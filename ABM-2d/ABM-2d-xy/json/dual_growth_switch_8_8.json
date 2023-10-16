@@ -5,7 +5,7 @@
     "growth_mean1": 1.0,
     "growth_std1": 0.2,
     "growth_mean2": 1.5,
-    "growth_std2": 0.3,
+    "growth_std2": 0.2,
     "lifetime_mean1": 8.0,
     "lifetime_mean2": 8.0,
     "E0": 3900,
