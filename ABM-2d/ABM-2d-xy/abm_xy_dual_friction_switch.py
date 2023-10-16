@@ -19,7 +19,6 @@ import matplotlib.pyplot as plt
 from growth import (
     grow_cells,
     divide_cells,
-    divide_cells_by_group,
     divide_max_length,
 )
 from mechanics import (
@@ -59,8 +58,12 @@ if __name__ == '__main__':
     R = params['R']                         # Outer cell radius (including EPS)
     L0 = params['L0']                       # Initial cell length (excluding caps)
     Ldiv = 2 * L0 + 2 * R                   # Division length (excluding caps)
+    growth_mean = params['growth_mean']     # Mean growth rate
+    growth_std = params['growth_std']       # Standard deviation of growth rate
     eta_mean1 = params['eta_mean1']         # Mean surface friction coefficient of group 1
     eta_mean2 = params['eta_mean2']         # Mean surface friction coefficient of group 2
+    lifetime_mean1 = params['lifetime_mean1']    # Mean lifetime of cells in group 1
+    lifetime_mean2 = params['lifetime_mean2']    # Mean lifetime of cells in group 2
     E0 = params['E0']                       # Matrix contact stiffness
     sigma0 = params['sigma0']               # Adhesion energy density (force per unit length)
     eta_ambient = params['eta_ambient']     # Ambient viscosity with surrounding fluid
@@ -117,14 +120,22 @@ if __name__ == '__main__':
     i = 0     # Current iteration
     rng = np.random.default_rng(1234567890)
 
+    # Growth rate distribution function: normal distribution with given
+    # mean and standard deviation
+    growth_dist = lambda gen: gen.normal(growth_mean, growth_std)
+
     # Friction coefficient distribution functions: normal distributions with 
     # given mean and standard deviation
-    eta_dist1 = lambda gen: gen.normal(eta_mean1, eta_std1)
-    eta_dist2 = lambda gen: gen.normal(eta_mean2, eta_std2)
+    @njit(fastmath=True)
+    def eta_dist1(gen):
+        return gen.normal(eta_mean1, eta_std1)
+    @njit(fastmath=True)
+    def eta_dist2(gen):
+        return gen.normal(eta_mean2, eta_std2)
 
     # Rates of switching from group 1 to group 2 and vice versa 
-    rate_12 = 1 / lifetime_mean1
-    rate_21 = 1 / lifetime_mean2
+    rate_12 = 1.0 / lifetime_mean1
+    rate_21 = 1.0 / lifetime_mean2
 
     # Output file prefix
     prefix = sys.argv[2]
@@ -132,7 +143,7 @@ if __name__ == '__main__':
     # Define a founder cell at the origin at time zero, parallel to x-axis,
     # with mean growth rate and default viscosity and friction coefficients
     cells = np.array(
-        [[0, 0, 1, 0, L0, 0, growth_mean1, eta_ambient, eta_mean1, 1]],
+        [[0, 0, 1, 0, L0, 0, growth_mean, eta_ambient, eta_mean1, 1]],
         dtype=np.float64
     )
 
@@ -149,8 +160,8 @@ if __name__ == '__main__':
     while t < t_final and cells.shape[0] < n_cells:
         # Divide the cells that have reached division length
         to_divide = divide_max_length(cells, Ldiv)
-        cells = divide_cells_by_group(
-            cells, t, R, to_divide, [growth_dist1, growth_dist2], rng, [1, 2],
+        cells = divide_cells(
+            cells, t, R, to_divide, growth_dist, rng,
             daughter_length_std=daughter_length_std,
             orientation_conc=orientation_conc
         )
@@ -181,7 +192,7 @@ if __name__ == '__main__':
                 j += 1
             # If the error is small, increase the stepsize up to a maximum stepsize
             if max_error < 1e-8:
-                dt = np.min([dt * ((1e-8 / max_error) ** (1 / (error_order + 1))), 1e-4])
+                dt = np.min([dt * ((1e-8 / max_error) ** (1 / (error_order + 1))), 1e-5])
         cells = cells_new
         
         # Grow the cells
@@ -193,7 +204,11 @@ if __name__ == '__main__':
 
         # Identify cells to switch from one group to the other
         to_switch = choose_cells_to_switch(cells, rate_12, rate_21, dt, rng)
-        cells = switch_features(cells, 8, to_switch, eta_dist1, eta_dist2, rng)
+        try:
+            cells = switch_features(cells, 8, to_switch, eta_dist1, eta_dist2, rng)
+        except ValueError:
+            print(cells.shape, to_switch.shape)
+            raise
 
         # Update neighboring cells 
         if i % iter_update_neighbors == 0:
