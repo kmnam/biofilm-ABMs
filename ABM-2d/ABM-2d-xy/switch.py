@@ -23,6 +23,48 @@ Last updated:
 # 8) cell-surface friction coefficient
 # 9) cell group identifier (1 or 2)
 #######################################################################
+@njit(fastmath=True)
+def choose_cells_to_switch(cells, rate_12, rate_21, dt, rng):
+    """
+    Given rates of switching from group 1 to group 2 and vice versa and a 
+    small time increment, randomly sample a subset of cells to switch from
+    one group to the other within the time increment.
+
+    Parameters
+    ----------
+    cells : `numpy.ndarray`
+        Existing population of cells. 
+    rate_12 : float
+        Rate of switching from group 1 to group 2.
+    rate_21 : float
+        Rate of switching from group 2 to group 1.
+    dt : float
+        Time increment for switching.
+    rng : `numpy.random.Generator`
+        Random number generator.
+
+    Returns
+    -------
+    Boolean index indicating which cells are to switch from one group to
+    the other. 
+    """
+    # Switching from group 1 to group 2 (resp. group 2 to group 1) occurs 
+    # with probability rate_12 * dt (resp. rate_21 * dt) within the time 
+    # increment dt
+    prob_12 = rate_12 * dt
+    prob_21 = rate_21 * dt
+    in_group_1 = (cells[:, 9] == 1)
+    to_switch = np.zeros((cells.shape[0],), dtype=np.int32)
+    for i in range(cells.shape[0]):
+        if in_group_1[i]:
+            to_switch[i] = (rng.uniform() < prob_12)   # Switch from 1 to 2?
+        else:
+            to_switch[i] = (rng.uniform() < prob_21)   # Switch from 2 to 1?
+
+    return to_switch
+
+#######################################################################
+@njit(fastmath=True)
 def switch_features(cells, feature_idx, to_switch, dist1, dist2, rng):
     """
     Switch the indicated cells on the basis of the given feature from one 
