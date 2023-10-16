@@ -28,7 +28,7 @@ from numba import njit
 # Additional features may be included in the array but these are not 
 # relevant for the computations implemented here
 #######################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def composite_viscosity_force_prefactors(cells, R, surface_contact_density):
     """
     Compute the derivatives of the dissipation due to bulk viscosity and
@@ -70,7 +70,7 @@ def composite_viscosity_force_prefactors(cells, R, surface_contact_density):
     return KL
 
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def cell_point_nearest_to_point(r, n, l, q):
     """
     Compute the point along the centerline of the given cell to the point q.
@@ -99,7 +99,7 @@ def cell_point_nearest_to_point(r, n, l, q):
         return -l / 2
 
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def cell_cell_distance(r1, n1, l1, r2, n2, l2):
     """
     Compute the distance vector from cell 1 to cell 2.
@@ -200,7 +200,7 @@ def cell_cell_distance(r1, n1, l1, r2, n2, l2):
     return dist_12, s, t
 
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def get_cell_neighbors(cells, neighbor_threshold, R, Ldiv):
     """
     Get all pairs of cells whose distances are within the given threshold.
@@ -267,7 +267,7 @@ def get_cell_neighbors(cells, neighbor_threshold, R, Ldiv):
     return neighbors
  
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def cell_cell_forces(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell):
     """
     Compute the derivatives of the cell-cell interaction energies for each 
@@ -350,7 +350,7 @@ def cell_cell_forces(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell):
     return dEdq
 
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def cell_cell_forces_from_neighbors(cells, neighbors, R, Rcell, E0, Ecell):
     """
     Compute the derivatives of the cell-cell interaction energies for each 
@@ -431,7 +431,7 @@ def cell_cell_forces_from_neighbors(cells, neighbors, R, Rcell, E0, Ecell):
     return dEdq
 
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def get_velocities(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell,
                    surface_contact_density):
     """
@@ -501,7 +501,7 @@ def get_velocities(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell,
     return velocities
 
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def get_velocities_from_neighbors(cells, neighbors, R, Rcell, E0, Ecell, 
                                   surface_contact_density):
     """
@@ -572,7 +572,7 @@ def get_velocities_from_neighbors(cells, neighbors, R, Rcell, E0, Ecell,
     return velocities
 
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def normalize_orientations(cells):
     """
     Normalize the orientation vectors of all cells in the given population.
@@ -593,7 +593,7 @@ def normalize_orientations(cells):
     return cells
 
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def step_RK(A, b, c, cells, neighbor_threshold, dt, R, Rcell, Ldiv, E0, Ecell, 
             surface_contact_density, rng, noise_scale):
     """
@@ -669,7 +669,7 @@ def step_RK(A, b, c, cells, neighbor_threshold, dt, R, Rcell, Ldiv, E0, Ecell,
     return cells
 
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def step_RK_adaptive(A, b, bs, c, cells, neighbor_threshold, dt, R, Rcell, Ldiv,
                      E0, Ecell, surface_contact_density, rng, noise_scale):
     """
@@ -752,7 +752,7 @@ def step_RK_adaptive(A, b, bs, c, cells, neighbor_threshold, dt, R, Rcell, Ldiv,
     return cells
 
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def step_RK_from_neighbors(A, b, c, cells, neighbors, dt, R, Rcell, E0, Ecell, 
                            surface_contact_density, rng, noise_scale):
     """
@@ -828,7 +828,7 @@ def step_RK_from_neighbors(A, b, c, cells, neighbors, dt, R, Rcell, E0, Ecell,
     return cells
 
 ########################################################################
-@njit(fastmath=False)
+@njit(fastmath=True)
 def step_RK_adaptive_from_neighbors(A, b, bs, c, cells, neighbors, dt, R, Rcell,
                                     E0, Ecell, surface_contact_density, rng,
                                     noise_scale):
