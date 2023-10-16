@@ -5,7 +5,7 @@ Authors:
     JP Nijjer, Kee-Myoung Nam
 
 Last updated:
-    10/14/2023
+    10/15/2023
 """
 
 import sys
@@ -211,6 +211,7 @@ if __name__ == '__main__':
             path = '{}_iter{}.txt'.format(prefix, i)
             params['t_curr'] = t
             write_cells(cells, path, params=params)
+        if i % iter_video == 0:
             paths.append(path)
 
     # Change two of the cells to the fast-growing phenotype
@@ -279,6 +280,7 @@ if __name__ == '__main__':
             path = '{}_iter{}.txt'.format(prefix, i)
             params['t_curr'] = t
             write_cells(cells, path, params=params)
+        if i % iter_video == 0:
             paths.append(path)
 
     # Write final population to file
