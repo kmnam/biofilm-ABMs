@@ -5,9 +5,9 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/10/2023
+    10/15/2023
 """
-
+import re
 import numpy as np
 
 #######################################################################
@@ -24,6 +24,36 @@ import numpy as np
 # 7) cell's ambient viscosity with respect to surrounding fluid
 # 8) cell-surface friction coefficient
 # 9, 10, 11, ...) additional features
+#######################################################################
+def read_cells(path):
+    """
+    Read the cells in the given file, together with the simulation parameters.
+
+    Parameters
+    ----------
+    path : str 
+        Input file path.
+
+    Returns
+    -------
+    Population of cells, together with a dict containing the simulation 
+    parameters. 
+    """
+    # First read the parameters
+    params = {}
+    with open(path) as f:
+        for line in f:
+            if line.startswith('#'):
+                m = re.match(r'# ([A-Za-z0-9_]+) = ([0-9e+-\.]+)', line)
+                params[m.group(1)] = float(m.group(2))
+
+    # Then read the cells that are stored in the file 
+    cells = np.loadtxt(path, comments='#', delimiter='\t', skiprows=0)
+    if len(cells.shape) == 1:
+        cells = cells.reshape((1, -1))
+
+    return cells, params
+
 #######################################################################
 def write_cells(cells, path, fmt=None, params={}):
     """
