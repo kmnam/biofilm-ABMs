@@ -2,10 +2,10 @@
 Functions for modeling cell growth and division. 
 
 Authors:
-    JP Nijjer, Kee-Myoung Nam
+    Kee-Myoung Nam, JP Nijjer
 
 Last updated:
-    10/12/2023
+    10/16/2023
 """
 
 import numpy as np
@@ -70,12 +70,13 @@ def divide_max_length(cells, Ldiv):
     return (cells[:, 4] > Ldiv)
 
 ########################################################################
-def divide_adder(cells, Linc):
+def divide_adder(cells, Linc, idx=-1):
     """
     Identify the cells that have grown the given length increment. (This
     corresponds to the adder model.)
 
-    The input array is assumed to have >= 11 columns. 
+    By default, the initial length of each cell is assumed to be stored 
+    in the last column of the array, unless an index (`idx`) is specified.
 
     Parameters
     ----------
@@ -83,12 +84,14 @@ def divide_adder(cells, Linc):
         Existing population of cells.
     Linc : float
         Length increment.
+    idx : int
+        Index of column storing cell initial lengths. -1 by default. 
 
     Returns
     -------
     Boolean index indicating which cells are to divide.
     """
-    return (cells[:, 4] - cells[:, 10] > Linc)
+    return (cells[:, 4] - cells[:, idx] > Linc)
 
 ########################################################################
 def divide_cells(cells, t, R, to_divide, growth_dist, rng, daughter_length_std=0,
