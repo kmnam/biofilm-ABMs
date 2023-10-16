@@ -1,11 +1,12 @@
 """
-Based on code originally written by JP Nijjer.
+An agent-based model that switches cells between two states that exhibit 
+different distributions of growth rates. 
 
 Authors:
-    JP Nijjer, Kee-Myoung Nam
+    Kee-Myoung Nam, JP Nijjer
 
 Last updated:
-    10/15/2023
+    10/16/2023
 """
 
 import sys
@@ -25,6 +26,10 @@ from mechanics import (
     get_cell_neighbors,
     step_RK_adaptive_from_neighbors
 )
+from switch import (
+    choose_cells_to_switch,
+    switch_features
+)
 from plot import plot_simulation
 from utils import write_cells
 
@@ -43,86 +48,6 @@ b = np.array([2/9, 1/3, 4/9, 0], dtype=np.float64)
 bs = np.array([7/24, 1/4, 1/3, 1/8], dtype=np.float64)
 c = np.array([0, 1/2, 3/4, 1], dtype=np.float64)
 error_order = 2
-
-#######################################################################
-# In what follows, a population of N cells is represented as a 2-D array of 
-# size (N, 12), where each row represents a cell and stores the following data:
-# 
-# 0) x-coordinate of cell center
-# 1) y-coordinate of cell center
-# 2) x-coordinate of cell orientation vector
-# 3) y-coordinate of cell orientation vector
-# 4) cell length (excluding caps) 
-# 5) timepoint at which the cell was formed
-# 6) cell growth rate
-# 7) cell's ambient viscosity with respect to surrounding fluid
-# 8) cell-surface friction coefficient
-# 9) cell group identifier (1 for slow-growing, 2 for fast-growing)
-# 10) total lifetime of cell in its current group
-# 11) elapsed lifetime of cell in its current group
-#######################################################################
-def switch_groups(cells, to_switch, lifetime_dist1, lifetime_dist2, growth_dist1, 
-                  growth_dist2, rng):
-    """
-    Switch the indicated cells from one group to the other.
-
-    New lifetimes and growth rates are chosen using the given distribution
-    functions, each of which must take the random number generator `rng` as
-    its single input.
-
-    Parameters
-    ----------
-    cells : `numpy.ndarray`
-        Existing population of cells.
-    to_switch : `numpy.ndarray`
-        Boolean index indicating which cells are to switch from one group
-        to the other. 
-    lifetime_dist1 : function
-        Lifetime distribution function for group 1. Must take 
-        `numpy.random.Generator` as its single argument.
-    lifetime_dist2 : function
-        Lifetime distribution function for group 2. Must take
-        `numpy.random.Generator` as its single argument.
-    growth_dist1 : function
-        Growth rate distribution function for group 1. Must take
-        `numpy.random.Generator` as its single argument.
-    growth_dist2 : function
-        Growth rate distribution function for group 2. Must take
-        `numpy.random.Generator` as its single argument.
-    rng : `numpy.random.Generator`
-        Random number generator.
-
-    Returns
-    -------
-    Updated population array.
-    """
-    n_switch = to_switch.sum()
-
-    # If there are cells to switch ...
-    if n_switch > 0:
-        # Get indices of cells to be switched from 1 to 2 and vice versa
-        to_switch_from_1_to_2 = (to_switch & (cells[:, 9] == 1))
-        to_switch_from_2_to_1 = (to_switch & (cells[:, 9] == 2))
-        idx_switch_from_1_to_2 = np.where(to_switch_from_1_to_2)[0]
-        idx_switch_from_2_to_1 = np.where(to_switch_from_2_to_1)[0]
-
-        # Sample new lifetimes and growth rates for each such cell 
-        lifetimes_new_1 = np.array([lifetime_dist1(rng) for _ in idx_switch_from_2_to_1])
-        lifetimes_new_2 = np.array([lifetime_dist2(rng) for _ in idx_switch_from_1_to_2])
-        growth_new_1 = np.array([growth_dist1(rng) for _ in idx_switch_from_2_to_1])
-        growth_new_2 = np.array([growth_dist2(rng) for _ in idx_switch_from_1_to_2])
-
-        # Switch groups and assign new lifetimes and growth rates
-        cells[to_switch_from_1_to_2, 9] = 2
-        cells[to_switch_from_1_to_2, 6] = growth_new_2
-        cells[to_switch_from_1_to_2, 10] = lifetimes_new_2
-        cells[to_switch_from_1_to_2, 11] = 0
-        cells[to_switch_from_2_to_1, 9] = 1
-        cells[to_switch_from_2_to_1, 6] = growth_new_1
-        cells[to_switch_from_2_to_1, 10] = lifetimes_new_1
-        cells[to_switch_from_2_to_1, 11] = 0
-
-    return cells
 
 #######################################################################
 if __name__ == '__main__':
@@ -197,29 +122,24 @@ if __name__ == '__main__':
 
     # Growth rate distribution functions: normal distributions with given
     # mean and standard deviation
-    growth_dist1 = lambda gen: gen.normal(growth_mean1, growth_std1)
-    growth_dist2 = lambda gen: gen.normal(growth_mean2, growth_std2)
+    @njit(fastmath=True)
+    def growth_dist1(gen):
+        return gen.normal(growth_mean1, growth_std1)
+    @njit(fastmath=True)
+    def growth_dist2(gen):
+        return gen.normal(growth_mean2, growth_std2)
 
-    # Group lifetime distribution functions: exponential distributions with
-    # given mean lifetimes
-    lifetime_dist1 = lambda gen: gen.exponential(scale=lifetime_mean1)
-    lifetime_dist2 = lambda gen: gen.exponential(scale=lifetime_mean2)
+    # Rates of switching from group 1 to group 2 and vice versa
+    rate_12 = 1.0 / lifetime_mean1
+    rate_21 = 1.0 / lifetime_mean2
 
     # Output file prefix
     prefix = sys.argv[2]
 
     # Define a founder cell at the origin at time zero, parallel to x-axis,
     # with mean growth rate and default viscosity and friction coefficients
-    #
-    # Additional entries include the following:
-    # 9) Group identifier (1 or 2)
-    # 10) Total lifetime of cell in given group
-    # 11) Elapsed lifetime of cell in given group
     cells = np.array(
-        [[
-            0, 0, 1, 0, L0, 0, growth_mean1, eta_ambient, eta_surface,
-            1, lifetime_dist1(rng), 0
-        ]],
+        [[0, 0, 1, 0, L0, 0, growth_mean1, eta_ambient, eta_surface, 1]],
         dtype=np.float64
     )
 
@@ -246,20 +166,6 @@ if __name__ == '__main__':
         if to_divide.sum() > 0:
             neighbors = get_cell_neighbors(cells, neighbor_threshold, R, Ldiv)
 
-        # Re-sample group lifetimes (and set elapsed lifetimes to zero)
-        # for all daughter cells
-        #
-        # This is fine because the lifetimes are assumed to be exponentially
-        # distributed and therefore memoryless
-        if to_divide.sum() > 0:
-            idx_daughters = np.concatenate((
-                np.where(to_divide)[0], np.arange(to_divide.size, cells.shape[0])
-            ))
-            for j in idx_daughters:
-                lifetime = lifetime_dist1(rng) if cells[j, 9] == 1 else lifetime_dist2(rng)
-                cells[j, 10] = lifetime
-                cells[j, 11] = 0
-        
         # Update cell positions and orientations
         cells_new, errors = step_RK_adaptive_from_neighbors(
             A, b, bs, c, cells, neighbors, dt, R, Rcell, E0, Ecell,
@@ -294,12 +200,8 @@ if __name__ == '__main__':
 
         # Update elapsed lifetimes of cells in each group and switch groups 
         # for all cells whose lifetimes have completely elapsed
-        cells[:, 11] += dt
-        to_switch = (cells[:, 10] < cells[:, 11])
-        cells = switch_groups(
-            cells, to_switch, lifetime_dist1, lifetime_dist2, growth_dist1,
-            growth_dist2, rng
-        )
+        to_switch = choose_cells_to_switch(cells, rate_12, rate_21, dt, rng)
+        cells = switch_features(cells, 6, to_switch, growth_dist1, growth_dist2, rng)
 
         # Update neighboring cells 
         if i % iter_update_neighbors == 0:

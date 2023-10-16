@@ -204,11 +204,7 @@ if __name__ == '__main__':
 
         # Identify cells to switch from one group to the other
         to_switch = choose_cells_to_switch(cells, rate_12, rate_21, dt, rng)
-        try:
-            cells = switch_features(cells, 8, to_switch, eta_dist1, eta_dist2, rng)
-        except ValueError:
-            print(cells.shape, to_switch.shape)
-            raise
+        cells = switch_features(cells, 8, to_switch, eta_dist1, eta_dist2, rng)
 
         # Update neighboring cells 
         if i % iter_update_neighbors == 0:
