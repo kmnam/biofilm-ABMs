@@ -11,10 +11,11 @@
     "eta_surface": 720,
     "dt": 1e-5,
     "iter_write": 500,
+    "iter_video": 500,
     "iter_update_stepsize": 5,
     "iter_update_neighbors": 20,
     "t_final": 20.0,
-    "n_cells": 200,
+    "n_cells": 500,
     "daughter_length_std": 0.01,
     "orientation_conc": 100
 }
