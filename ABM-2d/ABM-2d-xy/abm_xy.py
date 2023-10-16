@@ -73,6 +73,7 @@ if __name__ == '__main__':
     eta_surface = params['eta_surface']     # Friction with surface
     dt = params['dt']                       # Timestep
     iter_write = params['iter_write']       # Write simulation data to file every so often
+    iter_video = params['iter_video']       # Compile simulation data into output video every so often
     iter_update_stepsize = params['iter_update_stepsize']      # Update stepsize every so often
     iter_update_neighbors = params['iter_update_neighbors']    # Update neighbors every so often
     neighbor_threshold = 2 * (2 * R + L0)   # Radius for neighboring cells
@@ -222,6 +223,7 @@ if __name__ == '__main__':
             path = '{}_iter{}.txt'.format(prefix, i)
             params['t_curr'] = t
             write_cells(cells, path, params=params)
+        if i % iter_video == 0:
             paths.append(path)
 
     # Write final population to file
