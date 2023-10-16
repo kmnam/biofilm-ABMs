@@ -7,6 +7,8 @@ Authors:
 Last updated:
     10/16/2023
 """
+import numpy as np
+from numba import njit
 
 #######################################################################
 # In what follows, a population of N cells is represented as a 2-D array of 
@@ -110,6 +112,8 @@ def switch_features(cells, feature_idx, to_switch, dist1, dist2, rng):
         # Get indices of cells to be switched from 1 to 2 and vice versa
         to_switch_from_1_to_2 = (to_switch & (cells[:, 9] == 1))
         to_switch_from_2_to_1 = (to_switch & (cells[:, 9] == 2))
+        n_switch_from_1_to_2 = to_switch_from_1_to_2.sum()
+        n_switch_from_2_to_1 = to_switch_from_2_to_1.sum()
         idx_switch_from_1_to_2 = np.where(to_switch_from_1_to_2)[0]
         idx_switch_from_2_to_1 = np.where(to_switch_from_2_to_1)[0]
 
@@ -118,10 +122,12 @@ def switch_features(cells, feature_idx, to_switch, dist1, dist2, rng):
         feature_new_2 = np.array([dist2(rng) for _ in idx_switch_from_1_to_2])
 
         # Switch groups and assign new growth rates
-        cells[to_switch_from_1_to_2, 9] = 2
-        cells[to_switch_from_1_to_2, feature_idx] = feature_new_2
-        cells[to_switch_from_2_to_1, 9] = 1
-        cells[to_switch_from_2_to_1, feature_idx] = feature_new_1
+        if n_switch_from_1_to_2 > 0:
+            cells[to_switch_from_1_to_2, 9] = 2
+            cells[to_switch_from_1_to_2, feature_idx] = feature_new_2
+        if n_switch_from_2_to_1 > 0:
+            cells[to_switch_from_2_to_1, 9] = 1
+            cells[to_switch_from_2_to_1, feature_idx] = feature_new_1
 
     return cells
 
