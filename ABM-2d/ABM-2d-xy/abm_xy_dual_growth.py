@@ -2,7 +2,7 @@
 Based on code originally written by JP Nijjer.
 
 Authors:
-    JP Nijjer, Kee-Myoung Nam
+    Kee-Myoung Nam, JP Nijjer
 
 Last updated:
     10/15/2023
