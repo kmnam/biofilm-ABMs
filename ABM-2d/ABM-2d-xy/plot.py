@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/10/2023
+    10/17/2023
 """
 import re
 import numpy as np
@@ -109,7 +109,7 @@ def plot_cells(cells, ax, R, colors=None):
     return ax
 
 #########################################################################
-def plot_simulation(paths, outpath, R=None, fps=10):
+def plot_simulation(paths, outpath, R=None, fps=10, colors=None):
     """
     Given an ordered sequence of file paths, parse the stored simulation data
     and generate a video.
@@ -124,7 +124,12 @@ def plot_simulation(paths, outpath, R=None, fps=10):
         Cell radius. None by default (in which case the radius is parsed from
         the file; if not provided, an error is raised)
     fps : int
-        Frames per second. 
+        Frames per second.
+    colors : str or list of str
+        Either one color for the entire population or a list of colors for
+        each cell *group* in the population. None by default (in which case
+        the cells are all colored by group according to the seaborn deep 
+        color palette, `sns.color_palette()`).
     """
     # Run through the files once, to plot the cells and obtain the best x-
     # and y-axes limits
@@ -188,23 +193,34 @@ def plot_simulation(paths, outpath, R=None, fps=10):
         if len(cells.shape) == 1:
             cells = cells.reshape((1, -1))
     
-        # Were the cells identified?
+        # Were the cells identified by group?
         if cells.shape[1] > 9:
             # If so, assume the identifiers are given in column 9 (first
             # column after essential data) and label the cells by their
             # groups
             #
-            # Assume that the groups are labeled 1, 2, 3 ...
-            groups = cells[:, 9].astype(np.int32) - 1
-            colors = [sns.color_palette()[groups[i]] for i in range(cells.shape[0])]
+            # If colors were specified, then use them in order of the group
+            # labels, assuming they are labeled 1, 2, 3 ...
+            #
+            # Otherwise, use the seaborn deep color palette
+            if colors is None:
+                groups = cells[:, 9].astype(np.int32) - 1
+                colors_by_cell = [
+                    sns.color_palette()[groups[i]] for i in range(cells.shape[0])
+                ]
+            elif type(colors) == str:
+                colors_by_cell = [colors for _ in range(cells.shape[0])]
+            else:    # type(colors) should be list
+                groups = cells[:, 9].astype(np.int32) - 1
+                colors_by_cell = [colors[groups[i]] for i in range(cells.shape[0])]
+        # Otherwise, label the cells with a single color
         else:
-            # Otherwise, label the cells with a single color
-            colors = None
+            colors_by_cell = None
 
         # Plot the cells with the specified colors and configure axes
         fig = plt.figure()
         ax = plt.gca()
-        plot_cells(cells, ax, R, colors=colors)
+        plot_cells(cells, ax, R, colors=colors_by_cell)
         ax.set_aspect('equal')
         ax.set_xlim([xmin, xmax])
         ax.set_ylim([ymin, ymax])
