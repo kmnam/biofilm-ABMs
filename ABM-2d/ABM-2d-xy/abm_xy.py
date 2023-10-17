@@ -226,6 +226,13 @@ if __name__ == '__main__':
         if i % iter_video == 0:
             paths.append(path)
 
+    # Check that there are not too many frames being stitched together, 
+    # assuming 10 fps
+    max_frames = 3000                  # 3000 frames = 300 sec = 5 min
+    if len(paths) + 1 > max_frames:    # Add 1 since the last frame has not been added
+        increment = len(paths) // 3000 + 1
+        paths = paths[::increment]
+
     # Write final population to file
     path = '{}_final.txt'.format(prefix)
     params['t_curr'] = t
