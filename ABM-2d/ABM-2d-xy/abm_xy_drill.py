@@ -17,6 +17,7 @@ from numba import config
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
+import seaborn as sns
 from growth import (
     grow_cells,
     divide_cells,
@@ -131,8 +132,10 @@ if __name__ == '__main__':
 
     # Define a founder cell at the origin at time zero, parallel to x-axis,
     # with mean growth rate and default viscosity and friction coefficients
+    #
+    # All live cells are labeled as group 1, all dead cells as group 2
     cells = np.array(
-        [[0, 0, 1, 0, L0, 0, growth_mean, eta_ambient, eta_surface]],
+        [[0, 0, 1, 0, L0, 0, growth_mean, eta_ambient, eta_surface, 1]],
         dtype=np.float64
     )
 
@@ -215,6 +218,7 @@ if __name__ == '__main__':
     )
     kill_idx = np.argsort(distances)[:n_kill]
     cells[kill_idx, 6] = 0.0
+    cells[kill_idx, 9] = 2
 
     # Restart the simulation ...
     while t < t_final and cells.shape[0] < n_cells:
@@ -292,5 +296,8 @@ if __name__ == '__main__':
     paths.append(path)
 
     # Generate video of simulation 
-    plot_simulation(paths, '{}.avi'.format(prefix), R, fps=10)
+    plot_simulation(
+        paths, '{}.avi'.format(prefix), R, fps=10,
+        colors=[sns.color_palette()[0], (0, 0, 0)]
+    )
 
