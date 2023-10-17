@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam, JP Nijjer
 
 Last updated:
-    10/15/2023
+    10/16/2023
 """
 
 import sys
@@ -20,10 +20,10 @@ from growth import (
     divide_cells,
     divide_max_length,
 )
-from mechanics import get_cell_neighbors, step_RK_adaptive_from_neighbors
-from mechanics_parallel import get_cell_neighbors as get_cell_neighbors_parallel
-from mechanics_parallel import step_RK_adaptive_from_neighbors as\
-    step_RK_adaptive_from_neighbors_parallel
+from mechanics import (
+    get_cell_neighbors,
+    step_RK_adaptive_from_neighbors
+)
 from plot import plot_simulation
 from utils import write_cells
 
@@ -126,10 +126,6 @@ if __name__ == '__main__':
     # Output file prefix
     prefix = sys.argv[2]
 
-    # Run force calculations and integration in parallel if cells exceed 
-    # this number
-    min_cells_parallel = 1000
-
     # Define a founder cell at the origin at time zero, parallel to x-axis,
     # with mean growth rate and default viscosity and friction coefficients
     cells = np.array(
@@ -158,22 +154,13 @@ if __name__ == '__main__':
 
         # Update neighboring cells if division has occurred
         if to_divide.sum() > 0:
-            if cells.shape[0] > min_cells_parallel:
-                neighbors = get_cell_neighbors_parallel(cells, neighbor_threshold, R, Ldiv)
-            else:
-                neighbors = get_cell_neighbors(cells, neighbor_threshold, R, Ldiv)
+            neighbors = get_cell_neighbors(cells, neighbor_threshold, R, Ldiv)
         
         # Update cell positions and orientations
-        if cells.shape[0] > min_cells_parallel:
-            cells_new, errors = step_RK_adaptive_from_neighbors_parallel(
-                A, b, bs, c, cells, neighbors, dt, R, Rcell, E0, Ecell,
-                surface_contact_density, rng, noise_scale
-            )
-        else:
-            cells_new, errors = step_RK_adaptive_from_neighbors(
-                A, b, bs, c, cells, neighbors, dt, R, Rcell, E0, Ecell,
-                surface_contact_density, rng, noise_scale
-            )
+        cells_new, errors = step_RK_adaptive_from_neighbors(
+            A, b, bs, c, cells, neighbors, dt, R, Rcell, E0, Ecell,
+            surface_contact_density, rng, noise_scale
+        )
 
         # If the error is big, retry the step with a smaller stepsize (up to 
         # a given maximum number of iterations)
@@ -183,16 +170,10 @@ if __name__ == '__main__':
             j = 0
             while max_error > 1e-8 and j < max_tries:
                 dt *= (1e-8 / max_error) ** (1 / (error_order + 1))
-                if cells.shape[0] > min_cells_parallel:
-                    cells_new, errors = step_RK_adaptive_from_neighbors_parallel(
-                        A, b, bs, c, cells, neighbors, dt, R, Rcell, E0, Ecell,
-                        surface_contact_density, rng, noise_scale
-                    )
-                else:
-                    cells_new, errors = step_RK_adaptive_from_neighbors(
-                        A, b, bs, c, cells, neighbors, dt, R, Rcell, E0, Ecell,
-                        surface_contact_density, rng, noise_scale
-                    )
+                cells_new, errors = step_RK_adaptive_from_neighbors(
+                    A, b, bs, c, cells, neighbors, dt, R, Rcell, E0, Ecell,
+                    surface_contact_density, rng, noise_scale
+                )
                 max_error = np.max([np.abs(errors).max(), 1e-100])
                 j += 1
             # If the error is small, increase the stepsize up to a maximum stepsize
@@ -209,10 +190,7 @@ if __name__ == '__main__':
 
         # Update neighboring cells 
         if i % iter_update_neighbors == 0:
-            if cells.shape[0] > min_cells_parallel:
-                neighbors = get_cell_neighbors_parallel(cells, neighbor_threshold, R, Ldiv)
-            else:
-                neighbors = get_cell_neighbors(cells, neighbor_threshold, R, Ldiv)
+            neighbors = get_cell_neighbors(cells, neighbor_threshold, R, Ldiv)
         
         # Write the current population to file 
         if i % iter_write == 0:
