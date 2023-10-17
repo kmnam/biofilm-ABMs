@@ -123,11 +123,11 @@ def switch_features(cells, feature_idx, to_switch, dist1, dist2, rng):
 
         # Switch groups and assign new growth rates
         if n_switch_from_1_to_2 > 0:
-            cells[to_switch_from_1_to_2, 9] = 2
-            cells[to_switch_from_1_to_2, feature_idx] = feature_new_2
+            cells[idx_switch_from_1_to_2, 9] = 2
+            cells[idx_switch_from_1_to_2, feature_idx] = feature_new_2
         if n_switch_from_2_to_1 > 0:
-            cells[to_switch_from_2_to_1, 9] = 1
-            cells[to_switch_from_2_to_1, feature_idx] = feature_new_1
+            cells[idx_switch_from_2_to_1, 9] = 1
+            cells[idx_switch_from_2_to_1, feature_idx] = feature_new_1
 
     return cells
 
