@@ -15,8 +15,8 @@
     "iter_update_stepsize": 5,
     "iter_update_neighbors": 20,
     "t_final": 20.0,
-    "n_cells": 200,
-	"n_seed": 100,
+    "n_cells": 1000,
+    "n_seed": 200,
     "daughter_length_std": 0.01,
     "orientation_conc": 100
 }
