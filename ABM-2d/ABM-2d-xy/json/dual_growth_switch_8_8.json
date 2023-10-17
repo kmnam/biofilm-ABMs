@@ -1,6 +1,6 @@
 {
     "R": 0.8,
-    "Rcell": 0.7,
+    "Rcell": 0.35,
     "L0": 1.0,
     "growth_mean1": 1.0,
     "growth_std1": 0.2,
