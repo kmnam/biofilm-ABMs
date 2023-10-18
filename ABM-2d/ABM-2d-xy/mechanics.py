@@ -237,12 +237,12 @@ def get_cell_neighbors(cells, neighbor_threshold, R, Ldiv):
     # 3) y-coordinate of distance vector from cell i to cell j
     # 4) Cell-body coordinate of contact point along centerline of cell i
     # 5) Cell-body coordinate of contact point along centerline of cell j
-    neighbors = np.zeros((int(n * (n - 1) / 2), 6), dtype=np.float64)
+    neighbors = np.zeros((n * (n - 1) // 2, 6), dtype=np.float64)
     idx = 0
 
     # For each pair of cells in the population ...
     for i in range(n):
-        for j in range(i+1, n):
+        for j in range(i):    # Note that j < i
             # For two cells to be within neighbor_threshold of each other,
             # their centers must be within neighbor_threshold + Ldiv + 2 * R
             dist_rij = np.linalg.norm(cells[i, :2] - cells[j, :2])
@@ -332,20 +332,21 @@ def cell_cell_forces(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell):
             prefactor = 2.5 * E0 * np.sqrt(R) * (overlap ** 1.5)
         # Case 2: the overlap is instead greater than R - Rcell (i.e., it
         # encroaches into the bodies of the two cells)
-        elif overlap > R - Rcell:
+        elif overlap >= R - Rcell:
             prefactor1 = E0 * (R - Rcell) ** 1.5
             prefactor2 = Ecell * (overlap - R + Rcell) ** 1.5
             prefactor = 2.5 * np.sqrt(R) * (prefactor1 + prefactor2)
 
-        # Derivative of cell-cell interaction energy w.r.t position of cell i
-        vij = prefactor * dir_ij
-        dEdq[i, :2] += vij
-        # Derivative of cell-cell interaction energy w.r.t orientation of cell i
-        dEdq[i, 2:4] += vij * si
-        # Derivative of cell-cell interaction energy w.r.t position of cell j
-        dEdq[j, :2] -= vij
-        # Derivative of cell-cell interaction energy w.r.t orientation of cell j
-        dEdq[j, 2:4] -= vij * sj
+        if overlap > 0:
+            # Derivative of cell-cell interaction energy w.r.t position of cell i
+            vij = prefactor * dir_ij
+            dEdq[i, :2] += vij
+            # Derivative of cell-cell interaction energy w.r.t orientation of cell i
+            dEdq[i, 2:4] += vij * si
+            # Derivative of cell-cell interaction energy w.r.t position of cell j
+            dEdq[j, :2] -= vij
+            # Derivative of cell-cell interaction energy w.r.t orientation of cell j
+            dEdq[j, 2:4] -= vij * sj
 
     return dEdq
 
@@ -398,7 +399,6 @@ def cell_cell_forces_from_neighbors(cells, neighbors, R, Rcell, E0, Ecell):
         sj = neighbors[k, 5]           # Cell-body coordinate along cell j
         delta_ij = np.linalg.norm(dist_ij)    # Magnitude of distance vector
         dir_ij = dist_ij / delta_ij           # Normalized distance vector from i to j
-        dir_ji = -dir_ij                      # Normalized distance vector from j to i
         
         # Get the overlapping distance between cells i and j (this distance
         # is negative if the cells are not overlapping)
@@ -414,19 +414,21 @@ def cell_cell_forces_from_neighbors(cells, neighbors, R, Rcell, E0, Ecell):
             prefactor = 2.5 * E0 * np.sqrt(R) * (overlap ** 1.5)
         # Case 2: the overlap is instead greater than R - Rcell (i.e., it
         # encroaches into the bodies of the two cells)
-        elif overlap > R - Rcell:
+        elif overlap >= R - Rcell:
             prefactor1 = E0 * (R - Rcell) ** 1.5
             prefactor2 = Ecell * (overlap - R + Rcell) ** 1.5
             prefactor = 2.5 * np.sqrt(R) * (prefactor1 + prefactor2)
 
-        # Derivative of cell-cell interaction energy w.r.t position of cell i
-        dEdq[i, :2] += prefactor * dir_ij
-        # Derivative of cell-cell interaction energy w.r.t orientation of cell i
-        dEdq[i, 2:4] += prefactor * dir_ij * si
-        # Derivative of cell-cell interaction energy w.r.t position of cell j
-        dEdq[j, :2] += prefactor * dir_ji
-        # Derivative of cell-cell interaction energy w.r.t orientation of cell j
-        dEdq[j, 2:4] += prefactor * dir_ji * sj
+        if overlap > 0:
+            # Derivative of cell-cell interaction energy w.r.t position of cell i
+            vij = prefactor * dir_ij
+            dEdq[i, :2] += vij
+            # Derivative of cell-cell interaction energy w.r.t orientation of cell i
+            dEdq[i, 2:4] += vij * si
+            # Derivative of cell-cell interaction energy w.r.t position of cell j
+            dEdq[j, :2] -= vij
+            # Derivative of cell-cell interaction energy w.r.t orientation of cell j
+            dEdq[j, 2:4] -= vij * sj
 
     return dEdq
 
