@@ -6,7 +6,7 @@ Authors:
     Kee-Myoung Nam, JP Nijjer
 
 Last updated:
-    10/16/2023
+    10/18/2023
 """
 
 import sys
@@ -26,6 +26,7 @@ from mechanics import (
     get_cell_neighbors,
     step_RK_adaptive_from_neighbors
 )
+from mechanics_parallel import get_cell_neighbors_parallel
 from switch import (
     choose_cells_to_switch,
     switch_features
@@ -146,6 +147,13 @@ if __name__ == '__main__':
     # Compute initial array of neighboring cells (should be empty)
     neighbors = get_cell_neighbors(cells, neighbor_threshold, R, Ldiv)
 
+    # Run parallelized version for compilation
+    _ = get_cell_neighbors_parallel(cells, neighbor_threshold, R, Ldiv)
+
+    # Minimum number of cells to accumulate before switching to parallel
+    # neighbor calculation
+    min_cells_parallel = 1000
+
     # Write the founder cell to file
     paths = []
     path = '{}_init.txt'.format(prefix)
@@ -164,7 +172,14 @@ if __name__ == '__main__':
 
         # Update neighboring cells if division has occurred
         if to_divide.sum() > 0:
-            neighbors = get_cell_neighbors(cells, neighbor_threshold, R, Ldiv)
+            if cells.shape[0] >= min_cells_parallel:
+                neighbors = get_cell_neighbors_parallel(
+                    cells, neighbor_threshold, R, Ldiv
+                )
+            else:
+                neighbors = get_cell_neighbors(
+                    cells, neighbor_threshold, R, Ldiv
+                )
 
         # Update cell positions and orientations
         cells_new, errors = step_RK_adaptive_from_neighbors(
@@ -205,7 +220,14 @@ if __name__ == '__main__':
 
         # Update neighboring cells 
         if i % iter_update_neighbors == 0:
-            neighbors = get_cell_neighbors(cells, neighbor_threshold, R, Ldiv)
+            if cells.shape[0] >= min_cells_parallel:
+                neighbors = get_cell_neighbors_parallel(
+                    cells, neighbor_threshold, R, Ldiv
+                )
+            else:
+                neighbors = get_cell_neighbors(
+                    cells, neighbor_threshold, R, Ldiv
+                )
         
         # Write the current population to file 
         if i % iter_write == 0:
