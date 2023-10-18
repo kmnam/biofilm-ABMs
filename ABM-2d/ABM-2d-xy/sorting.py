@@ -68,11 +68,16 @@ if __name__ == '__main__':
     # Minimum number of cells for sortedness to be measured
     min_cells = 100
 
+    # Array of population sizes to demarcate on the plot
+    sizes_to_plot = [200, 500]
+
     # For each file ...
     times = []
+    sizes = []
     sortedness = []
     for filename in filenames:
-        # Parse the cells and timepoint associated with the file
+        # Parse the cells, population size, and timepoint associated with
+        # the file
         cells, params = read_cells(filename)
         try:
             t = params['t_curr']
@@ -81,26 +86,52 @@ if __name__ == '__main__':
 
         # Compute the radial sortedness of the population, given that 
         # there are more than the minimum number of cells
-        if cells.shape[0] > min_cells:
+        size = cells.shape[0]
+        if size > min_cells:
             times.append(t)
+            sizes.append(size)
             scores = np.array(
-                [0 if cells[i, 9] == 2 else 1 for i in range(cells.shape[0])],
+                [0 if cells[i, 9] == 2 else 1 for i in range(size)],
                 dtype=np.int32
             )
             sortedness.append(radial_sortedness(cells, scores, rng))
 
     # Plot the sortedness profile over time
     color = sns.color_palette()[0]
-    plt.plot(times, sortedness, c=color)
+    plt.plot(times, sortedness, c=color, zorder=0)
 
-    # Plot dashed horizontal line at final sortedness value
-    ax = plt.gca()
-    xlim = ax.get_xlim()
+    # Plot dashed vertical lines for sortedness values at chosen
+    # population sizes
     color = sns.color_palette()[1]
-    plt.plot(xlim, [sortedness[-1], sortedness[-1]], linestyle='--', c=color)
+    for size in sizes_to_plot:
+        try:
+            idx = sizes.index(size)
+        except ValueError:
+            for i, s in enumerate(sizes):
+                if s > size:
+                    idx = i
+                    break
+        plt.plot(
+            [times[idx], times[idx]], [-1, 1],
+            linestyle='--', c=color, zorder=1
+        )
+        plt.annotate(
+            r'$n = {}$'.format(size),
+            (times[idx] - (times[-1] - times[0]) * 0.01, 0.95),
+            verticalalignment='top',
+            horizontalalignment='right'
+        )
+
+    # Annotate final sortedness value
+    color = sns.color_palette()[3]
+    plt.scatter(
+        [times[-1]], [sortedness[-1]],
+        marker='X', s=30, color=color, zorder=1
+    )
     plt.annotate(
         '{:.4f}'.format(sortedness[-1]),
-        (xlim[1] - (xlim[1] - xlim[0]) * 0.05, sortedness[-1] - 0.1),
+        (times[-1], sortedness[-1] - 0.05),
+        verticalalignment='top',
         horizontalalignment='right'
     )
 
@@ -108,7 +139,6 @@ if __name__ == '__main__':
     ax = plt.gca()
     ax.set_xlabel('Time')
     ax.set_ylabel('Sortedness')
-    ax.set_xlim(xlim)
     ax.set_ylim([-1, 1])
     plt.savefig(sys.argv[2])
 
