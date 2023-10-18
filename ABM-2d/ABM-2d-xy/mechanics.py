@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/14/2023
+    10/18/2023
 """
 
 import numpy as np
@@ -317,7 +317,6 @@ def cell_cell_forces(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell):
         sj = neighbors[k, 5]           # Cell-body coordinate along cell j
         delta_ij = np.linalg.norm(dist_ij)    # Magnitude of distance vector
         dir_ij = dist_ij / delta_ij           # Normalized distance vector from i to j
-        dir_ji = -dir_ij                      # Normalized distance vector from j to i
         
         # Get the overlapping distance between cells i and j (this distance
         # is negative if the cells are not overlapping)
@@ -339,13 +338,14 @@ def cell_cell_forces(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell):
             prefactor = 2.5 * np.sqrt(R) * (prefactor1 + prefactor2)
 
         # Derivative of cell-cell interaction energy w.r.t position of cell i
-        dEdq[i, :2] += prefactor * dir_ij
+        vij = prefactor * dir_ij
+        dEdq[i, :2] += vij
         # Derivative of cell-cell interaction energy w.r.t orientation of cell i
-        dEdq[i, 2:4] += prefactor * dir_ij * si
+        dEdq[i, 2:4] += vij * si
         # Derivative of cell-cell interaction energy w.r.t position of cell j
-        dEdq[j, :2] += prefactor * dir_ji
+        dEdq[j, :2] -= vij
         # Derivative of cell-cell interaction energy w.r.t orientation of cell j
-        dEdq[j, 2:4] += prefactor * dir_ji * sj
+        dEdq[j, 2:4] -= vij * sj
 
     return dEdq
 

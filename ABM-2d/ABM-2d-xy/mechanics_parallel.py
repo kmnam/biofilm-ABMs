@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/14/2023
+    10/18/2023
 """
 
 import numpy as np
@@ -28,7 +28,7 @@ from numba import njit, prange
 # Additional features may be included in the array but these are not 
 # relevant for the computations implemented here
 #######################################################################
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def composite_viscosity_force_prefactors(cells, R, surface_contact_density):
     """
     Compute the derivatives of the dissipation due to bulk viscosity and
@@ -63,15 +63,16 @@ def composite_viscosity_force_prefactors(cells, R, surface_contact_density):
     The prefactors K and L defined above for each cell. 
     """
     KL = np.zeros((cells.shape[0], 2), dtype=np.float64)
+    a = surface_contact_density / R
     for i in prange(cells.shape[0]):
-        composite_drag = cells[i, 7] + cells[i, 8] * surface_contact_density / R
+        composite_drag = cells[i, 7] + cells[i, 8] * a
         KL[i, 0] = cells[i, 4] * composite_drag
         KL[i, 1] = (cells[i, 4] ** 3) * composite_drag / 12
 
     return KL
 
 ########################################################################
-@njit
+@njit(fastmath=True)
 def cell_point_nearest_to_point(r, n, l, q):
     """
     Compute the point along the centerline of the given cell to the point q.
@@ -100,7 +101,7 @@ def cell_point_nearest_to_point(r, n, l, q):
         return -l / 2
 
 ########################################################################
-@njit
+@njit(fastmath=True)
 def cell_cell_distance(r1, n1, l1, r2, n2, l2):
     """
     Compute the distance vector from cell 1 to cell 2.
@@ -201,7 +202,7 @@ def cell_cell_distance(r1, n1, l1, r2, n2, l2):
     return dist_12, s, t
 
 ########################################################################
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def get_cell_neighbors(cells, neighbor_threshold, R, Ldiv):
     """
     Get all pairs of cells whose distances are within the given threshold.
@@ -230,22 +231,22 @@ def get_cell_neighbors(cells, neighbor_threshold, R, Ldiv):
 
     # Maintain arrays of neighboring cell data
     #
-    # neighbors[i, j] == 1 if cells i and j are neighboring (and zero 
-    # otherwise)
+    # neighbors[k] == 1 if cells i and j are neighboring (and zero otherwise),
+    # where k = i * (i - 1) / 2 + j
     #
-    # If cells i and j are neighboring (neighbors[i, j] == 1):
-    # - distances[i, j, :] is the distance vector between cells i and j
-    # - sij[i, j, 0] is the cell-body coordinate of the contact point with 
+    # If cells i and j are neighboring (neighbors[k] == 1):
+    # - distances[k, :] is the distance vector between cells i and j
+    # - sij[k, 0] is the cell-body coordinate of the contact point with 
     #   cell j along the centerline of cell i
-    # - sij[i, j, 1] is the cell-body coordinate of the contact point with 
+    # - sij[k, 1] is the cell-body coordinate of the contact point with 
     #   cell i along the centerline of cell j
-    neighbors = np.zeros((n, n), dtype=np.int32)
-    distances = np.zeros((n, n, 2), dtype=np.float64)
-    sij = np.zeros((n, n, 2), dtype=np.float64)
+    neighbors = np.zeros((n * (n - 1) // 2,), dtype=np.int32)
+    distances = np.zeros((n * (n - 1) // 2, 2), dtype=np.float64)
+    sij = np.zeros((n * (n - 1) // 2, 2), dtype=np.float64)
 
     # For each pair of cells in the population ...
     for i in prange(n):
-        for j in range(i+1, n):
+        for j in range(i):    # Note that j < i
             # For two cells to be within neighbor_threshold of each other,
             # their centers must be within neighbor_threshold + Ldiv + 2 * R
             dist_rij = np.linalg.norm(cells[i, :2] - cells[j, :2])
@@ -257,10 +258,11 @@ def get_cell_neighbors(cells, neighbor_threshold, R, Ldiv):
                     cells[j, :2], cells[j, 2:4], cells[j, 4]
                 )
                 if np.linalg.norm(dist_ij) < neighbor_threshold:
-                    neighbors[i, j] = 1
-                    distances[i, j, :] = dist_ij
-                    sij[i, j, 0] = si
-                    sij[i, j, 1] = sj
+                    k = i * (i - 1) // 2 + j
+                    neighbors[k] = 1
+                    distances[k, :] = dist_ij
+                    sij[k, 0] = si
+                    sij[k, 1] = sj
 
     # Define output array ... 
     # 
@@ -274,19 +276,20 @@ def get_cell_neighbors(cells, neighbor_threshold, R, Ldiv):
     # 5) Cell-body coordinate of contact point along centerline of cell j
     outarr = np.zeros((neighbors.sum(), 6), dtype=np.float64)
     idx = 0
-    for i in range(n):
-        for j in range(i+1, n):
-            if neighbors[i, j] == 1:
+    for i in prange(n):
+        for j in range(i):
+            k = i * (i - 1) // 2 + j
+            if neighbors[k] == 1:
                 outarr[idx, 0] = i
                 outarr[idx, 1] = j
-                outarr[idx, 2:4] = distances[i, j, :]
-                outarr[idx, 4:6] = sij[i, j, :]
+                outarr[idx, 2:4] = distances[k, :]
+                outarr[idx, 4:6] = sij[k, :]
                 idx += 1
 
     return outarr
  
 ########################################################################
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def cell_cell_forces(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell):
     """
     Compute the derivatives of the cell-cell interaction energies for each 
@@ -369,11 +372,12 @@ def cell_cell_forces(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell):
             prefactor = 2.5 * np.sqrt(R) * (prefactor1 + prefactor2)
 
         # Derivative of cell-cell interaction energy w.r.t position of cell i
-        forces[k, :2] = prefactor * dir_ij
+        vij = prefactor * dir_ij
+        forces[k, :2] = vij
         # Derivative of cell-cell interaction energy w.r.t orientation of cell i
-        forces[k, 2:4] = prefactor * dir_ij * si
+        forces[k, 2:4] = vij * si
         # Derivative of cell-cell interaction energy w.r.t orientation of cell j
-        forces[k, 4:6] = -prefactor * dir_ij * sj
+        forces[k, 4:6] = -vij * sj
 
     # Compute net forces acting on each cell
     for k in range(neighbors.shape[0]):
@@ -387,7 +391,7 @@ def cell_cell_forces(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell):
     return dEdq
 
 ########################################################################
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def cell_cell_forces_from_neighbors(cells, neighbors, R, Rcell, E0, Ecell):
     """
     Compute the derivatives of the cell-cell interaction energies for each 
@@ -468,14 +472,15 @@ def cell_cell_forces_from_neighbors(cells, neighbors, R, Rcell, E0, Ecell):
             prefactor = 2.5 * np.sqrt(R) * (prefactor1 + prefactor2)
 
         # Derivative of cell-cell interaction energy w.r.t position of cell i
-        forces[k, :2] = prefactor * dir_ij
+        vij = prefactor * dir_ij
+        forces[k, :2] = vij
         # Derivative of cell-cell interaction energy w.r.t orientation of cell i
-        forces[k, 2:4] = prefactor * dir_ij * si
+        forces[k, 2:4] = vij * si
         # Derivative of cell-cell interaction energy w.r.t orientation of cell j
-        forces[k, 4:6] = -prefactor * dir_ij * sj
+        forces[k, 4:6] = -vij * sj
 
     # Compute net forces acting on each cell
-    for k in range(neighbors.shape[0]):
+    for k in prange(neighbors.shape[0]):
         i = np.int32(neighbors[k, 0])
         j = np.int32(neighbors[k, 1])
         dEdq[i, :2] += forces[k, :2]
@@ -486,7 +491,7 @@ def cell_cell_forces_from_neighbors(cells, neighbors, R, Rcell, E0, Ecell):
     return dEdq
 
 ########################################################################
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def get_velocities(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell,
                    surface_contact_density):
     """
@@ -556,7 +561,7 @@ def get_velocities(cells, neighbor_threshold, R, Rcell, Ldiv, E0, Ecell,
     return velocities
 
 ########################################################################
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def get_velocities_from_neighbors(cells, neighbors, R, Rcell, E0, Ecell, 
                                   surface_contact_density):
     """
@@ -627,7 +632,7 @@ def get_velocities_from_neighbors(cells, neighbors, R, Rcell, E0, Ecell,
     return velocities
 
 ########################################################################
-@njit
+@njit(fastmath=True)
 def normalize_orientations(cells):
     """
     Normalize the orientation vectors of all cells in the given population.
@@ -648,7 +653,7 @@ def normalize_orientations(cells):
     return cells
 
 ########################################################################
-@njit
+@njit(fastmath=True)
 def step_RK(A, b, c, cells, neighbor_threshold, dt, R, Rcell, Ldiv, E0, Ecell, 
             surface_contact_density, rng, noise_scale):
     """
@@ -724,7 +729,7 @@ def step_RK(A, b, c, cells, neighbor_threshold, dt, R, Rcell, Ldiv, E0, Ecell,
     return cells
 
 ########################################################################
-@njit
+@njit(fastmath=True)
 def step_RK_adaptive(A, b, bs, c, cells, neighbor_threshold, dt, R, Rcell, Ldiv,
                      E0, Ecell, surface_contact_density, rng, noise_scale):
     """
@@ -807,7 +812,7 @@ def step_RK_adaptive(A, b, bs, c, cells, neighbor_threshold, dt, R, Rcell, Ldiv,
     return cells
 
 ########################################################################
-@njit
+@njit(fastmath=True)
 def step_RK_from_neighbors(A, b, c, cells, neighbors, dt, R, Rcell, E0, Ecell, 
                            surface_contact_density, rng, noise_scale):
     """
@@ -883,7 +888,7 @@ def step_RK_from_neighbors(A, b, c, cells, neighbors, dt, R, Rcell, E0, Ecell,
     return cells
 
 ########################################################################
-@njit
+@njit(fastmath=True)
 def step_RK_adaptive_from_neighbors(A, b, bs, c, cells, neighbors, dt, R, Rcell,
                                     E0, Ecell, surface_contact_density, rng,
                                     noise_scale):
