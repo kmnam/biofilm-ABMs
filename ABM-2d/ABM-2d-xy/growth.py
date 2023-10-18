@@ -5,10 +5,11 @@ Authors:
     Kee-Myoung Nam, JP Nijjer
 
 Last updated:
-    10/16/2023
+    10/18/2023
 """
 
 import numpy as np
+from numba import njit
 
 #######################################################################
 # In what follows, a population of N cells is represented as a 2-D array of 
@@ -170,25 +171,35 @@ def divide_cells(cells, t, R, to_divide, growth_dist, rng, daughter_length_std=0
         if orientation_conc is not None:
             dividing_orientations = cells[to_divide, 2:4]
             theta1 = rng.vonmises(0, orientation_conc, size=(n_divide,))
+            cos_theta1 = np.cos(theta1)
+            sin_theta1 = np.sin(theta1)
+            rotations = np.stack(
+                ((cos_theta1, -sin_theta1), (sin_theta1, cos_theta1))
+            )
             for i, j in enumerate(idx_divide):
-                rot = np.array(
-                    [
-                        [np.cos(theta1[i]), -np.sin(theta1[i])],
-                        [np.sin(theta1[i]), np.cos(theta1[i])]
-                    ],
-                    dtype=np.float64
-                )
-                cells[j, 2:4] = np.dot(rot, dividing_orientations[i, :])
+                #rot = np.array(
+                #    [
+                #        [np.cos(theta1[i]), -np.sin(theta1[i])],
+                #        [np.sin(theta1[i]), np.cos(theta1[i])]
+                #    ],
+                #    dtype=np.float64
+                #)
+                cells[j, 2:4] = np.dot(rotations[:, :, i], dividing_orientations[i, :])
             theta2 = rng.vonmises(0, orientation_conc, size=(n_divide,))
+            cos_theta2 = np.cos(theta2)
+            sin_theta2 = np.sin(theta2)
+            rotations = np.stack(
+                ((cos_theta2, -sin_theta2), (sin_theta2, cos_theta2))
+            )
             for i in range(n_divide):
-                rot = np.array(
-                    [
-                        [np.cos(theta2[i]), -np.sin(theta2[i])],
-                        [np.sin(theta2[i]), np.cos(theta2[i])]
-                    ],
-                    dtype=np.float64
-                )
-                new_cells[i, 2:4] = np.dot(rot, dividing_orientations[i, :])
+                #rot = np.array(
+                #    [
+                #        [np.cos(theta2[i]), -np.sin(theta2[i])],
+                #        [np.sin(theta2[i]), np.cos(theta2[i])]
+                #    ],
+                #    dtype=np.float64
+                #)
+                new_cells[i, 2:4] = np.dot(rotations[:, :, i], dividing_orientations[i, :])
 
         # Update cell lengths and positions ...
         #
@@ -331,25 +342,35 @@ def divide_cells_by_group(cells, t, R, to_divide, growth_dists, rng, group_ids,
         if orientation_conc is not None:
             dividing_orientations = cells[to_divide, 2:4]
             theta1 = rng.vonmises(0, orientation_conc, size=(n_divide,))
+            cos_theta1 = np.cos(theta1)
+            sin_theta1 = np.sin(theta1)
+            rotations = np.stack(
+                ((cos_theta1, -sin_theta1), (sin_theta1, cos_theta1))
+            )
             for i, j in enumerate(idx_divide):
-                rot = np.array(
-                    [
-                        [np.cos(theta1[i]), -np.sin(theta1[i])],
-                        [np.sin(theta1[i]), np.cos(theta1[i])]
-                    ],
-                    dtype=np.float64
-                )
-                cells[j, 2:4] = np.dot(rot, dividing_orientations[i, :])
+                #rot = np.array(
+                #    [
+                #        [np.cos(theta1[i]), -np.sin(theta1[i])],
+                #        [np.sin(theta1[i]), np.cos(theta1[i])]
+                #    ],
+                #    dtype=np.float64
+                #)
+                cells[j, 2:4] = np.dot(rotations[:, :, i], dividing_orientations[i, :])
             theta2 = rng.vonmises(0, orientation_conc, size=(n_divide,))
+            cos_theta2 = np.cos(theta2)
+            sin_theta2 = np.sin(theta2)
+            rotations = np.stack(
+                ((cos_theta2, -sin_theta2), (sin_theta2, cos_theta2))
+            )
             for i in range(n_divide):
-                rot = np.array(
-                    [
-                        [np.cos(theta2[i]), -np.sin(theta2[i])],
-                        [np.sin(theta2[i]), np.cos(theta2[i])]
-                    ],
-                    dtype=np.float64
-                )
-                new_cells[i, 2:4] = np.dot(rot, dividing_orientations[i, :])
+                #rot = np.array(
+                #    [
+                #        [np.cos(theta2[i]), -np.sin(theta2[i])],
+                #        [np.sin(theta2[i]), np.cos(theta2[i])]
+                #    ],
+                #    dtype=np.float64
+                #)
+                new_cells[i, 2:4] = np.dot(rotations[:, :, i], dividing_orientations[i, :])
 
         # Update cell lengths and positions ...
         #
