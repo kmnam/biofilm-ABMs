@@ -84,7 +84,7 @@ def get_cell_neighbors_parallel(cells, neighbor_threshold, R, Ldiv):
     Get all pairs of cells whose distances are within the given threshold.
 
     This function should be used over the serial version when there are
-    many cells (> 1000).  
+    many cells (e.g., speedups are apparent for > 100 cells and 4 threads).  
 
     Parameters
     ----------
