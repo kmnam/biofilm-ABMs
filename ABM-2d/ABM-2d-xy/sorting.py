@@ -1,6 +1,6 @@
 """
 Given a directory containing the simulation of a biofilm, plot the 
-trajectory of radial sortedness over time. 
+trajectory of radial Spearman correlation coefficient over time.
 
 Authors:
     Kee-Myoung Nam
@@ -17,7 +17,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from utils import read_cells
-from metrics import radial_sortedness
+from metrics import radial_spearman_coeff
 
 #####################################################################
 def parse_dir(path):
@@ -62,7 +62,7 @@ def parse_dir(path):
 
 #####################################################################
 if __name__ == '__main__':
-    rng = np.random.default_rng(1234567890)
+    #rng = np.random.default_rng(1234567890)
     filenames = parse_dir(os.path.join(sys.argv[1], '*'))
 
     # Minimum number of cells for sortedness to be measured
@@ -84,8 +84,9 @@ if __name__ == '__main__':
         except KeyError:    # Timepoint not stored in initial file
             t = 0.0
 
-        # Compute the radial sortedness of the population, given that 
-        # there are more than the minimum number of cells
+        # Compute the radial Spearman correlation coefficient of the
+        # population, given that there are more than the minimum number
+        # of cells
         size = cells.shape[0]
         if size > min_cells:
             times.append(t)
@@ -94,7 +95,7 @@ if __name__ == '__main__':
                 [0 if cells[i, 9] == 2 else 1 for i in range(size)],
                 dtype=np.int32
             )
-            sortedness.append(radial_sortedness(cells, scores, rng))
+            sortedness.append(radial_spearman_coeff(cells, scores))
 
     # Plot the sortedness profile over time
     color = sns.color_palette()[0]
