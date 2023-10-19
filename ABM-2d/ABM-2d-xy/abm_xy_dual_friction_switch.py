@@ -25,7 +25,7 @@ from mechanics import (
     get_cell_neighbors,
     step_RK_adaptive_from_neighbors
 )
-from mechanics import get_cell_neighbors_parallel
+from mechanics_parallel import get_cell_neighbors_parallel
 from switch import (
     choose_cells_to_switch,
     switch_features
