@@ -158,7 +158,7 @@ if __name__ == '__main__':
     min_cells_parallel = 300
 
     # Fix number of threads
-    set_num_threads(4)
+    set_num_threads(8)
 
     # Write the founder cell to file
     paths = []
