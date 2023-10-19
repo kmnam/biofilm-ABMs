@@ -12,7 +12,7 @@ Last updated:
 import sys
 import json
 import numpy as np
-from numba import njit
+from numba import njit, set_num_threads
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
@@ -152,7 +152,10 @@ if __name__ == '__main__':
 
     # Minimum number of cells to accumulate before switching to parallel
     # neighbor calculation
-    min_cells_parallel = 1000
+    min_cells_parallel = 300
+
+    # Fix number of threads
+    set_num_threads(4)
 
     # Write the founder cell to file
     paths = []
