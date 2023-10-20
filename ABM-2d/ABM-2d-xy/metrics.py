@@ -5,10 +5,10 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/17/2023
+    10/20/2023
 """
 import numpy as np
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, kendalltau
 
 #######################################################################
 def radial_sortedness(cells, scores, rng):
@@ -98,5 +98,32 @@ def radial_spearman_coeff(cells, scores):
     )
 
     return spearmanr(distances, scores).statistic
+
+#######################################################################
+def radial_kendall_tau(cells, scores):
+    """
+    Compute the Kendall's tau correlation coefficient between the cells'
+    radial distances and their given scores.
+
+    Parameters
+    ----------
+    cells : `numpy.ndarray`
+        Existing population of cells.
+    scores : `numpy.ndarray`
+        1-D array of scores (one for each cell). 
+    rng : `numpy.random.Generator`
+        Random number generator.
+
+    Returns
+    -------
+    Kendall's tau correlation coefficient between radial distance and score.
+    """
+    # Compute radial distance from biofilm center
+    center = cells[:, :2].sum(axis=0) / cells.shape[0]
+    distances = np.sqrt(
+        np.power(cells[:, 0] - center[0], 2) + np.power(cells[:, 1] - center[1], 2)
+    )
+
+    return kendalltau(distances, scores).statistic
 
 
