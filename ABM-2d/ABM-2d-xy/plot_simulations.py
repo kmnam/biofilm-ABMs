@@ -71,8 +71,12 @@ if __name__ == '__main__':
     # Maximum number of cells to be plotted
     max_cells = 3000
 
-    # Cell radius 
+    # Maximum number of frames to be plotted
+    max_frames = 1200    # 1200 frames at 10 fps = 120 sec = 2 min
+
+    # Cell radius and line width
     R = 0.35
+    linewidth = 0.8
 
     # Colors for all groups being tracked in the simulation
     colors = sns.color_palette()[:2]
@@ -88,6 +92,15 @@ if __name__ == '__main__':
             filenames_to_plot.append(path)
             break
 
+    # If the number of frames exceeds the maximum number, skip over
+    # frames in constant increments
+    if len(filenames_to_plot) > max_frames:
+        increment = filenames_to_plot // max_frames + 1
+        filenames_to_plot = filenames_to_plot[::increment]
+        
     # Plot simulation to the given output file
-    plot_simulation(paths_to_plot, outpath, R=R, fps=10, colors=colors)
+    plot_simulation(
+        filenames_to_plot, outpath, R=R, fps=10, colors=colors,
+        linewidth=linewidth
+    )
 
