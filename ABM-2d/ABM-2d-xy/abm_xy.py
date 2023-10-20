@@ -126,6 +126,9 @@ if __name__ == '__main__':
     # Output file prefix
     prefix = sys.argv[2]
 
+    # Maximum number of tries to control stepsize per iteration
+    max_tries = 3
+
     # Define a founder cell at the origin at time zero, parallel to x-axis,
     # with mean growth rate and default viscosity and friction coefficients
     cells = np.array(
@@ -166,7 +169,6 @@ if __name__ == '__main__':
         # a given maximum number of iterations)
         if i % iter_update_stepsize == 0:
             max_error = np.max([np.abs(errors).max(), 1e-100])
-            max_tries = 5
             j = 0
             while max_error > 1e-8 and j < max_tries:
                 dt *= (1e-8 / max_error) ** (1 / (error_order + 1))
