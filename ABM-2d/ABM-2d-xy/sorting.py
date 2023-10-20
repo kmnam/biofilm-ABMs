@@ -6,7 +6,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/17/2023
+    10/19/2023
 """
 
 import os
@@ -52,7 +52,7 @@ def parse_dir(path):
     sorted_idx = np.argsort(idx)
     filenames_sorted += [filenames_iter[i] for i in sorted_idx]
     
-    # Find the final file
+    # Find the final file (if one exists)
     for filename in filenames:
         if 'final' in filename:
             filenames_sorted.append(filename)
@@ -68,8 +68,11 @@ if __name__ == '__main__':
     # Minimum number of cells for sortedness to be measured
     min_cells = 100
 
+    # Maximum number of cells for sortedness to be measured
+    max_cells = 3000
+
     # Array of population sizes to demarcate on the plot
-    sizes_to_plot = [200, 500]
+    sizes_to_plot = [500, 1000, 2000]
 
     # For each file ...
     times = []
@@ -88,7 +91,7 @@ if __name__ == '__main__':
         # population, given that there are more than the minimum number
         # of cells
         size = cells.shape[0]
-        if size > min_cells:
+        if size > min_cells and size <= max_cells:
             times.append(t)
             sizes.append(size)
             scores = np.array(
