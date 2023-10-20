@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/17/2023
+    10/19/2023
 """
 import re
 import numpy as np
@@ -67,7 +67,7 @@ def get_cell_outlines(cells, R):
     return outlines
 
 #########################################################################
-def plot_cells(cells, ax, R, colors=None):
+def plot_cells(cells, ax, R, colors=None, linewidth=1):
     """
     Display the cells with Matplotlib.
 
@@ -83,6 +83,8 @@ def plot_cells(cells, ax, R, colors=None):
         Either one color for the entire population or a list of colors for
         each cell in the population. None by default (in which case the 
         cells are all colored with `sns.color_palette()[0]`).
+    linewidth : float
+        Line width for each cell. 
 
     Returns
     -------
@@ -101,7 +103,7 @@ def plot_cells(cells, ax, R, colors=None):
     for i in range(outlines.shape[0]):
         x = outlines[i, :, 0]
         y = outlines[i, :, 1]
-        ax.plot(x, y, color=colors[i])
+        ax.plot(x, y, color=colors[i], linewidth=linewidth)
 
     # Set aspect ratio
     ax.set_aspect('equal')
@@ -109,7 +111,8 @@ def plot_cells(cells, ax, R, colors=None):
     return ax
 
 #########################################################################
-def plot_simulation(paths, outpath, R=None, fps=10, colors=None):
+def plot_simulation(paths, outpath, R=None, fps=10, colors=None, linewidth=1,
+                    figsize=(6.4, 4.8)):
     """
     Given an ordered sequence of file paths, parse the stored simulation data
     and generate a video.
@@ -130,6 +133,10 @@ def plot_simulation(paths, outpath, R=None, fps=10, colors=None):
         each cell *group* in the population. None by default (in which case
         the cells are all colored by group according to the seaborn deep 
         color palette, `sns.color_palette()`).
+    linewidth : float
+        Line width for each cell. 
+    figsize : tuple of two floats
+        Figure dimensions in inches.
     """
     # Run through the files once, to plot the cells and obtain the best x-
     # and y-axes limits
@@ -167,7 +174,7 @@ def plot_simulation(paths, outpath, R=None, fps=10, colors=None):
         cells = np.loadtxt(path, comments='#', delimiter='\t', skiprows=0)
         if len(cells.shape) == 1:
             cells = cells.reshape((1, -1))
-        fig = plt.figure()
+        fig = plt.figure(figsize=figsize)
         ax = plt.gca()
         plot_cells(cells, ax, R)
         ax.set_aspect('equal')
@@ -218,15 +225,16 @@ def plot_simulation(paths, outpath, R=None, fps=10, colors=None):
             colors_by_cell = None
 
         # Plot the cells with the specified colors and configure axes
-        fig = plt.figure()
+        fig = plt.figure(figsize=figsize)
         ax = plt.gca()
-        plot_cells(cells, ax, R, colors=colors_by_cell)
+        plot_cells(cells, ax, R, colors=colors_by_cell, linewidth=linewidth)
         ax.set_aspect('equal')
         ax.set_xlim([xmin, xmax])
         ax.set_ylim([ymin, ymax])
 
-        # Label plot with the timepoint associated with this population
-        ax.set_title(r'$t = {:.10f}$'.format(t))
+        # Label plot with the timepoint associated with this population and 
+        # the population size 
+        ax.set_title(r'$t = {:.10f}, n = {}$'.format(t, cells.shape[0]))
 
         # Get the figure contents as a PIL image
         canvas = fig.canvas
