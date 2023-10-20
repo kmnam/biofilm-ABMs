@@ -57,7 +57,7 @@ def parse_dir(path):
         if 'final' in filename:
             filenames_sorted.append(filename)
             break
-    
+
     return filenames_sorted
 
 #####################################################################
@@ -84,22 +84,28 @@ if __name__ == '__main__':
 
     # Parse all files up to the given maximum number of cells
     filenames_to_plot = []
-    for filename in filenames_to_plot:
+    for filename in filenames:
         cells, _ = read_cells(filename)
         size = cells.shape[0]
         if size >= min_cells and size < max_cells:
-            filenames_to_plot.append(path)
+            filenames_to_plot.append(filename)
         elif size == max_cells:
-            filenames_to_plot.append(path)
+            filenames_to_plot.append(filename)
             break
+    print(
+        '... parsed {} frames in {}'.format(len(filenames_to_plot), sys.argv[1])
+    )
 
     # If the number of frames exceeds the maximum number, skip over
     # frames in constant increments
     if len(filenames_to_plot) > max_frames:
-        increment = filenames_to_plot // max_frames + 1
+        increment = len(filenames_to_plot) // max_frames + 1
         filenames_to_plot = filenames_to_plot[::increment]
         
     # Plot simulation to the given output file
+    print(
+        '... plotting {} frames in {}'.format(len(filenames_to_plot), sys.argv[1])
+    )
     plot_simulation(
         filenames_to_plot, outpath, R=R, fps=10, colors=colors,
         linewidth=linewidth
