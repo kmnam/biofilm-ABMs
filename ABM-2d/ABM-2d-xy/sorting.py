@@ -6,7 +6,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/19/2023
+    10/20/2023
 """
 
 import os
@@ -34,7 +34,7 @@ def parse_dir(path):
     -------
     List of files in order of iteration. 
     """
-    filenames = glob.glob(path)
+    filenames = glob.glob(os.path.join(path, '*'))
     filenames_sorted = []
 
     # Find the initial file 
@@ -62,8 +62,7 @@ def parse_dir(path):
 
 #####################################################################
 if __name__ == '__main__':
-    #rng = np.random.default_rng(1234567890)
-    filenames = parse_dir(os.path.join(sys.argv[1], '*'))
+    filenames = parse_dir(sys.argv[1])
 
     # Minimum number of cells for sortedness to be measured
     min_cells = 100
