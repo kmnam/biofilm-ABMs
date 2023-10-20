@@ -117,7 +117,7 @@ if __name__ == '__main__':
 
     t = 0     # Current time
     i = 0     # Current iteration
-    rng = np.random.default_rng(1234567890)
+    rng = np.random.default_rng(int(sys.argv[3]))    # Random number generator
 
     # Growth rate distribution functions: normal distributions with given
     # mean and standard deviation
