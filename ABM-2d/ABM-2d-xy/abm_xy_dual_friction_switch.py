@@ -6,7 +6,7 @@ Authors:
     Kee-Myoung Nam, JP Nijjer
 
 Last updated:
-    10/18/2023
+    10/19/2023
 """
 
 import sys
@@ -30,7 +30,6 @@ from switch import (
     choose_cells_to_switch,
     switch_features
 )
-from plot import plot_simulation
 from utils import write_cells
 
 #######################################################################
@@ -70,7 +69,6 @@ if __name__ == '__main__':
     eta_ambient = params['eta_ambient']     # Ambient viscosity with surrounding fluid
     dt = params['dt']                       # Timestep
     iter_write = params['iter_write']       # Write simulation data to file every so often
-    iter_video = params['iter_video']       # Compile simulation data into output video every so often
     iter_update_stepsize = params['iter_update_stepsize']      # Update stepsize every so often
     iter_update_neighbors = params['iter_update_neighbors']    # Update neighbors every so often
     neighbor_threshold = 2 * (2 * R + L0)   # Radius for neighboring cells
@@ -162,10 +160,8 @@ if __name__ == '__main__':
     set_num_threads(4)
 
     # Write the founder cell to file
-    paths = []
     path = '{}_init.txt'.format(prefix)
     write_cells(cells, path, params=params)
-    paths.append(path)
 
     # Run the simulation ...
     while t < t_final and cells.shape[0] < n_cells:
@@ -244,22 +240,9 @@ if __name__ == '__main__':
             path = '{}_iter{}.txt'.format(prefix, i)
             params['t_curr'] = t
             write_cells(cells, path, params=params)
-        if i % iter_video == 0:
-            paths.append(path)
-
-    # Check that there are not too many frames being stitched together, 
-    # assuming 10 fps
-    max_frames = 3000                  # 3000 frames = 300 sec = 5 min
-    if len(paths) + 1 > max_frames:    # Add 1 since the last frame has not been added
-        increment = len(paths) // 3000 + 1
-        paths = paths[::increment]
 
     # Write final population to file
     path = '{}_final.txt'.format(prefix)
     params['t_curr'] = t
     write_cells(cells, path, params=params)
-    paths.append(path)
-
-    # Generate video of simulation 
-    plot_simulation(paths, '{}.avi'.format(prefix), R, fps=10)
 
