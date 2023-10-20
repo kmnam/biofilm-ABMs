@@ -17,7 +17,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from utils import read_cells
-from metrics import radial_spearman_coeff
+from metrics import (
+    radial_sortedness, radial_spearman_coeff, radial_kendall_tau
+)
 
 #####################################################################
 def parse_dir(path):
@@ -62,6 +64,7 @@ def parse_dir(path):
 
 #####################################################################
 if __name__ == '__main__':
+    rng = np.random.default_rng(1234567890)
     filenames = parse_dir(sys.argv[1])
 
     # Minimum number of cells for sortedness to be measured
@@ -77,6 +80,8 @@ if __name__ == '__main__':
     times = []
     sizes = []
     sortedness = []
+    spearman = []
+    kendall = []
     for filename in filenames:
         # Parse the cells, population size, and timepoint associated with
         # the file
@@ -97,15 +102,19 @@ if __name__ == '__main__':
                 [0 if cells[i, 9] == 2 else 1 for i in range(size)],
                 dtype=np.int32
             )
-            sortedness.append(radial_spearman_coeff(cells, scores))
+            sortedness.append(radial_sortedness(cells, scores))
+            spearman.append(radial_spearman_coeff(cells, scores))
+            kendall.append(radial_kendall_tau(cells, scores))
 
     # Plot the sortedness profile over time
-    color = sns.color_palette()[0]
-    plt.plot(times, sortedness, c=color, zorder=0)
+    c1, c2, c3 = sns.color_palette()[:3]
+    plt.plot(times, sortedness, c=c1, zorder=0)
+    plt.plot(times, spearman, c=c2, zorder=0)
+    plt.plot(times, kendall, c=c3, zorder=0)
 
     # Plot dashed vertical lines for sortedness values at chosen
     # population sizes
-    color = sns.color_palette()[1]
+    color = sns.color_palette()[4]
     for size in sizes_to_plot:
         try:
             idx = sizes.index(size)
@@ -125,15 +134,16 @@ if __name__ == '__main__':
             horizontalalignment='right'
         )
 
-    # Annotate final sortedness value
+    # Annotate final sortedness values
     color = sns.color_palette()[3]
     plt.scatter(
-        [times[-1]], [sortedness[-1]],
+        [times[-1], times[-1], times[-1]],
+        [sortedness[-1], spearman[-1], kendall[-1]],
         marker='X', s=30, color=color, zorder=1
     )
     plt.annotate(
         '{:.4f}'.format(sortedness[-1]),
-        (times[-1], sortedness[-1] - 0.05),
+        (times[-1], spearman[-1] - 0.05),
         verticalalignment='top',
         horizontalalignment='right'
     )
