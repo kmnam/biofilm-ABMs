@@ -28,9 +28,9 @@
 #ifndef BIOFILM_MECHANICS_HPP
 #define BIOFILM_MECHANICS_HPP
 
+#include <cmath>
 #include <vector>
 #include <Eigen/Dense>
-#include "cell.hpp"
 
 using namespace Eigen;
 
