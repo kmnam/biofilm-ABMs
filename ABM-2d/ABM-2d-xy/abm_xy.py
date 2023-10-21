@@ -22,6 +22,7 @@ from growth import (
 )
 from mechanics import (
     get_cell_neighbors,
+    update_neighbor_distances,
     step_RK_adaptive_from_neighbors
 )
 from plot import plot_simulation
@@ -127,7 +128,7 @@ if __name__ == '__main__':
     prefix = sys.argv[2]
 
     # Maximum number of tries to control stepsize per iteration
-    max_tries = 3
+    max_tries = 5
 
     # Define a founder cell at the origin at time zero, parallel to x-axis,
     # with mean growth rate and default viscosity and friction coefficients
@@ -185,6 +186,9 @@ if __name__ == '__main__':
             
         # Grow the cells
         cells = grow_cells(cells, dt, R)
+
+        # Update distances between neighboring cells
+        neighbors = update_neighbor_distances(cells, neighbors)
         
         # Update current time
         t += dt
