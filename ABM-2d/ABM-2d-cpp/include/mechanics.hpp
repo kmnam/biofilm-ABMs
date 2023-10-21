@@ -126,28 +126,28 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
             {
                 // In this case, set t = l2 / 2 and find s
                 Matrix<T, 2, 1> q = r2 + half_l2 * n2; 
-                s = nearestCellBodyCoordToPoint(r1, n1, l1, q);
+                s = nearestCellBodyCoordToPoint<T>(r1, n1, l1, q);
                 t = half_l2;
             }
             else if (t < s + X && t >= -s + Y)    // In region 2
             {
                 // In this case, set s = l1 / 2 and find t
                 Matrix<T, 2, 1> q = r1 + half_l1 * n1;
-                t = nearestCellBodyCoordToPoint(r2, n2, l2, q); 
+                t = nearestCellBodyCoordToPoint<T>(r2, n2, l2, q); 
                 s = half_l1;
             }
             else if (t < -s + Y && t < s + Y)     // In region 3
             {
                 // In this case, set t = -l2 / 2 and find s
                 Matrix<T, 2, 1> q = r2 - half_l2 * n2;
-                s = nearestCellBodyCoordToPoint(r1, n1, l1, q); 
+                s = nearestCellBodyCoordToPoint<T>(r1, n1, l1, q); 
                 t = -half_l2; 
             }
             else    // t >= s + Y and t < s + X, in region 4 
             {
                 // In this case, set s = -l1 / 2 and find t
                 Matrix<T, 2, 1> q = r1 - half_l1 * n1;
-                t = nearestCellBodyCoordToPoint(r2, n2, l2, q); 
+                t = nearestCellBodyCoordToPoint<T>(r2, n2, l2, q); 
                 s = -half_l1; 
             }
         }
@@ -162,8 +162,8 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
     {
         Matrix<T, 2, 1> p1 = r1 - half_l1 * n1;               // Endpoint for s = -l1 / 2
         Matrix<T, 2, 1> q1 = r1 + half_l1 * n1;               // Endpoint for s = l1 / 2
-        T t_p1 = nearestCellBodyCoordToPoint(r2, n2, l2, p1); 
-        T t_q1 = nearestCellBodyCoordToPoint(r2, n2, l2, q1);
+        T t_p1 = nearestCellBodyCoordToPoint<T>(r2, n2, l2, p1); 
+        T t_q1 = nearestCellBodyCoordToPoint<T>(r2, n2, l2, q1);
         Matrix<T, 2, 1> dist_to_p1 = p1 - (r2 + t_p1 * n2);   // Vector running towards p1
         Matrix<T, 2, 1> dist_to_q1 = q1 - (r2 + t_q1 * n2);   // Vector running towards q1
         if (dist_to_p1.squaredNorm() < dist_to_q1.squaredNorm())    // Here, s = -l1 / 2
@@ -265,7 +265,7 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
             {
                 // In this case, compute their actual distance and check that 
                 // they lie within neighbor_threshold of each other 
-                auto result = distBetweenCells(
+                auto result = distBetweenCells<T>(
                     cells(i, Eigen::seq(0, 1)).matrix(),
                     cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 4), 
                     cells(j, Eigen::seq(0, 1)).matrix(),
@@ -318,7 +318,7 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
     {
         int i = static_cast<int>(neighbors(k, 0)); 
         int j = static_cast<int>(neighbors(k, 1)); 
-        auto result = distBetweenCells(
+        auto result = distBetweenCells<T>(
             cells(i, Eigen::seq(0, 1)).matrix(),
             cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 4), 
             cells(j, Eigen::seq(0, 1)).matrix(),
@@ -374,7 +374,7 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
         Array<T, 2, 1> dist_ij = neighbors(k, Eigen::seq(2, 3));   // Distance vector from i to j
         T si = neighbors(k, 4);                         // Cell-body coordinate along cell i
         T sj = neighbors(k, 5);                         // Cell-body coordinate along cell j
-        T delta_ij = dist_ij.norm();                    // Magnitude of distance vector 
+        T delta_ij = dist_ij.matrix().norm();           // Magnitude of distance vector 
         Array<T, 2, 1> dir_ij = dist_ij / delta_ij;     // Normalized distance vector
 
         // Get the overlapping distance between cells i and j (this distance
@@ -436,7 +436,7 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
-Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Matrix<T, Dynamic, Dynamic> >& cells,
+Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                                 const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                                 const T R, const T Rcell, 
                                                 const T E0, const T Ecell, 
@@ -471,12 +471,12 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Matrix<T, Dynami
     //
     int n = cells.rows(); 
     Array<T, Dynamic, 4> velocities = Matrix<T, Dynamic, 4>::Zero(n, 4); 
-    Array<T, Dynamic, 2> prefactors = compositeViscosityForcePrefactors(
+    Array<T, Dynamic, 2> prefactors = compositeViscosityForcePrefactors<T>(
         cells, R, surface_contact_density
     );
     Array<T, Dynamic, 1> K = prefactors.col(0);
     Array<T, Dynamic, 1> L = prefactors.col(1); 
-    Array<T, Dynamic, 4> dEdq = cellCellForcesFromNeighbors(
+    Array<T, Dynamic, 4> dEdq = cellCellForcesFromNeighbors<T>(
         cells, neighbors, R, Rcell, E0, Ecell
     );
     Array<T, Dynamic, 1> mult = cells.col(2) * dEdq.col(2) + cells.col(3) * dEdq.col(3); 
@@ -496,10 +496,11 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Matrix<T, Dynami
  * @param cells Existing population of cells. 
  */
 template <typename T>
-void normalizeOrientations(Ref<Matrix<T, Dynamic, Dynamic> > cells)
+void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
 {
     Array<T, Dynamic, 1> norms = cells(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array(); 
-    cells(Eigen::all, Eigen::seq(2, 3)).colwise() /= norms; 
+    cells(Eigen::all, 2) /= norms;
+    cells(Eigen::all, 3) /= norms;
 }
 
 /**
@@ -547,7 +548,7 @@ Array<T, Dynamic, 4> stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T
     int s = b.size(); 
     std::vector<Array<T, Dynamic, 4> > velocities; 
     velocities.push_back(
-        getVelocitiesFromNeighbors(
+        getVelocitiesFromNeighbors<T>(
             cells, neighbors, R, Rcell, E0, Ecell, surface_contact_density
         )
     );
@@ -559,7 +560,7 @@ Array<T, Dynamic, 4> stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T
         Array<T, Dynamic, Dynamic> cells_i(cells); 
         cells_i(Eigen::all, Eigen::seq(0, 3)) += multipliers * dt; 
         velocities.push_back(
-            get_velocities_from_neighbors(
+            getVelocitiesFromNeighbors<T>(
                 cells_i, neighbors, R, Rcell, E0, Ecell, surface_contact_density
             )
         ); 
@@ -579,7 +580,7 @@ Array<T, Dynamic, 4> stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T
     Array<T, Dynamic, 4> errors = delta1 - delta2; 
     
     // Renormalize orientations 
-    normalizeOrientations(cells); 
+    normalizeOrientations<T>(cells); 
 
     // Return errors 
     return errors; 
