@@ -24,9 +24,13 @@ from growth import (
 )
 from mechanics import (
     get_cell_neighbors,
+    update_neighbor_distances,
     step_RK_adaptive_from_neighbors
 )
-from mechanics_parallel import get_cell_neighbors_parallel
+from mechanics_parallel import (
+    get_cell_neighbors_parallel,
+    update_neighbor_distances_parallel
+)
 from switch import (
     choose_cells_to_switch,
     switch_features
@@ -135,6 +139,9 @@ if __name__ == '__main__':
     # Output file prefix
     prefix = sys.argv[2]
 
+    # Maximum number of attempts to control stepsize 
+    max_tries = 3
+
     # Define a founder cell at the origin at time zero, parallel to x-axis,
     # with mean growth rate and default viscosity and friction coefficients
     cells = np.array(
@@ -147,6 +154,9 @@ if __name__ == '__main__':
 
     # Run parallelized version for compilation
     _ = get_cell_neighbors_parallel(cells, neighbor_threshold, R, Ldiv)
+
+    # Run parallelized version of update_neighbor_distances() for compilation
+    _ = update_neighbor_distances_parallel(cells, neighbors)
 
     # Minimum number of cells to accumulate before switching to parallel
     # neighbor calculation
@@ -190,7 +200,6 @@ if __name__ == '__main__':
         # a given maximum number of iterations)
         if i % iter_update_stepsize == 0:
             max_error = np.max([np.abs(errors).max(), 1e-100])
-            max_tries = 5
             j = 0
             while max_error > 1e-8 and j < max_tries:
                 dt *= (1e-8 / max_error) ** (1 / (error_order + 1))
@@ -216,6 +225,12 @@ if __name__ == '__main__':
         # for all cells whose lifetimes have completely elapsed
         to_switch = choose_cells_to_switch(cells, rate_12, rate_21, dt, rng)
         cells = switch_features(cells, 6, to_switch, growth_dist1, growth_dist2, rng)
+
+        # Update distances between neighboring cells 
+        if cells.shape[0] >= min_cells_parallel:
+            neighbors = update_neighbor_distances_parallel(cells, neighbors)
+        else:
+            neighbors = update_neighbor_distances(cells, neighbors)
 
         # Update neighboring cells 
         if i % iter_update_neighbors == 0:
