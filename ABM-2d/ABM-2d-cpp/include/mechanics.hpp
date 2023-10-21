@@ -95,13 +95,14 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
     T s_numer = r12_dot_n1 - n1_dot_n2 * r12_dot_n2;
     T t_numer = n1_dot_n2 * r12_dot_n1 - r12_dot_n2;
     T denom = 1 - std::pow(n1_dot_n2, 2);
-    Matrix<T, 2, 1> dist; 
+    Matrix<T, 2, 1> dist;
+    T s, t;  
 
     // If the two centerlines are not parallel ...
     if (std::abs(denom) > 1e-6)
     {
-        T s = s_numer / denom;
-        T t = t_numer / denom; 
+        s = s_numer / denom;
+        t = t_numer / denom; 
         // Check that the unconstrained minimum values of s and t lie within
         // the desired ranges
         if (std::abs(s) > half_l1 || std::abs(t) > half_l2)
@@ -554,7 +555,7 @@ Array<T, Dynamic, 4> stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T
     {
         Array<T, Dynamic, 4> multipliers = Array<T, Dynamic, 4>::Zero(n, 4);
         for (int j = 0; j < i; ++j)
-            multipliers += velocities[j] * A[i, j];
+            multipliers += velocities[j] * A(i, j);
         Array<T, Dynamic, Dynamic> cells_i(cells); 
         cells_i(Eigen::all, Eigen::seq(0, 3)) += multipliers * dt; 
         velocities.push_back(
