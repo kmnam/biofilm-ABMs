@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/20/2023
+    10/21/2023
 """
 
 import numpy as np
@@ -90,7 +90,7 @@ def cell_point_nearest_to_point(r, n, l, q):
     -------
     Cell-body coordinate corresponding to nearest point along the cell. 
     """
-    s = (-np.dot(r, n) + np.dot(q, n)) / np.dot(n, n)
+    s = np.dot(q - r, n)
     if np.abs(s) <= l / 2:
         return s
     elif s > l / 2:
@@ -134,9 +134,15 @@ def cell_cell_distance(r1, n1, l1, r2, n2, l2):
 
     # We are looking for the values of s in [-l1/2, l1/2] and t in [-l2/2, l2/2]
     # such that the norm of r12 + t*n2 - s*n1 is minimized
-    s_numer = np.dot(r12, n1) - np.dot(n1, n2) * np.dot(r12, n2)
-    t_numer = np.dot(n1, n2) * np.dot(r12, n1) - np.dot(r12, n2)
-    denom = 1 - np.dot(n1, n2) ** 2
+    r12_dot_n1 = np.dot(r12, n1)
+    r12_dot_n2 = np.dot(r12, n2)
+    n1_dot_n2 = np.dot(n1, n2)
+    s_numer = r12_dot_n1 - n1_dot_n2 * r12_dot_n2
+    t_numer = n1_dot_n2 * r12_dot_n1 - r12_dot_n2
+    denom = 1 - n1_dot_n2 ** 2
+    #s_numer = np.dot(r12, n1) - np.dot(n1, n2) * np.dot(r12, n2)
+    #t_numer = np.dot(n1, n2) * np.dot(r12, n1) - np.dot(r12, n2)
+    #denom = 1 - np.dot(n1, n2) ** 2
 
     # If the two centerlines are not parallel ...
     if np.abs(denom) > 1e-6:
