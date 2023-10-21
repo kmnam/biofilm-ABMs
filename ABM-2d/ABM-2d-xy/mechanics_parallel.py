@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/18/2023
+    10/20/2023
 """
 
 import numpy as np
@@ -170,6 +170,47 @@ def get_cell_neighbors_parallel(cells, neighbor_threshold, R, Ldiv):
         outarr[k, 4:6] = sij[k, :]
 
     return outarr
+
+########################################################################
+@njit(parallel=True, fastmath=True)
+def update_neighbor_distances_parallel(cells, neighbors):
+    """
+    Update the cell-cell distances in the given array of neighboring pairs
+    of cells.
+
+    Parameters
+    ----------
+    cells : `numpy.ndarray`
+        Existing population of cells.
+    neighbors : `numpy.ndarray`
+        Array of neighboring pairs of cells.
+
+    Returns
+    -------
+    Updated array of neighboring pairs of cells.
+    """
+    # Each row of neighbors contains the following information about
+    # each pair of neighboring cells:
+    # 0) Index i of first cell in neighboring pair
+    # 1) Index j of second cell in neighboring pair
+    # 2) x-coordinate of distance vector from cell i to cell j
+    # 3) y-coordinate of distance vector from cell i to cell j
+    # 4) Cell-body coordinate of contact point along centerline of cell i
+    # 5) Cell-body coordinate of contact point along centerline of cell j
+    #
+    # Columns 2, 3, 4, 5 are updated here
+    for k in prange(neighbors.shape[0]):
+        i = np.int32(neighbors[k, 0])
+        j = np.int32(neighbors[k, 1])
+        dist_ij, si, sj = cell_cell_distance(
+            cells[i, :2], cells[i, 2:4], cells[i, 4],
+            cells[j, :2], cells[j, 2:4], cells[j, 4]
+        )
+        neighbors[k, 2:4] = dist_ij
+        neighbors[k, 4] = si
+        neighbors[k, 5] = sj
+
+    return neighbors
  
 ########################################################################
 @njit(parallel=True, fastmath=True)
