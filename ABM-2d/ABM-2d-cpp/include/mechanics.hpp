@@ -28,6 +28,7 @@
 #ifndef BIOFILM_MECHANICS_HPP
 #define BIOFILM_MECHANICS_HPP
 
+#include <iostream>
 #include <cassert>
 #include <cmath>
 #include <vector>
@@ -66,6 +67,8 @@ T nearestCellBodyCoordToPoint(const Ref<const Matrix<T, 2, 1> >& r,
  * Return the shortest distance between the centerlines of two cells, along
  * with the cell-body coordinates at which the shortest distance is achieved.
  *
+ * The distance vector returned by this function runs from cell 1 to cell 2.
+ *
  * @param r1 Center of cell 1.
  * @param n1 Orientation of cell 1.
  * @param l1 Length of cell 1.
@@ -73,7 +76,8 @@ T nearestCellBodyCoordToPoint(const Ref<const Matrix<T, 2, 1> >& r,
  * @param n2 Orientation of cell 2.
  * @param l2 Length of cell 2.
  * @returns Shortest distance between the two cells, along with the cell-body
- *          coordinates at which the shortest distance is achieved.
+ *          coordinates at which the shortest distance is achieved. The
+ *          distance is returned as a vector running from cell 1 to cell 2.
  */
 template <typename T>
 std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 1> >& r1,
@@ -115,38 +119,37 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
             // is nearest
             //
             // Region 1 (above top side):
-            //     between t = s + X and t = -s + X
+            //     between t = -s - X and t = s - X
             // Region 2 (right of right side):
-            //     between t = s + X and t = -s + Y
+            //     between t = s - X and t = -s + X
             // Region 3 (below bottom side): 
-            //     between t = -s + Y and t = s + Y
+            //     between t = -s + X and t = s + X
             // Region 4 (left of left side):
-            //     between t = s + Y and t = -s + X,
-            // where X = (l2 - l1) / 2 and Y = (l1 - l2) / 2
-            T X = half_l2 - half_l1;
-            T Y = -X; 
-            if (t >= s + X && t >= -s + X)        // In region 1
+            //     between t = s + X and t = -s - X
+            // where X = (l1 - l2) / 2
+            T X = half_l1 - half_l2;
+            if (t >= -s - X && t >= s - X)          // In region 1
             {
                 // In this case, set t = l2 / 2 and find s
                 Matrix<T, 2, 1> q = r2 + half_l2 * n2; 
                 s = nearestCellBodyCoordToPoint<T>(r1, n1, l1, q);
                 t = half_l2;
             }
-            else if (t < s + X && t >= -s + Y)    // In region 2
+            else if (t < s - X && t >= -s + X)      // In region 2
             {
                 // In this case, set s = l1 / 2 and find t
                 Matrix<T, 2, 1> q = r1 + half_l1 * n1;
                 t = nearestCellBodyCoordToPoint<T>(r2, n2, l2, q); 
                 s = half_l1;
             }
-            else if (t < -s + Y && t < s + Y)     // In region 3
+            else if (t < -s + X && t < s + X)      // In region 3
             {
                 // In this case, set t = -l2 / 2 and find s
                 Matrix<T, 2, 1> q = r2 - half_l2 * n2;
-                s = nearestCellBodyCoordToPoint<T>(r1, n1, l1, q); 
-                t = -half_l2; 
+                s = nearestCellBodyCoordToPoint<T>(r1, n1, l1, q);
+                t = -half_l2;
             }
-            else    // t >= s + Y and t < s + X, in region 4 
+            else    // t >= s + X and t < -s - X, in region 4
             {
                 // In this case, set s = -l1 / 2 and find t
                 Matrix<T, 2, 1> q = r1 - half_l1 * n1;
@@ -154,7 +157,7 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
                 s = -half_l1; 
             }
         }
-        // Compute distance vector between the two cells 
+        // Compute distance vector between the two cells
         dist = r12 + t * n2 - s * n1; 
     }
     // Otherwise, take cap centers of cell 1 and compare the distances to cell 2 
@@ -390,7 +393,7 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
         //
         // Case 1: the overlap is positive but less than R - Rcell (i.e., it 
         // is limited to within the EPS coating)
-        T prefactor;  
+        T prefactor = 0; 
         if (overlap > 0 && overlap < R - Rcell)
         {
             prefactor = 2.5 * E0 * std::sqrt(R) * std::pow(overlap, 1.5); 
@@ -480,6 +483,8 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     );
     Array<T, Dynamic, 1> K = prefactors.col(0);
     Array<T, Dynamic, 1> L = prefactors.col(1);
+    assert((K != 0).all() && "Composite viscosity force prefactors for positions have zero values"); 
+    assert((L != 0).all() && "Composite viscosity force prefactors for orientations have zero values");
     Array<T, Dynamic, 4> dEdq = cellCellForcesFromNeighbors<T>(
         cells, neighbors, R, Rcell, E0, Ecell
     );
@@ -488,12 +493,10 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         dEdq(Eigen::all, Eigen::seq(2, 3)) +
         cells(Eigen::all, Eigen::seq(2, 3)).colwise() * mult
     );
-    assert((K != 0).all() && "Composite viscosity force prefactors for positions have zero values"); 
-    assert((L != 0).all() && "Composite viscosity force prefactors for orientations have zero values"); 
     velocities.col(0) = -dEdq.col(0) / K;
     velocities.col(1) = -dEdq.col(1) / K; 
-    velocities.col(2) = -dEdn_constrained(0) / L;
-    velocities.col(3) = -dEdn_constrained(1) / L;
+    velocities.col(2) = -dEdn_constrained.col(0) / L;
+    velocities.col(3) = -dEdn_constrained.col(1) / L;
 
     return velocities;  
 }
@@ -521,11 +524,13 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * In this function, the pairs of neighboring cells in the population have 
  * been pre-computed.
  *
+ * Since the differential equations are time-autonomous, the nodes of the 
+ * Butcher tableau are not required. 
+ *
  * @param A Runge-Kutta matrix of Butcher tableau. Should be lower triangular
  *          with zero diagonal. 
  * @param b Weights of Butcher tableau. Entries should sum to one. 
  * @param bs Error weights of Butcher tableau. Entries should sum to one. 
- * @param c Nodes of Butcher tableau. First entry should be zero. 
  * @param cells Existing population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the 
  *                  population. 
@@ -543,7 +548,6 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
     stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& A,
                                         const Ref<const Array<T, Dynamic, 1> >& b,
                                         const Ref<const Array<T, Dynamic, 1> >& bs, 
-                                        const Ref<const Array<T, Dynamic, 1> >& c,
                                         const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
                                         const Ref<const Array<T, Dynamic, 6> >& neighbors, 
                                         const T dt, const T R, const T Rcell,
