@@ -145,7 +145,7 @@ int main(int argc, char** argv)
     while (n < n_cells)
     {
         // Divide the cells that have reached division length
-        Array<bool, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
+        Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
         cells = divideCells<T>(
             cells, t, R, to_divide, growth_dist_func, rng, daughter_length_dist_func,
             daughter_angle_dist_func
