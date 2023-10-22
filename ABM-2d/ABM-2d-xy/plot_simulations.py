@@ -6,9 +6,11 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/20/2023
+    10/22/2023
 """
 
+import matplotlib
+matplotlib.use('agg')
 import sys
 import os
 import glob
@@ -75,7 +77,7 @@ if __name__ == '__main__':
     max_frames = 1200    # 1200 frames at 10 fps = 120 sec = 2 min
 
     # Cell radius and line width
-    R = 0.35
+    R = 0.8
     linewidth = 0.8
 
     # Colors for all groups being tracked in the simulation
