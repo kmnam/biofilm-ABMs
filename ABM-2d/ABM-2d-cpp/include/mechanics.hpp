@@ -215,7 +215,7 @@ Array<T, Dynamic, 2> compositeViscosityForcePrefactors(const Ref<const Array<T, 
     Array<T, Dynamic, 2> KL(cells.rows(), 2);
     Array<T, Dynamic, 1> composite_drag = cells.col(7) + cells.col(8) * surface_contact_density / R; 
     KL.col(0) = cells.col(4) * composite_drag; 
-    KL.col(1) = cells.col(4).array().pow(3) * composite_drag / 12; 
+    KL.col(1) = cells.col(4).pow(3) * composite_drag / 12;
 
     return KL; 
 }
@@ -356,7 +356,7 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
                                                  const T R, const T Rcell,
                                                  const T E0, const T Ecell)
 {
-    int n = cells.size();   // Number of cells
+    int n = cells.rows();   // Number of cells
 
     // If there is only one cell, return zero
     if (n == 1)
@@ -470,20 +470,24 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     // lambda = -0.5 * (nx * dE/dnx + ny * dE/dny)
     //
     int n = cells.rows(); 
-    Array<T, Dynamic, 4> velocities = Matrix<T, Dynamic, 4>::Zero(n, 4); 
+    Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4); 
     Array<T, Dynamic, 2> prefactors = compositeViscosityForcePrefactors<T>(
         cells, R, surface_contact_density
     );
     Array<T, Dynamic, 1> K = prefactors.col(0);
-    Array<T, Dynamic, 1> L = prefactors.col(1); 
+    Array<T, Dynamic, 1> L = prefactors.col(1);
     Array<T, Dynamic, 4> dEdq = cellCellForcesFromNeighbors<T>(
         cells, neighbors, R, Rcell, E0, Ecell
     );
-    Array<T, Dynamic, 1> mult = cells.col(2) * dEdq.col(2) + cells.col(3) * dEdq.col(3); 
-    velocities(Eigen::all, Eigen::seq(0, 1)) = -dEdq(Eigen::all, Eigen::seq(0, 1)) / K; 
-    velocities(Eigen::all, Eigen::seq(2, 3)) = -(
-        dEdq(Eigen::all, Eigen::seq(2, 3)) + mult * cells(Eigen::all, Eigen::seq(2, 3))
-    ) / L;
+    Array<T, Dynamic, 1> mult = cells.col(2) * dEdq.col(2) + cells.col(3) * dEdq.col(3);
+    Array<T, Dynamic, 2> dEdn_constrained = (
+        dEdq(Eigen::all, Eigen::seq(2, 3)) +
+        cells(Eigen::all, Eigen::seq(2, 3)).colwise() * mult
+    ); 
+    velocities.col(0) = -dEdq.col(0) / K;
+    velocities.col(1) = -dEdq.col(1) / K; 
+    velocities.col(2) = -dEdn_constrained(0) / L;
+    velocities.col(3) = -dEdn_constrained(1) / L;
 
     return velocities;  
 }
@@ -498,9 +502,9 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
 template <typename T>
 void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
 {
-    Array<T, Dynamic, 1> norms = cells(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array(); 
-    cells(Eigen::all, 2) /= norms;
-    cells(Eigen::all, 3) /= norms;
+    Array<T, Dynamic, 1> norms = cells(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array();
+    cells.col(2) /= norms; 
+    cells.col(3) /= norms;
 }
 
 /**
@@ -563,7 +567,7 @@ Array<T, Dynamic, 4> stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T
             getVelocitiesFromNeighbors<T>(
                 cells_i, neighbors, R, Rcell, E0, Ecell, surface_contact_density
             )
-        ); 
+        );
     }
 
     // Compute Runge-Kutta update from computed velocities
@@ -576,7 +580,7 @@ Array<T, Dynamic, 4> stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T
     }
     Array<T, Dynamic, 4> delta1 = velocities_final1 * dt; 
     Array<T, Dynamic, 4> delta2 = velocities_final2 * dt; 
-    cells(Eigen::all, Eigen::seq(0, 3)) += delta1; 
+    cells(Eigen::all, Eigen::seq(0, 3)) += delta1;
     Array<T, Dynamic, 4> errors = delta1 - delta2; 
     
     // Renormalize orientations 
