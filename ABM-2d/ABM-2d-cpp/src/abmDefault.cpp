@@ -16,7 +16,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/21/2023
+ *     10/22/2023
  */
 
 #include <iostream>
@@ -47,17 +47,11 @@ int main(int argc, char** argv)
     b << 2./9., 1./3., 4./9., 0;
     Array<T, Dynamic, 1> bs(4); 
     bs << 7./24., 1./4., 1./3., 1./8.;
-    Array<T, Dynamic, 1> c(4); 
-    c << 0, 1./2., 3./4., 1; 
     T error_order = 2; 
 
     // Parse input json file 
     std::string json_filename = argv[1];
     boost::json::object json_data = parseConfigFile(json_filename).as_object();
-
-    // TODO Check that required input parameters were specified 
-    if (!json_data.contains("R"))
-        throw std::runtime_error("Cell radius must be specified"); 
 
     // Define required input parameters
     const T R = static_cast<T>(json_data["R"].as_double());
@@ -137,9 +131,13 @@ int main(int argc, char** argv)
     
     // Compute initial array of neighboring cells (should be empty)
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
-    std::cout << neighbors << "\n\n";
 
-    // TODO Write the founder cell to file
+    // Write the founder cell to file
+    json_data["t_curr"] = t;
+    std::stringstream ss_init; 
+    ss_init << prefix << "_init.txt";
+    std::string filename_init = ss_init.str(); 
+    writeCells<T>(cells, json_data, filename_init); 
     
     // Run the simulation ... 
     while (n < n_cells)
@@ -149,7 +147,7 @@ int main(int argc, char** argv)
         cells = divideCells<T>(
             cells, t, R, to_divide, growth_dist_func, rng, daughter_length_dist_func,
             daughter_angle_dist_func
-        ); 
+        );
 
         // Update the neighboring cells if division has occurred
         if (to_divide.sum() > 0)
@@ -157,11 +155,11 @@ int main(int argc, char** argv)
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-            A, b, bs, c, cells, neighbors, dt, R, Rcell, E0, Ecell,
+            A, b, bs, cells, neighbors, dt, R, Rcell, E0, Ecell,
             surface_contact_density
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first; 
-        Array<T, Dynamic, 4> errors = result.second; 
+        Array<T, Dynamic, 4> errors = result.second;
 
         // If the error is big, retry the step with a smaller stepsize (up to
         // a given maximum number of attempts)
@@ -173,7 +171,7 @@ int main(int argc, char** argv)
             {
                 dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-                    A, b, bs, c, cells, neighbors, dt, R, Rcell, E0, Ecell,
+                    A, b, bs, cells, neighbors, dt, R, Rcell, E0, Ecell,
                     surface_contact_density
                 ); 
                 cells_new = result.first; 
@@ -183,7 +181,7 @@ int main(int argc, char** argv)
             }
             // If the error is small, increase the stepsize up to a maximum stepsize
             if (max_error < 1e-8)
-                dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-4);
+                dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-5);
         }
         cells = cells_new;
 
@@ -202,17 +200,26 @@ int main(int argc, char** argv)
         if (i % iter_update_neighbors == 0)
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
 
-        // TODO Write the current population to file
+        // Write the current population to file
         if (i % iter_write == 0)
         {
             std::cout << "Iteration " << i << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
                       << ", dt = " << dt << std::endl;
+            json_data["t_curr"] = t;
+            std::stringstream ss; 
+            ss << prefix << "_iter" << i << ".txt"; 
+            std::string filename = ss.str(); 
+            writeCells<T>(cells, json_data, filename); 
         } 
     }
 
-    // TODO Write final population to file
-    std::cout << cells << std::endl; 
+    // Write final population to file
+    json_data["t_curr"] = t;
+    std::stringstream ss_final; 
+    ss_final << prefix << "_final.txt";
+    std::string filename_final = ss_final.str(); 
+    writeCells<T>(cells, json_data, filename_final); 
     
     return 0; 
 }
