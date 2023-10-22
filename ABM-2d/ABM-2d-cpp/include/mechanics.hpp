@@ -22,12 +22,13 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/21/2023
+ *     10/22/2023
  */
 
 #ifndef BIOFILM_MECHANICS_HPP
 #define BIOFILM_MECHANICS_HPP
 
+#include <cassert>
 #include <cmath>
 #include <vector>
 #include <utility>
@@ -376,7 +377,8 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
         Array<T, 2, 1> dist_ij = neighbors(k, Eigen::seq(2, 3));   // Distance vector from i to j
         T si = neighbors(k, 4);                         // Cell-body coordinate along cell i
         T sj = neighbors(k, 5);                         // Cell-body coordinate along cell j
-        T delta_ij = dist_ij.matrix().norm();           // Magnitude of distance vector 
+        T delta_ij = dist_ij.matrix().norm();           // Magnitude of distance vector
+        assert(delta_ij > 0 && "Distance vector with zero norm encountered");  
         Array<T, 2, 1> dir_ij = dist_ij / delta_ij;     // Normalized distance vector
 
         // Get the overlapping distance between cells i and j (this distance
@@ -485,7 +487,9 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     Array<T, Dynamic, 2> dEdn_constrained = (
         dEdq(Eigen::all, Eigen::seq(2, 3)) +
         cells(Eigen::all, Eigen::seq(2, 3)).colwise() * mult
-    ); 
+    );
+    assert((K != 0).all() && "Composite viscosity force prefactors for positions have zero values"); 
+    assert((L != 0).all() && "Composite viscosity force prefactors for orientations have zero values"); 
     velocities.col(0) = -dEdq.col(0) / K;
     velocities.col(1) = -dEdq.col(1) / K; 
     velocities.col(2) = -dEdn_constrained(0) / L;
@@ -505,6 +509,7 @@ template <typename T>
 void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
 {
     Array<T, Dynamic, 1> norms = cells(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array();
+    assert((norms > 0).all() && "Zero norms encountered during orientation normalization");
     cells.col(2) /= norms; 
     cells.col(3) /= norms;
 }
