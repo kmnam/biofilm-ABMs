@@ -9,6 +9,7 @@ Last updated:
 """
 import numpy as np
 from scipy.stats import spearmanr, kendalltau
+from mechanics import get_cell_neighbors
 
 #######################################################################
 def radial_sortedness(cells, scores, rng):
@@ -125,5 +126,4 @@ def radial_kendall_tau(cells, scores):
     )
 
     return kendalltau(distances, scores).statistic
-
 

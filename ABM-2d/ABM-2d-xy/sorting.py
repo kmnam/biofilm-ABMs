@@ -71,10 +71,10 @@ if __name__ == '__main__':
     min_cells = 100
 
     # Maximum number of cells for sortedness to be measured
-    max_cells = 3000
+    max_cells = 5000
 
     # Array of population sizes to demarcate on the plot
-    sizes_to_plot = [500, 1000, 2000]
+    sizes_to_plot = [500, 1000, 2000, 5000]
 
     # For each file ...
     times = []
@@ -102,7 +102,7 @@ if __name__ == '__main__':
                 [0 if cells[i, 9] == 2 else 1 for i in range(size)],
                 dtype=np.int32
             )
-            sortedness.append(radial_sortedness(cells, scores))
+            sortedness.append(radial_sortedness(cells, scores, rng))
             spearman.append(radial_spearman_coeff(cells, scores))
             kendall.append(radial_kendall_tau(cells, scores))
 
@@ -142,7 +142,7 @@ if __name__ == '__main__':
         marker='X', s=30, color=color, zorder=1
     )
     plt.annotate(
-        '{:.4f}'.format(sortedness[-1]),
+        '{:.4f}'.format(spearman[-1]),
         (times[-1], spearman[-1] - 0.05),
         verticalalignment='top',
         horizontalalignment='right'

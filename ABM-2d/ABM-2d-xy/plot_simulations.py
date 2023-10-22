@@ -63,14 +63,13 @@ def parse_dir(path):
 #####################################################################
 if __name__ == '__main__':
     filenames = parse_dir(sys.argv[1])
-    n_cells = int(sys.argv[2])
-    outpath = sys.argv[3]
+    outpath = sys.argv[2]
 
     # Minimum number of cells to be plotted
     min_cells = 0
 
     # Maximum number of cells to be plotted
-    max_cells = 3000
+    max_cells = 5000
 
     # Maximum number of frames to be plotted
     max_frames = 1200    # 1200 frames at 10 fps = 120 sec = 2 min
