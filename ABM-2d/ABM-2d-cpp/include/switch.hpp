@@ -93,11 +93,12 @@ Array<int, Dynamic, 1> chooseCellsToSwitch(const Ref<const Array<T, Dynamic, Dyn
  * @param dist2 Feature distribution function for group 2.
  * @param rng Random number generator.
  */
-void switchFeatures(Ref<Array<T, Dynamic, Dynamic> > cells, const int feature_idx,
-                    const Ref<const Array<int, Dynamic, 1> >& to_switch, 
-                    std::function<T(boost::random::mt19937&)> dist1, 
-                    std::function<T(boost::random::mt19937&)> dist2,
-                    boost::random::mt19937& rng)
+template <typename T>
+void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells, const int feature_idx,
+                  const Ref<const Array<int, Dynamic, 1> >& to_switch, 
+                  std::function<T(boost::random::mt19937&)> dist1, 
+                  std::function<T(boost::random::mt19937&)> dist2,
+                  boost::random::mt19937& rng)
 {
     int n_switch = to_switch.sum(); 
 
