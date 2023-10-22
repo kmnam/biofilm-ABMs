@@ -55,10 +55,10 @@ void growCells(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt, const T R)
  * @returns Boolean index indicating which cells are to divide. 
  */
 template <typename T>
-Array<bool, Dynamic, 1> divideMaxLength(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                        const T Ldiv)
+Array<int, Dynamic, 1> divideMaxLength(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                       const T Ldiv)
 {
-    return (cells.col(4) > Ldiv); 
+    return (cells.col(4) > Ldiv).template cast<int>(); 
 }
 
 /**
@@ -102,23 +102,23 @@ Array<bool, Dynamic, 1> divideMaxLength(const Ref<const Array<T, Dynamic, Dynami
 template <typename T>
 Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                        const T t, const T R,
-                                       const Ref<const Array<bool, Dynamic, 1> >& to_divide,
+                                       const Ref<const Array<int, Dynamic, 1> >& to_divide,
                                        std::function<T(boost::random::mt19937&)>& growth_dist,
                                        boost::random::mt19937& rng,
                                        std::function<T(boost::random::mt19937&)>& daughter_length_dist,
                                        std::function<T(boost::random::mt19937&)>& daughter_angle_dist)
 {
     // If there are cells to be divided ...
-    const int n_divide = to_divide.sum(); 
+    const int n_divide = to_divide.sum();
     if (n_divide > 0)
     {
         // Get indices of cells to be divided
         int n = cells.rows(); 
-        std::vector<int> idx_divide; 
+        std::vector<int> idx_divide;
         for (int i = 0; i < n; ++i)
         {
             if (to_divide(i))
-                idx_divide.push_back(i); 
+                idx_divide.push_back(i);
         }
 
         // Get an extended copy of the existing population
@@ -185,7 +185,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
         // Get perturbations from point of division along cell centerline
         // for the daughter cell centers
         Array<T, Dynamic, 1> delta1 = M * (cells_total(idx_divide, 4) - 2 * R) / 2 + R; 
-        Array<T, Dynamic, 1> delta2 = (1 - M) * (new_cells.col(4) - 2 * R) / 2 + R; 
+        Array<T, Dynamic, 1> delta2 = (1 - M) * (new_cells.col(4) - 2 * R) / 2 + R;
         // Define daughter cell lengths and locate daughter cell centers
         cells_total(idx_divide, 4) = M * (cells_total(idx_divide, 4) - 2 * R); 
         new_cells.col(4) = (1 - M) * (new_cells.col(4) - 2 * R); 
@@ -196,7 +196,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
         cells_total(idx_divide, 1) = (
             cells_total(idx_divide, 1) + (div - delta1) * cells_total(idx_divide, 3)
         );
-        new_cells.col(1) = new_cells.col(1) + (div + delta2) * new_cells.col(3); 
+        new_cells.col(1) = new_cells.col(1) + (div + delta2) * new_cells.col(3);
 
         // Update cell birth times
         cells_total(idx_divide, 5) = t;
