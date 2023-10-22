@@ -30,6 +30,8 @@
 
 #include <cmath>
 #include <vector>
+#include <utility>
+#include <tuple>
 #include <Eigen/Dense>
 
 using namespace Eigen;
@@ -514,9 +516,6 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * In this function, the pairs of neighboring cells in the population have 
  * been pre-computed.
  *
- * The given array of cell data is updated in place, and the array of 
- * errors predicted by the adaptive method is returned.  
- *
  * @param A Runge-Kutta matrix of Butcher tableau. Should be lower triangular
  *          with zero diagonal. 
  * @param b Weights of Butcher tableau. Entries should sum to one. 
@@ -531,21 +530,20 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param E0 Elastic modulus of EPS. 
  * @param Ecell Elastic modulus of cell.
  * @param surface_contact_density Cell-surface contact area density.
- * @returns Array of errors in the cell positions and orientations.  
+ * @returns Updated population of cells, along with the array of errors in
+ *          the cell positions and orientations.  
  */
 template <typename T>
-Array<T, Dynamic, 4> stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& A,
-                                                         const Ref<const Array<T, Dynamic, 1> >& b,
-                                                         const Ref<const Array<T, Dynamic, 1> >& bs, 
-                                                         const Ref<const Array<T, Dynamic, 1> >& c,
-                                                         Ref<Array<T, Dynamic, Dynamic> > cells,  
-                                                         const Ref<const Array<T, Dynamic, 6> >& neighbors, 
-                                                         const T dt,
-                                                         const T R,
-                                                         const T Rcell,
-                                                         const T E0,
-                                                         const T Ecell,
-                                                         const T surface_contact_density)
+std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
+    stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& A,
+                                        const Ref<const Array<T, Dynamic, 1> >& b,
+                                        const Ref<const Array<T, Dynamic, 1> >& bs, 
+                                        const Ref<const Array<T, Dynamic, 1> >& c,
+                                        const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
+                                        const Ref<const Array<T, Dynamic, 6> >& neighbors, 
+                                        const T dt, const T R, const T Rcell,
+                                        const T E0, const T Ecell,
+                                        const T surface_contact_density)
 {
     // Compute velocities at given partial timesteps 
     int n = cells.rows(); 
@@ -571,6 +569,7 @@ Array<T, Dynamic, 4> stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T
     }
 
     // Compute Runge-Kutta update from computed velocities
+    Array<T, Dynamic, Dynamic> cells_new(cells); 
     Array<T, Dynamic, 4> velocities_final1 = Array<T, Dynamic, 4>::Zero(n, 4); 
     Array<T, Dynamic, 4> velocities_final2 = Array<T, Dynamic, 4>::Zero(n, 4); 
     for (int i = 0; i < s; ++i)
@@ -580,14 +579,13 @@ Array<T, Dynamic, 4> stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T
     }
     Array<T, Dynamic, 4> delta1 = velocities_final1 * dt; 
     Array<T, Dynamic, 4> delta2 = velocities_final2 * dt; 
-    cells(Eigen::all, Eigen::seq(0, 3)) += delta1;
+    cells_new(Eigen::all, Eigen::seq(0, 3)) += delta1;
     Array<T, Dynamic, 4> errors = delta1 - delta2; 
     
     // Renormalize orientations 
-    normalizeOrientations<T>(cells); 
+    normalizeOrientations<T>(cells_new); 
 
-    // Return errors 
-    return errors; 
+    return std::make_pair(cells_new, errors); 
 }
 
 #endif
