@@ -149,10 +149,10 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             Matrix<T, 2, 2> rot(2, 2); 
             rot << cos_theta1(i), -sin_theta1(i),
                    sin_theta1(i),  cos_theta1(i); 
-            cells_total(i, Eigen::seq(2, 3)) = rot.dot(dividing_orientations.row(i).matrix().transpose()).transpose().array();
+            cells_total(i, Eigen::seq(2, 3)) = (rot * dividing_orientations.matrix().row(i).transpose()).array();
             rot << cos_theta2(i), -sin_theta2(i),
                    sin_theta2(i),  cos_theta2(i); 
-            new_cells(i, Eigen::seq(2, 3)) = rot.dot(dividing_orientations.row(i).matrix().transpose()).transpose().array();  
+            new_cells(i, Eigen::seq(2, 3)) = (rot * dividing_orientations.matrix().row(i).transpose()).array();  
         }
 
         // Update cell lengths and positions ... 
