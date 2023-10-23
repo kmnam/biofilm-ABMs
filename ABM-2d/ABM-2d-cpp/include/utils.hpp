@@ -58,7 +58,7 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
     // Run through the simulation parameters ... 
     for (auto&& param : params)
     {
-        std::string key = param.key().to_string(); 
+        std::string key(std::string_view(param.key().data(), param.key().size()); 
         outfile << "# " << key << " = " << params.at(key) << std::endl;
     }
 
