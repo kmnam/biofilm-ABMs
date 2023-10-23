@@ -5,11 +5,10 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/20/2023
+    10/23/2023
 """
 import numpy as np
 from scipy.stats import spearmanr, kendalltau
-from mechanics import get_cell_neighbors
 
 #######################################################################
 def radial_sortedness(cells, scores, rng):
