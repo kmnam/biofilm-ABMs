@@ -6,7 +6,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/20/2023
+    10/22/2023
 """
 
 import os
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     max_cells = 5000
 
     # Array of population sizes to demarcate on the plot
-    sizes_to_plot = [500, 1000, 2000, 5000]
+    sizes_to_plot = [500, 1000, 2000]
 
     # For each file ...
     times = []
@@ -133,6 +133,16 @@ if __name__ == '__main__':
             verticalalignment='top',
             horizontalalignment='right'
         )
+    plt.plot(
+        [times[-1], times[-1]], [-1, 1],
+        linestyle='--', c=color, zorder=1
+    )
+    plt.annotate(
+        r'$n = {}$'.format(sizes[-1]),
+        (times[-1] - (times[-1] - times[0]) * 0.01, 0.95),
+        verticalalignment='top',
+        horizontalalignment='right'
+    )
 
     # Annotate final sortedness values
     color = sns.color_palette()[3]
