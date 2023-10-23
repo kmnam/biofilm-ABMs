@@ -97,19 +97,11 @@ int main(int argc, char** argv)
 
     // Daughter angle distribution function: von Mises distribution with 
     // mean 0 and given concentration parameter
-    //
-    // TODO Implement von Mises sampling
-    boost::random::normal_distribution<> daughter_angle_dist(0.0, 1. / orientation_conc); 
+    boost::random::uniform_01<> uniform_dist;  
     std::function<T(boost::random::mt19937&)> daughter_angle_dist_func =
-        [&daughter_angle_dist](boost::random::mt19937& rng)
+        [&orientation_conc, &uniform_dist](boost::random::mt19937& rng)
         {
-            T angle = daughter_angle_dist(rng); 
-            if (std::abs(angle) <= 0.1)
-                return angle; 
-            else if (angle > 0.1)
-                return 0.1;
-            else    // angle < 0.1 
-                return -0.1; 
+            return vonMises(0.0, orientation_conc, rng, uniform_dist); 
         };
 
     // Output file prefix
