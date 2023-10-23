@@ -143,7 +143,7 @@ int main(int argc, char** argv)
     //
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
     // with mean growth rate and default viscosity and friction coefficients
-    boost::random::mt19937 rng(1234567890);
+    boost::random::mt19937 rng(std::stoi(argv[3]));
     T t = 0; 
     int i = 0;
     int n = 1;
