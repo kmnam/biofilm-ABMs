@@ -28,7 +28,6 @@
 #ifndef BIOFILM_MECHANICS_HPP
 #define BIOFILM_MECHANICS_HPP
 
-#include <iostream>
 #include <cassert>
 #include <cmath>
 #include <vector>
