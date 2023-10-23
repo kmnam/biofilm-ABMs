@@ -99,26 +99,27 @@ T vonMises(const T mu, const T kappa, boost::random::mt19937& rng,
 {
     T tau = 1 + std::sqrt(1 + 4 * kappa * kappa);
     T rho = (tau - std::sqrt(2 * tau)) / (2 * kappa);
-    T r = (1 + rho * rho) / (2 * rho); 
+    T r = (1 + rho * rho) / (2 * rho);
+    T z, f, c; 
     bool reject = true; 
     while (reject)
     {
         T u1 = uniform_dist(rng); 
         T u2 = uniform_dist(rng);
-        T u3 = uniform_dist(rng); 
-        T z = std::cos(boost::math::constants::pi<T>() * u1);
-        T f = (1 + r * z) / (r + z); 
-        T c = kappa * (r - f); 
+        z = std::cos(boost::math::constants::pi<T>() * u1);
+        f = (1 + r * z) / (r + z); 
+        c = kappa * (r - f); 
         if (c * (2 - c) - u2 > 0)
-            reject = false; 
+            reject = false;
         else if (std::log(c / u2) + 1 - c >= 0)
             reject = false;
     }
 
-    if (u3 - 0.5 > 0)
-        return (std::acos(f) + mu) % boost::math::constants::two_pi<T>();
-    else (u3 - 0.5 < 0)
-        return (-std::acos(f) + mu) % boost::math::constants::two_pi<T>(); 
+    T u3 = uniform_dist(rng); 
+    if (u3 > 0.5)
+        return std::fmod(std::acos(f) + mu, boost::math::constants::two_pi<T>());
+    else if (u3 < 0.5)
+        return std::fmod(-std::acos(f) + mu, boost::math::constants::two_pi<T>()); 
     else 
         return mu;
 }
