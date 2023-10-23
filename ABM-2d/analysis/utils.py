@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/16/2023
+    10/23/2023
 """
 import re
 import numpy as np
@@ -44,7 +44,7 @@ def read_cells(path):
     with open(path) as f:
         for line in f:
             if line.startswith('#'):
-                m = re.match(r'# ([A-Za-z0-9_]+) = ([0-9e+-\.]+)', line)
+                m = re.match(r'# ([A-Za-z0-9_]+) = ([0-9eE+-\.]+)', line)
                 params[m.group(1)] = float(m.group(2))
 
     # Then read the cells that are stored in the file 
