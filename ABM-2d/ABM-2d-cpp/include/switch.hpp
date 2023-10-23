@@ -48,7 +48,7 @@ template <typename T>
 Array<int, Dynamic, 1> chooseCellsToSwitch(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
                                            const T rate_12, const T rate_21,
                                            const T dt, boost::random::mt19937& rng,
-                                           boost::random::uniform_01& dist)
+                                           boost::random::uniform_01<>& dist)
 {
     // Switching from group 1 to group 2 (resp. group 2 to group 1) occurs
     // with probability rate_12 * dt (resp. rate_21 * dt) within the time
