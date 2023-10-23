@@ -124,9 +124,6 @@ int main(int argc, char** argv)
     T rate_12 = 1.0 / lifetime_mean1; 
     T rate_21 = 1.0 / lifetime_mean2;
 
-    // Standard uniform distribution function
-    boost::random::uniform_01<> uniform_dist;  
-
     // Output file prefix
     std::string prefix = argv[2];
 
