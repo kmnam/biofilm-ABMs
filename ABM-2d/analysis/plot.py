@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/19/2023
+    10/23/2023
 """
 import re
 import numpy as np
@@ -151,7 +151,7 @@ def plot_simulation(paths, outpath, R=None, fps=10, colors=None, linewidth=1,
             with open(path) as f:
                 for line in f:
                     if line.startswith('# R = '):
-                        m = re.match(r'# R = ([0-9e+-\.]+)', line)
+                        m = re.match(r'# R = ([0-9Ee+-\.]+)', line)
                         R = float(m.group(1))
                         break
                     elif not line.startswith('#'):
@@ -165,7 +165,7 @@ def plot_simulation(paths, outpath, R=None, fps=10, colors=None, linewidth=1,
         with open(path) as f:
             for line in f:
                 if line.startswith('# t_curr = '):
-                    m = re.match(r'# t_curr = ([0-9e+-\.]+)', line)
+                    m = re.match(r'# t_curr = ([0-9Ee+-\.]+)', line)
                     t = float(m.group(1))
                     break
         times.append(t)
