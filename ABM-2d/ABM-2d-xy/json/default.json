@@ -1,6 +1,6 @@
 {
     "R": 0.8,
-    "Rcell": 0.7,
+    "Rcell": 0.35,
     "L0": 1.0,
     "growth_mean": 1.0,
     "growth_std": 0.2,
@@ -10,12 +10,12 @@
     "eta_ambient": 0.072,
     "eta_surface": 720,
     "dt": 1e-5,
-    "iter_write": 500,
-    "iter_video": 500,
+    "iter_write": 5000,
+    "iter_video": 5000,
     "iter_update_stepsize": 5,
-    "iter_update_neighbors": 20,
+    "iter_update_neighbors": 50,
     "t_final": 20.0,
-    "n_cells": 500,
+    "n_cells": 100,
     "daughter_length_std": 0.01,
     "orientation_conc": 100
 }
