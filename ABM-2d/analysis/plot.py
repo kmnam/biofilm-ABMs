@@ -67,7 +67,7 @@ def get_cell_outlines(cells, R):
     return outlines
 
 #########################################################################
-def plot_cells(cells, ax, R, colors=None, linewidth=1, with_polar=False):
+def plot_cells(cells, ax, R, colors=None, linewidth=1):
     """
     Display the cells with Matplotlib.
 
@@ -85,9 +85,6 @@ def plot_cells(cells, ax, R, colors=None, linewidth=1, with_polar=False):
         cells are all colored with `sns.color_palette()[0]`).
     linewidth : float
         Line width for each cell.
-    with_polar : bool
-        If True, plot the center of mass of the population and markings 
-        denoting radial distance from the center. 
 
     Returns
     -------
@@ -114,8 +111,64 @@ def plot_cells(cells, ax, R, colors=None, linewidth=1, with_polar=False):
     return ax
 
 #########################################################################
+def add_circles(cells, ax):
+    """
+    Draw a set of concentric circles with uniformly spaced radii that 
+    are centered at the center of mass of the population of cells.
+
+    The axes aspect ratio is assumed to be equal. 
+
+    Parameters
+    ----------
+    cells : `numpy.ndarray`
+        Existing population of cells. 
+    ax : `matplotlib.pyplot.Axes`
+        Axes onto which the cells are plotted. The cells are assumed to
+        have been plotted already. 
+    
+    Returns
+    -------
+    Updated axes. 
+    """
+    # Save axes limits for future use
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+
+    # Plot center of mass
+    center = cells[:, :2].sum(axis=0) / cells.shape[0]
+    ax.scatter([center[0]], [center[1]], marker='X', c='red', s=40, zorder=10)
+
+    # Assuming that the cell positions form a circular disk, determine
+    # radii to plot from x-axis ticks, which are assumed to be uniformly
+    # spaced
+    xticks = ax.get_xticks()
+    delta = xticks[1] - xticks[0]
+
+    # Draw circles of constant radius from center of mass
+    maxdist = np.linalg.norm(cells[:, :2] - center, axis=1).max()
+    radii = []
+    r = delta
+    theta = np.linspace(0, 2 * np.pi, 100)
+    while r < maxdist:
+        radii.append(r)
+        r += delta
+    radii.append(r)
+    for r in radii:
+        ax.plot(
+            center[0] + r * np.cos(theta),
+            center[1] + r * np.sin(theta),
+            c=(0.8, 0.8, 0.8)
+        )
+
+    # Reset axes limits
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    return ax
+
+#########################################################################
 def plot_simulation(paths, outpath, R=None, fps=10, colors=None, linewidth=1,
-                    figsize=(6.4, 4.8)):
+                    figsize=(6.4, 4.8), with_circles=True):
     """
     Given an ordered sequence of file paths, parse the stored simulation data
     and generate a video.
@@ -140,6 +193,9 @@ def plot_simulation(paths, outpath, R=None, fps=10, colors=None, linewidth=1,
         Line width for each cell. 
     figsize : tuple of two floats
         Figure dimensions in inches.
+    with_circles : bool
+        If True, plot the center of mass of the population and markings 
+        denoting radial distance from the center. 
     """
     # Run through the files once, to plot the cells and obtain the best x-
     # and y-axes limits
@@ -234,6 +290,10 @@ def plot_simulation(paths, outpath, R=None, fps=10, colors=None, linewidth=1,
         ax.set_aspect('equal')
         ax.set_xlim([xmin, xmax])
         ax.set_ylim([ymin, ymax])
+
+        # Add circles to the plot if desired
+        if with_circles:
+            ax = add_circles(cells, ax)
 
         # Label plot with the timepoint associated with this population and 
         # the population size 
