@@ -6,7 +6,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/22/2023
+    10/25/2023
 """
 
 import matplotlib
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     max_frames = 1200    # 1200 frames at 10 fps = 120 sec = 2 min
 
     # Cell radius and line width
-    R = 0.8
+    R = 0.35
     linewidth = 0.8
 
     # Colors for all groups being tracked in the simulation
@@ -94,18 +94,25 @@ if __name__ == '__main__':
             filenames_to_plot.append(filename)
             break
     print(
-        '... parsed {} frames in {}'.format(len(filenames_to_plot), sys.argv[1])
+        '... parsed {} frames in {}'.format(
+            len(filenames_to_plot), sys.argv[1]
+        )
     )
 
     # If the number of frames exceeds the maximum number, skip over
-    # frames in constant increments
+    # frames in constant increments (excluding the initial and final 
+    # frames, which should be kept)
     if len(filenames_to_plot) > max_frames:
         increment = len(filenames_to_plot) // max_frames + 1
-        filenames_to_plot = filenames_to_plot[::increment]
+        filename_final = filenames_to_plot[-1]
+        filenames_to_plot = filenames_to_plot[:-1:increment]
+        filenames_to_plot.append(filename_final)
         
     # Plot simulation to the given output file
     print(
-        '... plotting {} frames in {}'.format(len(filenames_to_plot), sys.argv[1])
+        '... plotting {} frames in {}'.format(
+            len(filenames_to_plot), sys.argv[1]
+        )
     )
     plot_simulation(
         filenames_to_plot, outpath, R=R, fps=10, colors=colors,
