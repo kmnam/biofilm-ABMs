@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/23/2023
+    10/25/2023
 """
 import numpy as np
 from scipy.stats import spearmanr, kendalltau
@@ -33,9 +33,7 @@ def radial_sortedness(cells, scores, rng):
     """
     # Compute radial distance from biofilm center
     center = cells[:, :2].sum(axis=0) / cells.shape[0]
-    distances = np.sqrt(
-        np.power(cells[:, 0] - center[0], 2) + np.power(cells[:, 1] - center[1], 2)
-    )
+    distances = np.linalg.norm(cells[:, 2] - center, axis=1)
 
     # Get the scores in ascending and descending order
     scores_ascend = np.sort(scores)
@@ -93,9 +91,7 @@ def radial_spearman_coeff(cells, scores):
     """
     # Compute radial distance from biofilm center
     center = cells[:, :2].sum(axis=0) / cells.shape[0]
-    distances = np.sqrt(
-        np.power(cells[:, 0] - center[0], 2) + np.power(cells[:, 1] - center[1], 2)
-    )
+    distances = np.linalg.norm(cells[:, 2] - center, axis=1)
 
     return spearmanr(distances, scores).statistic
 
@@ -120,9 +116,48 @@ def radial_kendall_tau(cells, scores):
     """
     # Compute radial distance from biofilm center
     center = cells[:, :2].sum(axis=0) / cells.shape[0]
-    distances = np.sqrt(
-        np.power(cells[:, 0] - center[0], 2) + np.power(cells[:, 1] - center[1], 2)
-    )
+    distances = np.linalg.norm(cells[:, 2] - center, axis=1)
 
     return kendalltau(distances, scores).statistic
 
+#######################################################################
+def radial_group_distribution(cells, delta, nradii=100):
+    """
+    Given a biofilm of cells existing in two groups, get the distribution
+    of the two groups as a function of radius from the biofilm's center.
+
+    For each radius, this function locates the cells whose centers lie
+    within an annulus with width `delta` and the given radius as its
+    outer radius.
+
+    Parameters
+    ----------
+    cells : `numpy.ndarray`
+        Existing population of cells. 
+    delta : float
+        The width of the annulus used for scanning the biofilm.
+    nradii : int
+        The number of different annuli for which to evaluate this 
+        distribution.
+
+    Returns
+    -------
+    The outer radius of each annulus and the corresponding fraction of
+    cells within each annulus that belong to group 1. 
+    """
+    # Identify the biofilm center and the radial distance of the furthest
+    # cell from the center
+    center = cells[:, :2].sum(axis=0) / cells.shape[0]
+    distances = np.linalg.norm(cells[:, :2] - center, axis=1)
+    maxdist = distances.max()
+
+    # Starting from an outer radius of delta, identify the cells whose
+    # centers lie within an annulus of given outer radius and width delta
+    radii = np.linspace(delta, maxdist + 1e-8, nradii)
+    in_group_1 = np.zeros((nradii,), dtype=np.float64)
+    for i, r in enumerate(radii):
+        cells_within = (distances >= r - delta) & (distances < r)
+        in_group_1[i] = (cells[cells_within, 9] == 1).sum() / cells_within.sum()
+
+    return radii, in_group_1
+    
