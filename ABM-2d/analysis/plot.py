@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/23/2023
+    10/25/2023
 """
 import re
 import numpy as np
@@ -67,7 +67,7 @@ def get_cell_outlines(cells, R):
     return outlines
 
 #########################################################################
-def plot_cells(cells, ax, R, colors=None, linewidth=1):
+def plot_cells(cells, ax, R, colors=None, linewidth=1, with_polar=False):
     """
     Display the cells with Matplotlib.
 
@@ -84,7 +84,10 @@ def plot_cells(cells, ax, R, colors=None, linewidth=1):
         each cell in the population. None by default (in which case the 
         cells are all colored with `sns.color_palette()[0]`).
     linewidth : float
-        Line width for each cell. 
+        Line width for each cell.
+    with_polar : bool
+        If True, plot the center of mass of the population and markings 
+        denoting radial distance from the center. 
 
     Returns
     -------
