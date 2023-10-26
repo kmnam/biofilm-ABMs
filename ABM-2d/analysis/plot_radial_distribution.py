@@ -91,6 +91,7 @@ if __name__ == '__main__':
     radii = []
     distributions = []
     sizes_plotted = []
+    fractions_plotted = []
     times_plotted = []
     for size in sizes_to_plot:
         i = np.argmin(np.abs(sizes - size))
@@ -101,12 +102,18 @@ if __name__ == '__main__':
         radii.append(r)
         distributions.append(dist)
         sizes_plotted.append(s)
+        fractions_plotted.append((cells[:, 9] == 1).sum() / s)
         times_plotted.append(t)
 
     # Plot the distributions
     colors = sns.color_palette()[:len(sizes_to_plot)]
     for i in range(len(sizes_plotted)):
         plt.plot(radii[i], distributions[i], c=colors[i], zorder=0)
+    for i in range(len(sizes_plotted)):
+        plt.plot(
+            [0, radii[-1][-1]], [fractions_plotted[i], fractions_plotted[i]],
+            c=colors[i], linestyle='--', zorder=0)
+        )
 
     # Configure axes and legend
     ax = plt.gca()
