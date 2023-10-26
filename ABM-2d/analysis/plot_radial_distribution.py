@@ -112,7 +112,7 @@ if __name__ == '__main__':
     for i in range(len(sizes_plotted)):
         plt.plot(
             [0, radii[-1][-1]], [fractions_plotted[i], fractions_plotted[i]],
-            c=colors[i], linestyle='--', zorder=0)
+            c=colors[i], linestyle='--', zorder=0
         )
 
     # Configure axes and legend
