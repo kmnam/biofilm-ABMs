@@ -33,7 +33,7 @@ def radial_sortedness(cells, scores, rng):
     """
     # Compute radial distance from biofilm center
     center = cells[:, :2].sum(axis=0) / cells.shape[0]
-    distances = np.linalg.norm(cells[:, 2] - center, axis=1)
+    distances = np.linalg.norm(cells[:, :2] - center, axis=1)
 
     # Get the scores in ascending and descending order
     scores_ascend = np.sort(scores)
@@ -91,7 +91,7 @@ def radial_spearman_coeff(cells, scores):
     """
     # Compute radial distance from biofilm center
     center = cells[:, :2].sum(axis=0) / cells.shape[0]
-    distances = np.linalg.norm(cells[:, 2] - center, axis=1)
+    distances = np.linalg.norm(cells[:, :2] - center, axis=1)
 
     return spearmanr(distances, scores).statistic
 
@@ -116,7 +116,7 @@ def radial_kendall_tau(cells, scores):
     """
     # Compute radial distance from biofilm center
     center = cells[:, :2].sum(axis=0) / cells.shape[0]
-    distances = np.linalg.norm(cells[:, 2] - center, axis=1)
+    distances = np.linalg.norm(cells[:, :2] - center, axis=1)
 
     return kendalltau(distances, scores).statistic
 
