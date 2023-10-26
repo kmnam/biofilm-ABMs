@@ -16,7 +16,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/22/2023
+ *     10/26/2023
  */
 
 #include <iostream>
@@ -191,6 +191,18 @@ int main(int argc, char** argv)
         // Update neighboring cells 
         if (i % iter_update_neighbors == 0)
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+
+        // Check for any NaN's or infinities
+        if (cells.isNaN().any() || cells.isInf().any())
+        {
+            // Write final population to file and terminate  
+            json_data["t_curr"] = t;
+            std::stringstream ss_final; 
+            ss_final << prefix << "_finalexcept.txt";
+            std::string filename_final = ss_final.str(); 
+            writeCells<T>(cells, json_data, filename_final); 
+            throw std::runtime_error("Encountered NaN and/or infinity");  
+        }
 
         // Write the current population to file
         if (i % iter_write == 0)

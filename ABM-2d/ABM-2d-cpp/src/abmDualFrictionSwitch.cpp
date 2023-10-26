@@ -20,7 +20,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/22/2023
+ *     10/26/2023
  */
 
 #include <iostream>
@@ -226,6 +226,18 @@ int main(int argc, char** argv)
             cells, rate_12, rate_21, dt, rng, uniform_dist
         );
         switchGroups<T>(cells, 8, to_switch, eta_dist1, eta_dist2, rng);
+
+        // Check for any NaN's or infinities
+        if (cells.isNaN().any() || cells.isInf().any())
+        {
+            // Write final population to file and terminate  
+            json_data["t_curr"] = t;
+            std::stringstream ss_final; 
+            ss_final << prefix << "_finalexcept.txt";
+            std::string filename_final = ss_final.str(); 
+            writeCells<T>(cells, json_data, filename_final); 
+            throw std::runtime_error("Encountered NaN and/or infinity");  
+        }
 
         // Write the current population to file
         if (i % iter_write == 0)
