@@ -117,7 +117,7 @@ int main(int argc, char** argv)
     std::function<T(boost::random::mt19937&)> daughter_angle_dist_func =
         [&orientation_conc, &uniform_dist](boost::random::mt19937& rng)
         {
-            return vonMises(0.0, orientation_conc, rng, uniform_dist); 
+            return vonMises<T>(0.0, orientation_conc, rng, uniform_dist); 
         };
 
     // Rates of switching from group 1 to group 2 and vice versa 
@@ -177,7 +177,7 @@ int main(int argc, char** argv)
         // a given maximum number of attempts)
         if (i % iter_update_stepsize == 0)
         {
-            T max_error = std::max(errors.abs().maxCoeff(), 1e-100); 
+            T max_error = std::max(errors.abs().maxCoeff(), static_cast<T>(1e-30)); 
             int j = 0; 
             while (max_error > 1e-8 && j < max_tries)
             {
@@ -188,7 +188,7 @@ int main(int argc, char** argv)
                 ); 
                 cells_new = result.first; 
                 errors = result.second;
-                max_error = std::max(errors.abs().maxCoeff(), 1e-100); 
+                max_error = std::max(errors.abs().maxCoeff(), static_cast<T>(1e-30)); 
                 j++;  
             }
             // If the error is small, increase the stepsize up to a maximum stepsize
