@@ -22,7 +22,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/22/2023
+ *     11/4/2023
  */
 
 #ifndef BIOFILM_MECHANICS_HPP
@@ -369,7 +369,12 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
 
     // Maintain array of partial derivatives of the interaction energies 
     // with respect to x-position, y-position, x-orientation, y-orientation
-    Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(n, 4); 
+    Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(n, 4);
+
+    // Compute prefactors
+    T prefactor0 = 2.5 * std::sqrt(R);  
+    T prefactor1 = E0 * prefactor0; 
+    T prefactor2 = E0 * std::pow(R - Rcell, 1.5); 
 
     // For each pair of neighboring cells ...
     for (int k = 0; k < neighbors.rows(); ++k)
@@ -395,15 +400,14 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
         T prefactor = 0; 
         if (overlap > 0 && overlap < R - Rcell)
         {
-            prefactor = 2.5 * E0 * std::sqrt(R) * std::pow(overlap, 1.5); 
+            prefactor = prefactor1 * std::pow(overlap, 1.5); 
         }
         // Case 2: the overlap is instead greater than R - Rcell (i.e., it 
         // encroaches into the bodies of the two cells)
         else if (overlap >= R - Rcell)
         {
-            T prefactor1 = E0 * std::pow(R - Rcell, 1.5);
-            T prefactor2 = Ecell * std::pow(overlap - R + Rcell, 1.5);
-            prefactor = 2.5 * std::sqrt(R) * (prefactor1 + prefactor2); 
+            T prefactor3 = Ecell * std::pow(overlap - R + Rcell, 1.5);
+            prefactor = prefactor0 * (prefactor2 + prefactor3); 
         }
 
         if (overlap > 0)
