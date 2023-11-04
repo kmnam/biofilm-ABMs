@@ -20,7 +20,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/26/2023
+ *     11/4/2023
  */
 
 #include <iostream>
@@ -142,7 +142,7 @@ int main(int argc, char** argv)
     cells << 0, 0, 1, 0, L0, 0, growth_mean1, eta_ambient, eta_surface, 1;
     
     // Compute initial array of neighboring cells (should be empty)
-    Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+    Array<T, Dynamic, 6, RowMajor> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
 
     // Write the founder cell to file
     json_data["t_curr"] = t;

@@ -226,7 +226,9 @@ Array<T, Dynamic, 2> compositeViscosityForcePrefactors(const Ref<const Array<T, 
 }
 
 /**
- * Get all pairs of cells whose distances are within the given threshold. 
+ * Get all pairs of cells whose distances are within the given threshold.
+ *
+ * The returned array is given in row-major format.  
  *
  * @param cells Existing population of cells.
  * @param neighbor_threshold Threshold for distinguishing between neighboring
@@ -236,14 +238,15 @@ Array<T, Dynamic, 2> compositeViscosityForcePrefactors(const Ref<const Array<T, 
  * @returns Array of indices of pairs of neighboring cells.
  */
 template <typename T>
-Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                      const T neighbor_threshold, const T R, const T Ldiv)
+Array<T, Dynamic, 6, RowMajor> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                                const T neighbor_threshold,
+                                                const T R, const T Ldiv)
 {
     int n = cells.rows();   // Number of cells
 
     // If there is only one cell, return an empty array
     if (n == 1)
-        return Array<T, Dynamic, 6>::Zero(0, 6); 
+        return Array<T, Dynamic, 6, RowMajor>::Zero(0, 6); 
 
     // Maintain array of neighboring cells 
     //
@@ -255,7 +258,7 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
     // 3) y-coordinate of distance vector from cell i to cell j
     // 4) Cell-body coordinate of contact point along centerline of cell i
     // 5) Cell-body coordinate of contact point along centerline of cell j
-    Array<T, Dynamic, 6> neighbors(n * (n - 1) / 2, 6);
+    Array<T, Dynamic, 6, RowMajor> neighbors(n * (n - 1) / 2, 6);
     int idx = 0; 
 
     // For each pair of cells in the population ... 
@@ -307,7 +310,7 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
  */
 template <typename T>
 void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
-                             Ref<Array<T, Dynamic, 6> > neighbors)
+                             Ref<Array<T, Dynamic, 6, RowMajor> > neighbors)
 {
     // Each row contains the following information about each pair of 
     // neighboring cells:
@@ -357,7 +360,7 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  */
 template <typename T>
 Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                                 const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                                 const Ref<const Array<T, Dynamic, 6, RowMajor> >& neighbors,
                                                  const T R, const T Rcell,
                                                  const T E0, const T Ecell)
 {
@@ -447,7 +450,7 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  */
 template <typename T>
 Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                                const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                                const Ref<const Array<T, Dynamic, 6, RowMajor> >& neighbors,
                                                 const T R, const T Rcell, 
                                                 const T E0, const T Ecell, 
                                                 const T surface_contact_density)
@@ -552,7 +555,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                                         const Ref<const Array<T, Dynamic, 1> >& b,
                                         const Ref<const Array<T, Dynamic, 1> >& bs, 
                                         const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
-                                        const Ref<const Array<T, Dynamic, 6> >& neighbors, 
+                                        const Ref<const Array<T, Dynamic, 6, RowMajor> >& neighbors, 
                                         const T dt, const T R, const T Rcell,
                                         const T E0, const T Ecell,
                                         const T surface_contact_density)
