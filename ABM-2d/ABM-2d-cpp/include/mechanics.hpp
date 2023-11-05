@@ -100,7 +100,7 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
     T n1_dot_n2 = n1.dot(n2);
     T s_numer = r12_dot_n1 - n1_dot_n2 * r12_dot_n2;
     T t_numer = n1_dot_n2 * r12_dot_n1 - r12_dot_n2;
-    T denom = 1 - std::pow(n1_dot_n2, 2);
+    T denom = 1 - n1_dot_n2 * n1_dot_n2;
     Matrix<T, 2, 1> dist;
     T s, t;  
 
@@ -220,7 +220,7 @@ Array<T, Dynamic, 2> compositeViscosityForcePrefactors(const Ref<const Array<T, 
     Array<T, Dynamic, 2> KL(cells.rows(), 2);
     Array<T, Dynamic, 1> composite_drag = cells.col(7) + cells.col(8) * surface_contact_density / R; 
     KL.col(0) = cells.col(4) * composite_drag; 
-    KL.col(1) = cells.col(4).pow(3) * composite_drag / 12;
+    KL.col(1) = cells.col(4) * cells.col(4) * cells.col(4) * composite_drag / 12;
 
     return KL; 
 }
