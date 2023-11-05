@@ -384,7 +384,7 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
     // Compute distance vector magnitude, direction, and corresponding
     // cell-cell overlap for every pair of neighboring cells
     Array<T, Dynamic, 1> magnitudes = neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array(); 
-    Array<T, Dynamic, 2> directions = neighbors(Eigen::all, Eigen::seq(2, 3)).rowwise() / magnitudes;
+    Array<T, Dynamic, 2> directions = neighbors(Eigen::all, Eigen::seq(2, 3)).colwise() / magnitudes;
     Array<T, Dynamic, 1> overlaps = 2 * R - magnitudes;  
 
     // For each pair of neighboring cells ...
