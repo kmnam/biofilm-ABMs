@@ -381,6 +381,12 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
     T prefactor1 = E0 * prefactor0; 
     T prefactor2 = E0 * powRdiff;
 
+    // Compute distance vector magnitude, direction, and corresponding
+    // cell-cell overlap for every pair of neighboring cells
+    Array<T, Dynamic, 1> magnitudes = neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array(); 
+    Array<T, Dynamic, 2> directions = neighbors(Eigen::all, Eigen::seq(2, 3)).rowwise() / magnitudes;
+    Array<T, Dynamic, 1> overlaps = 2 * R - magnitudes;  
+
     // For each pair of neighboring cells ...
     for (int k = 0; k < neighbors.rows(); ++k)
     {
@@ -389,13 +395,9 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
         Array<T, 2, 1> dist_ij = neighbors(k, Eigen::seq(2, 3));   // Distance vector from i to j
         T si = neighbors(k, 4);                         // Cell-body coordinate along cell i
         T sj = neighbors(k, 5);                         // Cell-body coordinate along cell j
-        T delta_ij = dist_ij.matrix().norm();           // Magnitude of distance vector
-        assert(delta_ij > 0 && "Distance vector with zero norm encountered");  
-        Array<T, 2, 1> dir_ij = dist_ij / delta_ij;     // Normalized distance vector
-
-        // Get the overlapping distance between cells i and j (this distance
-        // is negative if the cells are not overlapping)
-        T overlap = 2 * R - delta_ij; 
+        T delta_ij = magnitudes(k);                     // Magnitude of distance vector
+        Array<T, 2, 1> dir_ij = directions.row(k);      // Normalized distance vector 
+        T overlap = overlaps(k);                        // Cell-cell overlap 
 
         // Define prefactors that determine the magnitudes of the interaction
         // forces, depending on the size of the overlap 
