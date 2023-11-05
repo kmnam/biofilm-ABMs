@@ -20,7 +20,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/4/2023
+ *     11/5/2023
  */
 
 #include <iostream>
@@ -83,8 +83,10 @@ int main(int argc, char** argv)
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
 
-    // Surface contact area density 
+    // Surface contact area density and powers of cell radius  
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
+    const T sqrtR = std::sqrt(R); 
+    const T powRdiff = std::pow(R - Rcell, 1.5);
 
     // Growth rate distribution functions: normal distributions with given mean
     // and standard deviation
@@ -167,8 +169,8 @@ int main(int argc, char** argv)
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-            A, b, bs, cells, neighbors, dt, R, Rcell, E0, Ecell,
-            surface_contact_density
+            A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff, E0,
+            Ecell, surface_contact_density
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first; 
         Array<T, Dynamic, 4> errors = result.second;
@@ -183,8 +185,8 @@ int main(int argc, char** argv)
             {
                 dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-                    A, b, bs, cells, neighbors, dt, R, Rcell, E0, Ecell,
-                    surface_contact_density
+                    A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff,
+                    E0, Ecell, surface_contact_density
                 ); 
                 cells_new = result.first; 
                 errors = result.second;

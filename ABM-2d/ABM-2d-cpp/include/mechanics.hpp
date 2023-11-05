@@ -22,7 +22,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/4/2023
+ *     11/5/2023
  */
 
 #ifndef BIOFILM_MECHANICS_HPP
@@ -351,7 +351,9 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
  * @param R Cell radius, including the EPS. 
- * @param Rcell Cell radius, excluding the EPS. 
+ * @param sqrtR Pre-computed square root of `R`.
+ * @param Rcell Cell radius, excluding the EPS.
+ * @param powRdiff Pre-computed value for `pow(R - Rcell, 1.5)`. 
  * @param E0 Elastic modulus of EPS. 
  * @param Ecell Elastic modulus of cell.
  * @returns Derivatives of the cell-cell interaction energies with respect 
@@ -360,7 +362,8 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
 template <typename T>
 Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                                  const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                                 const T R, const T Rcell,
+                                                 const T R, const T sqrtR,
+                                                 const T Rcell, const T powRdiff, 
                                                  const T E0, const T Ecell)
 {
     int n = cells.rows();   // Number of cells
@@ -374,9 +377,9 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
     Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(n, 4);
 
     // Compute prefactors
-    T prefactor0 = 2.5 * std::sqrt(R);  
+    T prefactor0 = 2.5 * sqrtR; 
     T prefactor1 = E0 * prefactor0; 
-    T prefactor2 = E0 * std::pow(R - Rcell, 1.5); 
+    T prefactor2 = E0 * powRdiff;
 
     // For each pair of neighboring cells ...
     for (int k = 0; k < neighbors.rows(); ++k)
@@ -441,7 +444,9 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population. 
  * @param R Cell radius, including the EPS.
+ * @param sqrtR Pre-computed square root of `R`.
  * @param Rcell Cell radius, excluding the EPS.
+ * @param powRdiff Pre-computed value for `pow(R - Rcell, 1.5)`. 
  * @param E0 Elastic modulus of EPS. 
  * @param Ecell Elastic modulus of cell. 
  * @param surface_contact_density Cell-surface contact area density. 
@@ -450,7 +455,8 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
 template <typename T>
 Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                                 const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                                const T R, const T Rcell, 
+                                                const T R, const T sqrtR, 
+                                                const T Rcell, const T powRdiff,
                                                 const T E0, const T Ecell, 
                                                 const T surface_contact_density)
 {
@@ -491,7 +497,7 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     assert((K != 0).all() && "Composite viscosity force prefactors for positions have zero values"); 
     assert((L != 0).all() && "Composite viscosity force prefactors for orientations have zero values");
     Array<T, Dynamic, 4> dEdq = cellCellForcesFromNeighbors<T>(
-        cells, neighbors, R, Rcell, E0, Ecell
+        cells, neighbors, R, sqrtR, Rcell, powRdiff, E0, Ecell
     );
     Array<T, Dynamic, 1> mult = cells.col(2) * dEdq.col(2) + cells.col(3) * dEdq.col(3);
     Array<T, Dynamic, 2> dEdn_constrained = (
@@ -540,8 +546,10 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param neighbors Array specifying pairs of neighboring cells in the 
  *                  population. 
  * @param dt Timestep. 
- * @param R Cell radius, including the EPS. 
- * @param Rcell Cell radius, excluding the EPS. 
+ * @param R Cell radius, including the EPS.
+ * @param sqrtR Pre-computed square root of `R`.
+ * @param Rcell Cell radius, excluding the EPS.
+ * @param powRdiff Pre-computed value for `pow(R - Rcell, 1.5)`. 
  * @param E0 Elastic modulus of EPS. 
  * @param Ecell Elastic modulus of cell.
  * @param surface_contact_density Cell-surface contact area density.
@@ -555,7 +563,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                                         const Ref<const Array<T, Dynamic, 1> >& bs, 
                                         const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
                                         const Ref<const Array<T, Dynamic, 6> >& neighbors, 
-                                        const T dt, const T R, const T Rcell,
+                                        const T dt, const T R, const T sqrtR,
+                                        const T Rcell, const T powRdiff,
                                         const T E0, const T Ecell,
                                         const T surface_contact_density)
 {
@@ -565,7 +574,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
     std::vector<Array<T, Dynamic, 4> > velocities; 
     velocities.push_back(
         getVelocitiesFromNeighbors<T>(
-            cells, neighbors, R, Rcell, E0, Ecell, surface_contact_density
+            cells, neighbors, R, sqrtR, Rcell, powRdiff, E0, Ecell,
+            surface_contact_density
         )
     );
     for (int i = 1; i < s; ++i)
@@ -577,7 +587,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
         cells_i(Eigen::all, Eigen::seq(0, 3)) += multipliers * dt; 
         velocities.push_back(
             getVelocitiesFromNeighbors<T>(
-                cells_i, neighbors, R, Rcell, E0, Ecell, surface_contact_density
+                cells_i, neighbors, R, sqrtR, Rcell, powRdiff, E0, Ecell,
+                surface_contact_density
             )
         );
     }
