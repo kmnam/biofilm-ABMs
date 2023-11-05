@@ -392,10 +392,8 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
     {
         int i = static_cast<int>(neighbors(k, 0)); 
         int j = static_cast<int>(neighbors(k, 1)); 
-        Array<T, 2, 1> dist_ij = neighbors(k, Eigen::seq(2, 3));   // Distance vector from i to j
         T si = neighbors(k, 4);                         // Cell-body coordinate along cell i
         T sj = neighbors(k, 5);                         // Cell-body coordinate along cell j
-        T delta_ij = magnitudes(k);                     // Magnitude of distance vector
         Array<T, 2, 1> dir_ij = directions.row(k);      // Normalized distance vector 
         T overlap = overlaps(k);                        // Cell-cell overlap 
 
