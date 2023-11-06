@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/25/2023
+    11/6/2023
 """
 import numpy as np
 from scipy.stats import spearmanr, kendalltau
@@ -157,7 +157,12 @@ def radial_group_distribution(cells, delta, nradii=100):
     in_group_1 = np.zeros((nradii,), dtype=np.float64)
     for i, r in enumerate(radii):
         cells_within = (distances >= r - delta) & (distances < r)
-        in_group_1[i] = (cells[cells_within, 9] == 1).sum() / cells_within.sum()
+        if cells_within.sum() == 0:
+            print(
+                'Warning: no cells found in annulus with radii {:.10f} '
+                'and {:.10f}'.format(r - delta, r)
+            )
+        in_group_1[i] = (cells[cells_within, 10] == 1).sum() / cells_within.sum()
 
     return radii, in_group_1
     
