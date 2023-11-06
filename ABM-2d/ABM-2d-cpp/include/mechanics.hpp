@@ -2,7 +2,7 @@
  * Implementations of cell-cell and cell-surface interaction forces.
  *
  * In what follows, a population of N cells is represented as a 2-D array of
- * size (N, 9+), where each row represents a cell and stores the following 
+ * size (N, 10+), where each row represents a cell and stores the following 
  * data: 
  *
  * 0) x-coordinate of cell center
@@ -10,10 +10,11 @@
  * 2) x-coordinate of cell orientation vector
  * 3) y-coordinate of cell orientation vector
  * 4) cell length (excluding caps)
- * 5) timepoint at which cell was formed
- * 6) cell growth rate
- * 7) cell's ambient viscosity with respect to surrounding fluid
- * 8) cell-surface friction coefficient
+ * 5) half of cell length (excluding caps)
+ * 6) timepoint at which cell was formed
+ * 7) cell growth rate
+ * 8) cell's ambient viscosity with respect to surrounding fluid
+ * 9) cell-surface friction coefficient
  *
  * Additional features may be included in the array but these are not
  * relevant for the computations implemented here. 
@@ -43,16 +44,16 @@ using namespace Eigen;
  *
  * @param r Cell center.
  * @param n Cell orientation.
- * @param l Cell length.  
+ * @param half_l Half of cell length.  
  * @param q Input point.
  * @returns Distance from cell to input point.
  */
 template <typename T>
 T nearestCellBodyCoordToPoint(const Ref<const Matrix<T, 2, 1> >& r, 
-                              const Ref<const Matrix<T, 2, 1> >& n, const T l,
+                              const Ref<const Matrix<T, 2, 1> >& n,
+                              const T half_l,
                               const Ref<const Matrix<T, 2, 1> >& q)
 {
-    T half_l = l / 2;
     T s = (q - r).dot(n);
     if (std::abs(s) <= half_l)
         return s;
@@ -70,10 +71,10 @@ T nearestCellBodyCoordToPoint(const Ref<const Matrix<T, 2, 1> >& r,
  *
  * @param r1 Center of cell 1.
  * @param n1 Orientation of cell 1.
- * @param l1 Length of cell 1.
+ * @param half_l1 Half of length of cell 1.
  * @param r2 Center of cell 2.
  * @param n2 Orientation of cell 2.
- * @param l2 Length of cell 2.
+ * @param half_l2 Half of length of cell 2.
  * @returns Shortest distance between the two cells, along with the cell-body
  *          coordinates at which the shortest distance is achieved. The
  *          distance is returned as a vector running from cell 1 to cell 2.
@@ -81,14 +82,11 @@ T nearestCellBodyCoordToPoint(const Ref<const Matrix<T, 2, 1> >& r,
 template <typename T>
 std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 1> >& r1,
                                                    const Ref<const Matrix<T, 2, 1> >& n1, 
-                                                   const T l1,
+                                                   const T half_l1,
                                                    const Ref<const Matrix<T, 2, 1> >& r2,
                                                    const Ref<const Matrix<T, 2, 1> >& n2,
-                                                   const T l2)
+                                                   const T half_l2)
 {
-    T half_l1 = l1 / 2;
-    T half_l2 = l2 / 2;
-
     // Vector running from r1 to r2
     Matrix<T, 2, 1> r12 = r2 - r1;
 
@@ -131,28 +129,28 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
             {
                 // In this case, set t = l2 / 2 and find s
                 Matrix<T, 2, 1> q = r2 + half_l2 * n2; 
-                s = nearestCellBodyCoordToPoint<T>(r1, n1, l1, q);
+                s = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, q);
                 t = half_l2;
             }
             else if (t < s - X && t >= -s + X)      // In region 2
             {
                 // In this case, set s = l1 / 2 and find t
                 Matrix<T, 2, 1> q = r1 + half_l1 * n1;
-                t = nearestCellBodyCoordToPoint<T>(r2, n2, l2, q); 
+                t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, q); 
                 s = half_l1;
             }
             else if (t < -s + X && t < s + X)      // In region 3
             {
                 // In this case, set t = -l2 / 2 and find s
                 Matrix<T, 2, 1> q = r2 - half_l2 * n2;
-                s = nearestCellBodyCoordToPoint<T>(r1, n1, l1, q);
+                s = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, q);
                 t = -half_l2;
             }
             else    // t >= s + X and t < -s - X, in region 4
             {
                 // In this case, set s = -l1 / 2 and find t
                 Matrix<T, 2, 1> q = r1 - half_l1 * n1;
-                t = nearestCellBodyCoordToPoint<T>(r2, n2, l2, q); 
+                t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, q); 
                 s = -half_l1; 
             }
         }
@@ -167,8 +165,8 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
     {
         Matrix<T, 2, 1> p1 = r1 - half_l1 * n1;               // Endpoint for s = -l1 / 2
         Matrix<T, 2, 1> q1 = r1 + half_l1 * n1;               // Endpoint for s = l1 / 2
-        T t_p1 = nearestCellBodyCoordToPoint<T>(r2, n2, l2, p1); 
-        T t_q1 = nearestCellBodyCoordToPoint<T>(r2, n2, l2, q1);
+        T t_p1 = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, p1); 
+        T t_q1 = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, q1);
         Matrix<T, 2, 1> dist_to_p1 = p1 - (r2 + t_p1 * n2);   // Vector running towards p1
         Matrix<T, 2, 1> dist_to_q1 = q1 - (r2 + t_q1 * n2);   // Vector running towards q1
         if (dist_to_p1.squaredNorm() < dist_to_q1.squaredNorm())    // Here, s = -l1 / 2
@@ -218,7 +216,7 @@ Array<T, Dynamic, 2> compositeViscosityForcePrefactors(const Ref<const Array<T, 
                                                        const T surface_contact_density)
 {
     Array<T, Dynamic, 2> KL(cells.rows(), 2);
-    Array<T, Dynamic, 1> composite_drag = cells.col(7) + cells.col(8) * surface_contact_density / R; 
+    Array<T, Dynamic, 1> composite_drag = cells.col(8) + cells.col(9) * surface_contact_density / R; 
     KL.col(0) = cells.col(4) * composite_drag; 
     KL.col(1) = cells.col(4) * cells.col(4) * cells.col(4) * composite_drag / 12;
 
@@ -245,7 +243,7 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
 
     // If there is only one cell, return an empty array
     if (n == 1)
-        return Array<T, Dynamic, 6>::Zero(0, 6); 
+        return Array<T, Dynamic, 6>::Zero(0, 6);
 
     // Maintain array of neighboring cells 
     //
@@ -274,9 +272,9 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
                 // they lie within neighbor_threshold of each other 
                 auto result = distBetweenCells<T>(
                     cells(i, Eigen::seq(0, 1)).matrix(),
-                    cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 4), 
+                    cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 5),
                     cells(j, Eigen::seq(0, 1)).matrix(),
-                    cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 4)
+                    cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 5)
                 );
                 Matrix<T, 2, 1> dist_ij = std::get<0>(result); 
                 T si = std::get<1>(result);
@@ -327,9 +325,9 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
         int j = static_cast<int>(neighbors(k, 1)); 
         auto result = distBetweenCells<T>(
             cells(i, Eigen::seq(0, 1)).matrix(),
-            cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 4), 
+            cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 5),
             cells(j, Eigen::seq(0, 1)).matrix(),
-            cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 4)
+            cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 5)
         ); 
         Matrix<T, 2, 1> dist_ij = std::get<0>(result); 
         T si = std::get<1>(result);
