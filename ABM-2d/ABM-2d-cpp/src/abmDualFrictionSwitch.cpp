@@ -198,8 +198,8 @@ int main(int argc, char** argv)
             {
                 dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-                    A, b, bs, cells, neighbors, dt, R, Rcell, E0, Ecell,
-                    surface_contact_density
+                    A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff,
+                    E0, Ecell, surface_contact_density
                 ); 
                 cells_new = result.first; 
                 errors = result.second;
