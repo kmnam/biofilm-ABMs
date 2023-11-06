@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/25/2023
+    11/6/2023
 """
 import re
 import numpy as np
@@ -168,7 +168,7 @@ def add_circles(cells, ax):
 
 #########################################################################
 def plot_simulation(paths, outpath, R=None, fps=10, colors=None, linewidth=1,
-                    figsize=(6.4, 4.8), with_circles=True):
+                    figsize=(6.4, 4.8), with_circles=False):
     """
     Given an ordered sequence of file paths, parse the stored simulation data
     and generate a video.
@@ -260,8 +260,8 @@ def plot_simulation(paths, outpath, R=None, fps=10, colors=None, linewidth=1,
             cells = cells.reshape((1, -1))
     
         # Were the cells identified by group?
-        if cells.shape[1] > 9:
-            # If so, assume the identifiers are given in column 9 (first
+        if cells.shape[1] > 10:
+            # If so, assume the identifiers are given in column 10 (first
             # column after essential data) and label the cells by their
             # groups
             #
@@ -270,14 +270,14 @@ def plot_simulation(paths, outpath, R=None, fps=10, colors=None, linewidth=1,
             #
             # Otherwise, use the seaborn deep color palette
             if colors is None:
-                groups = cells[:, 9].astype(np.int32) - 1
+                groups = cells[:, 10].astype(np.int32) - 1
                 colors_by_cell = [
                     sns.color_palette()[groups[i]] for i in range(cells.shape[0])
                 ]
             elif type(colors) == str:
                 colors_by_cell = [colors for _ in range(cells.shape[0])]
             else:    # type(colors) should be list
-                groups = cells[:, 9].astype(np.int32) - 1
+                groups = cells[:, 10].astype(np.int32) - 1
                 colors_by_cell = [colors[groups[i]] for i in range(cells.shape[0])]
         # Otherwise, label the cells with a single color
         else:
