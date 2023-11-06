@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/5/2023
+ *     11/6/2023
  */
 
 #ifndef BIOFILM_MECHANICS_HPP
@@ -125,21 +125,23 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
             //     between t = s + X and t = -s - X
             // where X = (l1 - l2) / 2
             T X = half_l1 - half_l2;
-            if (t >= -s - X && t >= s - X)          // In region 1
+            T Y = s + X;
+            T Z = s - X;
+            if (t >= -Y && t >= Z)          // In region 1
             {
                 // In this case, set t = l2 / 2 and find s
                 Matrix<T, 2, 1> q = r2 + half_l2 * n2; 
                 s = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, q);
                 t = half_l2;
             }
-            else if (t < s - X && t >= -s + X)      // In region 2
+            else if (t < Z && t >= -Z)      // In region 2
             {
                 // In this case, set s = l1 / 2 and find t
                 Matrix<T, 2, 1> q = r1 + half_l1 * n1;
                 t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, q); 
                 s = half_l1;
             }
-            else if (t < -s + X && t < s + X)      // In region 3
+            else if (t < -Z && t < Y)      // In region 3
             {
                 // In this case, set t = -l2 / 2 and find s
                 Matrix<T, 2, 1> q = r2 - half_l2 * n2;
