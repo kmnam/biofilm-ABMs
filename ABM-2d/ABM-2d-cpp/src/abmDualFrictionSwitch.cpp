@@ -1,26 +1,27 @@
 /**
  * An agent-based model that switches cells between two states that exhibit
- * different distributions of growth rates. 
+ * different friction coefficients. 
  *
  * In what follows, a population of N cells is represented as a 2-D array of 
- * size (N, 10), where each row represents a cell and stores the following data:
+ * size (N, 11), where each row represents a cell and stores the following data:
  * 
  * 0) x-coordinate of cell center
  * 1) y-coordinate of cell center
  * 2) x-coordinate of cell orientation vector
  * 3) y-coordinate of cell orientation vector
- * 4) cell length (excluding caps) 
- * 5) timepoint at which the cell was formed
- * 6) cell growth rate
- * 7) cell's ambient viscosity with respect to surrounding fluid
- * 8) cell-surface friction coefficient
- * 9) cell group identifier (1 for high friction, 2 for low friction)
+ * 4) cell length (excluding caps)
+ * 5) half of cell length (excluding caps) 
+ * 6) timepoint at which the cell was formed
+ * 7) cell growth rate
+ * 8) cell's ambient viscosity with respect to surrounding fluid
+ * 9) cell-surface friction coefficient
+ * 10) cell group identifier (1 for high friction, 2 for low friction)
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/26/2023
+ *     11/5/2023
  */
 
 #include <iostream>
@@ -84,8 +85,10 @@ int main(int argc, char** argv)
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
 
-    // Surface contact area density 
+    // Surface contact area density and powers of cell radius  
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
+    const T sqrtR = std::sqrt(R); 
+    const T powRdiff = std::pow(R - Rcell, 1.5);
 
     // Growth rate distribution function: normal distribution with given mean
     // and standard deviation
@@ -139,6 +142,9 @@ int main(int argc, char** argv)
     // Maximum number of attempts to control stepsize per iteration 
     int max_tries = 3;
 
+    // Minimum error 
+    T min_error = static_cast<T>(1e-30); 
+
     // Initialize simulation ...
     //
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
@@ -147,8 +153,8 @@ int main(int argc, char** argv)
     T t = 0; 
     int i = 0;
     int n = 1;
-    Array<T, Dynamic, Dynamic> cells(n, 10);
-    cells << 0, 0, 1, 0, L0, 0, growth_mean, eta_ambient, eta_mean1, 1;
+    Array<T, Dynamic, Dynamic> cells(n, 11);
+    cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1, 1;
     
     // Compute initial array of neighboring cells (should be empty)
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
@@ -176,8 +182,8 @@ int main(int argc, char** argv)
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-            A, b, bs, cells, neighbors, dt, R, Rcell, E0, Ecell,
-            surface_contact_density
+            A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff, E0,
+            Ecell, surface_contact_density
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first; 
         Array<T, Dynamic, 4> errors = result.second;
@@ -186,7 +192,7 @@ int main(int argc, char** argv)
         // a given maximum number of attempts)
         if (i % iter_update_stepsize == 0)
         {
-            T max_error = std::max(errors.abs().maxCoeff(), 1e-100); 
+            T max_error = std::max(errors.abs().maxCoeff(), min_error); 
             int j = 0; 
             while (max_error > 1e-8 && j < max_tries)
             {
@@ -197,7 +203,7 @@ int main(int argc, char** argv)
                 ); 
                 cells_new = result.first; 
                 errors = result.second;
-                max_error = std::max(errors.abs().maxCoeff(), 1e-100); 
+                max_error = std::max(errors.abs().maxCoeff(), min_error); 
                 j++;  
             }
             // If the error is small, increase the stepsize up to a maximum stepsize
