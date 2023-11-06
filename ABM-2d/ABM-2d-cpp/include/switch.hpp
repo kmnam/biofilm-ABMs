@@ -2,18 +2,19 @@
  * Functions for cell state switching. 
  * 
  * In what follows, a population of N cells is represented as a 2-D array of 
- * size (N, 10+), where each row represents a cell and stores the following data:
+ * size (N, 11+), where each row represents a cell and stores the following data:
  * 
  * 0) x-coordinate of cell center
  * 1) y-coordinate of cell center
  * 2) x-coordinate of cell orientation vector
  * 3) y-coordinate of cell orientation vector
- * 4) cell length (excluding caps) 
- * 5) timepoint at which the cell was formed
- * 6) cell growth rate
- * 7) cell's ambient viscosity with respect to surrounding fluid
- * 8) cell-surface friction coefficient
- * 9) cell group identifier (integer, optional)
+ * 4) cell length (excluding caps)
+ * 5) half of cell length (excluding caps) 
+ * 6) timepoint at which the cell was formed
+ * 7) cell growth rate
+ * 8) cell's ambient viscosity with respect to surrounding fluid
+ * 9) cell-surface friction coefficient
+ * 10) cell group identifier (integer, optional)
  *
  * Additional features may be included in the array but these are not 
  * relevant for the computations implemented here.
@@ -22,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/22/2023
+ *     11/5/2023
  */
 
 #include <cmath>
@@ -56,7 +57,7 @@ Array<int, Dynamic, 1> chooseCellsToSwitch(const Ref<const Array<T, Dynamic, Dyn
     int n = cells.rows(); 
     T prob_12 = rate_12 * dt;
     T prob_21 = rate_21 * dt;
-    Array<bool, Dynamic, 1> in_group_1 = (cells.col(9) == 1);
+    Array<bool, Dynamic, 1> in_group_1 = (cells.col(10) == 1);
     Array<int, Dynamic, 1> to_switch = Array<int, Dynamic, 1>::Zero(n);
     for (int i = 0; i < n; ++i)
     {
@@ -78,9 +79,9 @@ Array<int, Dynamic, 1> chooseCellsToSwitch(const Ref<const Array<T, Dynamic, Dyn
  * The cells are assumed to each exist in one of two states, each of which 
  * has a distribution for the given feature. 
  *
- * The feature should be one of growth rate (6), ambient viscosity (7), 
- * surface friction coefficient (8), or an additionally specified feature
- * (10+). 
+ * The feature should be one of growth rate (7), ambient viscosity (8), 
+ * surface friction coefficient (9), or an additionally specified feature
+ * (11+). 
  *
  * New feature values are chosen using the given distribution functions, 
  * each of which must take a random number generator as its single input.
@@ -113,13 +114,13 @@ void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells, const int feature_idx,
             if (to_switch(i) && cells(i, 9) == 1)    // Switching from 1 to 2
             {
                 T value = dist2(rng);
-                cells(i, 9) = 2;
+                cells(i, 10) = 2;
                 cells(i, feature_idx) = value; 
             }
             else if (to_switch(i))                   // Switching from 2 to 1
             {
                 T value = dist1(rng);
-                cells(i, 9) = 1;
+                cells(i, 10) = 1;
                 cells(i, feature_idx) = value;
             }
         }
