@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/21/2023
+ *     11/5/2023
  */
 
 #include <fstream>
@@ -69,10 +69,10 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
     {
         for (int j = 0; j < cells.cols(); ++j)
         {
-            if (j < 9)         // If the entry is a floating-point value
-                outfile << cells(i, j) << '\t'; 
-            else if (j == 9)   // If the entry is a group identifier 
+            if (j == 10)         // If the entry is a group identifier
                 outfile << static_cast<int>(cells(i, j)) << '\t'; 
+            else                 // Otherwise 
+                outfile << cells(i, j) << '\t'; 
         }
         outfile.seekp(-1, std::ios_base::cur);
         outfile << std::endl;
