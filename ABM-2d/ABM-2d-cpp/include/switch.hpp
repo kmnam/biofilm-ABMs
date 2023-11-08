@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/5/2023
+ *     11/8/2023
  */
 
 #include <cmath>
@@ -111,13 +111,13 @@ void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells, const int feature_idx,
         int n = cells.rows();
         for (int i = 0; i < n; ++i)
         {
-            if (to_switch(i) && cells(i, 9) == 1)    // Switching from 1 to 2
+            if (to_switch(i) && cells(i, 10) == 1)    // Switching from 1 to 2
             {
                 T value = dist2(rng);
                 cells(i, 10) = 2;
                 cells(i, feature_idx) = value; 
             }
-            else if (to_switch(i))                   // Switching from 2 to 1
+            else if (to_switch(i))                    // Switching from 2 to 1
             {
                 T value = dist1(rng);
                 cells(i, 10) = 1;
