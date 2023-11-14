@@ -90,21 +90,14 @@ int main(int argc, char** argv)
     const T sqrtR = std::sqrt(R); 
     const T powRdiff = std::pow(R - Rcell, 1.5);
 
-    // Growth rate distribution functions: normal distributions with given mean
+    // Growth rate distribution function: normal distribution with given mean
     // and standard deviation
-    boost::random::normal_distribution<> growth_dist1(growth_mean1, growth_std1);
-    boost::random::normal_distribution<> growth_dist2(growth_mean2, growth_std2);
-    std::function<T(boost::random::mt19937&)> growth_dist1_func =
-        [&growth_dist1](boost::random::mt19937& rng)
+    boost::random::normal_distribution<> growth_dist(growth_mean, growth_std);
+    std::function<T(boost::random::mt19937&)> growth_dist_func =
+        [&growth_dist](boost::random::mt19937& rng)
         {
-            return growth_dist1(rng); 
+            return growth_dist(rng); 
         };
-    std::function<T(boost::random::mt19937&)> growth_dist2_func =
-        [&growth_dist2](boost::random::mt19937& rng)
-        {
-            return growth_dist2(rng);
-        };
-    std::vector<std::function<T(boost::random::mt19937&)> > growth_dist_funcs {growth_dist1_func, growth_dist2_func}; 
 
     // Friction coefficient distribution functions: normal distributions with
     // given mean and standard deviation 
@@ -238,7 +231,7 @@ int main(int argc, char** argv)
         Array<int, Dynamic, 1> to_switch = chooseCellsToSwitch<T>(
             cells, rate_12, rate_21, dt, rng, uniform_dist
         );
-        switchGroups<T>(cells, 8, to_switch, eta_dist1, eta_dist2, rng);
+        switchGroups<T>(cells, 9, to_switch, eta_dist1, eta_dist2, rng);
 
         // Check for any NaN's or infinities
         if (cells.isNaN().any() || cells.isInf().any())
