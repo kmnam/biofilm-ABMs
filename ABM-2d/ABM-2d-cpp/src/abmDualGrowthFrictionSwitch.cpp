@@ -1,6 +1,6 @@
 /**
  * An agent-based model that switches cells between two states that exhibit
- * different friction coefficients. 
+ * different distributions of growth rates. 
  *
  * In what follows, a population of N cells is represented as a 2-D array of 
  * size (N, 11), where each row represents a cell and stores the following data:
@@ -9,13 +9,13 @@
  * 1) y-coordinate of cell center
  * 2) x-coordinate of cell orientation vector
  * 3) y-coordinate of cell orientation vector
- * 4) cell length (excluding caps)
- * 5) half of cell length (excluding caps) 
+ * 4) cell length (excluding caps) 
+ * 5) half of cell length (excluding caps)
  * 6) timepoint at which the cell was formed
  * 7) cell growth rate
  * 8) cell's ambient viscosity with respect to surrounding fluid
  * 9) cell-surface friction coefficient
- * 10) cell group identifier (1 for high friction, 2 for low friction)
+ * 10) cell group identifier (1 for slow-growing, 2 for fast-growing)
  *
  * Authors:
  *     Kee-Myoung Nam
@@ -64,12 +64,14 @@ int main(int argc, char** argv)
     const T Rcell = static_cast<T>(json_data["Rcell"].as_double());
     const T L0 = static_cast<T>(json_data["L0"].as_double());
     const T Ldiv = 2 * L0 + 2 * R;
-    const T growth_mean = static_cast<T>(json_data["growth_mean"].as_double());
-    const T growth_std = static_cast<T>(json_data["growth_std"].as_double());
+    const T growth_mean1 = static_cast<T>(json_data["growth_mean1"].as_double());
+    const T growth_std1 = static_cast<T>(json_data["growth_std1"].as_double());
+    const T growth_mean2 = static_cast<T>(json_data["growth_mean2"].as_double()); 
+    const T growth_std2 = static_cast<T>(json_data["growth_std2"].as_double());
     const T eta_mean1 = static_cast<T>(json_data["eta_mean1"].as_double());
     const T eta_std1 = static_cast<T>(json_data["eta_std1"].as_double()); 
     const T eta_mean2 = static_cast<T>(json_data["eta_mean2"].as_double());
-    const T eta_std2 = static_cast<T>(json_data["eta_std2"].as_double());
+    const T eta_std2 = static_cast<T>(json_data["eta_std2"].as_double());  
     const T lifetime_mean1 = static_cast<T>(json_data["lifetime_mean1"].as_double()); 
     const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
     const T E0 = static_cast<T>(json_data["E0"].as_double());
@@ -93,7 +95,7 @@ int main(int argc, char** argv)
     // Growth rate distribution functions: normal distributions with given mean
     // and standard deviation
     boost::random::normal_distribution<> growth_dist1(growth_mean1, growth_std1);
-    boost::random::normal_distribution<> growth_dist2(growth_mean2, growth_std2);
+    boost::random::normal_distribution<> growth_dist2(growth_mean2, growth_std2); 
     std::function<T(boost::random::mt19937&)> growth_dist1_func =
         [&growth_dist1](boost::random::mt19937& rng)
         {
@@ -105,21 +107,6 @@ int main(int argc, char** argv)
             return growth_dist2(rng);
         };
     std::vector<std::function<T(boost::random::mt19937&)> > growth_dist_funcs {growth_dist1_func, growth_dist2_func}; 
-
-    // Friction coefficient distribution functions: normal distributions with
-    // given mean and standard deviation 
-    boost::random::normal_distribution<> eta_dist1(eta_mean1, eta_std1);
-    boost::random::normal_distribution<> eta_dist2(eta_mean2, eta_std2); 
-    std::function<T(boost::random::mt19937&)> eta_dist1_func =
-        [&eta_dist1](boost::random::mt19937& rng)
-        {
-            return eta_dist1(rng); 
-        };
-    std::function<T(boost::random::mt19937&)> eta_dist2_func =
-        [&eta_dist2](boost::random::mt19937& rng)
-        {
-            return eta_dist2(rng);
-        };
 
     // Daughter cell length ratio distribution function: normal distribution
     // with mean 0.5 and given standard deviation
@@ -161,7 +148,7 @@ int main(int argc, char** argv)
     int i = 0;
     int n = 1;
     Array<T, Dynamic, Dynamic> cells(n, 11);
-    cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1, 1;
+    cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean1, eta_ambient, eta_mean1, 1;
     
     // Compute initial array of neighboring cells (should be empty)
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
@@ -179,7 +166,7 @@ int main(int argc, char** argv)
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
         cells = divideCells<T>(
-            cells, t, R, to_divide, growth_dist_func, rng, daughter_length_dist_func,
+            cells, t, R, to_divide, growth_dist_funcs, rng, daughter_length_dist_func,
             daughter_angle_dist_func
         );
 
@@ -199,7 +186,7 @@ int main(int argc, char** argv)
         // a given maximum number of attempts)
         if (i % iter_update_stepsize == 0)
         {
-            T max_error = std::max(errors.abs().maxCoeff(), min_error); 
+            T max_error = std::max(errors.abs().maxCoeff(), min_error);
             int j = 0; 
             while (max_error > 1e-8 && j < max_tries)
             {
@@ -210,7 +197,7 @@ int main(int argc, char** argv)
                 ); 
                 cells_new = result.first; 
                 errors = result.second;
-                max_error = std::max(errors.abs().maxCoeff(), min_error); 
+                max_error = std::max(errors.abs().maxCoeff(), min_error);
                 j++;  
             }
             // If the error is small, increase the stepsize up to a maximum stepsize
@@ -238,7 +225,10 @@ int main(int argc, char** argv)
         Array<int, Dynamic, 1> to_switch = chooseCellsToSwitch<T>(
             cells, rate_12, rate_21, dt, rng, uniform_dist
         );
-        switchGroups<T>(cells, 8, to_switch, eta_dist1, eta_dist2, rng);
+        switchByGrowthRateAndFrictionCoeff<T>(
+            cells, to_switch, growth_dist1, growth_dist2, friction_dist1,
+            friction_dist2, rng
+        );
 
         // Check for any NaN's or infinities
         if (cells.isNaN().any() || cells.isInf().any())

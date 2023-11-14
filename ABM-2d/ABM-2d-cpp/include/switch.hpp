@@ -155,13 +155,13 @@ void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells, const int feature_idx,
  * @param rng Random number generator.
  */
 template <typename T>
-void switchGrowthRateAndFrictionCoeff(Ref<Array<T, Dynamic, Dynamic> > cells,
-                                      const Ref<const Array<int, Dynamic, 1> >& to_switch, 
-                                      std::function<T(boost::random::mt19937&)>& growth_dist1, 
-                                      std::function<T(boost::random::mt19937&)>& growth_dist2,
-                                      std::function<T(boost::random::mt19937&)>& friction_dist1,
-                                      std::function<T(boost::random::mt19937&)>& friction_dist2,
-                                      boost::random::mt19937& rng)
+void switchByGrowthRateAndFrictionCoeff(Ref<Array<T, Dynamic, Dynamic> > cells,
+                                        const Ref<const Array<int, Dynamic, 1> >& to_switch, 
+                                        std::function<T(boost::random::mt19937&)>& growth_dist1, 
+                                        std::function<T(boost::random::mt19937&)>& growth_dist2,
+                                        std::function<T(boost::random::mt19937&)>& friction_dist1,
+                                        std::function<T(boost::random::mt19937&)>& friction_dist2,
+                                        boost::random::mt19937& rng)
 {
     int n_switch = to_switch.sum(); 
 
