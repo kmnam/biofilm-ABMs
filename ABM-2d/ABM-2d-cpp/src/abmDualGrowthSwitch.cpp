@@ -222,7 +222,7 @@ int main(int argc, char** argv)
         Array<int, Dynamic, 1> to_switch = chooseCellsToSwitch<T>(
             cells, rate_12, rate_21, dt, rng, uniform_dist
         );
-        switchGroups<T>(cells, 6, to_switch, growth_dist1, growth_dist2, rng);
+        switchGroups<T>(cells, 7, to_switch, growth_dist1, growth_dist2, rng);
 
         // Check for any NaN's or infinities
         if (cells.isNaN().any() || cells.isInf().any())
