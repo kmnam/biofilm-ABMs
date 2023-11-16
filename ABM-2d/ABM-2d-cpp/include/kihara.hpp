@@ -101,9 +101,9 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
             // Derivative of cell-cell interaction energy w.r.t position of cell i
             Array<T, 2, 1> vij;
             if (!repulsive_only(k)) 
-                vij = (prefactor_12 / std::pow(dist, 13) - prefactor_6 / std::pow(dist, 7)) * dir_ij;
+                vij = -(prefactor_12 / std::pow(dist, 13) - prefactor_6 / std::pow(dist, 7)) * dir_ij;
             else
-                vij = (prefactor_12 / std::pow(dist, 13)) * dir_ij;
+                vij = -(prefactor_12 / std::pow(dist, 13)) * dir_ij;
             dEdq(i, Eigen::seq(0, 1)) += vij; 
             // Derivative of cell-cell interaction energy w.r.t orientation of cell i
             dEdq(i, Eigen::seq(2, 3)) += vij * si; 
