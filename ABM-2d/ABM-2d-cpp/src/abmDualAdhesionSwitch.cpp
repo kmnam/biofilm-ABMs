@@ -178,7 +178,7 @@ int main(int argc, char** argv)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             // Identify which pairs of neighboring cells exhibit adhesion 
-            repulsive_only.resize(neighbors.size());    // No need for conservativeResize() 
+            repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.size()); 
             for (int k = 0; k < neighbors.size(); ++k)
             {
                 const int i = neighbors(k, 0); 
@@ -242,7 +242,7 @@ int main(int argc, char** argv)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             // Identify which pairs of neighboring cells exhibit adhesion 
-            repulsive_only.resize(neighbors.size());    // No need for conservativeResize() 
+            repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.size()); 
             for (int k = 0; k < neighbors.size(); ++k)
             {
                 const int i = neighbors(k, 0); 
