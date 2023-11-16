@@ -32,6 +32,7 @@
 #include <boost/random.hpp>
 #include "../include/growth.hpp"
 #include "../include/mechanics.hpp"
+#include "../include/kihara.hpp"
 #include "../include/switch.hpp"
 #include "../include/utils.hpp"
 
@@ -188,9 +189,9 @@ int main(int argc, char** argv)
         }
 
         // Update cell positions and orientations 
-        auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-            A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff, E0,
-            Ecell, surface_contact_density
+        auto result = stepRungeKuttaAdaptiveKihara<T>(
+            A, b, bs, cells, neighbors, dt, R, Rcell, prefactor_12, prefactor_6,
+            surface_contact_density
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first; 
         Array<T, Dynamic, 4> errors = result.second;
@@ -204,9 +205,9 @@ int main(int argc, char** argv)
             while (max_error > 1e-8 && j < max_tries)
             {
                 dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
-                result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-                    A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff,
-                    E0, Ecell, surface_contact_density
+                result = stepRungeKuttaAdaptiveKihara<T>(
+                    A, b, bs, cells, neighbors, dt, R, Rcell, prefactor_12, prefactor_6,
+                    surface_contact_density
                 ); 
                 cells_new = result.first; 
                 errors = result.second;
