@@ -23,13 +23,12 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/10/2023
+ *     11/11/2023
  */
 
 #ifndef BIOFILM_CELL_CELL_POTENTIAL_FORCES_HPP
 #define BIOFILM_CELL_CELL_POTENTIAL_FORCES_HPP
 
-#include <assert>
 #include <cmath>
 #include <Eigen/Dense>
 
@@ -55,10 +54,10 @@ using namespace Eigen;
  *                     component).
  */
 template <typename T>
-Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
-                                          const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                          const T R, const T Rcell,
-                                          const T prefactor_12)
+Array<T, Dynamic, 4> cellCellForcesRepulsiveKihara(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
+                                                   const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                                   const T R, const T Rcell,
+                                                   const T prefactor_12)
 {
     int n = cells.rows();    // Number of cells
     
@@ -92,7 +91,7 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
         if (dist <= 2 * R)
         {
             // Derivative of cell-cell interaction energy w.r.t position of cell i
-            Array<T, 2, 1> vij = (-prefactor_12 / std::pow(dist, 13)) * dir_ij;
+            Array<T, 2, 1> vij = (prefactor_12 / std::pow(dist, 13)) * dir_ij;
             dEdq(i, Eigen::seq(0, 1)) += vij; 
             // Derivative of cell-cell interaction energy w.r.t orientation of cell i
             dEdq(i, Eigen::seq(2, 3)) += vij * si; 
@@ -163,7 +162,7 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
         if (dist <= 2 * R)
         {
             // Derivative of cell-cell interaction energy w.r.t position of cell i
-            Array<T, 2, 1> vij = (-prefactor_12 / std::pow(dist, 13) + prefactor_6 / std::pow(dist, 7)) * dir_ij;
+            Array<T, 2, 1> vij = (prefactor_12 / std::pow(dist, 13) - prefactor_6 / std::pow(dist, 7)) * dir_ij;
             dEdq(i, Eigen::seq(0, 1)) += vij; 
             // Derivative of cell-cell interaction energy w.r.t orientation of cell i
             dEdq(i, Eigen::seq(2, 3)) += vij * si; 
