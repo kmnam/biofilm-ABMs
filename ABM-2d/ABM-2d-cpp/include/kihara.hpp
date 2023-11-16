@@ -52,7 +52,9 @@ using namespace Eigen;
  *                     cell-cell distance at which the Kihara potential 
  *                     is minimized.
  * @param prefactor_6 The value `12 * eps0 * std::pow(dmin, 6)`.
- * @param repulsive_only If true, use only the repulsive part of the potential.
+ * @param repulsive_only A vector that indicates, for each pair of neighboring
+ *                       cells, whether to use only the repulsive part of the
+ *                       potential.  
  */
 template <typename T>
 Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
@@ -60,7 +62,7 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
                                           const T R, const T Rcell,
                                           const T prefactor_12,
                                           const T prefactor_6,
-                                          const bool repulsive_only = false)
+                                          const Ref<const Array<int, Dynamic, 1> >& repulsive_only)
 {
     int n = cells.rows();    // Number of cells
     
@@ -95,7 +97,7 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
         {
             // Derivative of cell-cell interaction energy w.r.t position of cell i
             Array<T, 2, 1> vij;
-            if (!repulsive_only) 
+            if (!repulsive_only(k)) 
                 vij = (prefactor_12 / std::pow(dist, 13) - prefactor_6 / std::pow(dist, 7)) * dir_ij;
             else
                 vij = (prefactor_12 / std::pow(dist, 13)) * dir_ij;
@@ -133,7 +135,9 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
  *                     is minimized.
  * @param prefactor_6 The value `12 * eps0 * std::pow(dmin, 6)`.
  * @param surface_contact_density Cell-surface contact area density.
- * @param repulsive_only If true, use only the repulsive part of the potential.
+ * @param repulsive_only A vector that indicates, for each pair of neighboring
+ *                       cells, whether to use only the repulsive part of the
+ *                       potential.  
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -143,7 +147,7 @@ Array<T, Dynamic, 4> getVelocitiesKihara(const Ref<const Array<T, Dynamic, Dynam
                                          const T prefactor_12,
                                          const T prefactor_6,
                                          const T surface_contact_density,
-                                         const bool repulsive_only = false)
+                                         const Ref<const Array<int, Dynamic, 1> >& repulsive_only)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -226,7 +230,9 @@ Array<T, Dynamic, 4> getVelocitiesKihara(const Ref<const Array<T, Dynamic, Dynam
  *                     is minimized.
  * @param prefactor_6 The value `12 * eps0 * std::pow(dmin, 6)`.
  * @param surface_contact_density Cell-surface contact area density.
- * @param repulsive_only If true, use only the repulsive part of the potential.
+ * @param repulsive_only A vector that indicates, for each pair of neighboring
+ *                       cells, whether to use only the repulsive part of the
+ *                       potential.  
  * @returns Updated population of cells, along with the array of errors in
  *          the cell positions and orientations.  
  */
@@ -240,7 +246,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                                  const T dt, const T R, const T Rcell,
                                  const T prefactor_12, const T prefactor_6,
                                  const T surface_contact_density,
-                                 const bool use_repulsive_only = false)
+                                 const Ref<const Array<int, Dynamic, 1> >& repulsive_only)
 {
     // Compute velocities at given partial timesteps 
     int n = cells.rows(); 
