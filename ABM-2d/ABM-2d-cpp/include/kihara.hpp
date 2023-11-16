@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/11/2023
+ *     11/16/2023
  */
 
 #ifndef BIOFILM_CELL_CELL_POTENTIAL_FORCES_HPP
