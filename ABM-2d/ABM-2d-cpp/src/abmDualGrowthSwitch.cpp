@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/5/2023
+ *     11/16/2023
  */
 
 #include <iostream>
@@ -39,6 +39,9 @@ using namespace Eigen;
 
 // Define floating-point type to be used 
 typedef double T; 
+
+// Upper bound on daughter cell orientation angle 
+const double theta_bound = boost::math::constants::pi<double>() / 90; 
 
 int main(int argc, char** argv)
 {
@@ -120,7 +123,10 @@ int main(int argc, char** argv)
     std::function<T(boost::random::mt19937&)> daughter_angle_dist_func =
         [&orientation_conc, &uniform_dist](boost::random::mt19937& rng)
         {
-            return vonMises<T>(0.0, orientation_conc, rng, uniform_dist); 
+            T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
+            while (theta > theta_bound)
+                theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
+            return theta;
         };
 
     // Rates of switching from group 1 to group 2 and vice versa 
