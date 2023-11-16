@@ -90,7 +90,7 @@ int main(int argc, char** argv)
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
 
     // Kihara potential prefactors
-    const T eps0 = 1.0;                  // TODO Find suitable value
+    const T eps0 = 3.86e-15;             // Set to value for eps0 in Hartmann et al. 2019
     const T dmin = R - Rcell;            // TODO Find suitable value
     const T prefactor_12 = 12 * eps0 * std::pow(dmin, 12); 
     const T prefactor_6 = 12 * eps0 * std::pow(dmin, 6);
@@ -191,7 +191,7 @@ int main(int argc, char** argv)
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveKihara<T>(
             A, b, bs, cells, neighbors, dt, R, Rcell, prefactor_12, prefactor_6,
-            surface_contact_density
+            surface_contact_density, repulsive_only
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first; 
         Array<T, Dynamic, 4> errors = result.second;
@@ -207,7 +207,7 @@ int main(int argc, char** argv)
                 dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveKihara<T>(
                     A, b, bs, cells, neighbors, dt, R, Rcell, prefactor_12, prefactor_6,
-                    surface_contact_density
+                    surface_contact_density, repulsive_only
                 ); 
                 cells_new = result.first; 
                 errors = result.second;
