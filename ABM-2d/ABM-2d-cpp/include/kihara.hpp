@@ -82,6 +82,9 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
     // Compute cell-cell distances between the cells themselves (excluding EPS)
     Array<T, Dynamic, 1> distances = magnitudes - 2 * Rcell;
 
+    // Maximum cell-cell distance at which the force is nonzero
+    T maxdist = 2 * (R - Rcell); 
+
     // For each pair of neighboring cells ...
     for (int k = 0; k < neighbors.rows(); ++k)
     {
@@ -93,7 +96,7 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
         T dist = distances(k);                          // Cell-cell distance
 
         // If the distance between cells is at most 2 * R ... 
-        if (dist <= 2 * R)
+        if (dist <= maxdist)
         {
             // Derivative of cell-cell interaction energy w.r.t position of cell i
             Array<T, 2, 1> vij;
