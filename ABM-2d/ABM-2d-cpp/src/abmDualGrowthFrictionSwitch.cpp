@@ -109,7 +109,22 @@ int main(int argc, char** argv)
         {
             return growth_dist2(rng);
         };
-    std::vector<std::function<T(boost::random::mt19937&)> > growth_dist_funcs {growth_dist1_func, growth_dist2_func}; 
+    std::vector<std::function<T(boost::random::mt19937&)> > growth_dist_funcs {growth_dist1_func, growth_dist2_func};
+
+    // Friction coefficient distribution functions: normal distributions with
+    // given mean and standard deviation 
+    boost::random::normal_distribution<> eta_dist1(eta_mean1, eta_std1);
+    boost::random::normal_distribution<> eta_dist2(eta_mean2, eta_std2); 
+    std::function<T(boost::random::mt19937&)> eta_dist1_func =
+        [&eta_dist1](boost::random::mt19937& rng)
+        {
+            return eta_dist1(rng); 
+        };
+    std::function<T(boost::random::mt19937&)> eta_dist2_func =
+        [&eta_dist2](boost::random::mt19937& rng)
+        {
+            return eta_dist2(rng);
+        };
 
     // Daughter cell length ratio distribution function: normal distribution
     // with mean 0.5 and given standard deviation
@@ -232,8 +247,8 @@ int main(int argc, char** argv)
             cells, rate_12, rate_21, dt, rng, uniform_dist
         );
         switchByGrowthRateAndFrictionCoeff<T>(
-            cells, to_switch, growth_dist1, growth_dist2, friction_dist1,
-            friction_dist2, rng
+            cells, to_switch, growth_dist1_func, growth_dist2_func, eta_dist1_func,
+            eta_dist2_func, rng
         );
 
         // Check for any NaN's or infinities
