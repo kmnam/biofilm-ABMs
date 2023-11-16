@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/8/2023
+ *     11/16/2023
  */
 
 #ifndef BIOFILM_SWITCH_HPP
@@ -71,6 +71,37 @@ Array<int, Dynamic, 1> chooseCellsToSwitch(const Ref<const Array<T, Dynamic, Dyn
     } 
 
     return to_switch;
+}
+
+/**
+ * Switch the indicated cells from one group to the other (not on the basis
+ * of any feature).
+ *
+ * The given array of cell data is updated in place. 
+ *
+ * @param cells Existing population of cells.
+ * @param to_switch Boolean index indicating which cells are to switch from
+ *                  one distribution to the other. 
+ */
+template <typename T>
+void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells,
+                  const Ref<const Array<int, Dynamic, 1> >& to_switch) 
+{
+    int n_switch = to_switch.sum(); 
+
+    // If there are cells to switch ... 
+    if (n_switch > 0)
+    {
+        // For each cell to be switched from 1 to 2 or vice versa ... 
+        int n = cells.rows();
+        for (int i = 0; i < n; ++i)
+        {
+            if (to_switch(i) && cells(i, 10) == 1)    // Switching from 1 to 2
+                cells(i, 10) = 2;
+            else if (to_switch(i))                    // Switching from 2 to 1
+                cells(i, 10) = 1;
+        }
+    }
 }
 
 /**
