@@ -132,6 +132,9 @@ int main(int argc, char** argv)
     // Output file prefix
     std::string prefix = argv[2];
 
+    // Array of errors for each iteration 
+    Array<T, Dynamic, 4> errors; 
+
     // Maximum number of attempts to control stepsize per iteration 
     int max_tries = 3;
 
@@ -150,11 +153,13 @@ int main(int argc, char** argv)
     cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface, 1;
     
     // Compute initial array of neighboring cells (should be empty)
-    Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+    //Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+    Array<T, Dynamic, 6> neighbors;
 
     // Identify which pairs of neighboring cells exhibit adhesion (array 
     // should be empty)
-    Array<int, Dynamic, 1> repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.size()); 
+    //Array<int, Dynamic, 1> repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.size());
+    Array<int, Dynamic, 1> repulsive_only; 
 
     // Write the founder cell to file
     json_data["t_curr"] = t;
@@ -188,43 +193,49 @@ int main(int argc, char** argv)
             } 
         }
 
-        // Update cell positions and orientations 
-        auto result = stepRungeKuttaAdaptiveKihara<T>(
-            A, b, bs, cells, neighbors, dt, R, Rcell, prefactor_12, prefactor_6,
-            surface_contact_density, repulsive_only
-        ); 
-        Array<T, Dynamic, Dynamic> cells_new = result.first; 
-        Array<T, Dynamic, 4> errors = result.second;
-
-        // If the error is big, retry the step with a smaller stepsize (up to
-        // a given maximum number of attempts)
-        if (i % iter_update_stepsize == 0)
+        if (n > 1)
         {
-            T max_error = std::max(errors.abs().maxCoeff(), min_error); 
-            int j = 0; 
-            while (max_error > 1e-8 && j < max_tries)
+            // Update cell positions and orientations 
+            auto result = stepRungeKuttaAdaptiveKihara<T>(
+                A, b, bs, cells, neighbors, dt, R, Rcell, prefactor_12, prefactor_6,
+                surface_contact_density, repulsive_only
+            ); 
+            Array<T, Dynamic, Dynamic> cells_new = result.first; 
+            errors = result.second;
+
+            // If the error is big, retry the step with a smaller stepsize (up to
+            // a given maximum number of attempts)
+            if (i % iter_update_stepsize == 0)
             {
-                dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
-                result = stepRungeKuttaAdaptiveKihara<T>(
-                    A, b, bs, cells, neighbors, dt, R, Rcell, prefactor_12, prefactor_6,
-                    surface_contact_density, repulsive_only
-                ); 
-                cells_new = result.first; 
-                errors = result.second;
-                max_error = std::max(errors.abs().maxCoeff(), min_error); 
-                j++;  
+                T max_error = std::max(errors.abs().maxCoeff(), min_error); 
+                int j = 0; 
+                while (max_error > 1e-8 && j < max_tries)
+                {
+                    dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
+                    result = stepRungeKuttaAdaptiveKihara<T>(
+                        A, b, bs, cells, neighbors, dt, R, Rcell, prefactor_12, prefactor_6,
+                        surface_contact_density, repulsive_only
+                    ); 
+                    cells_new = result.first; 
+                    errors = result.second;
+                    max_error = std::max(errors.abs().maxCoeff(), min_error); 
+                    j++;  
+                }
+                // If the error is small, increase the stepsize up to a maximum stepsize
+                if (max_error < 1e-8)
+                    dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-5);
             }
-            // If the error is small, increase the stepsize up to a maximum stepsize
-            if (max_error < 1e-8)
-                dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-5);
+            cells = cells_new;
         }
-        cells = cells_new;
 
         // Grow the cells
         growCells<T>(cells, dt, R);
 
-        // Update distances between neighboring cells
-        updateNeighborDistances<T>(cells, neighbors);
+        if (n > 1)
+        {
+            // Update distances between neighboring cells
+            updateNeighborDistances<T>(cells, neighbors);
+        }
 
         // Update current time 
         t += dt;
@@ -238,7 +249,7 @@ int main(int argc, char** argv)
         switchGroups<T>(cells, to_switch);
 
         // Update neighboring cells 
-        if (i % iter_update_neighbors == 0)
+        if (n > 1 && i % iter_update_neighbors == 0)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             // Identify which pairs of neighboring cells exhibit adhesion 
