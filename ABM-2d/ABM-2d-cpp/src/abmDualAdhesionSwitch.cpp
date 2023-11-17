@@ -151,12 +151,10 @@ int main(int argc, char** argv)
     
     // Compute initial array of neighboring cells (should be empty)
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
-    std::cout << neighbors.rows() << " " << neighbors.cols() << std::endl; 
 
     // Identify which pairs of neighboring cells exhibit adhesion (array 
     // should be empty)
     Array<int, Dynamic, 1> repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.rows());
-    std::cout << repulsive_only.size() << std::endl; 
 
     // Write the founder cell to file
     json_data["t_curr"] = t;
