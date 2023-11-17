@@ -31,6 +31,7 @@
 
 #include <cmath>
 #include <limits>
+#include <tuple>
 #include <Eigen/Dense>
 #include "mechanics.hpp"
 
@@ -133,7 +134,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
 
         // Must check that all distances between cells are greater than the 
         // given minimum
-        T mindist = 0.5 * Rcell;
+        T mindist = 1.5 * Rcell;
         bool satisfies_distance = false;
 
         // While the distance criterion is not satisfied ... 
@@ -241,7 +242,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 {
                     if (i != j)
                     {
-                        T dist = distBetweenCells(
+                        auto result = distBetweenCells<T>(
                             cells_total(i, Eigen::seq(0, 1)).matrix(),
                             cells_total(i, Eigen::seq(2, 3)).matrix(),
                             cells_total(i, 5),
@@ -249,8 +250,10 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                             cells_total(j, Eigen::seq(2, 3)).matrix(),
                             cells_total(j, 5) 
                         );
+                        Matrix<T, 2, 1> dij = std::get<0>(result);
+                        T dist = dij.norm(); 
                         if (dist < daughters_mindist)
-                            dist = daughters_mindist;  
+                            daughters_mindist = dist; 
                     }
                 }
             } 
@@ -260,7 +263,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 {
                     if (i != j)
                     {
-                        T dist = distBetweenCells(
+                        auto result = distBetweenCells<T>(
                             cells_total(i, Eigen::seq(0, 1)).matrix(),
                             cells_total(i, Eigen::seq(2, 3)).matrix(),
                             cells_total(i, 5),
@@ -268,8 +271,10 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                             cells_total(j, Eigen::seq(2, 3)).matrix(),
                             cells_total(j, 5) 
                         );
+                        Matrix<T, 2, 1> dij = std::get<0>(result);
+                        T dist = dij.norm();
                         if (dist < daughters_mindist)
-                            dist = daughters_mindist;  
+                            daughters_mindist = dist;
                     }
                 }
             }
@@ -306,7 +311,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
  */
 template <typename T>
 Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                       const T t, const T R,
+                                       const T t, const T R, const T Rcell,
                                        const Ref<const Array<int, Dynamic, 1> >& to_divide,
                                        std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
                                        boost::random::mt19937& rng,
@@ -331,7 +336,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
 
         // Must check that all distances between cells are greater than the 
         // given minimum
-        T mindist = Rcell;
+        T mindist = 1.5 * Rcell;
         bool satisfies_distance = false;
 
         // While the distance criterion is not satisfied ... 
@@ -445,7 +450,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 {
                     if (i != j)
                     {
-                        T dist = distBetweenCells(
+                        auto result = distBetweenCells<T>(
                             cells_total(i, Eigen::seq(0, 1)).matrix(),
                             cells_total(i, Eigen::seq(2, 3)).matrix(),
                             cells_total(i, 5),
@@ -453,8 +458,10 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                             cells_total(j, Eigen::seq(2, 3)).matrix(),
                             cells_total(j, 5) 
                         );
+                        Matrix<T, 2, 1> dij = std::get<0>(result);
+                        T dist = dij.norm(); 
                         if (dist < daughters_mindist)
-                            dist = daughters_mindist;  
+                            daughters_mindist = dist;
                     }
                 }
             } 
@@ -464,7 +471,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 {
                     if (i != j)
                     {
-                        T dist = distBetweenCells(
+                        auto result = distBetweenCells<T>(
                             cells_total(i, Eigen::seq(0, 1)).matrix(),
                             cells_total(i, Eigen::seq(2, 3)).matrix(),
                             cells_total(i, 5),
@@ -472,8 +479,10 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                             cells_total(j, Eigen::seq(2, 3)).matrix(),
                             cells_total(j, 5) 
                         );
+                        Matrix<T, 2, 1> dij = std::get<0>(result);
+                        T dist = dij.norm(); 
                         if (dist < daughters_mindist)
-                            dist = daughters_mindist;  
+                            daughters_mindist = dist;
                     }
                 }
             }
