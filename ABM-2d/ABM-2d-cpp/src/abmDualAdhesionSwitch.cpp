@@ -155,7 +155,7 @@ int main(int argc, char** argv)
 
     // Identify which pairs of neighboring cells exhibit adhesion (array 
     // should be empty)
-    Array<int, Dynamic, 1> repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.size());
+    Array<int, Dynamic, 1> repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.rows());
     std::cout << repulsive_only.size() << std::endl; 
 
     // Write the founder cell to file
@@ -180,7 +180,7 @@ int main(int argc, char** argv)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             // Identify which pairs of neighboring cells exhibit adhesion
-            repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.size()); 
+            repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.rows()); 
             for (int k = 0; k < neighbors.rows(); ++k)
             {
                 const int p = neighbors(k, 0); 
@@ -244,7 +244,7 @@ int main(int argc, char** argv)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             // Identify which pairs of neighboring cells exhibit adhesion 
-            repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.size()); 
+            repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.rows()); 
             for (int k = 0; k < neighbors.rows(); ++k)
             {
                 const int p = neighbors(k, 0); 
