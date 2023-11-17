@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/6/2023
+ *     11/16/2023
  */
 
 #ifndef BIOFILM_MECHANICS_HPP
@@ -99,8 +99,9 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
     T s_numer = r12_dot_n1 - n1_dot_n2 * r12_dot_n2;
     T t_numer = n1_dot_n2 * r12_dot_n1 - r12_dot_n2;
     T denom = 1 - n1_dot_n2 * n1_dot_n2;
-    Matrix<T, 2, 1> dist;
-    T s, t;  
+    Matrix<T, 2, 1> dist = Matrix<T, 2, 1>::Zero(2);
+    T s = 0;
+    T t = 0;  
 
     // If the two centerlines are not parallel ...
     if (std::abs(denom) > 1e-6)
@@ -257,7 +258,8 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
     // 3) y-coordinate of distance vector from cell i to cell j
     // 4) Cell-body coordinate of contact point along centerline of cell i
     // 5) Cell-body coordinate of contact point along centerline of cell j
-    Array<T, Dynamic, 6> neighbors(n * (n - 1) / 2, 6);
+    int npairs = n * (n - 1) / 2;
+    Array<T, Dynamic, 6> neighbors(npairs, 6);
     int idx = 0; 
 
     // For each pair of cells in the population ... 
