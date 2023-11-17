@@ -96,7 +96,7 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
         if (dist <= maxdist)
         {
             // Derivative of cell-cell interaction energy w.r.t position of cell i
-            Array<T, 2, 1> vij;
+            Array<T, 2, 1> vij = Array<T, 2, 1>::Zero(2);
             if (!repulsive_only(k)) 
                 vij = (prefactor_12 / std::pow(dist, 13) - prefactor_6 / std::pow(dist, 7)) * dir_ij;
             else
