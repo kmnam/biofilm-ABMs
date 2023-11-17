@@ -151,10 +151,12 @@ int main(int argc, char** argv)
     
     // Compute initial array of neighboring cells (should be empty)
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+    std::cout << neighbors.rows() << " " << neighbors.cols() << std::endl; 
 
     // Identify which pairs of neighboring cells exhibit adhesion (array 
     // should be empty)
     Array<int, Dynamic, 1> repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.size());
+    std::cout << repulsive_only.size() << std::endl; 
 
     // Write the founder cell to file
     json_data["t_curr"] = t;
@@ -177,15 +179,15 @@ int main(int argc, char** argv)
         if (to_divide.sum() > 0)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
-            // Identify which pairs of neighboring cells exhibit adhesion 
+            // Identify which pairs of neighboring cells exhibit adhesion
             repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.size()); 
-            for (int k = 0; k < neighbors.size(); ++k)
+            for (int k = 0; k < neighbors.rows(); ++k)
             {
-                const int i = neighbors(k, 0); 
-                const int j = neighbors(k, 1);
-                if (cells(i, 10) != 1 || cells(j, 10) != 1)
+                const int p = neighbors(k, 0); 
+                const int q = neighbors(k, 1);
+                if (cells(p, 10) != 1 || cells(q, 10) != 1)
                     repulsive_only(k) = 1;  
-            } 
+            }
         }
 
         // Update cell positions and orientations 
@@ -243,13 +245,13 @@ int main(int argc, char** argv)
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             // Identify which pairs of neighboring cells exhibit adhesion 
             repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.size()); 
-            for (int k = 0; k < neighbors.size(); ++k)
+            for (int k = 0; k < neighbors.rows(); ++k)
             {
-                const int i = neighbors(k, 0); 
-                const int j = neighbors(k, 1);
-                if (cells(i, 10) != 1 || cells(j, 10) != 1)
+                const int p = neighbors(k, 0); 
+                const int q = neighbors(k, 1);
+                if (cells(p, 10) != 1 || cells(q, 10) != 1)
                     repulsive_only(k) = 1;  
-            } 
+            }
         }
 
         // Check for any NaN's or infinities
