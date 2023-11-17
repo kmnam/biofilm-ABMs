@@ -26,6 +26,9 @@
  *     11/5/2023
  */
 
+#ifndef BIOFILM_CELL_GROWTH_HPP
+#define BIOFILM_CELL_GROWTH_HPP
+
 #include <cmath>
 #include <Eigen/Dense>
 
@@ -379,4 +382,6 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
     {
         return cells; 
     }
-} 
+}
+
+#endif

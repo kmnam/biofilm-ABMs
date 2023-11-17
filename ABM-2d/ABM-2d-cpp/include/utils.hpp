@@ -8,6 +8,9 @@
  *     11/5/2023
  */
 
+#ifndef BIOFILM_UTILS_HPP
+#define BIOFILM_UTILS_HPP
+
 #include <fstream>
 #include <string>
 #include <iomanip>
@@ -125,3 +128,4 @@ T vonMises(const T mu, const T kappa, boost::random::mt19937& rng,
         return mu;
 }
 
+#endif
