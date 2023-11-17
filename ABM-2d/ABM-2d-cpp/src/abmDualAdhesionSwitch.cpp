@@ -91,7 +91,7 @@ int main(int argc, char** argv)
 
     // Kihara potential prefactors
     const T eps0 = 3.86e-15;             // Set to value for eps0 in Hartmann et al. 2019
-    const T dmin = R - Rcell;            // TODO Find suitable value
+    const T dmin = 1.5 * R;              // TODO Find suitable value
     const T prefactor_12 = 12 * eps0 * std::pow(dmin, 12); 
     const T prefactor_6 = 12 * eps0 * std::pow(dmin, 6);
 

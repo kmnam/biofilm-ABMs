@@ -79,11 +79,8 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
     Array<T, Dynamic, 1> magnitudes = neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array();
     Array<T, Dynamic, 2> directions = neighbors(Eigen::all, Eigen::seq(2, 3)).colwise() / magnitudes;
     
-    // Compute cell-cell distances between the cells themselves (excluding EPS)
-    Array<T, Dynamic, 1> distances = magnitudes - 2 * Rcell;
-
     // Maximum cell-cell distance at which the force is nonzero
-    T maxdist = 2 * (R - Rcell); 
+    T maxdist = 2 * R; 
 
     // For each pair of neighboring cells ...
     for (int k = 0; k < neighbors.rows(); ++k)
@@ -93,7 +90,7 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
         T si = neighbors(k, 4);                         // Cell-body coordinate along cell i
         T sj = neighbors(k, 5);                         // Cell-body coordinate along cell j
         Array<T, 2, 1> dir_ij = directions.row(k);      // Normalized distance vector 
-        T dist = distances(k);                          // Cell-cell distance
+        T dist = magnitudes(k);                         // Cell-cell distance
 
         // If the distance between cells is at most 2 * R ... 
         if (dist <= maxdist)
@@ -104,13 +101,13 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
                 vij = (prefactor_12 / std::pow(dist, 13) - prefactor_6 / std::pow(dist, 7)) * dir_ij;
             else
                 vij = (prefactor_12 / std::pow(dist, 13)) * dir_ij;
-            dEdq(i, Eigen::seq(0, 1)) -= vij; 
+            dEdq(i, Eigen::seq(0, 1)) += vij; 
             // Derivative of cell-cell interaction energy w.r.t orientation of cell i
-            dEdq(i, Eigen::seq(2, 3)) -= vij * si; 
+            dEdq(i, Eigen::seq(2, 3)) += vij * si; 
             // Derivative of cell-cell interaction energy w.r.t position of cell j
-            dEdq(j, Eigen::seq(0, 1)) += vij; 
+            dEdq(j, Eigen::seq(0, 1)) -= vij; 
             // Derivative of cell-cell interaction energy w.r.t orientation of cell j
-            dEdq(j, Eigen::seq(2, 3)) += vij * sj; 
+            dEdq(j, Eigen::seq(2, 3)) -= vij * sj; 
         } 
     }
 

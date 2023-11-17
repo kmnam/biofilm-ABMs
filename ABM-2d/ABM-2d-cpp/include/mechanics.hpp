@@ -35,7 +35,6 @@
 #include <utility>
 #include <tuple>
 #include <Eigen/Dense>
-#include "potentials.hpp"
 
 using namespace Eigen;
 
