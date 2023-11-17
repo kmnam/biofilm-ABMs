@@ -74,7 +74,7 @@ if __name__ == '__main__':
     max_cells = 5000
 
     # Maximum number of frames to be plotted
-    max_frames = 1200    # 1200 frames at 10 fps = 120 sec = 2 min
+    max_frames = 600    # 600 frames at 10 fps = 60 sec
 
     # Cell radius and line width
     R = 0.35
