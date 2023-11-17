@@ -90,8 +90,8 @@ int main(int argc, char** argv)
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
 
     // Kihara potential prefactors
-    const T eps0 = 3.86e-15;             // Set to value for eps0 in Hartmann et al. 2019
-    const T dmin = 1.5 * R;              // TODO Find suitable value
+    const T eps0 = 1.0;                               // TODO Find suitable value
+    const T dmin = 2 * Rcell + 1.5 * (R - Rcell);     // TODO Find suitable value
     const T prefactor_12 = 12 * eps0 * std::pow(dmin, 12); 
     const T prefactor_6 = 12 * eps0 * std::pow(dmin, 6);
 
