@@ -15,7 +15,7 @@
  * 7) cell growth rate
  * 8) cell's ambient viscosity with respect to surrounding fluid
  * 9) cell-surface friction coefficient
- * 10) cell group identifier (1 for non-adhering, 2 for self-adhering)
+ * 10) cell group identifier (1 for self-adhering, 2 for non-adhering)
  *
  * Authors:
  *     Kee-Myoung Nam
