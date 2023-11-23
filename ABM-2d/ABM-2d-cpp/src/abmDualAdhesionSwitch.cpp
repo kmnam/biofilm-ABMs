@@ -169,7 +169,7 @@ int main(int argc, char** argv)
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
         cells = divideCells<T>(
-            cells, t, R, to_divide, growth_dist_func, rng, daughter_length_dist_func,
+            cells, t, R, Rcell, to_divide, growth_dist_func, rng, daughter_length_dist_func,
             daughter_angle_dist_func
         );
 
@@ -218,6 +218,21 @@ int main(int argc, char** argv)
             if (max_error < 1e-8)
                 dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-5);
         }
+        // Check for any NaN's or infinities or coordinates that changed a large
+        // amount over one step
+        if (cells.isNaN().any() || cells.isInf().any() || ((cells(Eigen::all, Eigen::seq(0, 1)) - cells_new(Eigen::all, Eigen::seq(0, 1))).abs() > Ldiv).any())
+        {
+            // Write final population to file and terminate  
+            std::stringstream ss_prev, ss_final;
+            ss_prev << prefix << "_finalexceptprev.txt";  
+            ss_final << prefix << "_finalexcept.txt";
+            std::string filename_prev = ss_prev.str(); 
+            std::string filename_final = ss_final.str(); 
+            writeCells<T>(cells, json_data, filename_prev);
+            json_data["t_curr"] = t;
+            writeCells<T>(cells_new, json_data, filename_final);  
+            throw std::runtime_error("Encountered NaN and/or infinity");  
+        }
         cells = cells_new;
 
         // Grow the cells
@@ -250,18 +265,6 @@ int main(int argc, char** argv)
                 if (cells(p, 10) != 1 || cells(q, 10) != 1)
                     repulsive_only(k) = 1;  
             }
-        }
-
-        // Check for any NaN's or infinities
-        if (cells.isNaN().any() || cells.isInf().any())
-        {
-            // Write final population to file and terminate  
-            json_data["t_curr"] = t;
-            std::stringstream ss_final; 
-            ss_final << prefix << "_finalexcept.txt";
-            std::string filename_final = ss_final.str(); 
-            writeCells<T>(cells, json_data, filename_final); 
-            throw std::runtime_error("Encountered NaN and/or infinity");  
         }
 
         // Write the current population to file
