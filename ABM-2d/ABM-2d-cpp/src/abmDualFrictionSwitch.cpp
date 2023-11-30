@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/16/2023
+ *     11/30/2023
  */
 
 #include <iostream>
@@ -191,8 +191,9 @@ int main(int argc, char** argv)
             A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff, E0,
             Ecell, surface_contact_density
         ); 
-        Array<T, Dynamic, Dynamic> cells_new = result.first; 
-        Array<T, Dynamic, 4> errors = result.second;
+        Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result); 
+        Array<T, Dynamic, 4> errors = std::get<1>(result);
+	Array<T, Dynamic, 4> velocities = std::get<2>(result); 
 
         // If the error is big, retry the step with a smaller stepsize (up to
         // a given maximum number of attempts)
@@ -207,8 +208,9 @@ int main(int argc, char** argv)
                     A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff,
                     E0, Ecell, surface_contact_density
                 ); 
-                cells_new = result.first; 
-                errors = result.second;
+                cells_new = std::get<0>(result); 
+                errors = std::get<1>(result);
+		velocities = std::get<2>(result); 
                 max_error = std::max(errors.abs().maxCoeff(), min_error); 
                 j++;  
             }

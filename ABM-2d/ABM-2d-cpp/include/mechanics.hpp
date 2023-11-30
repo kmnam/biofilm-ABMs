@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/16/2023
+ *     11/30/2023
  */
 
 #ifndef BIOFILM_MECHANICS_HPP
@@ -559,7 +559,7 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  *          the cell positions and orientations.  
  */
 template <typename T>
-std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
+std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4> >
     stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& A,
                                         const Ref<const Array<T, Dynamic, 1> >& b,
                                         const Ref<const Array<T, Dynamic, 1> >& bs, 
@@ -612,7 +612,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
     // Renormalize orientations 
     normalizeOrientations<T>(cells_new); 
 
-    return std::make_pair(cells_new, errors); 
+    return std::make_tuple(cells_new, errors, velocities_final1); 
 }
 
 #endif
