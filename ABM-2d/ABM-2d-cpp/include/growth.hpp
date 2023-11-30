@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/17/2023
+ *     11/30/2023
  */
 
 #ifndef BIOFILM_CELL_GROWTH_HPP
@@ -130,15 +130,56 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
         }
 
         // Get an extended copy of the existing population
-        Array<T, Dynamic, Dynamic> cells_total(n + n_divide, cells.cols()); 
+        Array<T, Dynamic, Dynamic> cells_total(n + n_divide, cells.cols());
 
-        // Must check that all distances between cells are greater than the 
-        // given minimum
-        T mindist = 1.5 * Rcell;
-        bool satisfies_distance = false;
+        // Get the minimum distance from each dividing cell among all other cells
+        // in the population
+        //
+        // If the minimum distance is less than the default value, then the
+        // daughter cells do not undergo random re-orientation 
+        //
+        // Otherwise, the daughter cells are randomly re-oriented and a minimum
+        // distance criterion is checked for both daughter cells  
+        Array<int, Dynamic, 1> check_distance = Array<int, Dynamic, 1>::Ones(n_divide); 
+        int m = 0;
+        const T mindist_default = 2 * Rcell;    // Default value
+        for (const int i : idx_divide)
+        {
+            T mindist_i = mindist_default;
+            for (int j = 0; j < n; ++j)
+            {
+                if (i != j)
+                {
+                    auto result = distBetweenCells<T>(
+                        cells(i, Eigen::seq(0, 1)).matrix(), 
+                        cells(i, Eigen::seq(2, 3)).matrix(),
+                        cells(i, 5),
+                        cells(j, Eigen::seq(0, 1)).matrix(),
+                        cells(j, Eigen::seq(2, 3)).matrix(),
+                        cells(j, 5)
+                    );
+                    Matrix<T, 2, 1> dij = std::get<0>(result);
+                    T dist = dij.norm(); 
+                    if (dist < mindist_i)
+                        mindist_i = dist;
+                }
+            }
+            if (mindist_i < mindist_default)
+                check_distance(m) = 0;
+            m++;
+        }
 
-        // While the distance criterion is not satisfied ... 
-        while (!satisfies_distance)
+        // Initialize array of indicators for whether each dividing cell satisfies
+        // the corresponding minimum distance criterion
+        Array<int, Dynamic, 1> satisfies_distance = Array<int, Dynamic, 1>::Zero(n_divide);
+        for (int i = 0; i < n_divide; ++i)
+        {
+            if (check_distance(i) == 0)
+                satisfies_distance(i) = 1;
+        }
+
+        // While the distance criterion is not satisfied for at least one cell... 
+        while (satisfies_distance.sum() < n_divide)
         {
             // Get a copy of the corresponding sub-array
             cells_total(Eigen::seqN(0, n), Eigen::all) = cells;
@@ -150,11 +191,17 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             // rotating the dividing cell's orientation counterclockwise by
             // a angle theta, which is sampled using daughter_angle_dist()
             Array<T, Dynamic, 2> dividing_orientations(new_cells(Eigen::all, Eigen::seq(2, 3))); 
-            Array<T, Dynamic, 1> theta1(n_divide), theta2(n_divide); 
+            Array<T, Dynamic, 1> theta1 = Array<T, Dynamic, 1>::Zero(n_divide);
+            Array<T, Dynamic, 1> theta2 = Array<T, Dynamic, 1>::Zero(n_divide); 
             for (int i = 0; i < n_divide; ++i)
             {
-                theta1(i) = daughter_angle_dist(rng); 
-                theta2(i) = daughter_angle_dist(rng);
+                // If the minimum distance for the dividing cell is less
+                // than the default value, then set theta1 = theta2 = 0
+                if (check_distance(i) == 1)
+                {
+                    theta1(i) = daughter_angle_dist(rng); 
+                    theta2(i) = daughter_angle_dist(rng);
+                }
             }
             Array<T, Dynamic, 1> cos_theta1 = theta1.cos(); 
             Array<T, Dynamic, 1> sin_theta1 = theta1.sin(); 
@@ -235,51 +282,69 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             cells_total(Eigen::seqN(n, n_divide), Eigen::all) = new_cells;
 
             // Check the distance criterion for each daughter cell
-            T daughters_mindist = std::numeric_limits<T>::infinity(); 
+            Array<T, Dynamic, 1> daughter_mindists1(n_divide);
+            Array<T, Dynamic, 1> daughter_mindists2(n_divide); 
+            m = 0;
             for (const int i : idx_divide)
             {
-                for (int j = 0; j < cells_total.rows(); ++j)
+                if (check_distance(m) == 1)
                 {
-                    if (i != j)
+                    T daughter_mindist = std::numeric_limits<T>::infinity(); 
+                    for (int j = 0; j < cells_total.rows(); ++j)
                     {
-                        auto result = distBetweenCells<T>(
-                            cells_total(i, Eigen::seq(0, 1)).matrix(),
-                            cells_total(i, Eigen::seq(2, 3)).matrix(),
-                            cells_total(i, 5),
-                            cells_total(j, Eigen::seq(0, 1)).matrix(),
-                            cells_total(j, Eigen::seq(2, 3)).matrix(),
-                            cells_total(j, 5) 
-                        );
-                        Matrix<T, 2, 1> dij = std::get<0>(result);
-                        T dist = dij.norm(); 
-                        if (dist < daughters_mindist)
-                            daughters_mindist = dist; 
+                        if (i != j)
+                        {
+                            auto result = distBetweenCells<T>(
+                                cells_total(i, Eigen::seq(0, 1)).matrix(),
+                                cells_total(i, Eigen::seq(2, 3)).matrix(),
+                                cells_total(i, 5),
+                                cells_total(j, Eigen::seq(0, 1)).matrix(),
+                                cells_total(j, Eigen::seq(2, 3)).matrix(),
+                                cells_total(j, 5) 
+                            );
+                            Matrix<T, 2, 1> dij = std::get<0>(result);
+                            T dist = dij.norm(); 
+                            if (dist < daughter_mindist)
+                                daughter_mindist = dist;
+                        }
                     }
+                    daughter_mindists1(m) = daughter_mindist;
                 }
-            } 
+                m++;
+            }
+            m = 0;
             for (int i = n; i < n + n_divide; ++i)
             {
-                for (int j = 0; j < cells_total.rows(); ++j)
+                if (check_distance(m) == 1)
                 {
-                    if (i != j)
+                    T daughter_mindist = std::numeric_limits<T>::infinity(); 
+                    for (int j = 0; j < cells_total.rows(); ++j)
                     {
-                        auto result = distBetweenCells<T>(
-                            cells_total(i, Eigen::seq(0, 1)).matrix(),
-                            cells_total(i, Eigen::seq(2, 3)).matrix(),
-                            cells_total(i, 5),
-                            cells_total(j, Eigen::seq(0, 1)).matrix(),
-                            cells_total(j, Eigen::seq(2, 3)).matrix(),
-                            cells_total(j, 5) 
-                        );
-                        Matrix<T, 2, 1> dij = std::get<0>(result);
-                        T dist = dij.norm();
-                        if (dist < daughters_mindist)
-                            daughters_mindist = dist;
+                        if (i != j)
+                        {
+                            auto result = distBetweenCells<T>(
+                                cells_total(i, Eigen::seq(0, 1)).matrix(),
+                                cells_total(i, Eigen::seq(2, 3)).matrix(),
+                                cells_total(i, 5),
+                                cells_total(j, Eigen::seq(0, 1)).matrix(),
+                                cells_total(j, Eigen::seq(2, 3)).matrix(),
+                                cells_total(j, 5) 
+                            );
+                            Matrix<T, 2, 1> dij = std::get<0>(result);
+                            T dist = dij.norm(); 
+                            if (dist < daughter_mindist)
+                                daughter_mindist = dist;
+                        }
                     }
+                    daughter_mindists2(m) = daughter_mindist;
                 }
+                m++;
             }
-            if (daughters_mindist > mindist)
-                satisfies_distance = true; 
+            for (int i = 0; i < n_divide; ++i)
+            {
+                if (check_distance(i) == 1 && daughter_mindists1(i) >= mindist_default && daughter_mindists2(i) >= mindist_default)
+                    satisfies_distance(i) = 1;
+            }
         } 
         return cells_total; 
     }
@@ -334,13 +399,54 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
         // Get an extended copy of the existing population
         Array<T, Dynamic, Dynamic> cells_total(n + n_divide, cells.cols());
 
-        // Must check that all distances between cells are greater than the 
-        // given minimum
-        T mindist = 1.5 * Rcell;
-        bool satisfies_distance = false;
+        // Get the minimum distance from each dividing cell among all other cells
+        // in the population
+        //
+        // If the minimum distance is less than the default value, then the
+        // daughter cells do not undergo random re-orientation 
+        //
+        // Otherwise, the daughter cells are randomly re-oriented and a minimum
+        // distance criterion is checked for both daughter cells  
+        Array<int, Dynamic, 1> check_distance = Array<int, Dynamic, 1>::Ones(n_divide); 
+        int m = 0;
+        const T mindist_default = 2 * Rcell;    // Default value
+        for (const int i : idx_divide)
+        {
+            T mindist_i = mindist_default;
+            for (int j = 0; j < n; ++j)
+            {
+                if (i != j)
+                {
+                    auto result = distBetweenCells<T>(
+                        cells(i, Eigen::seq(0, 1)).matrix(), 
+                        cells(i, Eigen::seq(2, 3)).matrix(),
+                        cells(i, 5),
+                        cells(j, Eigen::seq(0, 1)).matrix(),
+                        cells(j, Eigen::seq(2, 3)).matrix(),
+                        cells(j, 5)
+                    );
+                    Matrix<T, 2, 1> dij = std::get<0>(result);
+                    T dist = dij.norm(); 
+                    if (dist < mindist_i)
+                        mindist_i = dist;
+                }
+            }
+            if (mindist_i < mindist_default)
+                check_distance(m) = 0; 
+            m++;
+        }
 
-        // While the distance criterion is not satisfied ... 
-        while (!satisfies_distance)
+        // Initialize array of indicators for whether each dividing cell satisfies
+        // the corresponding minimum distance criterion
+        Array<int, Dynamic, 1> satisfies_distance = Array<int, Dynamic, 1>::Zero(n_divide);
+        for (int i = 0; i < n_divide; ++i)
+        {
+            if (check_distance(i) == 0)
+                satisfies_distance(i) = 1;
+        }
+
+        // While the distance criterion is not satisfied for at least one cell... 
+        while (satisfies_distance.sum() < n_divide)
         {
             // Get a copy of the corresponding sub-array
             cells_total(Eigen::seqN(0, n), Eigen::all) = cells; 
@@ -352,11 +458,17 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             // rotating the dividing cell's orientation counterclockwise by
             // a angle theta, which is sampled using daughter_angle_dist()
             Array<T, Dynamic, 2> dividing_orientations(new_cells(Eigen::all, Eigen::seq(2, 3))); 
-            Array<T, Dynamic, 1> theta1(n_divide), theta2(n_divide); 
+            Array<T, Dynamic, 1> theta1 = Array<T, Dynamic, 1>::Zero(n_divide);
+            Array<T, Dynamic, 1> theta2 = Array<T, Dynamic, 1>::Zero(n_divide); 
             for (int i = 0; i < n_divide; ++i)
             {
-                theta1(i) = daughter_angle_dist(rng); 
-                theta2(i) = daughter_angle_dist(rng);
+                // If the minimum distance for the dividing cell is less
+                // than the default value, then set theta1 = theta2 = 0
+                if (check_distance(i) == 1)
+                {
+                    theta1(i) = daughter_angle_dist(rng); 
+                    theta2(i) = daughter_angle_dist(rng);
+                }
             }
             Array<T, Dynamic, 1> cos_theta1 = theta1.cos(); 
             Array<T, Dynamic, 1> sin_theta1 = theta1.sin(); 
@@ -443,51 +555,69 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             cells_total(Eigen::seqN(n, n_divide), Eigen::all) = new_cells;
 
             // Check the distance criterion for each daughter cell
-            T daughters_mindist = std::numeric_limits<T>::infinity(); 
+            Array<T, Dynamic, 1> daughter_mindists1(n_divide);
+            Array<T, Dynamic, 1> daughter_mindists2(n_divide); 
+            m = 0;
             for (const int i : idx_divide)
             {
-                for (int j = 0; j < cells_total.rows(); ++j)
+                if (check_distance(m) == 1)
                 {
-                    if (i != j)
+                    T daughter_mindist = std::numeric_limits<T>::infinity(); 
+                    for (int j = 0; j < cells_total.rows(); ++j)
                     {
-                        auto result = distBetweenCells<T>(
-                            cells_total(i, Eigen::seq(0, 1)).matrix(),
-                            cells_total(i, Eigen::seq(2, 3)).matrix(),
-                            cells_total(i, 5),
-                            cells_total(j, Eigen::seq(0, 1)).matrix(),
-                            cells_total(j, Eigen::seq(2, 3)).matrix(),
-                            cells_total(j, 5) 
-                        );
-                        Matrix<T, 2, 1> dij = std::get<0>(result);
-                        T dist = dij.norm(); 
-                        if (dist < daughters_mindist)
-                            daughters_mindist = dist;
+                        if (i != j)
+                        {
+                            auto result = distBetweenCells<T>(
+                                cells_total(i, Eigen::seq(0, 1)).matrix(),
+                                cells_total(i, Eigen::seq(2, 3)).matrix(),
+                                cells_total(i, 5),
+                                cells_total(j, Eigen::seq(0, 1)).matrix(),
+                                cells_total(j, Eigen::seq(2, 3)).matrix(),
+                                cells_total(j, 5) 
+                            );
+                            Matrix<T, 2, 1> dij = std::get<0>(result);
+                            T dist = dij.norm(); 
+                            if (dist < daughter_mindist)
+                                daughter_mindist = dist;
+                        }
                     }
+                    daughter_mindists1(m) = daughter_mindist;
                 }
-            } 
+                m++;
+            }
+            m = 0;
             for (int i = n; i < n + n_divide; ++i)
             {
-                for (int j = 0; j < cells_total.rows(); ++j)
+                if (check_distance(m) == 1)
                 {
-                    if (i != j)
+                    T daughter_mindist = std::numeric_limits<T>::infinity(); 
+                    for (int j = 0; j < cells_total.rows(); ++j)
                     {
-                        auto result = distBetweenCells<T>(
-                            cells_total(i, Eigen::seq(0, 1)).matrix(),
-                            cells_total(i, Eigen::seq(2, 3)).matrix(),
-                            cells_total(i, 5),
-                            cells_total(j, Eigen::seq(0, 1)).matrix(),
-                            cells_total(j, Eigen::seq(2, 3)).matrix(),
-                            cells_total(j, 5) 
-                        );
-                        Matrix<T, 2, 1> dij = std::get<0>(result);
-                        T dist = dij.norm(); 
-                        if (dist < daughters_mindist)
-                            daughters_mindist = dist;
+                        if (i != j)
+                        {
+                            auto result = distBetweenCells<T>(
+                                cells_total(i, Eigen::seq(0, 1)).matrix(),
+                                cells_total(i, Eigen::seq(2, 3)).matrix(),
+                                cells_total(i, 5),
+                                cells_total(j, Eigen::seq(0, 1)).matrix(),
+                                cells_total(j, Eigen::seq(2, 3)).matrix(),
+                                cells_total(j, 5) 
+                            );
+                            Matrix<T, 2, 1> dij = std::get<0>(result);
+                            T dist = dij.norm(); 
+                            if (dist < daughter_mindist)
+                                daughter_mindist = dist;
+                        }
                     }
+                    daughter_mindists2(m) = daughter_mindist;
                 }
+                m++;
             }
-            if (daughters_mindist > mindist)
-                satisfies_distance = true; 
+            for (int i = 0; i < n_divide; ++i)
+            {
+               if (check_distance(i) == 1 && daughter_mindists1(i) >= mindist_default && daughter_mindists2(i) >= mindist_default)
+                   satisfies_distance(i) = 1;
+            }
         } 
         return cells_total; 
     }
