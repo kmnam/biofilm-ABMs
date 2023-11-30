@@ -1,5 +1,5 @@
 /**
- * Implementations of potential-based cell-cell interaction forces.
+ * Implementations of Kihara potential-based cell-cell interaction forces.
  *
  * In what follows, a population of N cells is represented as a 2-D array of
  * size (N, 10+), where each row represents a cell and stores the following 
@@ -23,11 +23,11 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/16/2023
+ *     11/30/2023
  */
 
-#ifndef BIOFILM_CELL_CELL_POTENTIAL_FORCES_HPP
-#define BIOFILM_CELL_CELL_POTENTIAL_FORCES_HPP
+#ifndef KIHARA_BIOFILM_CELL_CELL_POTENTIAL_FORCES_HPP
+#define KIHARA_BIOFILM_CELL_CELL_POTENTIAL_FORCES_HPP
 
 #include <cmath>
 #include <Eigen/Dense>
@@ -40,17 +40,17 @@ using namespace Eigen;
  * cell with respect to the cell's position and orientation coordinates.
  *
  * In this function, the pairs of neighboring cells in the population have
- * been pre-computed
+ * been pre-computed.
  *
  * @param cells Existing population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the 
  *                  population.
  * @param R Cell radius, including the EPS. 
  * @param Rcell Cell radius, excluding the EPS.
+ * @param dmin The cell-cell distance at which the Kihara potential is
+ *             minimized.
  * @param prefactor_12 The value `12 * eps0 * std::pow(dmin, 12)`, where
- *                     `eps0` is the strength parameter and `dmin` is the
- *                     cell-cell distance at which the Kihara potential 
- *                     is minimized.
+ *                     `eps0` is the strength parameter.
  * @param prefactor_6 The value `12 * eps0 * std::pow(dmin, 6)`.
  * @param repulsive_only A vector that indicates, for each pair of neighboring
  *                       cells, whether to use only the repulsive part of the
@@ -59,7 +59,7 @@ using namespace Eigen;
 template <typename T>
 Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
                                           const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                          const T R, const T Rcell,
+                                          const T R, const T Rcell, const T dmin,
                                           const T prefactor_12,
                                           const T prefactor_6,
                                           const Ref<const Array<int, Dynamic, 1> >& repulsive_only)
@@ -97,10 +97,14 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
         {
             // Derivative of cell-cell interaction energy w.r.t position of cell i
             Array<T, 2, 1> vij = Array<T, 2, 1>::Zero(2);
-            if (!repulsive_only(k)) 
+            if (!repulsive_only(k))
+            { 
                 vij = (prefactor_12 / std::pow(dist, 13) - prefactor_6 / std::pow(dist, 7)) * dir_ij;
-            else
+            }
+            else if (repulsive_only(k) && dist < dmin)
+            {
                 vij = (prefactor_12 / std::pow(dist, 13)) * dir_ij;
+            }
             dEdq(i, Eigen::seq(0, 1)) += vij; 
             // Derivative of cell-cell interaction energy w.r.t orientation of cell i
             dEdq(i, Eigen::seq(2, 3)) += vij * si; 
@@ -129,10 +133,10 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
  *                  population. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
+ * @param dmin The cell-cell distance at which the Kihara potential is
+ *             minimized.
  * @param prefactor_12 The value `12 * eps0 * std::pow(dmin, 12)`, where
- *                     `eps0` is the strength parameter and `dmin` is the
- *                     cell-cell distance at which the Kihara potential 
- *                     is minimized.
+ *                     `eps0` is the strength parameter.
  * @param prefactor_6 The value `12 * eps0 * std::pow(dmin, 6)`.
  * @param surface_contact_density Cell-surface contact area density.
  * @param repulsive_only A vector that indicates, for each pair of neighboring
@@ -143,7 +147,7 @@ Array<T, Dynamic, 4> cellCellForcesKihara(const Ref<const Array<T, Dynamic, Dyna
 template <typename T>
 Array<T, Dynamic, 4> getVelocitiesKihara(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                          const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                         const T R, const T Rcell,
+                                         const T R, const T Rcell, const T dmin,
                                          const T prefactor_12,
                                          const T prefactor_6,
                                          const T surface_contact_density,
@@ -186,7 +190,7 @@ Array<T, Dynamic, 4> getVelocitiesKihara(const Ref<const Array<T, Dynamic, Dynam
     assert((K != 0).all() && "Composite viscosity force prefactors for positions have zero values"); 
     assert((L != 0).all() && "Composite viscosity force prefactors for orientations have zero values");
     Array<T, Dynamic, 4> dEdq = cellCellForcesKihara<T>(
-        cells, neighbors, R, Rcell, prefactor_12, prefactor_6, repulsive_only
+        cells, neighbors, R, Rcell, dmin, prefactor_12, prefactor_6, repulsive_only
     );
     Array<T, Dynamic, 1> mult = cells.col(2) * dEdq.col(2) + cells.col(3) * dEdq.col(3);
     Array<T, Dynamic, 2> dEdn_constrained = (
@@ -224,10 +228,10 @@ Array<T, Dynamic, 4> getVelocitiesKihara(const Ref<const Array<T, Dynamic, Dynam
  * @param dt Timestep. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
+ * @param dmin The cell-cell distance at which the Kihara potential is
+ *             minimized.
  * @param prefactor_12 The value `12 * eps0 * std::pow(dmin, 12)`, where
- *                     `eps0` is the strength parameter and `dmin` is the
- *                     cell-cell distance at which the Kihara potential 
- *                     is minimized.
+ *                     `eps0` is the strength parameter.
  * @param prefactor_6 The value `12 * eps0 * std::pow(dmin, 6)`.
  * @param surface_contact_density Cell-surface contact area density.
  * @param repulsive_only A vector that indicates, for each pair of neighboring
@@ -243,7 +247,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                                  const Ref<const Array<T, Dynamic, 1> >& bs, 
                                  const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
                                  const Ref<const Array<T, Dynamic, 6> >& neighbors, 
-                                 const T dt, const T R, const T Rcell,
+                                 const T dt, const T R, const T Rcell, const T dmin,
                                  const T prefactor_12, const T prefactor_6,
                                  const T surface_contact_density,
                                  const Ref<const Array<int, Dynamic, 1> >& repulsive_only)
@@ -254,7 +258,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
     std::vector<Array<T, Dynamic, 4> > velocities; 
     velocities.push_back(
         getVelocitiesKihara<T>(
-            cells, neighbors, R, Rcell, prefactor_12, prefactor_6,
+            cells, neighbors, R, Rcell, dmin, prefactor_12, prefactor_6,
             surface_contact_density, repulsive_only
         )
     );
@@ -267,7 +271,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
         cells_i(Eigen::all, Eigen::seq(0, 3)) += multipliers * dt; 
         velocities.push_back(
             getVelocitiesKihara<T>(
-                cells_i, neighbors, R, Rcell, prefactor_12, prefactor_6,
+                cells_i, neighbors, R, Rcell, dmin, prefactor_12, prefactor_6,
                 surface_contact_density, repulsive_only
             )
         );
