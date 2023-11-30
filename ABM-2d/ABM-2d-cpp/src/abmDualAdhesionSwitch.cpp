@@ -32,7 +32,7 @@
 #include <boost/random.hpp>
 #include "../include/growth.hpp"
 #include "../include/mechanics.hpp"
-#include "../include/kihara.hpp"
+#include "../include/hybrid.hpp"
 #include "../include/switch.hpp"
 #include "../include/utils.hpp"
 
@@ -85,13 +85,15 @@ int main(int argc, char** argv)
     const int n_cells = json_data["n_cells"].as_int64();
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
+    const T eps0 = static_cast<T>(json_data["kihara_strength"].as_double()); 
 
-    // Surface contact area density
+    // Surface contact area density and powers of cell radius  
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
+    const T sqrtR = std::sqrt(R); 
+    const T powRdiff = std::pow(R - Rcell, 1.5);
 
     // Kihara potential prefactors
-    const T eps0 = 1.0;                               // TODO Find suitable value
-    const T dmin = 2 * Rcell + 1.5 * (R - Rcell);     // TODO Find suitable value
+    const T dmin = 2 * Rcell + 1.0 * (R - Rcell);
     const T prefactor_12 = 12 * eps0 * std::pow(dmin, 12); 
     const T prefactor_6 = 12 * eps0 * std::pow(dmin, 6);
 
@@ -189,9 +191,9 @@ int main(int argc, char** argv)
         }
 
         // Update cell positions and orientations 
-        auto result = stepRungeKuttaAdaptiveKihara<T>(
-            A, b, bs, cells, neighbors, dt, R, Rcell, prefactor_12, prefactor_6,
-            surface_contact_density, repulsive_only
+        auto result = stepRungeKuttaAdaptiveHybrid<T>(
+            A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff, E0, Ecell,
+            dmin, prefactor_12, prefactor_6, surface_contact_density, repulsive_only
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first; 
         Array<T, Dynamic, 4> errors = result.second;
@@ -205,9 +207,9 @@ int main(int argc, char** argv)
             while (max_error > 1e-8 && j < max_tries)
             {
                 dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
-                result = stepRungeKuttaAdaptiveKihara<T>(
-                    A, b, bs, cells, neighbors, dt, R, Rcell, prefactor_12, prefactor_6,
-                    surface_contact_density, repulsive_only
+                result = stepRungeKuttaAdaptiveHybrid<T>(
+                    A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff, E0, Ecell,
+                    dmin, prefactor_12, prefactor_6, surface_contact_density, repulsive_only
                 ); 
                 cells_new = result.first; 
                 errors = result.second;
