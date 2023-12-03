@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/30/2023
+ *     12/3/2023
  */
 
 #ifndef BIOFILM_MECHANICS_HPP
@@ -104,7 +104,7 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
     T t = 0;  
 
     // If the two centerlines are not parallel ...
-    if (std::abs(denom) > 1e-6)
+    if (std::abs(denom) > 1e-10)
     {
         s = s_numer / denom;
         t = t_numer / denom; 
