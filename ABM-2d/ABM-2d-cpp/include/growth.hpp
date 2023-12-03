@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/30/2023
+ *     12/3/2023
  */
 
 #ifndef BIOFILM_CELL_GROWTH_HPP
@@ -95,7 +95,8 @@ Array<int, Dynamic, 1> divideMaxLength(const Ref<const Array<T, Dynamic, Dynamic
  *
  * @param cells Existing population of cells.
  * @param t Current time.
- * @param R Cell radius. 
+ * @param R Cell radius (including the EPS).
+ * @param Rcell Cell radius (excluding the EPS). 
  * @param to_divide Boolean index indicating which cells are to divide.
  * @param growth_dist Function instance specifying the growth rate
  *                    distribution. Must take boost::random::mt19937&
@@ -159,14 +160,13 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                         cells(j, 5)
                     );
                     Matrix<T, 2, 1> dij = std::get<0>(result);
-                    T dist = dij.norm(); 
+                    T dist = dij.norm();
                     if (dist < mindist_i)
                         mindist_i = dist;
                 }
             }
             if (mindist_i < mindist_default)
                 check_distance(m) = 0;
-            m++;
         }
 
         // Initialize array of indicators for whether each dividing cell satisfies
@@ -178,8 +178,19 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 satisfies_distance(i) = 1;
         }
 
-        // While the distance criterion is not satisfied for at least one cell... 
-        while (satisfies_distance.sum() < n_divide)
+        // Try to satisfy the distance criterion for all cells up to a fixed 
+        // number of iterations
+        //
+        // The last iteration is attempted with theta1 = theta2 = 0, in which
+        // case the division should give rise to no change in the minimum 
+        // distance from the dividing cell to the daughter cells; therefore, 
+        // the distance criterion should be satisfied on the last iteration
+        //
+        // If not (due to rare errors in distance calculation), then an 
+        // exception is raised
+        int ntries = 0;
+        const int ntries_total = 10; 
+        while (ntries < ntries_total && satisfies_distance.sum() < n_divide)
         {
             // Get a copy of the corresponding sub-array
             cells_total(Eigen::seqN(0, n), Eigen::all) = cells;
@@ -197,7 +208,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             {
                 // If the minimum distance for the dividing cell is less
                 // than the default value, then set theta1 = theta2 = 0
-                if (check_distance(i) == 1)
+                if (ntries < ntries_total - 1 && check_distance(i) == 1)
                 {
                     theta1(i) = daughter_angle_dist(rng); 
                     theta2(i) = daughter_angle_dist(rng);
@@ -345,7 +356,16 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 if (check_distance(i) == 1 && daughter_mindists1(i) >= mindist_default && daughter_mindists2(i) >= mindist_default)
                     satisfies_distance(i) = 1;
             }
-        } 
+            ntries++; 
+        }
+
+        // If the minimum distance criterion has not been satisfied for every
+        // cell, then an exception should be raised 
+        if (satisfies_distance.sum() < n_divide)
+            throw std::runtime_error(
+                "Cell division cannot satisfy minimum distance criterion"
+            );
+
         return cells_total; 
     }
     else 
@@ -362,7 +382,8 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
  *
  * @param cells Existing population of cells.
  * @param t Current time.
- * @param R Cell radius. 
+ * @param R Cell radius (including the EPS).
+ * @param Rcell Cell radius (excluding the EPS). 
  * @param to_divide Boolean index indicating which cells are to divide.
  * @param growth_dists Vector of function instances specifying the growth
  *                     rate distribution for each group. Each function must
@@ -426,14 +447,13 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                         cells(j, 5)
                     );
                     Matrix<T, 2, 1> dij = std::get<0>(result);
-                    T dist = dij.norm(); 
+                    T dist = dij.norm();
                     if (dist < mindist_i)
                         mindist_i = dist;
                 }
             }
             if (mindist_i < mindist_default)
-                check_distance(m) = 0; 
-            m++;
+                check_distance(m) = 0;
         }
 
         // Initialize array of indicators for whether each dividing cell satisfies
@@ -445,8 +465,19 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 satisfies_distance(i) = 1;
         }
 
-        // While the distance criterion is not satisfied for at least one cell... 
-        while (satisfies_distance.sum() < n_divide)
+        // Try to satisfy the distance criterion for all cells up to a fixed 
+        // number of iterations
+        //
+        // The last iteration is attempted with theta1 = theta2 = 0, in which
+        // case the division should give rise to no change in the minimum 
+        // distance from the dividing cell to the daughter cells; therefore, 
+        // the distance criterion should be satisfied on the last iteration
+        //
+        // If not (due to rare errors in distance calculation), then an 
+        // exception is raised
+        int ntries = 0;
+        const int ntries_total = 10; 
+        while (ntries < ntries_total && satisfies_distance.sum() < n_divide)
         {
             // Get a copy of the corresponding sub-array
             cells_total(Eigen::seqN(0, n), Eigen::all) = cells; 
@@ -464,7 +495,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             {
                 // If the minimum distance for the dividing cell is less
                 // than the default value, then set theta1 = theta2 = 0
-                if (check_distance(i) == 1)
+                if (ntries < ntries_total - 1 && check_distance(i) == 1)
                 {
                     theta1(i) = daughter_angle_dist(rng); 
                     theta2(i) = daughter_angle_dist(rng);
@@ -618,7 +649,16 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                if (check_distance(i) == 1 && daughter_mindists1(i) >= mindist_default && daughter_mindists2(i) >= mindist_default)
                    satisfies_distance(i) = 1;
             }
-        } 
+            ntries++; 
+        }
+
+        // If the minimum distance criterion has not been satisfied for every
+        // cell, then an exception should be raised 
+        if (satisfies_distance.sum() < n_divide)
+            throw std::runtime_error(
+                "Cell division cannot satisfy minimum distance criterion"
+            );
+
         return cells_total; 
     }
     else 
