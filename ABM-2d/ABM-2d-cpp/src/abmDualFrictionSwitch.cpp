@@ -161,6 +161,8 @@ int main(int argc, char** argv)
     int n = 1;
     Array<T, Dynamic, Dynamic> cells(n, 11);
     cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1, 1;
+    Array<T, Dynamic, 4> velocities(n, 4);
+    velocities << 0, 0, 0, 0;
     
     // Compute initial array of neighboring cells (should be empty)
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
@@ -178,7 +180,7 @@ int main(int argc, char** argv)
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
         cells = divideCells<T>(
-            cells, t, R, to_divide, growth_dist_func, rng, daughter_length_dist_func,
+            cells, t, R, Rcell, to_divide, growth_dist_func, rng, daughter_length_dist_func,
             daughter_angle_dist_func
         );
 
@@ -193,7 +195,7 @@ int main(int argc, char** argv)
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result); 
         Array<T, Dynamic, 4> errors = std::get<1>(result);
-	Array<T, Dynamic, 4> velocities = std::get<2>(result); 
+        Array<T, Dynamic, 4> velocities_new = std::get<2>(result); 
 
         // If the error is big, retry the step with a smaller stepsize (up to
         // a given maximum number of attempts)
@@ -210,7 +212,7 @@ int main(int argc, char** argv)
                 ); 
                 cells_new = std::get<0>(result); 
                 errors = std::get<1>(result);
-		velocities = std::get<2>(result); 
+                velocities_new = std::get<2>(result); 
                 max_error = std::max(errors.abs().maxCoeff(), min_error); 
                 j++;  
             }
@@ -219,6 +221,7 @@ int main(int argc, char** argv)
                 dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-5);
         }
         cells = cells_new;
+        velocities = velocities_new;
 
         // Grow the cells
         growCells<T>(cells, dt, R);
