@@ -122,7 +122,7 @@ int main(int argc, char** argv)
         [&orientation_conc, &uniform_dist](boost::random::mt19937& rng)
         {
             T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
-            while (theta > theta_bound)
+            while (theta > theta_bound || theta < -theta_bound)
                 theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
             return theta;
         };
@@ -253,6 +253,19 @@ int main(int argc, char** argv)
             cells, rate_12, rate_21, dt, rng, uniform_dist
         );
         switchGroups<T>(cells, to_switch);
+        // If switching did occur, identify which pairs of neighboring cells exhibit
+        // adhesion
+        if (to_switch.sum() > 0)
+        {
+            repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.rows()); 
+            for (int k = 0; k < neighbors.rows(); ++k)
+            {
+                const int p = neighbors(k, 0); 
+                const int q = neighbors(k, 1);
+                if (cells(p, 10) != 1 || cells(q, 10) != 1)
+                    repulsive_only(k) = 1;  
+            }
+        }
 
         // Update neighboring cells 
         if (i % iter_update_neighbors == 0)
