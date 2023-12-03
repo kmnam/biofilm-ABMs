@@ -266,7 +266,12 @@ int main(int argc, char** argv)
             std::stringstream ss; 
             ss << prefix << "_iter" << i << ".txt"; 
             std::string filename = ss.str(); 
-            writeCells<T>(cells, json_data, filename); 
+
+            // Write the velocities to file as additional attributes
+            Array<T, Dynamic, Dynamic> cells_to_write(cells.rows(), cells.cols() + 4);
+            cells_to_write(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells; 
+            cells_to_write(Eigen::all, Eigen::seq(cells.cols(), cells.cols() + 3)) = velocities;
+            writeCells<T>(cells_to_write, json_data, filename); 
         } 
     }
 
