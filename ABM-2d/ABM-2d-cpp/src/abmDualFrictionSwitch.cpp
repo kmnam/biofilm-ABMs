@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/30/2023
+ *     12/3/2023
  */
 
 #include <iostream>
@@ -133,7 +133,7 @@ int main(int argc, char** argv)
         [&orientation_conc, &uniform_dist](boost::random::mt19937& rng)
         {
             T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
-            while (theta > theta_bound)
+            while (theta > theta_bound || theta < -theta_bound)
                 theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
             return theta;
         };
