@@ -153,7 +153,7 @@ int main(int argc, char** argv)
     Array<T, Dynamic, Dynamic> cells(n, 11);
     cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean1, eta_ambient, eta_surface, 1;
     Array<T, Dynamic, 4> velocities(n, 4); 
-    cells << 0, 0, 0, 0;
+    velocities << 0, 0, 0, 0;
     
     // Compute initial array of neighboring cells (should be empty)
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
