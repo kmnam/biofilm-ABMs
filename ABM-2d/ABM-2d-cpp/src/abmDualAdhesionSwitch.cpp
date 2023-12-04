@@ -222,7 +222,8 @@ int main(int argc, char** argv)
         }
         // Check for any NaN's or infinities or coordinates that changed a large
         // amount over one step
-        if (cells.isNaN().any() || cells.isInf().any() || ((cells(Eigen::all, Eigen::seq(0, 1)) - cells_new(Eigen::all, Eigen::seq(0, 1))).abs() > Ldiv).any())
+        if (cells_new.isNaN().any() || cells_new.isInf().any() ||
+            ((cells(Eigen::all, Eigen::seq(0, 1)) - cells_new(Eigen::all, Eigen::seq(0, 1))).abs() > Ldiv).any())
         {
             // Write final population to file and terminate  
             std::stringstream ss_prev, ss_final;

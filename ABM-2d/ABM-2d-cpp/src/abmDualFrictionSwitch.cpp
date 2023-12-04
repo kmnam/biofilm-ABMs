@@ -220,6 +220,21 @@ int main(int argc, char** argv)
             if (max_error < 1e-8)
                 dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-5);
         }
+        // Check for any NaN's or infinities
+        if (cells_new.isNaN().any() || cells_new.isInf().any() ||
+            ((cells(Eigen::all, Eigen::seq(0, 1)) - cells_new(Eigen::all, Eigen::seq(0, 1))).abs() > Ldiv).any())
+        {
+            // Write final population to file and terminate 
+            std::stringstream ss_prev, ss_final;
+            ss_prev << prefix << "_finalexceptprev.txt"; 
+            ss_final << prefix << "_finalexcept.txt";
+            std::string filename_prev = ss_prev.str(); 
+            std::string filename_final = ss_final.str();
+            writeCells<T>(cells, json_data, filename_prev);
+            json_data["t_curr"] = t;
+            writeCells<T>(cells_new, json_data, filename_final); 
+            throw std::runtime_error("Encountered NaN and/or infinity");  
+        }
         cells = cells_new;
         velocities = velocities_new;
 
@@ -243,18 +258,6 @@ int main(int argc, char** argv)
             cells, rate_12, rate_21, dt, rng, uniform_dist
         );
         switchGroups<T>(cells, 9, to_switch, eta_dist1_func, eta_dist2_func, rng);
-
-        // Check for any NaN's or infinities
-        if (cells.isNaN().any() || cells.isInf().any())
-        {
-            // Write final population to file and terminate  
-            json_data["t_curr"] = t;
-            std::stringstream ss_final; 
-            ss_final << prefix << "_finalexcept.txt";
-            std::string filename_final = ss_final.str(); 
-            writeCells<T>(cells, json_data, filename_final); 
-            throw std::runtime_error("Encountered NaN and/or infinity");  
-        }
 
         // Write the current population to file
         if (i % iter_write == 0)
