@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     12/3/2023
+ *     12/4/2023
  */
 
 #ifndef BIOFILM_MECHANICS_HPP
@@ -104,7 +104,7 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
     T t = 0;  
 
     // If the two centerlines are not parallel ...
-    if (std::abs(denom) > 1e-10)
+    if (std::abs(denom) > 1e-6)
     {
         s = s_numer / denom;
         t = t_numer / denom; 
@@ -160,29 +160,62 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
         // Compute distance vector between the two cells
         dist = r12 + t * n2 - s * n1; 
     }
-    // Otherwise, take cap centers of cell 1 and compare the distances to cell 2 
-    //
-    // TODO Is choosing either cap center of cell 1 a suitable choice for 
-    // determining the cell-cell interaction force?
+    // Otherwise ... 
     else
     {
-        Matrix<T, 2, 1> p1 = r1 - half_l1 * n1;               // Endpoint for s = -l1 / 2
-        Matrix<T, 2, 1> q1 = r1 + half_l1 * n1;               // Endpoint for s = l1 / 2
-        T t_p1 = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, p1); 
-        T t_q1 = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, q1);
-        Matrix<T, 2, 1> dist_to_p1 = p1 - (r2 + t_p1 * n2);   // Vector running towards p1
-        Matrix<T, 2, 1> dist_to_q1 = q1 - (r2 + t_q1 * n2);   // Vector running towards q1
-        if (dist_to_p1.squaredNorm() < dist_to_q1.squaredNorm())    // Here, s = -l1 / 2
+        // First, compute the shortest distance vectors from the cap
+        // centers of cell 1 to cell 2
+        Matrix<T, 2, 1> p1 = r1 - half_l1 * n1;       // Endpoint of cell 1 for s = -l1 / 2
+        Matrix<T, 2, 1> q1 = r1 + half_l1 * n1;       // Endpoint of cell 1 for s = l1 / 2
+        T t_p1 = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, p1);   // Distance from cell 2 to p1
+        T t_q1 = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, q1);   // Distance from cell 2 to q1
+        Matrix<T, 2, 1> dist_from_p1 = (r2 + t_p1 * n2) - p1;   // Vector running towards cell 2 from p1
+        Matrix<T, 2, 1> dist_from_q1 = (r2 + t_q1 * n2) - q1;   // Vector running towards cell 2 from q1
+	T dp1_dot_n1 = std::abs(dist_from_p1.dot(n1));    // Dot product of vector from p1 to cell 2 with n1
+	T dq1_dot_n1 = std::abs(dist_from_q1.dot(n1));    // Dot product of vector from q1 to cell 2 with n1
+
+        // If both distance vectors are orthogonal to the orientation
+        // of cell 1, then choose the distance vector from r1 to r2
+        if (dp1_dot_n1 < 1e-6 && dq1_dot_n1 < 1e-6)
         {
-            dist = -dist_to_p1;
-            s = -half_l1;
-            t = t_p1;
+	    dist = r12;
+	    s = 0;
+	    t = 0;
         }
-        else                                                        // Here, s = l1 / 2 
+        // If both cell-body coordinates are equal, then they should 
+        // both be equal to -l2 / 2 or both be equal to l2 / 2, in which
+        // case we can choose whichever endpoint of cell 1 is closest
+        else if (t_p1 == t_q1)
         {
-            dist = -dist_to_q1;
-            s = half_l1;
-            t = t_q1;
+	    if (dist_to_p1.squaredNorm() < dist_to_q1.squaredNorm())
+	    {
+	        dist = -dist_to_p1;
+	        s = -half_l1;
+	        t = t_p1;
+	    }
+	    else
+	    {
+	        dist = -dist_to_q1;
+	        s = half_l1;
+	        t = t_q1;
+	    }
+        }
+        // Otherwise, the two cell-body coordinates should be different
+        //
+        // In this case, additionally calculate the shortest distance
+        // vectors from the cap centers of cell 2 to cell 1 
+        else
+        {
+	    Matrix<T, 2, 1> p2 = r2 - half_l2 * n2;               // Endpoint of cell 2 for t = -l2 / 2
+	    Matrix<T, 2, 1> q2 = r2 + half_l2 * n2;               // Endpoint of cell 2 for t = l2 / 2
+	    T s_p2 = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, p2);   // Distance from cell 1 to p2
+ 	    T s_q2 = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, q2);   // Distance from cell 1 to q2
+	    Matrix<T, 2, 1> dist_to_p2 = p2 - (r1 + s_p2 * n1);   // Vector from cell 1 running towards p2
+	    Matrix<T, 2, 1> dist_to_q2 = q2 - (r1 + s_q2 * n1);   // Vector from cell 1 running towards q2
+	    if ()
+	    {
+	        if (std::abs(t
+	    } 
         }
     }
     
