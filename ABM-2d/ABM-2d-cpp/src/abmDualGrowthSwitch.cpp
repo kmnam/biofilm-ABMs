@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     12/3/2023
+ *     12/5/2023
  */
 
 #include <iostream>
@@ -170,14 +170,39 @@ int main(int argc, char** argv)
     {
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
-        cells = divideCells<T>(
-            cells, t, R, Rcell, to_divide, growth_dist_funcs, rng, daughter_length_dist_func,
-            daughter_angle_dist_func
-        );
+        if (to_divide.sum() > 0)
+            std::cout << "... Dividing " << to_divide.sum() << " cells (iteration " << i
+                      << ")" << std::endl;
+        try
+        {
+            cells = divideCells<T>(
+                cells, t, R, Rcell, to_divide, growth_dist_funcs, rng, daughter_length_dist_func,
+                daughter_angle_dist_func
+            );
+        }
+        catch (const std::runtime_error& e)
+        {
+            std::cout << "[WARN] Encountered division event that violates "
+                      << "minimum distance criterion" << std::endl;
+        }
 
         // Update the neighboring cells if division has occurred
         if (to_divide.sum() > 0)
+        {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+            // Check that none of the distances are near zero 
+            if ((neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < 1e-8).any())
+            {
+                // Write final population to file and terminate 
+                std::stringstream ss_final, ss_error;
+                ss_final << prefix << "_finalexcept.txt";
+                std::string filename_final = ss_final.str();
+                json_data["t_curr"] = t;
+                writeCells<T>(cells, json_data, filename_final);
+                ss_error << "Encountered near-zero cell-cell distance (iteration " << i << ")" << std::endl;
+                throw std::runtime_error(ss_error.str()); 
+            }
+        }
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
@@ -212,28 +237,40 @@ int main(int argc, char** argv)
                 dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-5);
         }
         // Check for any NaN's or infinities
-        if (cells_new.isNaN().any() || cells_new.isInf().any() ||
-            ((cells(Eigen::all, Eigen::seq(0, 1)) - cells_new(Eigen::all, Eigen::seq(0, 1))).abs() > Ldiv).any())
+        if (cells_new.isNaN().any() || cells_new.isInf().any())
         {
             // Write final population to file and terminate 
-            std::stringstream ss_prev, ss_final;
+            std::stringstream ss_prev, ss_final, ss_error;
             ss_prev << prefix << "_finalexceptprev.txt"; 
             ss_final << prefix << "_finalexcept.txt";
             std::string filename_prev = ss_prev.str(); 
             std::string filename_final = ss_final.str();
             writeCells<T>(cells, json_data, filename_prev);
             json_data["t_curr"] = t;
-            writeCells<T>(cells_new, json_data, filename_final); 
-            throw std::runtime_error("Encountered NaN and/or infinity");  
+            writeCells<T>(cells_new, json_data, filename_final);
+            ss_error << "Encountered NaN and/or infinity (iteration " << i << ")" << std::endl; 
+            throw std::runtime_error(ss_error.str()); 
         }
         cells = cells_new;
-        velocities = velocities_new; 
+        velocities = velocities_new;
 
         // Grow the cells
         growCells<T>(cells, dt, R);
 
-        // Update distances between neighboring cells
+        // Update distances between neighboring cells (and check that no distances 
+        // are near zero)
         updateNeighborDistances<T>(cells, neighbors);
+        if ((neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < 1e-8).any())
+        {
+            // Write final population to file and terminate 
+            std::stringstream ss_final, ss_error;
+            ss_final << prefix << "_finalexcept.txt";
+            std::string filename_final = ss_final.str();
+            json_data["t_curr"] = t;
+            writeCells<T>(cells, json_data, filename_final);
+            ss_error << "Encountered near-zero cell-cell distance (iteration " << i << ")" << std::endl;
+            throw std::runtime_error(ss_error.str()); 
+        }
 
         // Update current time 
         t += dt;
@@ -242,7 +279,21 @@ int main(int argc, char** argv)
 
         // Update neighboring cells 
         if (i % iter_update_neighbors == 0)
+        {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+            // Check that none of the distances are near zero 
+            if ((neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < 1e-8).any())
+            {
+                // Write final population to file and terminate 
+                std::stringstream ss_final, ss_error;
+                ss_final << prefix << "_finalexcept.txt";
+                std::string filename_final = ss_final.str();
+                json_data["t_curr"] = t;
+                writeCells<T>(cells, json_data, filename_final);
+                ss_error << "Encountered near-zero cell-cell distance (iteration " << i << ")" << std::endl;
+                throw std::runtime_error(ss_error.str()); 
+            }
+        }
 
         // Switch cells between groups at the given rates
         Array<int, Dynamic, 1> to_switch = chooseCellsToSwitch<T>(
