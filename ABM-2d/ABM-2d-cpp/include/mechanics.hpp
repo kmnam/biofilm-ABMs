@@ -173,10 +173,12 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
         Matrix<T, 2, 1> dist_from_q1 = (r2 + t_q1 * n2) - q1;   // Vector running towards cell 2 from q1
         T dp1_dot_n1 = std::abs(dist_from_p1.dot(n1));    // Dot product of vector from p1 to cell 2 with n1
         T dq1_dot_n1 = std::abs(dist_from_q1.dot(n1));    // Dot product of vector from q1 to cell 2 with n1
+        T dp1_costheta = dp1_dot_n1 / dist_from_p1.norm();      // Cosine of corresponding angle
+        T dq1_costheta = dq1_dot_n1 / dist_from_q1.norm();      // Cosine of corresponding angle
 
         // If both distance vectors are orthogonal to the orientation
         // of cell 1, then choose the distance vector from r1 to r2
-        if (dp1_dot_n1 < 1e-6 && dq1_dot_n1 < 1e-6)
+        if (dp1_costheta < 1e-3 && dq1_costheta < 1e-3)
         {
             dist = r12;
             s = 0;
@@ -211,14 +213,14 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 2, 
             T s_p2 = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, p2);   // Distance from cell 1 to p2
             T s_q2 = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, q2);   // Distance from cell 1 to q2
             Matrix<T, 2, 1> dist_from_p2 = (r1 + s_p2 * n1) - p2;   // Vector from p2 running towards cell 1
-            Matrix<T, 2, 1> dist_from_q2 = (r1 + s_q2 * n1) - q2;   // Vector from q2 running towards cell 1
-            T dp2_dot_n2 = std::abs(dist_from_p2.dot(n2));    // Dot product of vector from p2 to cell 1 with n2
-            T dq2_dot_n2 = std::abs(dist_from_q2.dot(n2));    // Dot product of vector from q2 to cell 1 with n2
-            if (dp1_dot_n1 < 1e-6)
+                                                                    // (no need for vector from q2)
+            if (dp1_costheta < 1e-3)
                 dist = dist_from_p1;
-            else if (dq1_dot_n1 < 1e-6)
+            else if (dq1_costheta < 1e-3)
                 dist = dist_from_q1;
-            else 
+            else     // If neither vectors are orthogonal to n1, then both 
+                     // shortest distance vectors from cell 2 to cell 1 
+                     // should be orthogonal to n2
                 dist = -dist_from_p2;
             s = (s_p2 + s_q2) / 2;
             t = (t_p1 + t_q1) / 2;
