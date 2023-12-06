@@ -179,25 +179,25 @@ int main(int argc, char** argv)
     {
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
-	if (to_divide.sum() > 0)
-	    std::cout << "... Dividing " << to_divide.sum() << " cells (iteration " << i
-		      << ")" << std::endl;
-	try
-	{
+        if (to_divide.sum() > 0)
+            std::cout << "... Dividing " << to_divide.sum() << " cells (iteration " << i
+                      << ")" << std::endl;
+        try
+        {
             cells = divideCells<T>(
                 cells, t, R, Rcell, to_divide, growth_dist_func, rng, daughter_length_dist_func,
                 daughter_angle_dist_func
             );
-	}
-	catch (const std::runtime_error& e)
-	{
-	    std::cout << "[WARN] Encountered division event that violates "
-		      << "minimum distance criterion" << std::endl;
-	}
+        }
+        catch (const std::runtime_error& e)
+        {
+            std::cout << "[WARN] Encountered division event that violates "
+                      << "minimum distance criterion" << std::endl;
+        }
 
         // Update the neighboring cells if division has occurred
         if (to_divide.sum() > 0)
-	{
+        {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             // Check that none of the distances are near zero 
             if ((neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < 1e-8).any())
@@ -211,7 +211,7 @@ int main(int argc, char** argv)
                 ss_error << "Encountered near-zero cell-cell distance (iteration " << i << ")" << std::endl;
                 throw std::runtime_error(ss_error.str()); 
             }
-	}
+        }
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
@@ -257,7 +257,7 @@ int main(int argc, char** argv)
             writeCells<T>(cells, json_data, filename_prev);
             json_data["t_curr"] = t;
             writeCells<T>(cells_new, json_data, filename_final);
-	    ss_error << "Encountered NaN and/or infinity (iteration " << i << ")" << std::endl; 
+            ss_error << "Encountered NaN and/or infinity (iteration " << i << ")" << std::endl; 
             throw std::runtime_error(ss_error.str());
         }
         cells = cells_new;
@@ -267,7 +267,7 @@ int main(int argc, char** argv)
         growCells<T>(cells, dt, R);
 
         // Update distances between neighboring cells (and check that no distances
-	// are near zero)
+        // are near zero)
         updateNeighborDistances<T>(cells, neighbors);
         if ((neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < 1e-8).any())
         {
