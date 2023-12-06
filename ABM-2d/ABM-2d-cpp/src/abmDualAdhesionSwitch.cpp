@@ -150,6 +150,8 @@ int main(int argc, char** argv)
     int n = 1;
     Array<T, Dynamic, Dynamic> cells(n, 11);
     cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface, 1;
+    Array<T, Dynamic, 4> velocities(n, 4);
+    velocities << 0, 0, 0, 0;
     
     // Compute initial array of neighboring cells (should be empty)
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
@@ -170,15 +172,38 @@ int main(int argc, char** argv)
     {
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
-        cells = divideCells<T>(
-            cells, t, R, Rcell, to_divide, growth_dist_func, rng, daughter_length_dist_func,
-            daughter_angle_dist_func
-        );
+        if (to_divide.sum() > 0)
+            std::cout << "... Dividing " << to_divide.sum() << " cells (iteration " << i
+                      << ")" << std::endl;
+        try
+        {
+            cells = divideCells<T>(
+                cells, t, R, Rcell, to_divide, growth_dist_func, rng, daughter_length_dist_func,
+                daughter_angle_dist_func
+            );
+        }
+        catch (const std::runtime_error& e)
+        {
+            std::cout << "[WARN] Encountered division event that violates "
+                      << "minimum distance criterion" << std::endl;
+        }
 
         // Update the neighboring cells if division has occurred
         if (to_divide.sum() > 0)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+            // Check that none of the distances are near zero 
+            if ((neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < 1e-8).any())
+            {
+                // Write final population to file and terminate 
+                std::stringstream ss_final, ss_error;
+                ss_final << prefix << "_finalexcept.txt";
+                std::string filename_final = ss_final.str();
+                json_data["t_curr"] = t;
+                writeCells<T>(cells, json_data, filename_final);
+                ss_error << "Encountered near-zero cell-cell distance (iteration " << i << ")" << std::endl;
+                throw std::runtime_error(ss_error.str()); 
+            }
             // Identify which pairs of neighboring cells exhibit adhesion
             repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.rows()); 
             for (int k = 0; k < neighbors.rows(); ++k)
@@ -195,8 +220,9 @@ int main(int argc, char** argv)
             A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff, E0, Ecell,
             dmin, prefactor_12, prefactor_6, surface_contact_density, repulsive_only
         ); 
-        Array<T, Dynamic, Dynamic> cells_new = result.first; 
-        Array<T, Dynamic, 4> errors = result.second;
+        Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
+        Array<T, Dynamic, 4> errors = std::get<1>(result);
+        Array<T, Dynamic, 4> velocities_new = std::get<2>(result);
 
         // If the error is big, retry the step with a smaller stepsize (up to
         // a given maximum number of attempts)
@@ -211,8 +237,9 @@ int main(int argc, char** argv)
                     A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff, E0, Ecell,
                     dmin, prefactor_12, prefactor_6, surface_contact_density, repulsive_only
                 ); 
-                cells_new = result.first; 
-                errors = result.second;
+                cells_new = std::get<0>(result); 
+                errors = std::get<1>(result);
+                velocities_new = std::get<2>(result); 
                 max_error = std::max(errors.abs().maxCoeff(), min_error); 
                 j++;  
             }
@@ -220,29 +247,41 @@ int main(int argc, char** argv)
             if (max_error < 1e-8)
                 dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-5);
         }
-        // Check for any NaN's or infinities or coordinates that changed a large
-        // amount over one step
-        if (cells_new.isNaN().any() || cells_new.isInf().any() ||
-            ((cells(Eigen::all, Eigen::seq(0, 1)) - cells_new(Eigen::all, Eigen::seq(0, 1))).abs() > Ldiv).any())
+        // Check for any NaN's or infinities
+        if (cells_new.isNaN().any() || cells_new.isInf().any())
         {
-            // Write final population to file and terminate  
-            std::stringstream ss_prev, ss_final;
-            ss_prev << prefix << "_finalexceptprev.txt";  
+            // Write final population to file and terminate 
+            std::stringstream ss_prev, ss_final, ss_error;
+            ss_prev << prefix << "_finalexceptprev.txt"; 
             ss_final << prefix << "_finalexcept.txt";
             std::string filename_prev = ss_prev.str(); 
-            std::string filename_final = ss_final.str(); 
+            std::string filename_final = ss_final.str();
             writeCells<T>(cells, json_data, filename_prev);
             json_data["t_curr"] = t;
-            writeCells<T>(cells_new, json_data, filename_final);  
-            throw std::runtime_error("Encountered NaN and/or infinity");  
+            writeCells<T>(cells_new, json_data, filename_final);
+            ss_error << "Encountered NaN and/or infinity (iteration " << i << ")" << std::endl; 
+            throw std::runtime_error(ss_error.str());
         }
         cells = cells_new;
+        velocities = velocities_new;
 
         // Grow the cells
         growCells<T>(cells, dt, R);
 
-        // Update distances between neighboring cells
+        // Update distances between neighboring cells (and check that no distances
+        // are near zero)
         updateNeighborDistances<T>(cells, neighbors);
+        if ((neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < 1e-8).any())
+        {
+            // Write final population to file and terminate 
+            std::stringstream ss_final, ss_error;
+            ss_final << prefix << "_finalexcept.txt";
+            std::string filename_final = ss_final.str();
+            json_data["t_curr"] = t;
+            writeCells<T>(cells, json_data, filename_final);
+            ss_error << "Encountered near-zero cell-cell distance (iteration " << i << ")" << std::endl;
+            throw std::runtime_error(ss_error.str()); 
+        }
 
         // Update current time 
         t += dt;
@@ -272,6 +311,18 @@ int main(int argc, char** argv)
         if (i % iter_update_neighbors == 0)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+            // Check that none of the distances are near zero 
+            if ((neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < 1e-8).any())
+            {
+                // Write final population to file and terminate 
+                std::stringstream ss_final, ss_error;
+                ss_final << prefix << "_finalexcept.txt";
+                std::string filename_final = ss_final.str();
+                json_data["t_curr"] = t;
+                writeCells<T>(cells, json_data, filename_final);
+                ss_error << "Encountered near-zero cell-cell distance (iteration " << i << ")" << std::endl;
+                throw std::runtime_error(ss_error.str()); 
+            }
             // Identify which pairs of neighboring cells exhibit adhesion 
             repulsive_only = Array<int, Dynamic, 1>::Zero(neighbors.rows()); 
             for (int k = 0; k < neighbors.rows(); ++k)
@@ -293,7 +344,12 @@ int main(int argc, char** argv)
             std::stringstream ss; 
             ss << prefix << "_iter" << i << ".txt"; 
             std::string filename = ss.str(); 
-            writeCells<T>(cells, json_data, filename); 
+            
+            // Write the velocities to file as additional attributes
+            Array<T, Dynamic, Dynamic> cells_to_write(cells.rows(), cells.cols() + 4);
+            cells_to_write(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells; 
+            cells_to_write(Eigen::all, Eigen::seq(cells.cols(), cells.cols() + 3)) = velocities;
+            writeCells<T>(cells_to_write, json_data, filename); 
         } 
     }
 
