@@ -194,7 +194,7 @@ int main(int argc, char** argv)
         try
         {
             cells = divideCells<T>(
-                cells, t, R, Rcell, to_divide, growth_dist_func, rng, daughter_length_dist_func,
+                cells, t, R, Rcell, to_divide, growth_dist_funcs, rng, daughter_length_dist_func,
                 daughter_angle_dist_func
             );
         }
