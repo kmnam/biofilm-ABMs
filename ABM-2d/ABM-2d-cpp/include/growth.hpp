@@ -360,11 +360,9 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
         }
 
         // If the minimum distance criterion has not been satisfied for every
-        // cell, then an exception should be raised 
+        // cell, then print a warning
         if (satisfies_distance.sum() < n_divide)
-            throw std::runtime_error(
-                "Cell division cannot satisfy minimum distance criterion"
-            );
+            std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion";
 
         return cells_total; 
     }
@@ -513,8 +511,6 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                     theta2(i) = daughter_angle_dist(rng);
                 }
             }
-            //std::cout << "theta1: " << theta1.transpose() << std::endl; 
-            //std::cout << "theta2: " << theta2.transpose() << std::endl;
             Array<T, Dynamic, 1> cos_theta1 = theta1.cos(); 
             Array<T, Dynamic, 1> sin_theta1 = theta1.sin(); 
             Array<T, Dynamic, 1> cos_theta2 = theta2.cos(); 
@@ -687,11 +683,9 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
         }
 
         // If the minimum distance criterion has not been satisfied for every
-        // cell, then an exception should be raised 
+        // cell, then print a warning
         if (satisfies_distance.sum() < n_divide)
-            throw std::runtime_error(
-                "Cell division cannot satisfy minimum distance criterion"
-            );
+            std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion";
 
         return cells_total; 
     }

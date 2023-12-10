@@ -173,18 +173,10 @@ int main(int argc, char** argv)
         if (to_divide.sum() > 0)
             std::cout << "... Dividing " << to_divide.sum() << " cells (iteration " << i
                       << ")" << std::endl;
-        try
-        {
-            cells = divideCells<T>(
-                cells, t, R, Rcell, to_divide, growth_dist_funcs, rng, daughter_length_dist_func,
-                daughter_angle_dist_func
-            );
-        }
-        catch (const std::runtime_error& e)
-        {
-            std::cout << "[WARN] Encountered division event that violates "
-                      << "minimum distance criterion" << std::endl;
-        }
+        cells = divideCells<T>(
+            cells, t, R, Rcell, to_divide, growth_dist_funcs, rng, daughter_length_dist_func,
+            daughter_angle_dist_func
+        );
 
         // Update the neighboring cells if division has occurred
         if (to_divide.sum() > 0)
