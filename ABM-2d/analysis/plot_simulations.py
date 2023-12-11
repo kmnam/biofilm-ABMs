@@ -6,7 +6,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/25/2023
+    12/8/2023
 """
 
 import matplotlib
@@ -81,7 +81,7 @@ if __name__ == '__main__':
     linewidth = 0.8
 
     # Colors for all groups being tracked in the simulation
-    colors = sns.color_palette()[:2]
+    colors = sns.color_palette()[:3]
 
     # Parse all files up to the given maximum number of cells
     filenames_to_plot = []
@@ -116,6 +116,6 @@ if __name__ == '__main__':
     )
     plot_simulation(
         filenames_to_plot, outpath, R=R, fps=10, colors=colors,
-        linewidth=linewidth
+        figsize=(12.8, 9.6), linewidth=linewidth
     )
 
