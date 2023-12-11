@@ -67,7 +67,7 @@ if __name__ == '__main__':
     ncells = []
 
     # Minimum number of cells to plot  
-    min_cells = int(sys.argv[2])
+    min_cells = int(sys.argv[3])
 
     # For each file in the directory ... 
     for filename in filenames:
@@ -118,5 +118,5 @@ if __name__ == '__main__':
     axes[0].set_ylabel('Absolute velocity ($\mu$m/h)')
     axes[1].set_ylabel('Radial velocity ($\mu$m/h)')
     plt.tight_layout()
-    plt.show()
+    plt.savefig(sys.argv[2])
 
