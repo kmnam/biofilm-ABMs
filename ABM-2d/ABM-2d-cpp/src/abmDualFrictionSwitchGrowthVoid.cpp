@@ -213,7 +213,7 @@ int main(int argc, char** argv)
             std::vector<int> idx; 
             for (int j = 0; j < n; ++j)
             {
-                dists_to_center.push_back((cells(0, Eigen::seq(0, 1)) - center).matrix().norm());
+                dists_to_center.push_back((cells(j, Eigen::seq(0, 1)) - center.transpose()).matrix().norm());
                 idx.push_back(j);
             }
 
@@ -355,10 +355,16 @@ int main(int argc, char** argv)
             }
         }
 
-        // Switch cells between groups at the given rates
+        // Switch cells between groups at the given rates, while preventing dead 
+        // cells from switching
         Array<int, Dynamic, 1> to_switch = chooseCellsToSwitch<T>(
             cells, rate_12, rate_21, dt, rng, uniform_dist
         );
+        for (int j = 0; j < n; ++j)
+        {
+            if (cells(j, 10) == 3 && to_switch(j) == 1)
+                to_switch(j) = 0;
+        }
         switchGroups<T>(cells, 9, to_switch, eta_dist1_func, eta_dist2_func, rng);
 
         // Write the current population to file
