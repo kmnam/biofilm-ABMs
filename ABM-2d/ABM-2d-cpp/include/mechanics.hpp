@@ -527,7 +527,7 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     // where dnx and dny are the orientational velocities. This yields the 
     // following value of the Lagrange multiplier:
     //
-    // lambda = -0.5 * (nx * dE/dnx + ny * dE/dny)
+    // lambda = 0.5 * (nx * dE/dnx + ny * dE/dny)
     //
     int n = cells.rows(); 
     Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4); 
@@ -541,9 +541,13 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     Array<T, Dynamic, 4> dEdq = cellCellForcesFromNeighbors<T>(
         cells, neighbors, R, Rcell, cell_cell_prefactors
     );
+
+    // Set mult = 2 * lambda
     Array<T, Dynamic, 1> mult = cells.col(2) * dEdq.col(2) + cells.col(3) * dEdq.col(3);
+
+    // Solve the Lagrangian equations of motion
     Array<T, Dynamic, 2> dEdn_constrained = (
-        dEdq(Eigen::all, Eigen::seq(2, 3)) +
+        dEdq(Eigen::all, Eigen::seq(2, 3)) -
         cells(Eigen::all, Eigen::seq(2, 3)).colwise() * mult
     );
     velocities.col(0) = -dEdq.col(0) / K;
