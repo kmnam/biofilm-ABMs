@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     12/5/2023
+ *     1/9/2024
  */
 
 #ifndef BIOFILM_MECHANICS_HPP
@@ -399,15 +399,16 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  * @param powRdiff Pre-computed value for `pow(R - Rcell, 1.5)`. 
  * @param E0 Elastic modulus of EPS. 
  * @param Ecell Elastic modulus of cell.
+ * @param prefactors Array of four pre-computed prefactors, namely `2.5 * sqrt(R)`,
+ *                   `2.5 * E0 * sqrt(R)`, `E0 * pow(R - Rcell, 1.5)`, and `Ecell`.
  * @returns Derivatives of the cell-cell interaction energies with respect 
  *          to cell positions and orientations.   
  */
 template <typename T>
 Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                                  const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                                 const T R, const T sqrtR,
-                                                 const T Rcell, const T powRdiff, 
-                                                 const T E0, const T Ecell)
+                                                 const T R, const T Rcell,
+                                                 const Ref<const Array<T, 4, 1> >& prefactors)
 {
     int n = cells.rows();   // Number of cells
 
@@ -419,16 +420,17 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
     // with respect to x-position, y-position, x-orientation, y-orientation
     Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(n, 4);
 
-    // Compute prefactors
-    T prefactor0 = 2.5 * sqrtR; 
-    T prefactor1 = E0 * prefactor0; 
-    T prefactor2 = E0 * powRdiff;
-
     // Compute distance vector magnitude, direction, and corresponding
     // cell-cell overlap for every pair of neighboring cells
     Array<T, Dynamic, 1> magnitudes = neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array(); 
     Array<T, Dynamic, 2> directions = neighbors(Eigen::all, Eigen::seq(2, 3)).colwise() / magnitudes;
     Array<T, Dynamic, 1> overlaps = 2 * R - magnitudes;  
+
+    // Note that:
+    //     prefactors(0) = 2.5 * std::sqrt(R)
+    //     prefactors(1) = 2.5 * E0 * std::sqrt(R)
+    //     prefactors(2) = E0 * std::pow(R - Rcell, 1.5)
+    //     prefactors(3) = Ecell
 
     // For each pair of neighboring cells ...
     for (int k = 0; k < neighbors.rows(); ++k)
@@ -448,14 +450,14 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
         T prefactor = 0; 
         if (overlap > 0 && overlap < R - Rcell)
         {
-            prefactor = prefactor1 * std::pow(overlap, 1.5); 
+            prefactor = prefactors(1) * std::pow(overlap, 1.5); 
         }
         // Case 2: the overlap is instead greater than R - Rcell (i.e., it 
         // encroaches into the bodies of the two cells)
         else if (overlap >= R - Rcell)
         {
-            T prefactor3 = Ecell * std::pow(overlap - R + Rcell, 1.5);
-            prefactor = prefactor0 * (prefactor2 + prefactor3); 
+            T term = prefactors(3) * std::pow(overlap - R + Rcell, 1.5);
+            prefactor = prefactors(0) * (prefactors(2) + term);
         }
 
         if (overlap > 0)
@@ -487,20 +489,17 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population. 
  * @param R Cell radius, including the EPS.
- * @param sqrtR Pre-computed square root of `R`.
  * @param Rcell Cell radius, excluding the EPS.
- * @param powRdiff Pre-computed value for `pow(R - Rcell, 1.5)`. 
- * @param E0 Elastic modulus of EPS. 
- * @param Ecell Elastic modulus of cell. 
+ * @param cell_cell_prefactors Array of four pre-computed prefactors for 
+ *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density. 
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
 Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                                 const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                                const T R, const T sqrtR, 
-                                                const T Rcell, const T powRdiff,
-                                                const T E0, const T Ecell, 
+                                                const T R, const T Rcell,
+                                                const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                                 const T surface_contact_density)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
@@ -540,7 +539,7 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     assert((K != 0).all() && "Composite viscosity force prefactors for positions have zero values"); 
     assert((L != 0).all() && "Composite viscosity force prefactors for orientations have zero values");
     Array<T, Dynamic, 4> dEdq = cellCellForcesFromNeighbors<T>(
-        cells, neighbors, R, sqrtR, Rcell, powRdiff, E0, Ecell
+        cells, neighbors, R, Rcell, cell_cell_prefactors
     );
     Array<T, Dynamic, 1> mult = cells.col(2) * dEdq.col(2) + cells.col(3) * dEdq.col(3);
     Array<T, Dynamic, 2> dEdn_constrained = (
@@ -590,11 +589,9 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  *                  population. 
  * @param dt Timestep. 
  * @param R Cell radius, including the EPS.
- * @param sqrtR Pre-computed square root of `R`.
  * @param Rcell Cell radius, excluding the EPS.
- * @param powRdiff Pre-computed value for `pow(R - Rcell, 1.5)`. 
- * @param E0 Elastic modulus of EPS. 
- * @param Ecell Elastic modulus of cell.
+ * @param cell_cell_prefactors Array of four pre-computed prefactors for 
+ *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
  * @returns Updated population of cells, along with the array of errors in
  *          the cell positions and orientations.  
@@ -606,9 +603,8 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
                                         const Ref<const Array<T, Dynamic, 1> >& bs, 
                                         const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
                                         const Ref<const Array<T, Dynamic, 6> >& neighbors, 
-                                        const T dt, const T R, const T sqrtR,
-                                        const T Rcell, const T powRdiff,
-                                        const T E0, const T Ecell,
+                                        const T dt, const T R, const T Rcell,
+                                        const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                         const T surface_contact_density)
 {
     // Compute velocities at given partial timesteps 
@@ -617,7 +613,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
     std::vector<Array<T, Dynamic, 4> > velocities; 
     velocities.push_back(
         getVelocitiesFromNeighbors<T>(
-            cells, neighbors, R, sqrtR, Rcell, powRdiff, E0, Ecell,
+            cells, neighbors, R, Rcell, cell_cell_prefactors,
             surface_contact_density
         )
     );
@@ -630,7 +626,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
         cells_i(Eigen::all, Eigen::seq(0, 3)) += multipliers * dt; 
         velocities.push_back(
             getVelocitiesFromNeighbors<T>(
-                cells_i, neighbors, R, sqrtR, Rcell, powRdiff, E0, Ecell,
+                cells_i, neighbors, R, Rcell, cell_cell_prefactors,
                 surface_contact_density
             )
         );
