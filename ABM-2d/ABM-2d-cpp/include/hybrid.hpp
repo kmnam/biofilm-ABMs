@@ -24,7 +24,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     12/5/2023
+ *     1/10/2024
  */
 
 #ifndef HYBRID_BIOFILM_CELL_CELL_POTENTIAL_FORCES_HPP
@@ -47,11 +47,10 @@ using namespace Eigen;
  * @param neighbors Array specifying pairs of neighboring cells in the 
  *                  population.
  * @param R Cell radius, including the EPS. 
- * @param sqrtR Pre-computed square root of `R`.
  * @param Rcell Cell radius, excluding the EPS.
- * @param powRdiff Pre-computed value for `pow(R - Rcell, 1.5)`. 
- * @param E0 Elastic modulus of EPS. 
- * @param Ecell Elastic modulus of cell.  
+ * @param hertz_prefactors Array of four pre-computed prefactors, namely
+ *                         `2.5 * sqrt(R)`, `2.5 * E0 * sqrt(R)`,
+ *                         `E0 * pow(R - Rcell, 1.5)`, and `Ecell`.
  * @param dmin The cell-cell distance at which the Kihara potential component
  *             is minimized.
  * @param prefactor_12 The value `12 * eps0 * std::pow(dmin, 12)`, where
@@ -64,8 +63,8 @@ using namespace Eigen;
 template <typename T>
 Array<T, Dynamic, 4> cellCellForcesHybrid(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
                                           const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                          const T R, const T sqrtR, const T Rcell,
-                                          const T powRdiff, const T E0, const T Ecell,
+                                          const T R, const T Rcell,
+                                          const Ref<const Array<T, 4, 1> >& hertz_prefactors,
                                           const T dmin, const T prefactor_12,
                                           const T prefactor_6,
                                           const Ref<const Array<int, Dynamic, 1> >& repulsive_only)
@@ -80,10 +79,11 @@ Array<T, Dynamic, 4> cellCellForcesHybrid(const Ref<const Array<T, Dynamic, Dyna
     // with respect to x-position, y-position, x-orientation, y-orientation
     Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(n, 4);
 
-    // Compute prefactors
-    T prefactor0 = 2.5 * sqrtR; 
-    T prefactor1 = E0 * prefactor0; 
-    T prefactor2 = E0 * powRdiff;
+    // Note that:
+    //     hertz_prefactors(0) = 2.5 * std::sqrt(R)
+    //     hertz_prefactors(1) = 2.5 * E0 * std::sqrt(R)
+    //     hertz_prefactors(2) = E0 * std::pow(R - Rcell, 1.5)
+    //     hertz_prefactors(3) = Ecell
 
     // Compute distance vector magnitude and direction for every pair of
     // neighboring cells
@@ -113,7 +113,7 @@ Array<T, Dynamic, 4> cellCellForcesHybrid(const Ref<const Array<T, Dynamic, Dyna
         T prefactor_attr = 0; 
         if (overlap > 0 && overlap < R - Rcell)
         {
-            prefactor_repel = prefactor1 * std::pow(overlap, 1.5);
+            prefactor_repel = hertz_prefactors(1) * std::pow(overlap, 1.5);
             if (!repulsive_only(k))
             {
                 if (dist > dmin)
@@ -124,8 +124,8 @@ Array<T, Dynamic, 4> cellCellForcesHybrid(const Ref<const Array<T, Dynamic, Dyna
         // encroaches into the bodies of the two cells)
         else if (overlap >= R - Rcell)
         {
-            T prefactor3 = Ecell * std::pow(overlap - R + Rcell, 1.5);
-            prefactor_repel = prefactor0 * (prefactor2 + prefactor3);
+            T term = hertz_prefactors(3) * std::pow(overlap - R + Rcell, 1.5);
+            prefactor_repel = hertz_prefactors(0) * (hertz_prefactors(2) + term);
             if (!repulsive_only(k))
             {
                 if (dist > dmin)
@@ -160,11 +160,10 @@ Array<T, Dynamic, 4> cellCellForcesHybrid(const Ref<const Array<T, Dynamic, Dyna
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population. 
  * @param R Cell radius, including the EPS. 
- * @param sqrtR Pre-computed square root of `R`.
  * @param Rcell Cell radius, excluding the EPS.
- * @param powRdiff Pre-computed value for `pow(R - Rcell, 1.5)`. 
- * @param E0 Elastic modulus of EPS. 
- * @param Ecell Elastic modulus of cell.  
+ * @param hertz_prefactors Array of four pre-computed prefactors, namely
+ *                         `2.5 * sqrt(R)`, `2.5 * E0 * sqrt(R)`,
+ *                         `E0 * pow(R - Rcell, 1.5)`, and `Ecell`.
  * @param dmin The cell-cell distance at which the Kihara potential component
  *             is minimized.
  * @param prefactor_12 The value `12 * eps0 * std::pow(dmin, 12)`, where
@@ -179,8 +178,8 @@ Array<T, Dynamic, 4> cellCellForcesHybrid(const Ref<const Array<T, Dynamic, Dyna
 template <typename T>
 Array<T, Dynamic, 4> getVelocitiesHybrid(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                          const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                         const T R, const T sqrtR, const T Rcell,
-                                         const T powRdiff, const T E0, const T Ecell, 
+                                         const T R, const T Rcell,
+                                         const Ref<const Array<T, 4, 1> >& hertz_prefactors,
                                          const T dmin, const T prefactor_12,
                                          const T prefactor_6,
                                          const T surface_contact_density,
@@ -211,7 +210,7 @@ Array<T, Dynamic, 4> getVelocitiesHybrid(const Ref<const Array<T, Dynamic, Dynam
     // where dnx and dny are the orientational velocities. This yields the 
     // following value of the Lagrange multiplier:
     //
-    // lambda = -0.5 * (nx * dE/dnx + ny * dE/dny)
+    // lambda = 0.5 * (nx * dE/dnx + ny * dE/dny)
     //
     int n = cells.rows(); 
     Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4); 
@@ -223,12 +222,16 @@ Array<T, Dynamic, 4> getVelocitiesHybrid(const Ref<const Array<T, Dynamic, Dynam
     assert((K != 0).all() && "Composite viscosity force prefactors for positions have zero values"); 
     assert((L != 0).all() && "Composite viscosity force prefactors for orientations have zero values");
     Array<T, Dynamic, 4> dEdq = cellCellForcesHybrid<T>(
-        cells, neighbors, R, sqrtR, Rcell, powRdiff, E0, Ecell, dmin,
-        prefactor_12, prefactor_6, repulsive_only
+        cells, neighbors, R, Rcell, hertz_prefactors, dmin, prefactor_12,
+        prefactor_6, repulsive_only
     );
+
+    // Set mult = 2 * lambda
     Array<T, Dynamic, 1> mult = cells.col(2) * dEdq.col(2) + cells.col(3) * dEdq.col(3);
+
+    // Solve the Lagrangian equations of motion
     Array<T, Dynamic, 2> dEdn_constrained = (
-        dEdq(Eigen::all, Eigen::seq(2, 3)) +
+        dEdq(Eigen::all, Eigen::seq(2, 3)) -
         cells(Eigen::all, Eigen::seq(2, 3)).colwise() * mult
     );
     velocities.col(0) = -dEdq.col(0) / K;
@@ -261,11 +264,10 @@ Array<T, Dynamic, 4> getVelocitiesHybrid(const Ref<const Array<T, Dynamic, Dynam
  *                  population. 
  * @param dt Timestep. 
  * @param R Cell radius, including the EPS. 
- * @param sqrtR Pre-computed square root of `R`.
  * @param Rcell Cell radius, excluding the EPS.
- * @param powRdiff Pre-computed value for `pow(R - Rcell, 1.5)`. 
- * @param E0 Elastic modulus of EPS. 
- * @param Ecell Elastic modulus of cell.  
+ * @param hertz_prefactors Array of four pre-computed prefactors, namely
+ *                         `2.5 * sqrt(R)`, `2.5 * E0 * sqrt(R)`,
+ *                         `E0 * pow(R - Rcell, 1.5)`, and `Ecell`.
  * @param dmin The cell-cell distance at which the Kihara potential component
  *             is minimized.
  * @param prefactor_12 The value `12 * eps0 * std::pow(dmin, 12)`, where
@@ -285,8 +287,8 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
                                  const Ref<const Array<T, Dynamic, 1> >& bs, 
                                  const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
                                  const Ref<const Array<T, Dynamic, 6> >& neighbors, 
-                                 const T dt, const T R, const T sqrtR, const T Rcell,
-                                 const T powRdiff, const T E0, const T Ecell,
+                                 const T dt, const T R, const T Rcell,
+                                 const Ref<const Array<T, 4, 1> >& hertz_prefactors,
                                  const T dmin, const T prefactor_12, const T prefactor_6,
                                  const T surface_contact_density,
                                  const Ref<const Array<int, Dynamic, 1> >& repulsive_only)
@@ -297,7 +299,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
     std::vector<Array<T, Dynamic, 4> > velocities; 
     velocities.push_back(
         getVelocitiesHybrid<T>(
-            cells, neighbors, R, sqrtR, Rcell, powRdiff, E0, Ecell, dmin, prefactor_12,
+            cells, neighbors, R, Rcell, hertz_prefactors, dmin, prefactor_12,
             prefactor_6, surface_contact_density, repulsive_only
         )
     );
@@ -310,8 +312,8 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
         cells_i(Eigen::all, Eigen::seq(0, 3)) += multipliers * dt; 
         velocities.push_back(
             getVelocitiesHybrid<T>(
-                cells_i, neighbors, R, sqrtR, Rcell, powRdiff, E0, Ecell, dmin,
-                prefactor_12, prefactor_6, surface_contact_density, repulsive_only
+                cells_i, neighbors, R, Rcell, hertz_prefactors, dmin, prefactor_12,
+                prefactor_6, surface_contact_density, repulsive_only
             )
         );
     }
