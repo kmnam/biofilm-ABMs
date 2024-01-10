@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/30/2023
+ *     1/10/2024
  */
 
 #include <iostream>
@@ -87,10 +87,15 @@ int main(int argc, char** argv)
     const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
     const T eps0 = static_cast<T>(json_data["kihara_strength"].as_double()); 
 
-    // Surface contact area density and powers of cell radius  
+    // Surface contact area density and powers of cell radius 
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
     const T sqrtR = std::sqrt(R); 
     const T powRdiff = std::pow(R - Rcell, 1.5);
+    Array<T, 4, 1> cell_cell_prefactors;
+    cell_cell_prefactors << 2.5 * sqrtR,
+                            2.5 * E0 * sqrtR,
+                            E0 * powRdiff,
+                            Ecell; 
 
     // Kihara potential prefactors
     const T dmin = 2 * Rcell + 1.0 * (R - Rcell);
@@ -209,7 +214,7 @@ int main(int argc, char** argv)
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveHybrid<T>(
-            A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff, E0, Ecell,
+            A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
             dmin, prefactor_12, prefactor_6, surface_contact_density, repulsive_only
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
@@ -226,7 +231,7 @@ int main(int argc, char** argv)
             {
                 dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveHybrid<T>(
-                    A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff, E0, Ecell,
+                    A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
                     dmin, prefactor_12, prefactor_6, surface_contact_density, repulsive_only
                 ); 
                 cells_new = std::get<0>(result); 

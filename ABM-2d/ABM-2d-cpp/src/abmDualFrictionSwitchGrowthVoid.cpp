@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     12/10/2023
+ *     1/10/2024
  */
 
 #include <iostream>
@@ -92,6 +92,11 @@ int main(int argc, char** argv)
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
     const T sqrtR = std::sqrt(R); 
     const T powRdiff = std::pow(R - Rcell, 1.5);
+    Array<T, 4, 1> cell_cell_prefactors; 
+    cell_cell_prefactors << 2.5 * sqrtR,
+                            2.5 * E0 * sqrtR,
+                            E0 * powRdiff,
+                            Ecell; 
 
     // Growth rate distribution function: normal distribution with given mean
     // and standard deviation
@@ -266,8 +271,8 @@ int main(int argc, char** argv)
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-            A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff, E0,
-            Ecell, surface_contact_density
+            A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
+            surface_contact_density
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result); 
         Array<T, Dynamic, 4> errors = std::get<1>(result);
@@ -283,8 +288,8 @@ int main(int argc, char** argv)
             {
                 dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-                    A, b, bs, cells, neighbors, dt, R, sqrtR, Rcell, powRdiff,
-                    E0, Ecell, surface_contact_density
+                    A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
+                    surface_contact_density
                 ); 
                 cells_new = std::get<0>(result); 
                 errors = std::get<1>(result);
