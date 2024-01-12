@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     12/3/2023
+ *     1/12/2024
  */
 
 #ifndef BIOFILM_CELL_GROWTH_HPP
@@ -447,17 +447,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                     Matrix<T, 2, 1> dij = std::get<0>(result);
                     T dist = dij.norm();
                     if (dist < mindist_i)
-                    {
                         mindist_i = dist;
-                        //std::cout << "(" << i << ", " << j << "): "
-                        //          << cells(i, 0) << "," << cells(i, 1) << " "
-                        //          << cells(i, 2) << "," << cells(i, 3) << " " 
-                        //          << cells(i, 5) << " to "
-                        //          << cells(j, 0) << "," << cells(j, 1) << " "
-                        //          << cells(j, 2) << "," << cells(j, 3) << " "
-                        //          << cells(j, 5) << ": " << mindist_i 
-                        //          << " (distance: " << dij(0) << "," << dij(1) << ")" << std::endl;
-                    }
                 }
             }
             if (mindist_i < mindist_default)
@@ -487,8 +477,6 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
         const int ntries_total = 10; 
         while (ntries == 0 || (ntries < ntries_total && satisfies_distance.sum() < n_divide))
         {
-            //std::cout << "dividing try " << ntries << std::endl; 
-
             // Get a copy of the corresponding sub-array
             cells_total(Eigen::seqN(0, n), Eigen::all) = cells; 
             Array<T, Dynamic, Dynamic> new_cells(cells(idx_divide, Eigen::all)); 
@@ -619,17 +607,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                             Matrix<T, 2, 1> dij = std::get<0>(result);
                             T dist = dij.norm(); 
                             if (dist < daughter_mindist)
-                            {
                                 daughter_mindist = dist;
-                                //std::cout << "daughter 1 (" << i << ", " << j << "): "
-                                //          << cells_total(i, 0) << "," << cells_total(i, 1) << " "
-                                //          << cells_total(i, 2) << "," << cells_total(i, 3) << " " 
-                                //          << cells_total(i, 5) << " to "
-                                //          << cells_total(j, 0) << "," << cells_total(j, 1) << " "
-                                //          << cells_total(j, 2) << "," << cells_total(j, 3) << " "
-                                //          << cells_total(j, 5) << ": " << daughter_mindist 
-                                //          << " (distance: " << dij(0) << "," << dij(1) << ")" <<  std::endl;
-                            }
                         }
                     }
                     daughter_mindists1(m) = daughter_mindist;
@@ -657,17 +635,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                             Matrix<T, 2, 1> dij = std::get<0>(result);
                             T dist = dij.norm(); 
                             if (dist < daughter_mindist)
-                            {
                                 daughter_mindist = dist;
-                                //std::cout << "daughter 2 (" << i << ", " << j << "): "
-                                //          << cells_total(i, 0) << "," << cells_total(i, 1) << " "
-                                //          << cells_total(i, 2) << "," << cells_total(i, 3) << " " 
-                                //          << cells_total(i, 5) << " to "
-                                //          << cells_total(j, 0) << "," << cells_total(j, 1) << " "
-                                //          << cells_total(j, 2) << "," << cells_total(j, 3) << " "
-                                //          << cells_total(j, 5) << ": " << daughter_mindist 
-                                //          << " (distance: " << dij(0) << "," << dij(1) << ")" <<  std::endl;
-                            }
                         }
                     }
                     daughter_mindists2(m) = daughter_mindist;
