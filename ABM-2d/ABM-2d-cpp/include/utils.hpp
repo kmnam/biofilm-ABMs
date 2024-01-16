@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/5/2023
+ *     1/16/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -126,6 +126,37 @@ T vonMises(const T mu, const T kappa, boost::random::mt19937& rng,
         return std::fmod(-std::acos(f) + mu, boost::math::constants::two_pi<T>()); 
     else 
         return mu;
+}
+
+/**
+ * Check that all cell-cell distances in the given array of neighboring 
+ * cells are greater than some threshold.
+ *
+ * @param neighbors Array of neighboring pairs of cells.
+ * @param threshold Distance threshold.
+ * @returns True if the cell-cell distances exceed the given threshold, 
+ *          false otherwise. 
+ */
+template <typename T>
+bool distancesExceedThreshold(const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                              const T threshold)
+{
+    return (neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < threshold).any();
+}
+
+/**
+ * Check that the given cell coordinates contain a NaN or infinity. 
+ *
+ * @param cells Existing population of cells.
+ * @returns True if the cell coordinates contain a NaN or infinity, false
+ *          otherwise.
+ */
+bool isNaNOrInf(const Ref<const Array<T, Dynamic, Dynamic> >& cells)
+{
+    return (
+        cells(Eigen::all, Eigen::seq(0, 3)).isNaN().any() ||
+        cells(Eigen::all, Eigen::seq(0, 3)).isInf().any()
+    );
 }
 
 #endif
