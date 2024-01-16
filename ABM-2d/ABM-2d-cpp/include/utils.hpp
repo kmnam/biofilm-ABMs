@@ -151,6 +151,7 @@ bool distancesExceedThreshold(const Ref<const Array<T, Dynamic, 6> >& neighbors,
  * @returns True if the cell coordinates contain a NaN or infinity, false
  *          otherwise.
  */
+template <typename T>
 bool isNaNOrInf(const Ref<const Array<T, Dynamic, Dynamic> >& cells)
 {
     return (
