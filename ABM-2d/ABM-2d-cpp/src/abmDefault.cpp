@@ -1,16 +1,17 @@
 /**
  * In what follows, a population of N cells is represented as a 2-D array of 
- * size (N, 9), where each row represents a cell and stores the following data:
+ * size (N, 10), where each row represents a cell and stores the following data:
  * 
  * 0) x-coordinate of cell center
  * 1) y-coordinate of cell center
  * 2) x-coordinate of cell orientation vector
  * 3) y-coordinate of cell orientation vector
- * 4) cell length (excluding caps) 
- * 5) timepoint at which the cell was formed
- * 6) cell growth rate
- * 7) cell's ambient viscosity with respect to surrounding fluid
- * 8) cell-surface friction coefficient
+ * 4) cell length (excluding caps)
+ * 5) half of cell length (excluding caps)
+ * 6) timepoint at which the cell was formed
+ * 7) cell growth rate
+ * 8) cell's ambient viscosity with respect to surrounding fluid
+ * 9) cell-surface friction coefficient
  *
  * Authors:
  *     Kee-Myoung Nam
@@ -32,7 +33,10 @@
 using namespace Eigen;
 
 // Define floating-point type to be used 
-typedef double T; 
+typedef double T;
+
+// Upper bound on daughter cell orientation angle 
+const double theta_bound = boost::math::constants::pi<double>() / 90; 
 
 int main(int argc, char** argv)
 {
@@ -120,16 +124,21 @@ int main(int argc, char** argv)
     // Maximum number of attempts to control stepsize per iteration 
     int max_tries = 3;
 
+    // Minimum error 
+    T min_error = static_cast<T>(1e-30); 
+
     // Initialize simulation ...
     //
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
     // with mean growth rate and default viscosity and friction coefficients
-    boost::random::mt19937 rng(1234567890);
+    boost::random::mt19937 rng(std::stoi(argv[3]));
     T t = 0; 
     int i = 0;
     int n = 1;
-    Array<T, Dynamic, Dynamic> cells(n, 9);
-    cells << 0, 0, 1, 0, L0, 0, growth_mean, eta_ambient, eta_surface;
+    Array<T, Dynamic, Dynamic> cells(n, 10);
+    cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface;
+    Array<T, Dynamic, 4> velocities(n, 4);
+    velocities << 0, 0, 0, 0;
     
     // Compute initial array of neighboring cells (should be empty)
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
@@ -146,6 +155,9 @@ int main(int argc, char** argv)
     {
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
+        if (to_divide.sum() > 0)
+            std::cout << "... Dividing " << to_divide.sum() << " cells (iteration " << i
+                      << ")" << std::endl;
         cells = divideCells<T>(
             cells, t, R, Rcell, to_divide, growth_dist_func, rng,
             daughter_length_dist_func, daughter_angle_dist_func
@@ -160,14 +172,15 @@ int main(int argc, char** argv)
             A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
             surface_contact_density
         ); 
-        Array<T, Dynamic, Dynamic> cells_new = result.first; 
-        Array<T, Dynamic, 4> errors = result.second;
+        Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
+        Array<T, Dynamic, 4> errors = std::get<1>(result);
+        Array<T, Dynamic, 4> velocities_new = std::get<2>(result);
 
         // If the error is big, retry the step with a smaller stepsize (up to
         // a given maximum number of attempts)
         if (i % iter_update_stepsize == 0)
         {
-            T max_error = std::max(errors.abs().maxCoeff(), 1e-100); 
+            T max_error = std::max(errors.abs().maxCoeff(), min_error); 
             int j = 0; 
             while (max_error > 1e-8 && j < max_tries)
             {
@@ -176,9 +189,10 @@ int main(int argc, char** argv)
                     A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
                     surface_contact_density
                 ); 
-                cells_new = result.first; 
-                errors = result.second;
-                max_error = std::max(errors.abs().maxCoeff(), 1e-100); 
+                cells_new = std::get<0>(result);
+                errors = std::get<1>(result);
+                velocities_new = std::get<2>(result);
+                max_error = std::max(errors.abs().maxCoeff(), min_error);
                 j++;  
             }
             // If the error is small, increase the stepsize up to a maximum stepsize
@@ -186,6 +200,7 @@ int main(int argc, char** argv)
                 dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-5);
         }
         cells = cells_new;
+        velocities = velocities_new;
 
         // Grow the cells
         growCells<T>(cells, dt, R);
