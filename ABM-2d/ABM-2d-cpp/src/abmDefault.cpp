@@ -16,7 +16,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/26/2023
+ *     1/16/2024
  */
 
 #include <iostream>
@@ -74,8 +74,15 @@ int main(int argc, char** argv)
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
 
-    // Surface contact area density 
+    // Surface contact area density and powers of cell radius  
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
+    const T sqrtR = std::sqrt(R); 
+    const T powRdiff = std::pow(R - Rcell, 1.5);
+    Array<T, 4, 1> cell_cell_prefactors; 
+    cell_cell_prefactors << 2.5 * sqrtR,
+                            2.5 * E0 * sqrtR,
+                            E0 * powRdiff,
+                            Ecell;
 
     // Growth rate distribution function: normal distribution with given mean
     // and standard deviation
@@ -101,7 +108,10 @@ int main(int argc, char** argv)
     std::function<T(boost::random::mt19937&)> daughter_angle_dist_func =
         [&orientation_conc, &uniform_dist](boost::random::mt19937& rng)
         {
-            return vonMises(0.0, orientation_conc, rng, uniform_dist); 
+            T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
+            while (theta > theta_bound || theta < -theta_bound)
+                theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
+            return theta;
         };
 
     // Output file prefix
@@ -137,8 +147,8 @@ int main(int argc, char** argv)
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
         cells = divideCells<T>(
-            cells, t, R, to_divide, growth_dist_func, rng, daughter_length_dist_func,
-            daughter_angle_dist_func
+            cells, t, R, Rcell, to_divide, growth_dist_func, rng,
+            daughter_length_dist_func, daughter_angle_dist_func
         );
 
         // Update the neighboring cells if division has occurred
@@ -147,7 +157,7 @@ int main(int argc, char** argv)
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-            A, b, bs, cells, neighbors, dt, R, Rcell, E0, Ecell,
+            A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
             surface_contact_density
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first; 
@@ -163,7 +173,7 @@ int main(int argc, char** argv)
             {
                 dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-                    A, b, bs, cells, neighbors, dt, R, Rcell, E0, Ecell,
+                    A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
                     surface_contact_density
                 ); 
                 cells_new = result.first; 
