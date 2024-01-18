@@ -25,7 +25,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/12/2024
+ *     1/18/2024
  */
 
 #ifndef BIOFILM_CELL_GROWTH_3D_HPP
@@ -265,14 +265,14 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 //       sin_theta1(i),  cos_theta1(i); 
                 //cells_total(idx_divide[i], Eigen::seq(2, 3)) =
                 //    (rot * dividing_orientations.matrix().row(i).transpose()).array();
-                cells_total(idx_divide[i], Eigen::seq(3, 5)) = rotate(
+                cells_total(idx_divide[i], Eigen::seq(3, 5)) = rotate<T>(
                     dividing_orientations.row(i).transpose(), theta1(i), theta1(i), theta1(i)
                 );
                 //rot << cos_theta2(i), -sin_theta2(i),
                 //       sin_theta2(i),  cos_theta2(i); 
                 //new_cells(i, Eigen::seq(2, 3)) =
                 //    (rot * dividing_orientations.matrix().row(i).transpose()).array();
-                new_cells(i, Eigen::seq(3, 5)) = rotate(
+                new_cells(i, Eigen::seq(3, 5)) = rotate<T>(
                     dividing_orientations.row(i).transpose(), theta2(i), theta2(i), theta2(i)
                 ); 
             }
@@ -564,14 +564,14 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 //       sin_theta1(i),  cos_theta1(i); 
                 //cells_total(idx_divide[i], Eigen::seq(2, 3)) =
                 //    (rot * dividing_orientations.matrix().row(i).transpose()).array();
-                cells_total(idx_divide[i], Eigen::seq(3, 5)) = rotate(
+                cells_total(idx_divide[i], Eigen::seq(3, 5)) = rotate<T>(
                     dividing_orientations.row(i).transpose(), theta1(i), theta1(i), theta1(i)
                 );
                 //rot << cos_theta2(i), -sin_theta2(i),
                 //       sin_theta2(i),  cos_theta2(i); 
                 //new_cells(i, Eigen::seq(2, 3)) =
                 //    (rot * dividing_orientations.matrix().row(i).transpose()).array();
-                new_cells(i, Eigen::seq(3, 5)) = rotate(
+                new_cells(i, Eigen::seq(3, 5)) = rotate<T>(
                     dividing_orientations.row(i).transpose(), theta2(i), theta2(i), theta2(i)
                 ); 
             }

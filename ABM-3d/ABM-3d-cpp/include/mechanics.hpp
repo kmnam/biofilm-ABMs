@@ -25,7 +25,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/9/2024
+ *     1/18/2024
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -398,6 +398,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
  *                     each cell is zero. 
  * @returns The 6x6 matrix defined above (flattened) for each cell. 
  */
+template <typename T>
 Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
                                              const T l, const T half_l,
                                              const T eta0, const T eta1,
@@ -734,7 +735,7 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         b(5) = -dEdq_cell(i, 5) - dEdq_surface_repulsion(i, 1) - dEdq_surface_adhesion(i, 1);
 
         // Solve the corresponding linear system
-        Array<T, 7, 1> x = A.colPivHouseholderQr().solve(b);
+        Array<T, 7, 1> x = A.matrix().colPivHouseholderQr().solve(b.matrix()).array();
         velocities.row(i) = x.head(6);
     }
 
