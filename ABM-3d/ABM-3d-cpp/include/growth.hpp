@@ -268,13 +268,15 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 cells_total(idx_divide[i], Eigen::seq(3, 5)) = rotate<T>(
                     dividing_orientations.row(i).transpose(), theta1(i), theta1(i), theta1(i)
                 );
+                std::cout << cells_total(idx_divide[i], Eigen::seq(3, 5)) << std::endl;    // TODO
                 //rot << cos_theta2(i), -sin_theta2(i),
                 //       sin_theta2(i),  cos_theta2(i); 
                 //new_cells(i, Eigen::seq(2, 3)) =
                 //    (rot * dividing_orientations.matrix().row(i).transpose()).array();
                 new_cells(i, Eigen::seq(3, 5)) = rotate<T>(
                     dividing_orientations.row(i).transpose(), theta2(i), theta2(i), theta2(i)
-                ); 
+                );
+                std::cout << new_cells(i, Eigen::seq(3, 5)) << std::endl;    // TODO
             }
 
             // Update cell lengths and positions ... 
@@ -308,23 +310,33 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             // for the daughter cell centers
             Array<T, Dynamic, 1> delta1 = L1 / 2 + R; 
             Array<T, Dynamic, 1> delta2 = L2 / 2 + R;
+            std::cout << delta1 << std::endl; 
+            std::cout << delta2 << std::endl;    // TODO
             // Define daughter cell lengths and locate daughter cell centers
             cells_total(idx_divide, 6) = L1; 
             cells_total(idx_divide, 7) = L1 / 2;
             new_cells.col(6) = L2;
             new_cells.col(7) = L2 / 2;
+            std::cout << new_cells.col(6) << std::endl;
+            std::cout << new_cells.col(7) << std::endl;    // TODO 
             cells_total(idx_divide, 0) = (
                 cells_total(idx_divide, 0) + (div - delta1) * cells_total(idx_divide, 3)
             );
+            std::cout << cells_total(idx_divide, 0) << std::endl;   // TODO
             new_cells.col(0) = new_cells.col(0) + (div + delta2) * new_cells.col(3);
+            std::cout << new_cells.col(0) << std::endl;    // TODO
             cells_total(idx_divide, 1) = (
                 cells_total(idx_divide, 1) + (div - delta1) * cells_total(idx_divide, 4)
             );
+            std::cout << cells_total(idx_divide, 1) << std::endl;   // TODO
             new_cells.col(1) = new_cells.col(1) + (div + delta2) * new_cells.col(4);
+            std::cout << new_cells.col(1) << std::endl;    // TODO
             cells_total(idx_divide, 2) = (
                 cells_total(idx_divide, 2) + (div - delta1) * cells_total(idx_divide, 5)
             );
+            std::cout << cells_total(idx_divide, 2) << std::endl;   // TODO
             new_cells.col(2) = new_cells.col(2) + (div + delta2) * new_cells.col(5);
+            std::cout << new_cells.col(2) << std::endl;    // TODO
 
             // Update cell birth times
             cells_total(idx_divide, 8) = t;
