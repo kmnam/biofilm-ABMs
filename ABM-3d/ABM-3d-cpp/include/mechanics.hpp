@@ -25,7 +25,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/18/2024
+ *     1/20/2024
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -238,7 +238,8 @@ std::tuple<Matrix<T, 3, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 3, 
  * Compute the derivatives of the cell-surface repulsion energy for each cell
  * with respect to the cell's z-position and z-orientation.
  *
- * @param cells Existing population of cells. 
+ * @param cells Existing population of cells.
+ * @param ss Cell-body coordinates at which each cell-surface overlap is zero. 
  * @param R Cell radius.
  * @param E0 Elastic modulus of EPS. 
  * @param nz_threshold Threshold for determining whether the z-orientation of 
@@ -246,6 +247,7 @@ std::tuple<Matrix<T, 3, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 3, 
  */
 template <typename T>
 Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                                const Ref<const Array<T, Dynamic, 1> >& ss,
                                                 const T R, const T E0,
                                                 const T nz_threshold)
 {
@@ -261,7 +263,10 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
         // If the z-coordinate of the cell's orientation is zero ... 
         if (abs_nz(i) < nz_threshold)
         {
-            dEdq(i, 0) = -prefactor0 * (R - cells(i, 2)) * cells(i, 6);
+            T phi = R - cells(i, 2);
+            // dEdq(i, 0) is nonzero if phi > 0
+            if (phi > 0)
+                dEdq(i, 0) = -prefactor0 * phi * cells(i, 6);
             // dEdq(i, 1) is zero 
         }
         // Otherwise ...
@@ -270,16 +275,16 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
             // Compute the derivative of the cell-surface repulsion energy 
             // with respect to z-position
             T nz2 = cells(i, 5) * cells(i, 5);
-            T int1 = integral1(cells(i, 2), cells(i, 5), cells(i, 7), R, 1.0);
-            T int2 = integral1(cells(i, 2), cells(i, 5), cells(i, 7), R, 0.5);
+            T int1 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
+            T int2 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
             dEdq(i, 0) = -prefactor0 * ((1 - nz2) * int1 + std::pow(R, 0.5) * nz2 * int2);
 
             // Compute the derivative of the cell-surface repulsion energy 
             // with respect to z-orientation
-            T int3 = integral1(cells(i, 2), cells(i, 5), cells(i, 7), R, 2.0);
-            T int4 = integral2(cells(i, 2), cells(i, 5), cells(i, 7), R, 1.0);
-            T int5 = integral1(cells(i, 2), cells(i, 5), cells(i, 7), R, 1.5);
-            T int6 = integral2(cells(i, 2), cells(i, 5), cells(i, 7), R, 0.5);
+            T int3 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 2.0, ss(i));
+            T int4 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
+            T int5 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.5, ss(i));
+            T int6 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
             dEdq(i, 1) -= prefactor0 * cells(i, 5) * int3;
             dEdq(i, 1) -= prefactor0 * (1 - nz2) * int4; 
             dEdq(i, 1) += prefactor1 * cells(i, 5) * int5;
@@ -294,7 +299,8 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
  * Compute the derivatives of the cell-surface adhesion energy for each cell 
  * with respect to the cell's z-position and z-orientation. 
  *
- * @param cells Existing population of cells. 
+ * @param cells Existing population of cells.
+ * @param ss Cell-body coordinates at which each cell-surface overlap is zero. 
  * @param R Cell radius.
  * @param adhesion_energy_density Cell-surface adhesion energy density.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
@@ -302,6 +308,7 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
  */
 template <typename T>
 Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                               const Ref<const Array<T, Dynamic, 1> >& ss,
                                                const T R,
                                                const T adhesion_energy_density, 
                                                const T nz_threshold)
@@ -311,14 +318,17 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
 
     // For each cell ...
     const T prefactor0 = adhesion_energy_density * std::pow(R, 0.5) / 2;
-    const T prefactor1 = adhesion_energy_density * boost::math::constants::pi<T>() * R;
-    const T prefactor2 = adhesion_energy_density * std::pow(R, 0.5) * 2;
+    const T prefactor1 = 2 * adhesion_energy_density * boost::math::constants::pi<T>() * R;
+    const T prefactor2 = 2 * adhesion_energy_density * std::pow(R, 0.5);
     for (int i = 0; i < cells.rows(); ++i)
     {
         // If the z-coordinate of the cell's orientation is zero ... 
         if (abs_nz(i) < nz_threshold)
         {
-            dEdq(i, 0) = prefactor0 * cells(i, 6) / std::pow(R - cells(i, 2), 0.5);
+            T phi = R - cells(i, 2);
+            // dEdq(i, 0) is nonzero if phi > 0
+            if (phi > 0)
+                dEdq(i, 0) = prefactor0 * cells(i, 6) / std::pow(phi, 0.5);
             // dEdq(i, 1) is zero 
         }
         // Otherwise ... 
@@ -327,41 +337,17 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             // Compute the derivative of the cell-surface adhesion energy 
             // with respect to z-position
             T nz2 = cells(i, 5) * cells(i, 5);
-            T overlap1 = R - cells(i, 2) + cells(i, 5) * cells(i, 7);
-            T overlap2 = R - cells(i, 2) - cells(i, 5) * cells(i, 7);
-            T int1 = integral1(cells(i, 2), cells(i, 5), cells(i, 7), R, -0.5);
-            T c = 0;
-            if (overlap2 >= 0 && overlap1 < 0)
-                c = -1;
-            else if (overlap2 < 0 && overlap1 >= 0)
-                c = 1;
-            dEdq(i, 0) = prefactor0 * (1 - nz2) * int1 + prefactor1 * cells(i, 5) * c;
+            T int1 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
+            dEdq(i, 0) = prefactor0 * (1 - nz2) * int1;
 
             // Compute the derivative of the cell-surface adhesion energy
             // with respect to z-orientation
-            T int2 = integral1(cells(i, 2), cells(i, 5), cells(i, 7), R, 0.5);
-            T int3 = integral2(cells(i, 2), cells(i, 5), cells(i, 7), R, -0.5);
-            T b = 0;
-            T d = 0;
-            if (overlap2 >= 0 && overlap1 < 0)
-            {
-                b = overlap2;
-                d = -cells(i, 7);
-            }
-            else if (overlap2 < 0 && overlap1 >= 0)
-            {
-                b = overlap1;
-                d = -cells(i, 7); 
-            }
-            else if (overlap2 >= 0 && overlap1 >= 0)
-            {
-                b = overlap2 - overlap1;
-                d = -cells(i, 6);
-            }
-            dEdq(i, 1) = prefactor2 * cells(i, 5) * int2;
+            T int2 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
+            T int3 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
+            T int4 = integral4(cells(i, 2), cells(i, 5), R, cells(i, 7), ss(i));
+            dEdq(i, 1) += prefactor2 * cells(i, 5) * int2;
             dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
-            dEdq(i, 1) += prefactor1 * b;
-            dEdq(i, 1) += prefactor1 * cells(i, 5) * d;
+            dEdq(i, 1) -= prefactor1 * cells(i, 5) * int4;
         }
     }
 
@@ -391,6 +377,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
  * @param nz z-orientation of given cell.
  * @param l Length of given cell.
  * @param half_l Half-length of given cell.
+ * @param ss Cell-body coordinate at which cell-surface overlap is zero.
  * @param eta0 Ambient viscosity of given cell.
  * @param eta1 Surface friction coefficient of given cell.
  * @param R Cell radius.
@@ -401,8 +388,9 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
 template <typename T>
 Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
                                              const T l, const T half_l,
-                                             const T eta0, const T eta1,
-                                             const T R, const T nz_threshold)
+                                             const T ss, const T eta0,
+                                             const T eta1, const T R,
+                                             const T nz_threshold)
 {
     Array<T, 6, 6> M = Array<T, 6, 6>::Zero(6, 6);
     
@@ -412,16 +400,26 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
     T term3, term4, term5;
     if (abs_nz < nz_threshold)
     {
-        T prefactor = std::pow(R, 0.5) * std::pow(R - rz, 0.5);
-        term3 = prefactor * l;
-        term4 = 0;
-        term5 = prefactor * l * l * l / 12;
+        T phi = R - rz; 
+        if (phi > R - rz)
+        {
+            T prefactor = std::pow(R * phi, 0.5);
+            term3 = prefactor * l; 
+            term4 = 0;
+            term5 = prefactor * l * l * l / 12; 
+        }
+        else
+        {
+            term3 = 0;
+            term4 = 0;
+            term5 = 0;
+        }
     }
     else
     {
-        term3 = (eta1 / R) * areaIntegral1(rz, nz, half_l, R); 
-        term4 = (eta1 / R) * areaIntegral2(rz, nz, half_l, R);
-        term5 = (eta1 / R) * areaIntegral3(rz, nz, half_l, R);
+        term3 = (eta1 / R) * areaIntegral1(rz, nz, R, half_l, ss); 
+        term4 = (eta1 / R) * areaIntegral2(rz, nz, R, half_l, ss);
+        term5 = (eta1 / R) * areaIntegral3(rz, nz, R, half_l, ss);
     }
     M(0, 0) = term1 + term3;
     M(0, 3) = term4;
@@ -694,17 +692,65 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     int n = cells.rows(); 
     Array<T, Dynamic, 6> velocities = Array<T, Dynamic, 6>::Zero(n, 6);
 
+    // Get cell-body coordinates at which cell-surface overlap is zero for 
+    // each cell
+    Array<T, Dynamic, 1> abs_nz = cells(Eigen::all, 5).abs();
+    Array<T, Dynamic, 1> ss(n); 
+    for (int i = 0; i < n; ++i)
+    {
+        if (abs_nz(i) < nz_threshold)
+            ss(i) = std::numeric_limits<T>::quiet_NaN();
+        else
+            ss(i) = sstar(cells(i, 2), cells(i, 5), R); 
+    }
+    //if (cells.rows() >= 3)    // TODO
+    //{
+    //    std::cout << cells << std::endl; 
+    //    std::cout << ss << std::endl;
+    //} 
+
     // Get the derivatives of the cell-cell interaction energy, cell-surface
     // repulsion energy, and cell-surface adhesion energy for each cell 
     Array<T, Dynamic, 6> dEdq_cell = cellCellForcesFromNeighbors<T>(
         cells, neighbors, R, Rcell, cell_cell_prefactors 
     );
     Array<T, Dynamic, 2> dEdq_surface_repulsion = cellSurfaceRepulsionForces<T>(
-        cells, R, E0, nz_threshold
+        cells, ss, R, E0, nz_threshold
     );
     Array<T, Dynamic, 2> dEdq_surface_adhesion = cellSurfaceAdhesionForces<T>(
-        cells, R, adhesion_energy_density, nz_threshold
+        cells, ss, R, adhesion_energy_density, nz_threshold
     );
+    /*
+    if (cells.rows() >= 3)    // TODO
+    {
+        std::cout << dEdq_cell << std::endl;
+        for (int i = 0; i < n; ++i)
+        {
+            std::cout << cells(i, 2) << " " << cells(i, 5) << " " << R << " "
+                      << cells(i, 7) << " " << ss(i) << std::endl;
+            T int1 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
+            T int2 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
+            T int3 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 2.0, ss(i));
+            T int4 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
+            T int5 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.5, ss(i));
+            T int6 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
+            std::cout << "rep " << int1 << " " << int2 << " " << int3 << " "
+                      << int4 << " " << int5 << " " << int6 << std::endl;
+        }
+        std::cout << dEdq_surface_repulsion << std::endl;
+        for (int i = 0; i < n; ++i)
+        {
+            std::cout << cells(i, 2) << " " << cells(i, 5) << " " << R << " "
+                      << cells(i, 7) << " " << ss(i) << std::endl;
+            T int1 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
+            T int2 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
+            T int3 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
+            T int4 = integral4(cells(i, 2), cells(i, 5), R, cells(i, 7), ss(i));
+            std::cout << "adh " << int1 << " " << int2 << " " << int3 << " " << int4 << std::endl;
+        }
+        std::cout << dEdq_surface_adhesion << std::endl;
+    }
+    */
 
     // For each cell ... 
     for (int i = 0; i < n; ++i)
@@ -715,7 +761,7 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         // Compute the derivatives of the dissipation with respect to the 
         // cell's translational and orientational velocities 
         A(Eigen::seq(0, 5), Eigen::seq(0, 5)) = compositeViscosityForceMatrix<T>(
-            cells(i, 2), cells(i, 5), cells(i, 6), cells(i, 7),
+            cells(i, 2), cells(i, 5), cells(i, 6), cells(i, 7), ss(i),
             cells(i, 10), cells(i, 11), R, nz_threshold
         );
         A(3, 6) = -2 * cells(i, 3); 
@@ -743,7 +789,8 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
 }
 
 /**
- * Normalize the orientation vectors of all cells in the given population.
+ * Normalize the orientation vectors of all cells in the given population,
+ * and redirect all orientation vectors with positive z-coordinate.
  *
  * The given array of cell data is updated in place.  
  *
@@ -757,6 +804,16 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
     cells.col(3) /= norms; 
     cells.col(4) /= norms;
     cells.col(5) /= norms;
+
+    for (int i = 0; i < cells.rows(); ++i)
+    {
+        if (cells(i, 5) > 0)
+        {
+            cells(i, 3) *= -1;
+            cells(i, 4) *= -1;
+            cells(i, 5) *= -1;
+        }
+    }
 }
 
 /**
@@ -817,7 +874,8 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
         for (int j = 0; j < i; ++j)
             multipliers += velocities[j] * A(i, j);
         Array<T, Dynamic, Dynamic> cells_i(cells); 
-        cells_i(Eigen::all, Eigen::seq(0, 5)) += multipliers * dt; 
+        cells_i(Eigen::all, Eigen::seq(0, 5)) += multipliers * dt;
+        normalizeOrientations<T>(cells_i);    // Renormalize orientations after each modification
         velocities.push_back(
             getVelocitiesFromNeighbors<T>(
                 cells_i, neighbors, R, Rcell, cell_cell_prefactors, E0,
