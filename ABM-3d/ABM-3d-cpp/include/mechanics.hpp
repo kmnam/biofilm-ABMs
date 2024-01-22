@@ -25,7 +25,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/20/2024
+ *     1/22/2024
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -662,7 +662,9 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  * @param E0 Elastic modulus of EPS.
  * @param adhesion_energy_density Cell-surface adhesion energy density.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
- *                     each cell is zero. 
+ *                     each cell is zero.
+ * @param rng Random number generator.
+ * @param noise_dist Function instance specifying the noise distribution.  
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -672,7 +674,9 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
                                                 const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                                 const T E0,
                                                 const T adhesion_energy_density,
-                                                const T nz_threshold)
+                                                const T nz_threshold,
+                                                boost::random::mt19937& rng,
+                                                std::function<T(boost::random::mt19937&)>& noise_dist)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -773,12 +777,12 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
 
         // Extract the derivatives of the cell-cell interaction energy, 
         // cell-surface repulsion energy, and cell-surface adhesion energy
-        b(0) = -dEdq_cell(i, 0);
-        b(1) = -dEdq_cell(i, 1); 
-        b(2) = -dEdq_cell(i, 2) - dEdq_surface_repulsion(i, 0) - dEdq_surface_adhesion(i, 0);
-        b(3) = -dEdq_cell(i, 3);
-        b(4) = -dEdq_cell(i, 4); 
-        b(5) = -dEdq_cell(i, 5) - dEdq_surface_repulsion(i, 1) - dEdq_surface_adhesion(i, 1);
+        b(0) = -dEdq_cell(i, 0) - noise_dist(rng);
+        b(1) = -dEdq_cell(i, 1) - noise_dist(rng); 
+        b(2) = -dEdq_cell(i, 2) - dEdq_surface_repulsion(i, 0) - dEdq_surface_adhesion(i, 0) - noise_dist(rng);
+        b(3) = -dEdq_cell(i, 3) - noise_dist(rng);
+        b(4) = -dEdq_cell(i, 4) - noise_dist(rng); 
+        b(5) = -dEdq_cell(i, 5) - dEdq_surface_repulsion(i, 1) - dEdq_surface_adhesion(i, 1) - noise_dist(rng);
 
         // Solve the corresponding linear system
         Array<T, 7, 1> x = A.matrix().colPivHouseholderQr().solve(b.matrix()).array();
@@ -856,7 +860,9 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
                                         const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                         const T E0,
                                         const T adhesion_energy_density,
-                                        const T nz_threshold)
+                                        const T nz_threshold,
+                                        boost::random::mt19937& rng,
+                                        std::function<T(boost::random::mt19937&)>& noise_dist)
 {
     // Compute velocities at given partial timesteps 
     int n = cells.rows(); 
@@ -865,7 +871,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
     velocities.push_back(
         getVelocitiesFromNeighbors<T>(
             cells, neighbors, R, Rcell, cell_cell_prefactors, E0,
-            adhesion_energy_density, nz_threshold
+            adhesion_energy_density, nz_threshold, rng, noise_dist
         )
     );
     for (int i = 1; i < s; ++i)
@@ -879,7 +885,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
         velocities.push_back(
             getVelocitiesFromNeighbors<T>(
                 cells_i, neighbors, R, Rcell, cell_cell_prefactors, E0,
-                adhesion_energy_density, nz_threshold
+                adhesion_energy_density, nz_threshold, rng, noise_dist
             )
         );
     }
