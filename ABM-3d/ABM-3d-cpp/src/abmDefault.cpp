@@ -19,7 +19,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/21/2024
+ *     1/22/2024
  */
 
 #include <iostream>
@@ -57,6 +57,10 @@ const T min_dist = static_cast<T>(1e-8);
 
 // Zero threshold for z-orientation
 const T nz_threshold = static_cast<T>(1e-8);
+
+// Maximum noise to be added/subtracted from net force acting on each 
+// cell along each dimension 
+const T max_noise = static_cast<T>(1e-4);
 
 int main(int argc, char** argv)
 {
@@ -137,6 +141,13 @@ int main(int argc, char** argv)
             return theta;
         };
 
+    // Net force noise distribution: uniform distribution centered at zero
+    std::function<T(boost::random::mt19937&)> noise_dist_func =
+        [&uniform_dist](boost::random::mt19937& rng)
+        {
+            return -max_noise + 2 * max_noise * uniform_dist(rng);
+        };
+
     // Output file prefix
     std::string prefix = argv[2];
 
@@ -149,7 +160,7 @@ int main(int argc, char** argv)
     int i = 0;
     int n = 1;
     Array<T, Dynamic, Dynamic> cells(n, 12);
-    cells << 0, 0, 0, 1, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface;
+    cells << 0, 0, R, 1, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface;
     Array<T, Dynamic, 6> velocities(n, 6);
     velocities << 0, 0, 0, 0, 0, 0;
     
@@ -192,7 +203,7 @@ int main(int argc, char** argv)
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
             A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-            E0, sigma0, nz_threshold
+            E0, sigma0, nz_threshold, rng, noise_dist_func
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 6> errors = std::get<1>(result);
@@ -209,7 +220,7 @@ int main(int argc, char** argv)
                 dt *= std::pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
                     A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-                    E0, sigma0, nz_threshold
+                    E0, sigma0, nz_threshold, rng, noise_dist_func
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
