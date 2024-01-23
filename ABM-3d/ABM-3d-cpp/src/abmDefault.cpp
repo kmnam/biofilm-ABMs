@@ -19,7 +19,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/22/2024
+ *     1/23/2024
  */
 
 #include <iostream>
@@ -37,9 +37,6 @@ using namespace Eigen;
 // Define floating-point type to be used 
 typedef double T;
 
-// Upper bound on daughter cell orientation angle 
-const double theta_bound = boost::math::constants::pi<double>() / 90;
-
 // Maximum number of attempts to control stepsize per Runge-Kutta iteration 
 const int max_tries = 3;
 
@@ -50,17 +47,13 @@ const T min_error = static_cast<T>(1e-30);
 const T max_error_allowed = static_cast<T>(1e-8);
 
 // Maximum stepsize
-const T max_stepsize = static_cast<T>(1e-5); 
+const T max_stepsize = static_cast<T>(1e-6); 
 
 // Minimum distance between neighboring cells
 const T min_dist = static_cast<T>(1e-8);
 
 // Zero threshold for z-orientation
 const T nz_threshold = static_cast<T>(1e-8);
-
-// Maximum noise to be added/subtracted from net force acting on each 
-// cell along each dimension 
-const T max_noise = static_cast<T>(1e-4);
 
 int main(int argc, char** argv)
 {
@@ -101,6 +94,8 @@ int main(int argc, char** argv)
     const int n_cells = json_data["n_cells"].as_int64();
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
+    const T theta_bound = static_cast<T>(json_data["max_orientation_angle"].as_double());
+    const T max_noise = static_cast<T>(json_data["max_noise"].as_double());
 
     // Prefactors for cell-cell interaction forces
     const T sqrtR = std::sqrt(R); 
@@ -160,7 +155,7 @@ int main(int argc, char** argv)
     int i = 0;
     int n = 1;
     Array<T, Dynamic, Dynamic> cells(n, 12);
-    cells << 0, 0, R, 1, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface;
+    cells << 0, 0, 0.99 * R, 1, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface;
     Array<T, Dynamic, 6> velocities(n, 6);
     velocities << 0, 0, 0, 0, 0, 0;
     
@@ -184,7 +179,6 @@ int main(int argc, char** argv)
             std::cout << "... Dividing " << to_divide.sum() << " cells (iteration " << i
                       << ")" << std::endl;
             std::cout << cells << std::endl;
-            std::cout << neighbors << std::endl;
         }
         cells = divideCells<T>(
             cells, t, R, Rcell, to_divide, growth_dist_func, rng,
@@ -197,7 +191,6 @@ int main(int argc, char** argv)
             normalizeOrientations<T>(cells);
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             std::cout << cells << std::endl;        // TODO
-            std::cout << neighbors << std::endl;    // TODO
         }
 
         // Update cell positions and orientations 
