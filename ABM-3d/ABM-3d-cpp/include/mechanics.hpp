@@ -859,13 +859,11 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
                                         std::function<T(boost::random::mt19937&)>& noise_dist)
 {
     // Determine noise to add to each generalized force at each timestep
-    Array<T, 6, 1> noise = Array<T, 6, 1>::Zero(); 
-    for (int i = 0; i < 6; ++i)
-    {
-        // If there is only one cell, add zero noise 
-        if (cells.rows() > 1)
-            noise(i) = noise_dist(rng);
-    }
+    Array<T, 6, 1> noise;
+    if (cells.rows() == 1
+        noise = Array<T, 6, 1>::Zero();
+    else
+        noise = noise_dist(rng) * Array<T, 6, 1>::Ones();
 
     // Compute velocities at given partial timesteps 
     int n = cells.rows(); 
