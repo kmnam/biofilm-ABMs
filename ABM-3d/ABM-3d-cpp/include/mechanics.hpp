@@ -663,8 +663,7 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  * @param adhesion_energy_density Cell-surface adhesion energy density.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero.
- * @param rng Random number generator.
- * @param noise_dist Function instance specifying the noise distribution.  
+ * @param noise Pre-determined noise values to add to each generalized force.
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -674,9 +673,8 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
                                                 const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                                 const T E0,
                                                 const T adhesion_energy_density,
-                                                const T nz_threshold,
-                                                boost::random::mt19937& rng,
-                                                std::function<T(boost::random::mt19937&)>& noise_dist)
+                                                const T nz_threshold, 
+                                                const Ref<const Array<T, 6, 1> >& noise)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -707,12 +705,7 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         else
             ss(i) = sstar(cells(i, 2), cells(i, 5), R); 
     }
-    //if (cells.rows() >= 3)    // TODO
-    //{
-    //    std::cout << cells << std::endl; 
-    //    std::cout << ss << std::endl;
-    //} 
-
+    
     // Get the derivatives of the cell-cell interaction energy, cell-surface
     // repulsion energy, and cell-surface adhesion energy for each cell 
     Array<T, Dynamic, 6> dEdq_cell = cellCellForcesFromNeighbors<T>(
@@ -777,12 +770,13 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
 
         // Extract the derivatives of the cell-cell interaction energy, 
         // cell-surface repulsion energy, and cell-surface adhesion energy
-        b(0) = -dEdq_cell(i, 0) - noise_dist(rng);
-        b(1) = -dEdq_cell(i, 1) - noise_dist(rng); 
-        b(2) = -dEdq_cell(i, 2) - dEdq_surface_repulsion(i, 0) - dEdq_surface_adhesion(i, 0) - noise_dist(rng);
-        b(3) = -dEdq_cell(i, 3) - noise_dist(rng);
-        b(4) = -dEdq_cell(i, 4) - noise_dist(rng); 
-        b(5) = -dEdq_cell(i, 5) - dEdq_surface_repulsion(i, 1) - dEdq_surface_adhesion(i, 1) - noise_dist(rng);
+        b(0) = -dEdq_cell(i, 0);
+        b(1) = -dEdq_cell(i, 1);
+        b(2) = -dEdq_cell(i, 2) - dEdq_surface_repulsion(i, 0) - dEdq_surface_adhesion(i, 0);
+        b(3) = -dEdq_cell(i, 3);
+        b(4) = -dEdq_cell(i, 4);
+        b(5) = -dEdq_cell(i, 5) - dEdq_surface_repulsion(i, 1) - dEdq_surface_adhesion(i, 1);
+        b(Eigen::seq(0, 5)) += noise;
 
         // Solve the corresponding linear system
         Array<T, 7, 1> x = A.matrix().colPivHouseholderQr().solve(b.matrix()).array();
@@ -864,6 +858,15 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
                                         boost::random::mt19937& rng,
                                         std::function<T(boost::random::mt19937&)>& noise_dist)
 {
+    // Determine noise to add to each generalized force at each timestep
+    Array<T, 6, 1> noise = Array<T, 6, 1>::Zero(); 
+    for (int i = 0; i < 6; ++i)
+    {
+        // If there is only one cell, add zero noise 
+        if (cells.rows() > 1)
+            noise(i) = noise_dist(rng);
+    }
+
     // Compute velocities at given partial timesteps 
     int n = cells.rows(); 
     int s = b.size(); 
@@ -871,7 +874,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
     velocities.push_back(
         getVelocitiesFromNeighbors<T>(
             cells, neighbors, R, Rcell, cell_cell_prefactors, E0,
-            adhesion_energy_density, nz_threshold, rng, noise_dist
+            adhesion_energy_density, nz_threshold, noise
         )
     );
     for (int i = 1; i < s; ++i)
@@ -885,7 +888,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
         velocities.push_back(
             getVelocitiesFromNeighbors<T>(
                 cells_i, neighbors, R, Rcell, cell_cell_prefactors, E0,
-                adhesion_energy_density, nz_threshold, rng, noise_dist
+                adhesion_energy_density, nz_threshold, noise
             )
         );
     }
