@@ -126,15 +126,23 @@ int main(int argc, char** argv)
 
     // Daughter angle distribution function: von Mises distribution with 
     // mean 0 and given concentration parameter
-    boost::random::uniform_01<> uniform_dist;  
-    std::function<T(boost::random::mt19937&)> daughter_angle_dist_func =
-        [&orientation_conc, &uniform_dist, &theta_bound](boost::random::mt19937& rng)
-        {
-            T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
-            while (theta > theta_bound || theta < -theta_bound)
-                theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
-            return theta;
-        };
+    boost::random::uniform_01<> uniform_dist; 
+    std::function<T(boost::random::mt19937&)> daughter_angle_dist_func;
+    if (theta_bound == 0.0)
+    {
+        daughter_angle_dist_func = [](boost::random::mt19937& rng){ return 0; };
+    }
+    else
+    {
+        daughter_angle_dist_func = 
+            [&orientation_conc, &uniform_dist, &theta_bound](boost::random::mt19937& rng)
+            {
+                T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
+                while (theta > theta_bound || theta < -theta_bound)
+                    theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
+                return theta;
+            };
+    }
 
     // Net force noise distribution: uniform distribution centered at zero
     std::function<T(boost::random::mt19937&)> noise_dist_func =
