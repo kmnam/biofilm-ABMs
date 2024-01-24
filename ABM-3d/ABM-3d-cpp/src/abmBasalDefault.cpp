@@ -246,9 +246,9 @@ int main(int argc, char** argv)
             if (max_overlaps(j) > 0)
                 overlap_idx.push_back(j);
         }
-        if (overlap_idx.size() > 0)
+        if (overlap_idx.size() < cells.rows())
         {
-            cells = cells(overlap_idx, Eigen::all);
+            cells = cells(overlap_idx, Eigen::all).eval();
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
         }
 
