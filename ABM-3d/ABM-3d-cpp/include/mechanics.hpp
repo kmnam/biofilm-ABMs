@@ -860,10 +860,13 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
 {
     // Determine noise to add to each generalized force at each timestep
     Array<T, 6, 1> noise;
-    if (cells.rows() == 1
+    if (cells.rows() == 1)
         noise = Array<T, 6, 1>::Zero();
     else
-        noise = noise_dist(rng) * Array<T, 6, 1>::Ones();
+    {
+        for (int i = 0; i < 6; ++i)
+	    noise(i) = noise_dist(rng);
+    }
 
     // Compute velocities at given partial timesteps 
     int n = cells.rows(); 
