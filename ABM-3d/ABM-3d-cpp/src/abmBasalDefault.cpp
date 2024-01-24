@@ -241,10 +241,10 @@ int main(int argc, char** argv)
         // array of neighboring cells whenever a cell is deleted 
         Array<T, Dynamic, 1> max_overlaps = R - cells.col(2) - cells.col(7) * cells.col(5);
         std::vector<int> overlap_idx; 
-        for (int i = 0; i < cells.rows(); ++i)
+        for (int j = 0; j < cells.rows(); ++j)
         {
-            if (max_overlaps(i) > 0)
-                overlap_idx.push_back(i);
+            if (max_overlaps(j) > 0)
+                overlap_idx.push_back(j);
         }
         if (overlap_idx.size() > 0)
         {
