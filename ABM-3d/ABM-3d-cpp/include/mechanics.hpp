@@ -25,7 +25,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/22/2024
+ *     1/24/2024
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -256,7 +256,7 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
 
     // For each cell ...
     const T prefactor0 = 2 * E0;
-    const T prefactor1 = (8 / 3) * E0 * std::pow(R, 0.5); 
+    const T prefactor1 = (8. / 3.) * E0 * std::pow(R, 0.5); 
     const T prefactor2 = 2 * E0 * std::pow(R, 0.5);
     for (int i = 0; i < cells.rows(); ++i)
     {
