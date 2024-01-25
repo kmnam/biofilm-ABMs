@@ -25,7 +25,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/24/2024
+ *     1/25/2024
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -663,7 +663,8 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  * @param adhesion_energy_density Cell-surface adhesion energy density.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero.
- * @param noise Pre-determined noise values to add to each generalized force.
+ * @param noise Pre-determined vector of noise values; should range between
+ *              -1 and 1.
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -776,11 +777,28 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         b(3) = -dEdq_cell(i, 3);
         b(4) = -dEdq_cell(i, 4);
         b(5) = -dEdq_cell(i, 5) - dEdq_surface_repulsion(i, 1) - dEdq_surface_adhesion(i, 1);
-        b(Eigen::seq(0, 5)) += noise;
 
-        // Solve the corresponding linear system
+        // Solve the corresponding linear system without noise 
         Array<T, 7, 1> x = A.matrix().colPivHouseholderQr().solve(b.matrix()).array();
-        velocities.row(i) = x.head(6);
+
+        // If a nonzero noise vector has been specified ... 
+        if ((noise != 0).any())
+        {
+	    // Solve the linear system corresponding to the given noise vector
+	    Array<T, 7, 1> r = Array<T, 7, 1>::Zero();
+	    r(Eigen::seq(0, 5)) = noise;
+            Array<T, 7, 1> y = A.matrix().colPivHouseholderQr().solve(r.matrix()).array();
+
+	    // Determine noise magnitude by comparing magnitudes of x and y
+	    T eps = 0.1 * x.matrix().norm() / y.matrix().norm();
+
+            // Compute resulting velocities 
+            velocities.row(i) = (x + eps * y).head(6);
+        }
+        else    // Otherwise ... 
+        {
+            velocities.row(i) = x.head(6);
+        }
     }
 
     return velocities;  
