@@ -106,6 +106,52 @@ Array<T, 3, 1> rotate(const Ref<const Array<T, 3, 1> >& n, const T alpha,
 }
 
 /**
+ * Rotate the given orientation vector by the given angle in the xy-plane.
+ *
+ * @param n Input orientation vector.
+ * @param theta Angle to rotate (about z-axis). 
+ * @returns Rotated orientation vector.
+ */
+template <typename T>
+Array<T, 3, 1> rotateXY(const Ref<const Array<T, 3, 1> >& n, const T theta)
+{
+    Matrix<T, 3, 3> rot;
+    T sin_theta = std::sin(theta);
+    T cos_theta = std::cos(theta);
+    rot << cos_theta, -sin_theta, 0,
+           sin_theta, cos_theta, 0,
+           0, 0, 1;
+    return (rot * n.matrix()).array();
+}
+
+/**
+ * Rotate the given orientation vector by the given angle out of the xy-plane,
+ * maintaining the x- and y-orientations.
+ *
+ * This function rotates the given vector within the plane spanned by itself
+ * and the z-unit vector by the given angle. 
+ *
+ * @param n Input orientation vector.
+ * @param theta Angle to rotate (out of xy-plane). 
+ * @returns Rotated orientation vector.
+ */
+template <typename T>
+Array<T, 3, 1> rotateOutOfXY(const Ref<const Array<T, 3, 1> >& n, const T theta)
+{
+    // Get the unit vector along the axis of rotation
+    Matrix<T, 3, 1> z; 
+    z << 0, 0, 1;
+    Matrix<T, 3, 1> v = n.matrix().cross(z);
+    T norm = v.norm();
+    v /= norm;
+
+    // Use the Rodrigues' rotation formula to rotate the input vector
+    T sin_theta = std::sin(theta);
+    T cos_theta = std::cos(theta); 
+    return (n.matrix() * cos_theta + v * sin_theta + v * v.dot(n.matrix()) * (1 - cos_theta)).array();
+}
+
+/**
  * Divide the indicated cells at the given time.
  *
  * TODO Update docstring and comments to incorporate z-dimension
@@ -145,12 +191,9 @@ Array<T, 3, 1> rotate(const Ref<const Array<T, 3, 1> >& n, const T alpha,
  * @param daughter_angle_xy_dist Function instance specifying the daughter 
  *                               cell re-orientation distribution in the
  *                               xy-plane (rotation about z-axis).
- * @param daughter_angle_xz_dist Function instance specifying the daughter 
- *                               cell re-orientation distribution in the
- *                               xz-plane (rotation about y-axis).
- * @param daughter_angle_yz_dist Function instance specifying the daughter 
- *                               cell re-orientation distribution in the
- *                               yz-plane (rotation about x-axis).
+ * @param daughter_angle_z_dist  Function instance specifying the daughter 
+ *                               cell re-orientation distribution out of 
+ *                               the xy-plane (in the z-direction).
  * @returns Updated population of cells. 
  */
 template <typename T>
@@ -161,8 +204,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                                        boost::random::mt19937& rng,
                                        std::function<T(boost::random::mt19937&)>& daughter_length_dist,
                                        std::function<T(boost::random::mt19937&)>& daughter_angle_xy_dist,
-                                       std::function<T(boost::random::mt19937&)>& daughter_angle_xz_dist,
-                                       std::function<T(boost::random::mt19937&)>& daughter_angle_yz_dist)
+                                       std::function<T(boost::random::mt19937&)>& daughter_angle_z_dist)
 {
     // If there are cells to be divided ...
     const int n_divide = to_divide.sum();
@@ -247,14 +289,12 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             //
             // Each daughter cell has an orientation that is obtained by 
             // rotating the dividing cell's orientation counterclockwise by
-            // a angle theta, which is sampled using daughter_angle_dist()
+            // a angle theta, which is sampled from the given distributions
             Array<T, Dynamic, 3> dividing_orientations(new_cells(Eigen::all, Eigen::seq(3, 5))); 
             Array<T, Dynamic, 1> theta_xy1 = Array<T, Dynamic, 1>::Zero(n_divide);
-            Array<T, Dynamic, 1> theta_xz1 = Array<T, Dynamic, 1>::Zero(n_divide);
-            Array<T, Dynamic, 1> theta_yz1 = Array<T, Dynamic, 1>::Zero(n_divide);
+            Array<T, Dynamic, 1> theta_z1 = Array<T, Dynamic, 1>::Zero(n_divide);
             Array<T, Dynamic, 1> theta_xy2 = Array<T, Dynamic, 1>::Zero(n_divide); 
-            Array<T, Dynamic, 1> theta_xz2 = Array<T, Dynamic, 1>::Zero(n_divide);
-            Array<T, Dynamic, 1> theta_yz2 = Array<T, Dynamic, 1>::Zero(n_divide);
+            Array<T, Dynamic, 1> theta_z2 = Array<T, Dynamic, 1>::Zero(n_divide);
             for (int i = 0; i < n_divide; ++i)
             {
                 // If the minimum distance for the dividing cell is less
@@ -262,23 +302,18 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 if (ntries < ntries_total - 1 && check_distance(i) == 1)
                 {
                     theta_xy1(i) = daughter_angle_xy_dist(rng);
-                    theta_xz1(i) = daughter_angle_xz_dist(rng); 
-                    theta_yz1(i) = daughter_angle_yz_dist(rng); 
+                    theta_z1(i) = daughter_angle_z_dist(rng); 
                     theta_xy2(i) = daughter_angle_xy_dist(rng); 
-                    theta_xz2(i) = daughter_angle_xz_dist(rng); 
-                    theta_yz2(i) = daughter_angle_yz_dist(rng);
+                    theta_z2(i) = daughter_angle_z_dist(rng); 
                 }
             }
             for (int i = 0; i < n_divide; ++i)
             {
-                cells_total(idx_divide[i], Eigen::seq(3, 5)) = rotate<T>(
-                    dividing_orientations.row(i).transpose(), theta_xy1(i),
-                    theta_xz1(i), theta_yz1(i)
-                );
-                new_cells(i, Eigen::seq(3, 5)) = rotate<T>(
-                    dividing_orientations.row(i).transpose(), theta_xy2(i),
-                    theta_xz2(i), theta_yz2(i)
-                );
+                Array<T, 3, 1> u = dividing_orientations.row(i).transpose();
+                Array<T, 3, 1> v1 = rotateOutOfXY<T>(rotateXY<T>(u, theta_xy1(i)), theta_z1(i));
+                cells_total(idx_divide[i], Eigen::seq(3, 5)) = v1;
+                Array<T, 3, 1> v2 = rotateOutOfXY<T>(rotateXY<T>(u, theta_xy2(i)), theta_z2(i));
+                new_cells(i, Eigen::seq(3, 5)) = v2;
             }
 
             // Update cell lengths and positions ... 
