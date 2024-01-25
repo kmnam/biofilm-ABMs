@@ -44,7 +44,7 @@ const int max_tries = 3;
 const T min_error = static_cast<T>(1e-30);
 
 // Maximum error per Runge-Kutta iteration
-const T max_error_allowed = static_cast<T>(1e-8);
+const T max_error_allowed = static_cast<T>(1e-6);
 
 // Maximum stepsize
 const T max_stepsize = static_cast<T>(1e-6); 
@@ -270,7 +270,7 @@ int main(int argc, char** argv)
         std::vector<int> overlap_idx; 
         for (int j = 0; j < cells.rows(); ++j)
         {
-            if (max_overlaps(j) > 0)
+            if (max_overlaps(j) > -0.5 * R)    // Allow for a little room
                 overlap_idx.push_back(j);
         }
         if (overlap_idx.size() < cells.rows())
