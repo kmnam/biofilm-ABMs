@@ -19,7 +19,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/24/2024
+ *     1/25/2024
  */
 
 #include <iostream>
@@ -94,7 +94,8 @@ int main(int argc, char** argv)
     const int n_cells = json_data["n_cells"].as_int64();
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
-    const T theta_bound = static_cast<T>(json_data["max_orientation_angle"].as_double());
+    const T theta_xy_bound = static_cast<T>(json_data["max_orientation_angle_xy"].as_double());
+    const T theta_z_bound = static_cast<T>(json_data["max_orientation_angle_z"].as_double());
     const T max_noise = static_cast<T>(json_data["max_noise"].as_double());
 
     // Prefactors for cell-cell interaction forces
@@ -124,21 +125,38 @@ int main(int argc, char** argv)
             return daughter_length_dist(rng); 
         };
 
-    // Daughter angle distribution function: von Mises distribution with 
-    // mean 0 and given concentration parameter
+    // Daughter angle distribution functions: two von Mises distributions with 
+    // mean 0 and given concentration parameter that are bounded by the given 
+    // values 
     boost::random::uniform_01<> uniform_dist; 
-    std::function<T(boost::random::mt19937&)> daughter_angle_dist_func;
-    if (theta_bound == 0.0)
+    std::function<T(boost::random::mt19937&)> daughter_angle_xy_dist_func,
+                                              daughter_angle_z_dist_func;
+    if (theta_xy_bound == 0.0)
     {
-        daughter_angle_dist_func = [](boost::random::mt19937& rng){ return 0; };
+        daughter_angle_xy_dist_func = [](boost::random::mt19937& rng){ return 0; };
     }
     else
     {
-        daughter_angle_dist_func = 
-            [&orientation_conc, &uniform_dist, &theta_bound](boost::random::mt19937& rng)
+        daughter_angle_xy_dist_func = 
+            [&orientation_conc, &uniform_dist, &theta_xy_bound](boost::random::mt19937& rng)
             {
                 T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
-                while (theta > theta_bound || theta < -theta_bound)
+                while (theta > theta_xy_bound || theta < -theta_xy_bound)
+                    theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
+                return theta;
+            };
+    }
+    if (theta_z_bound == 0.0)
+    {
+        daughter_angle_z_dist_func = [](boost::random::mt19937& rng){ return 0; };
+    }
+    else
+    {
+        daughter_angle_z_dist_func = 
+            [&orientation_conc, &uniform_dist, &theta_z_bound](boost::random::mt19937& rng)
+            {
+                T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
+                while (theta > theta_z_bound || theta < -theta_z_bound)
                     theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
                 return theta;
             };
@@ -190,7 +208,8 @@ int main(int argc, char** argv)
         }
         cells = divideCells<T>(
             cells, t, R, Rcell, to_divide, growth_dist_func, rng,
-            daughter_length_dist_func, daughter_angle_dist_func
+            daughter_length_dist_func, daughter_angle_xy_dist_func,
+            daughter_angle_z_dist_func
         );
 
         // Update orientations and neighboring cells if division has occurred
