@@ -147,8 +147,9 @@ Array<T, 3, 1> rotateOutOfXY(const Ref<const Array<T, 3, 1> >& n, const T theta)
 
     // Use the Rodrigues' rotation formula to rotate the input vector
     T sin_theta = std::sin(theta);
-    T cos_theta = std::cos(theta); 
-    return (n.matrix() * cos_theta + v * sin_theta + v * v.dot(n.matrix()) * (1 - cos_theta)).array();
+    T cos_theta = std::cos(theta);
+    Matrix<T, 3, 1> w = v.cross(n.matrix()); 
+    return (n.matrix() * cos_theta + w * sin_theta).array();   // Third term is zero
 }
 
 /**
@@ -309,6 +310,8 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             }
             for (int i = 0; i < n_divide; ++i)
             {
+                std::cout << theta_xy1(i) << " " << theta_z1(i) << " "
+                          << theta_xy2(i) << " " << theta_z2(i) << std::endl;
                 Array<T, 3, 1> u = dividing_orientations.row(i).transpose();
                 Array<T, 3, 1> v1 = rotateOutOfXY<T>(rotateXY<T>(u, theta_xy1(i)), theta_z1(i));
                 cells_total(idx_divide[i], Eigen::seq(3, 5)) = v1;
