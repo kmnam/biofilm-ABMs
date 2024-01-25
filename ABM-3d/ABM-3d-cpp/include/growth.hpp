@@ -25,7 +25,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/18/2024
+ *     1/25/2024
  */
 
 #ifndef BIOFILM_CELL_GROWTH_3D_HPP
@@ -142,8 +142,15 @@ Array<T, 3, 1> rotate(const Ref<const Array<T, 3, 1> >& n, const T alpha,
  * @param rng Random number generator. 
  * @param daughter_length_dist Function instance specifying the daughter 
  *                             cell length ratio distribution. 
- * @param daughter_angle_dist Function instance specifying the daughter 
- *                            cell orientation distribution.
+ * @param daughter_angle_xy_dist Function instance specifying the daughter 
+ *                               cell re-orientation distribution in the
+ *                               xy-plane (rotation about z-axis).
+ * @param daughter_angle_xz_dist Function instance specifying the daughter 
+ *                               cell re-orientation distribution in the
+ *                               xz-plane (rotation about y-axis).
+ * @param daughter_angle_yz_dist Function instance specifying the daughter 
+ *                               cell re-orientation distribution in the
+ *                               yz-plane (rotation about x-axis).
  * @returns Updated population of cells. 
  */
 template <typename T>
@@ -153,7 +160,9 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                                        std::function<T(boost::random::mt19937&)>& growth_dist,
                                        boost::random::mt19937& rng,
                                        std::function<T(boost::random::mt19937&)>& daughter_length_dist,
-                                       std::function<T(boost::random::mt19937&)>& daughter_angle_dist)
+                                       std::function<T(boost::random::mt19937&)>& daughter_angle_xy_dist,
+                                       std::function<T(boost::random::mt19937&)>& daughter_angle_xz_dist,
+                                       std::function<T(boost::random::mt19937&)>& daughter_angle_yz_dist)
 {
     // If there are cells to be divided ...
     const int n_divide = to_divide.sum();
@@ -240,43 +249,36 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             // rotating the dividing cell's orientation counterclockwise by
             // a angle theta, which is sampled using daughter_angle_dist()
             Array<T, Dynamic, 3> dividing_orientations(new_cells(Eigen::all, Eigen::seq(3, 5))); 
-            Array<T, Dynamic, 1> theta1 = Array<T, Dynamic, 1>::Zero(n_divide);
-            Array<T, Dynamic, 1> theta2 = Array<T, Dynamic, 1>::Zero(n_divide); 
+            Array<T, Dynamic, 1> theta_xy1 = Array<T, Dynamic, 1>::Zero(n_divide);
+            Array<T, Dynamic, 1> theta_xz1 = Array<T, Dynamic, 1>::Zero(n_divide);
+            Array<T, Dynamic, 1> theta_yz1 = Array<T, Dynamic, 1>::Zero(n_divide);
+            Array<T, Dynamic, 1> theta_xy2 = Array<T, Dynamic, 1>::Zero(n_divide); 
+            Array<T, Dynamic, 1> theta_xz2 = Array<T, Dynamic, 1>::Zero(n_divide);
+            Array<T, Dynamic, 1> theta_yz2 = Array<T, Dynamic, 1>::Zero(n_divide);
             for (int i = 0; i < n_divide; ++i)
             {
                 // If the minimum distance for the dividing cell is less
                 // than the default value, then set theta1 = theta2 = 0
                 if (ntries < ntries_total - 1 && check_distance(i) == 1)
                 {
-                    theta1(i) = daughter_angle_dist(rng); 
-                    theta2(i) = daughter_angle_dist(rng);
+                    theta_xy1(i) = daughter_angle_xy_dist(rng);
+                    theta_xz1(i) = daughter_angle_xz_dist(rng); 
+                    theta_yz1(i) = daughter_angle_yz_dist(rng); 
+                    theta_xy2(i) = daughter_angle_xy_dist(rng); 
+                    theta_xz2(i) = daughter_angle_xz_dist(rng); 
+                    theta_yz2(i) = daughter_angle_yz_dist(rng);
                 }
             }
-            /*
-            Array<T, Dynamic, 1> cos_theta1 = theta1.cos(); 
-            Array<T, Dynamic, 1> sin_theta1 = theta1.sin(); 
-            Array<T, Dynamic, 1> cos_theta2 = theta2.cos(); 
-            Array<T, Dynamic, 1> sin_theta2 = theta2.sin();
-            */
             for (int i = 0; i < n_divide; ++i)
             {
-                //Matrix<T, 2, 2> rot(2, 2); 
-                //rot << cos_theta1(i), -sin_theta1(i),
-                //       sin_theta1(i),  cos_theta1(i); 
-                //cells_total(idx_divide[i], Eigen::seq(2, 3)) =
-                //    (rot * dividing_orientations.matrix().row(i).transpose()).array();
                 cells_total(idx_divide[i], Eigen::seq(3, 5)) = rotate<T>(
-                    dividing_orientations.row(i).transpose(), theta1(i), theta1(i), theta1(i)
+                    dividing_orientations.row(i).transpose(), theta_xy1(i),
+                    theta_xz1(i), theta_yz1(i)
                 );
-                std::cout << cells_total(idx_divide[i], Eigen::seq(3, 5)) << std::endl;    // TODO
-                //rot << cos_theta2(i), -sin_theta2(i),
-                //       sin_theta2(i),  cos_theta2(i); 
-                //new_cells(i, Eigen::seq(2, 3)) =
-                //    (rot * dividing_orientations.matrix().row(i).transpose()).array();
                 new_cells(i, Eigen::seq(3, 5)) = rotate<T>(
-                    dividing_orientations.row(i).transpose(), theta2(i), theta2(i), theta2(i)
+                    dividing_orientations.row(i).transpose(), theta_xy2(i),
+                    theta_xz2(i), theta_yz2(i)
                 );
-                std::cout << new_cells(i, Eigen::seq(3, 5)) << std::endl;    // TODO
             }
 
             // Update cell lengths and positions ... 
@@ -310,33 +312,23 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             // for the daughter cell centers
             Array<T, Dynamic, 1> delta1 = L1 / 2 + R; 
             Array<T, Dynamic, 1> delta2 = L2 / 2 + R;
-            std::cout << delta1 << std::endl; 
-            std::cout << delta2 << std::endl;    // TODO
             // Define daughter cell lengths and locate daughter cell centers
             cells_total(idx_divide, 6) = L1; 
             cells_total(idx_divide, 7) = L1 / 2;
             new_cells.col(6) = L2;
             new_cells.col(7) = L2 / 2;
-            std::cout << new_cells.col(6) << std::endl;
-            std::cout << new_cells.col(7) << std::endl;    // TODO 
             cells_total(idx_divide, 0) = (
                 cells_total(idx_divide, 0) + (div - delta1) * cells_total(idx_divide, 3)
             );
-            std::cout << cells_total(idx_divide, 0) << std::endl;   // TODO
             new_cells.col(0) = new_cells.col(0) + (div + delta2) * new_cells.col(3);
-            std::cout << new_cells.col(0) << std::endl;    // TODO
             cells_total(idx_divide, 1) = (
                 cells_total(idx_divide, 1) + (div - delta1) * cells_total(idx_divide, 4)
             );
-            std::cout << cells_total(idx_divide, 1) << std::endl;   // TODO
             new_cells.col(1) = new_cells.col(1) + (div + delta2) * new_cells.col(4);
-            std::cout << new_cells.col(1) << std::endl;    // TODO
             cells_total(idx_divide, 2) = (
                 cells_total(idx_divide, 2) + (div - delta1) * cells_total(idx_divide, 5)
             );
-            std::cout << cells_total(idx_divide, 2) << std::endl;   // TODO
             new_cells.col(2) = new_cells.col(2) + (div + delta2) * new_cells.col(5);
-            std::cout << new_cells.col(2) << std::endl;    // TODO
 
             // Update cell birth times
             cells_total(idx_divide, 8) = t;
@@ -415,8 +407,11 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             }
             for (int i = 0; i < n_divide; ++i)
             {
-                if (check_distance(i) == 1 && daughter_mindists1(i) >= mindist_default && daughter_mindists2(i) >= mindist_default)
+                if (check_distance(i) == 1 && daughter_mindists1(i) >= mindist_default &&
+                    daughter_mindists2(i) >= mindist_default)
+                {
                     satisfies_distance(i) = 1;
+                }
             }
             ntries++; 
         }
