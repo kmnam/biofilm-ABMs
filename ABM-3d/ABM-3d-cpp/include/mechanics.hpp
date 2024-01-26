@@ -271,6 +271,9 @@ Array<T, Dynamic, 7> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
     if (n == 1)
         return Array<T, Dynamic, 7>::Zero(0, 7);
 
+    // Generate Segment_3 instances for each cell 
+    std::vector<Segment_3> segments = generateSegments(cells);
+
     // Maintain array of neighboring cells 
     //
     // Each row contains the following information about each pair of 
@@ -298,14 +301,8 @@ Array<T, Dynamic, 7> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
             {
                 // In this case, compute their actual distance and check that 
                 // they lie within neighbor_threshold of each other
-                Segment_3 seg_i = cellSegment(
-                    cells(i, Eigen::seq(0, 2)), cells(i, Eigen::seq(3, 5)), cells(i, 7)
-                );
-                Segment_3 seg_j = cellSegment(
-                    cells(j, Eigen::seq(0, 2)), cells(j, Eigen::seq(3, 5)), cells(j, 7)
-                ); 
                 auto result = distBetweenCells(
-                    seg_i, seg_j, cells(i, Eigen::seq(0, 2)).matrix(),
+                    segments[i], segments[j], cells(i, Eigen::seq(0, 2)).matrix(),
                     cells(i, Eigen::seq(3, 5)).matrix(), cells(i, 7),
                     cells(j, Eigen::seq(0, 2)).matrix(),
                     cells(j, Eigen::seq(3, 5)).matrix(), cells(j, 7), K()
@@ -331,18 +328,52 @@ Array<T, Dynamic, 7> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
 }
 
 /**
+ * Generate a vector of Segment_3 instances for the given population of cells.
+ *
+ * Note that Segment_3 is not mutable, and therefore a new vector must be 
+ * generated every time the population is updated in some way. 
+ *
+ * @param cells Existing population of cells.
+ * @returns Vector of Segment_3 instances for each cell 
+ */
+template <typename T>
+std::vector<Segment_3> generateSegments(const Ref<const Array<T, Dynamic, Dynamic> >& cells)
+{
+    std::vector<Segment_3> segments;
+    for (int i = 0; i < cells.rows(); ++i)
+    {
+        Point_3 p(
+            cells(i, 0) - cells(i, 7) * cells(i, 3),
+            cells(i, 1) - cells(i, 7) * cells(i, 4),
+            cells(i, 2) - cells(i, 7) * cells(i, 5)
+        );
+        Point_3 q(
+            cells(i, 0) + cells(i, 7) * cells(i, 3),
+            cells(i, 1) + cells(i, 7) * cells(i, 4),
+            cells(i, 2) + cells(i, 7) * cells(i, 5)
+        );
+        segments.push_back(Segment_3(p, q));
+    }
+
+    return segments;
+}
+
+/**
  * Update the cell-cell distances in the given array of neighboring pairs
  * of cells.
  *
  * The given array of neighboring pairs of cells is updated in place.  
  *
  * @param cells Existing population of cells. 
- * @param neighbors Array of neighboring pairs of cells. 
+ * @param neighbors Array of neighboring pairs of cells.
  */
 template <typename T>
-void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
+void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                              Ref<Array<T, Dynamic, 7> > neighbors)
-{
+{ 
+    // Generate Segment_3 instances for each cell 
+    std::vector<Segment_3> segments = generateSegments(cells);
+
     // Each row contains the following information about each pair of 
     // neighboring cells:
     // 0) Index i of first cell in neighboring pair
@@ -358,14 +389,8 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
     {
         int i = static_cast<int>(neighbors(k, 0)); 
         int j = static_cast<int>(neighbors(k, 1));
-        Segment_3 seg_i = cellSegment(
-            cells(i, Eigen::seq(0, 2)), cells(i, Eigen::seq(3, 5)), cells(i, 7)
-        );
-        Segment_3 seg_j = cellSegment(
-            cells(j, Eigen::seq(0, 2)), cells(j, Eigen::seq(3, 5)), cells(j, 7)
-        ); 
         auto result = distBetweenCells(
-            seg_i, seg_j, cells(i, Eigen::seq(0, 2)).matrix(),
+            segments[i], segments[j], cells(i, Eigen::seq(0, 2)).matrix(),
             cells(i, Eigen::seq(3, 5)).matrix(), cells(i, 7),
             cells(j, Eigen::seq(0, 2)).matrix(),
             cells(j, Eigen::seq(3, 5)).matrix(), cells(j, 7), K()
