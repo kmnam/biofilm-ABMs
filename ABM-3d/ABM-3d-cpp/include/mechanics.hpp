@@ -604,8 +604,8 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     // For each cell ... 
     for (int i = 0; i < n; ++i)
     {
-        Array<T, 7, 7> A = Array<T, 7, 7>::Zero(7, 7);
-        Array<T, 7, 1> b = Array<T, 7, 1>::Zero(7);
+        Array<T, 7, 7> A = Array<T, 7, 7>::Zero();
+        Array<T, 7, 1> b = Array<T, 7, 1>::Zero();
 
         // Compute the derivatives of the dissipation with respect to the 
         // cell's translational and orientational velocities 
@@ -629,8 +629,9 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         b(4) = -dEdq_cell(i, 4);
         b(5) = -dEdq_cell(i, 5) - dEdq_surface_repulsion(i, 1) - dEdq_surface_adhesion(i, 1);
 
-        // Solve the corresponding linear system without noise 
-        Array<T, 7, 1> x = A.matrix().colPivHouseholderQr().solve(b.matrix()).array();
+        // Solve the corresponding linear system without noise
+        auto QR = A.matrix().colPivHouseholderQr(); 
+        Array<T, 7, 1> x = QR.solve(b.matrix()).array();
 
         // If a nonzero noise vector has been specified ... 
         if ((noise != 0).any())
@@ -638,10 +639,10 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
 	    // Solve the linear system corresponding to the given noise vector
 	    Array<T, 7, 1> r = Array<T, 7, 1>::Zero();
 	    r(Eigen::seq(0, 5)) = noise;
-            Array<T, 7, 1> y = A.matrix().colPivHouseholderQr().solve(r.matrix()).array();
+            Array<T, 7, 1> y = QR.solve(r.matrix()).array();
 
 	    // Determine noise magnitude by comparing magnitudes of x and y
-	    T eps = 0.1 * x.matrix().norm() / y.matrix().norm();
+	    T eps = 0.1 * x.head(6).matrix().norm() / y.head(6).matrix().norm();
 
             // Compute resulting velocities 
             velocities.row(i) = (x + eps * y).head(6);
@@ -728,10 +729,8 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
                                         std::function<T(boost::random::mt19937&)>& noise_dist)
 {
     // Determine noise to add to each generalized force at each timestep
-    Array<T, 6, 1> noise;
-    if (cells.rows() == 1)
-        noise = Array<T, 6, 1>::Zero();
-    else
+    Array<T, 6, 1> noise = Array<T, 6, 1>::Zero();
+    if (cells.rows() > 1)
     {
         for (int i = 0; i < 6; ++i)
 	    noise(i) = noise_dist(rng);
