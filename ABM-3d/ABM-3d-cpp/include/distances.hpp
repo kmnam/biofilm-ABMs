@@ -6,6 +6,9 @@
  *     1/25/2024
  */
 
+#ifndef DISTANCES_3D_HPP
+#define DISTANCES_3D_HPP
+
 #include <tuple>
 #include <Eigen/Dense>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
@@ -25,8 +28,10 @@ typedef K::Segment_3 Segment_3;
 Segment_3 cellSegment(const Ref<const Array<double, 3, 1> >& r,
                       const Ref<const Array<double, 3, 1> >& n, const double half_l)
 {
-    Point_3 p(r - half_l * n);
-    Point_3 q(r + half_l * n);
+    Array<double, 3, 1> p_ = r - half_l * n;
+    Array<double, 3, 1> q_ = r + half_l * n;
+    Point_3 p(p_(0), p_(1), p_(2));
+    Point_3 q(q_(0), q_(1), q_(2));
 
     return Segment_3(p, q);
 }
@@ -43,7 +48,7 @@ std::tuple<Matrix<double, 3, 1>, double, double> distBetweenCells(const Segment_
                                                                   const double half_l2,
                                                                   const K& k)
 {
-    auto result = CGAL::Distance_3::internal::squared_distance(seg1, seg2, k);
+    auto result = CGAL::Distance_3::internal::squared_distance(cell1, cell2, k);
     double s = CGAL::to_double(result.x) * 2 * half_l1 - half_l1;
     double t = CGAL::to_double(result.y) * 2 * half_l2 - half_l2;
     Matrix<double, 3, 1> dist = r2 + t * n2 - r1 - s * n1;
@@ -244,3 +249,4 @@ std::tuple<Matrix<T, 3, 1>, T, T> distBetweenCells(const Ref<const Matrix<T, 3, 
     return std::make_tuple(dist, s, t); 
 }
 
+#endif
