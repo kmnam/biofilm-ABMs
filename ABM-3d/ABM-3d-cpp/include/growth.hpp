@@ -35,7 +35,7 @@
 #include <limits>
 #include <tuple>
 #include <Eigen/Dense>
-#include "mechanics.hpp"
+#include "distances.hpp"
 
 using namespace Eigen; 
 
