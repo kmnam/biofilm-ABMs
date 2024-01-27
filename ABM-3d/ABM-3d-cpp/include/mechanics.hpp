@@ -25,7 +25,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/25/2024
+ *     1/27/2024
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -152,16 +152,23 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             // with respect to z-position
             T nz2 = cells(i, 5) * cells(i, 5);
             T int1 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
-            dEdq(i, 0) = prefactor0 * (1 - nz2) * int1;
+            T term2 = 0;
+            if (ss(i) >= -cells(i, 7) && ss(i) < cells(i, 7)) 
+                term2 = (prefactor1 / 2) * cells(i, 5);
+            dEdq(i, 0) = prefactor0 * (1 - nz2) * int1 - term2;
 
             // Compute the derivative of the cell-surface adhesion energy
             // with respect to z-orientation
             T int2 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
             T int3 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
             T int4 = integral4(cells(i, 2), cells(i, 5), R, cells(i, 7), ss(i));
+            T term4 = 0;
+            if (ss(i) >= -cells(i, 7) && ss(i) < cells(i, 7))
+                term4 = (prefactor1 / 2) * (R - cells(i, 2));
             dEdq(i, 1) += prefactor2 * cells(i, 5) * int2;
             dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
             dEdq(i, 1) -= prefactor1 * cells(i, 5) * int4;
+            dEdq(i, 1) -= term4;
         }
     }
 
