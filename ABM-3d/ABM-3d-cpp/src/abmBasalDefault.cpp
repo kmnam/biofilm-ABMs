@@ -52,9 +52,6 @@ const T max_stepsize = static_cast<T>(1e-6);
 // Minimum distance between neighboring cells
 const T min_dist = static_cast<T>(1e-8);
 
-// Zero threshold for z-orientation
-const T nz_threshold = static_cast<T>(1e-8);
-
 int main(int argc, char** argv)
 {
     // Define Butcher tableau for order 3(2) Runge-Kutta method by Bogacki
@@ -96,7 +93,8 @@ int main(int argc, char** argv)
     const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
     const T theta_xy_bound = static_cast<T>(json_data["max_orientation_angle_xy"].as_double());
     const T theta_z_bound = static_cast<T>(json_data["max_orientation_angle_z"].as_double());
-    const T max_noise = static_cast<T>(json_data["max_noise"].as_double());
+    const T noise_strength = static_cast<T>(json_data["noise_strength"].as_double());
+    const T nz_threshold = static_cast<T>(json_data["nz_threshold"].as_double());
 
     // Prefactors for cell-cell interaction forces
     const T sqrtR = std::sqrt(R); 
@@ -164,9 +162,9 @@ int main(int argc, char** argv)
 
     // Net force noise distribution: uniform distribution centered at zero
     std::function<T(boost::random::mt19937&)> noise_dist_func =
-        [&uniform_dist, &max_noise](boost::random::mt19937& rng)
+        [&uniform_dist](boost::random::mt19937& rng)
         {
-            return -max_noise + 2 * max_noise * uniform_dist(rng);
+            return -1 + 2 * uniform_dist(rng);
         };
 
     // Output file prefix
@@ -223,7 +221,7 @@ int main(int argc, char** argv)
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
             A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-            E0, sigma0, nz_threshold, rng, noise_dist_func
+            E0, sigma0, nz_threshold, rng, noise_dist_func, noise_strength
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 6> errors = std::get<1>(result);
@@ -240,7 +238,7 @@ int main(int argc, char** argv)
                 dt *= std::pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
                     A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-                    E0, sigma0, nz_threshold, rng, noise_dist_func
+                    E0, sigma0, nz_threshold, rng, noise_dist_func, noise_strength
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
