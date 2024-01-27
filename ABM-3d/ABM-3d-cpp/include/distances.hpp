@@ -1,9 +1,11 @@
 /**
+ * Distance calculations in three dimensions. 
+ *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/25/2024
+ *     1/27/2024
  */
 
 #ifndef DISTANCES_3D_HPP
@@ -23,7 +25,12 @@ typedef K::Point_3 Point_3;
 typedef K::Segment_3 Segment_3;
 
 /**
+ * Construct a Segment_3 instance for the given cell. 
  *
+ * @param r Cell center.
+ * @param n Cell orientation vector.
+ * @param half_l Half of cell length.
+ * @returns Segment_3 instance for the given cell. 
  */
 Segment_3 cellSegment(const Ref<const Array<double, 3, 1> >& r,
                       const Ref<const Array<double, 3, 1> >& n, const double half_l)
@@ -37,6 +44,23 @@ Segment_3 cellSegment(const Ref<const Array<double, 3, 1> >& r,
 }
 
 /**
+ * Return the shortest distance between the centerlines of two cells, along
+ * with the cell-body coordinates at which the shortest distance is achieved.
+ *
+ * The distance vector returned by this function runs from cell 1 to cell 2.
+ *
+ * @param cell1 Segment_3 instance for cell 1.
+ * @param cell2 Segment_3 instance for cell 2.
+ * @param r1 Center of cell 1.
+ * @param n1 Orientation of cell 1.
+ * @param half_l1 Half of length of cell 1.
+ * @param r2 Center of cell 2.
+ * @param n2 Orientation of cell 2.
+ * @param half_l2 Half of length of cell 2.
+ * @param k CGAL kernel instance to be passed to CGAL::...::squared_distance().
+ * @returns Shortest distance between the two cells, along with the cell-body
+ *          coordinates at which the shortest distance is achieved. The
+ *          distance is returned as a vector running from cell 1 to cell 2.
  */
 std::tuple<Matrix<double, 3, 1>, double, double> distBetweenCells(const Segment_3& cell1,
                                                                   const Segment_3& cell2,
