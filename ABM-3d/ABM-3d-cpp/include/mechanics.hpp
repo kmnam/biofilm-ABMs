@@ -523,6 +523,7 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  *                     each cell is zero.
  * @param noise Pre-determined vector of noise values; should range between
  *              -1 and 1.
+ * @param noise_strength Noise strength.
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -533,7 +534,8 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
                                                 const T E0,
                                                 const T adhesion_energy_density,
                                                 const T nz_threshold, 
-                                                const Ref<const Array<T, 6, 1> >& noise)
+                                                const Ref<const Array<T, 6, 1> >& noise,
+                                                const T noise_strength)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -649,7 +651,7 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
             Array<T, 7, 1> y = QR.solve(r.matrix()).array();
 
             // Determine noise magnitude by comparing magnitudes of x and y
-            T eps = 0.1 * x.head(6).matrix().norm() / y.head(6).matrix().norm();
+            T eps = noise_strength * x.head(6).matrix().norm() / y.head(6).matrix().norm();
 
             // Compute resulting velocities 
             velocities.row(i) = (x + eps * y).head(6);
@@ -716,7 +718,10 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param E0 Elastic modulus of EPS. 
  * @param adhesion_energy_density Cell-surface adhesion energy density.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
- *                     each cell is zero. 
+ *                     each cell is zero.
+ * @param rng Random number generator.
+ * @param noise_dist Noise distribution.
+ * @param noise_strength Noise strength.  
  * @returns Updated population of cells, along with the array of errors in
  *          the cell positions and orientations.  
  */
@@ -733,7 +738,8 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
                                         const T adhesion_energy_density,
                                         const T nz_threshold,
                                         boost::random::mt19937& rng,
-                                        std::function<T(boost::random::mt19937&)>& noise_dist)
+                                        std::function<T(boost::random::mt19937&)>& noise_dist,
+                                        const T noise_strength)
 {
     // Determine noise to add to each generalized force at each timestep
     Array<T, 6, 1> noise = Array<T, 6, 1>::Zero();
@@ -750,7 +756,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
     velocities.push_back(
         getVelocitiesFromNeighbors<T>(
             cells, neighbors, R, Rcell, cell_cell_prefactors, E0,
-            adhesion_energy_density, nz_threshold, noise
+            adhesion_energy_density, nz_threshold, noise, noise_strength
         )
     );
     for (int i = 1; i < s; ++i)
@@ -764,7 +770,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
         velocities.push_back(
             getVelocitiesFromNeighbors<T>(
                 cells_i, neighbors, R, Rcell, cell_cell_prefactors, E0,
-                adhesion_energy_density, nz_threshold, noise
+                adhesion_energy_density, nz_threshold, noise, noise_strength
             )
         );
     }
