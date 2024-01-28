@@ -99,10 +99,14 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
             T int4 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
             T int5 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.5, ss(i));
             T int6 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
-            dEdq(i, 1) -= prefactor0 * cells(i, 5) * int3;
-            dEdq(i, 1) -= prefactor0 * (1 - nz2) * int4; 
-            dEdq(i, 1) += prefactor1 * cells(i, 5) * int5;
-            dEdq(i, 1) -= prefactor2 * nz2 * int6;
+            //dEdq(i, 1) -= prefactor0 * cells(i, 5) * int3;
+            //dEdq(i, 1) -= prefactor0 * (1 - nz2) * int4; 
+            //dEdq(i, 1) += prefactor1 * cells(i, 5) * int5;
+            //dEdq(i, 1) -= prefactor2 * nz2 * int6;
+            dEdq(i, 1) -= prefactor0 * (-cells(i, 5)) * int3;
+            dEdq(i, 1) -= prefactor0 * (1 - nz2) * int4;
+            dEdq(i, 1) += prefactor1 * (-cells(i, 5)) * int5;
+            dEdq(i, 1) -= prefactor2 * nz2 * int6; 
         }
     }
 
@@ -165,9 +169,13 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             T term4 = 0;
             if (ss(i) >= -cells(i, 7) && ss(i) < cells(i, 7))
                 term4 = (prefactor1 / 2) * (R - cells(i, 2));
-            dEdq(i, 1) += prefactor2 * cells(i, 5) * int2;
+            //dEdq(i, 1) += prefactor2 * cells(i, 5) * int2;
+            //dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
+            //dEdq(i, 1) -= prefactor1 * cells(i, 5) * int4;
+            //dEdq(i, 1) -= term4;
+            dEdq(i, 1) += prefactor2 * (-cells(i, 5)) * int2; 
             dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
-            dEdq(i, 1) -= prefactor1 * cells(i, 5) * int4;
+            dEdq(i, 1) -= prefactor1 * (-cells(i, 5)) * int4;
             dEdq(i, 1) -= term4;
         }
     }
@@ -483,9 +491,9 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
         // TODO Does this change the verticalization trajectory?
         else if (overlap >= R - Rcell)
         {
-            //T term = prefactors(3) * std::pow(overlap - R + Rcell, 1.5);
-            //prefactor = prefactors(0) * (prefactors(2) + term);
-            prefactor = prefactors(1) * std::pow(overlap, 1.5); 
+            //prefactor = prefactors(1) * std::pow(overlap, 1.5); 
+            T term = prefactors(3) * std::pow(overlap - R + Rcell, 1.5);
+            prefactor = prefactors(0) * (prefactors(2) + term);
         }
 
         if (overlap > 0)
