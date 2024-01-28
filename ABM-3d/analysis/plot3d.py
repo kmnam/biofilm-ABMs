@@ -8,12 +8,13 @@ Last updated:
     1/27/2024
 """
 
+import sys
 import numpy as np
 from PIL import Image
 import cv2
 import pyvista as pv
 import seaborn as sns
-from utils import read_cells
+from utils import read_cells, parse_dir
 
 #######################################################################
 def plot_cells(cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
@@ -172,9 +173,25 @@ def plot_simulation(filenames, outfilename, R, xmin, xmax, ymin,
 
 #######################################################################
 if __name__ == '__main__':
-    cells, params = read_cells('test/test_init.txt')
+    filedir = sys.argv[1]
+    outprefix = sys.argv[2]
+    filenames = parse_dir(filedir)
+
+    # Get cell radius and final dimensions from final file
+    cells, params = read_cells(filenames[-1])
     R = params['R']
-    plot_simulation(
-        ['test/test_iter{}.txt'.format(i) for i in range(3000000, 3050000, 10000)],
-        'test.avi', R, -20, 20, -20, 20, 0, 0, view='xy', res=50, fps=10
-    )
+    xmin = cells[:, 0].min().floor()
+    xmax = cells[:, 0].max().ceil()
+    ymin = cells[:, 1].min().floor()
+    ymax = cells[:, 1].max().ceil()
+    zmin = cells[:, 2].min().floor()
+    zmax = cells[:, 2].max().ceil()
+
+    # Plot the simulation in 200-frame increments
+    for i in range(len(filenames) // 200 + 1):
+        start = i * 200
+        end = start + end
+        plot_simulation(
+            filenames[start:end], outprefix + '_{}.avi'.format(i), R,
+            xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=50, fps=10
+        )
