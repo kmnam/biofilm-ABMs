@@ -103,16 +103,6 @@ int main()
     boost::random::mt19937 rng(1234567890);
     for (int i = 0; i < 10000; ++i)
     {
-        // Get forces 
-        Array<double, Dynamic, 6> cell_cell_forces = cellCellForcesFromNeighbors<double>(
-            cells, neighbors, R, Rcell, cell_cell_prefactors
-        );
-        Array<double, Dynamic, 1> ss = (R - cells.col(2)) / cells.col(5);
-        Array<double, Dynamic, 2> cell_surface_repulsion_forces =
-            cellSurfaceRepulsionForces<double>(cells, ss, R, E0, nz_threshold);
-        Array<double, Dynamic, 2> cell_surface_adhesion_forces =
-            cellSurfaceAdhesionForces<double>(cells, ss, R, sigma0, nz_threshold);
-        
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<double>(
             A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
