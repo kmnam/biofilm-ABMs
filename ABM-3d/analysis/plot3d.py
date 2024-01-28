@@ -1,9 +1,11 @@
 """
+Functions for visualizing spherocylindrical cells in 3-D with Pyvista. 
+
 Authors:
     Kee-Myoung Nam
 
 Last updated:
-    1/24/2024
+    1/27/2024
 """
 
 import numpy as np
@@ -15,7 +17,7 @@ from utils import read_cells
 
 #######################################################################
 def plot_cells(cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
-               birdseye=True, res=50):
+               view='xy', res=50):
     """
     Plot the given population of cells with the given colors to the given
     PDF file. 
@@ -36,8 +38,8 @@ def plot_cells(cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
         y-axis bounds.
     zmin, zmax : float, float
         z-axis bounds.
-    birdseye : bool
-        If True, set view to bird's eye. 
+    view : str, 'xy' or 'xz' or 'yz'
+        Set the view to the given pair of axes. 
     res : int
         Resolution for plotting each cylinder and hemisphere.
     """
@@ -80,33 +82,76 @@ def plot_cells(cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
 
     # Change the view to bird's eye, reconfigure axes, add axes directions,
     # and save
-    print(birdseye)
-    if birdseye:
+    if view == 'xy':
         pl.view_xy()
+        pl.show_bounds(
+            bounds=[xmin, xmax, ymin, ymax, zmin, zmax], show_zlabels=False,
+            n_xlabels=2, n_ylabels=2, xtitle='', ytitle='', ztitle='',
+            font_family='arial', font_size=12
+        )
+    elif view == 'xz':
+        pl.view_xz()
+        pl.show_bounds(
+            bounds=[xmin, xmax, ymin, ymax, zmin, zmax], show_ylabels=False,
+            n_xlabels=2, n_zlabels=2, xtitle='', ytitle='', ztitle='',
+            font_family='arial', font_size=12
+        )
+    elif view == 'yz':
+        pl.view_yz()
+        pl.show_bounds(
+            bounds=[xmin, xmax, ymin, ymax, zmin, zmax], show_xlabels=False,
+            n_ylabels=2, n_zlabels=2, xtitle='', ytitle='', ztitle='',
+            font_family='arial', font_size=12
+        )
     pl.add_axes()
     pl.reset_camera(bounds=[xmin, xmax, ymin, ymax, zmin, zmax])
-    pl.show_bounds(
-        bounds=[xmin, xmax, ymin, ymax, zmin, zmax], show_zlabels=False,
-        n_xlabels=2, n_ylabels=2, xtitle='', ytitle='', ztitle='',
-        font_family='arial', font_size=12
-    )
 
     return pl
 
 #######################################################################
-def plot_simulation(filenames, outfilename, R, colors, xmin, xmax, ymin,
-                    ymax, zmin, zmax, birdseye=True, res=50, fps=10):
+def plot_simulation(filenames, outfilename, R, xmin, xmax, ymin,
+                    ymax, zmin, zmax, view='xy', res=50, fps=10):
     """
+    Given an ordered list of files containing cells to be plotted, parse 
+    and plot each population of cells and generate a video. 
+
+    Parameters
+    ----------
+    filenames : list of str
+        Ordered list of paths to files containing the cells to be plotted.
+    outfilename : str
+        Output filename. 
+    R : float
+        Cell radius.
+    colors : list
+        List of colors for each cell.
+    xmin, xmax : float, float
+        x-axis bounds. 
+    ymin, ymax : float, float
+        y-axis bounds.
+    zmin, zmax : float, float
+        z-axis bounds.
+    view : str, 'xy' or 'xz' or 'yz'
+        Set the view to the given pair of axes. 
+    res : int
+        Resolution for plotting each cylinder and hemisphere.
+    fps : int
+        Frames per second.
     """
-    pl = pv.Plotter(off_screen=True)
     images = []
 
     for filename in filenames:
         # Parse and plot the cells in the given file
         cells, params = read_cells(filename)
+        colors = [
+            sns.color_palette()[0] if cells[i, 5] >= -0.5 else sns.color_palette()[3]
+            for i in range(cells.shape[0])
+        ]
+        print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
+        pl = pv.Plotter(off_screen=True)
         pl = plot_cells(
             cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
-            birdseye=birdseye, res=res
+            view=view, res=res
         )
 
         # Get a screenshot of the plotted cells
@@ -114,6 +159,7 @@ def plot_simulation(filenames, outfilename, R, colors, xmin, xmax, ymin,
 
         # Convert to PIL image and append
         images.append(Image.fromarray(image))
+        pl.close()
 
     # Stitch the images together and export as an .avi file
     width, height = images[0].size
@@ -126,18 +172,9 @@ def plot_simulation(filenames, outfilename, R, colors, xmin, xmax, ymin,
 
 #######################################################################
 if __name__ == '__main__':
-    cells, params = read_cells('test_iter27350000.txt')
+    cells, params = read_cells('test/test_init.txt')
     R = params['R']
-    colors = [
-        sns.color_palette()[0] if cells[i, 5] >= -0.5 else sns.color_palette()[3]
-        for i in range(cells.shape[0])
-    ]
-    #pl = pv.Plotter()
-    #pl = plot_cells(
-    #    cells, pl, R, colors, -20, 20, -20, 20, 0, 0, birdseye=False, res=50
-    #)
-    #pl.save_graphic('test.pdf')
     plot_simulation(
-        ['test_iter27350000.txt'], 'test.avi', R, colors, -20, 20, -20,
-        20, 0, 0, birdseye=True, res=50
+        ['test/test_iter{}.txt'.format(i) for i in range(3000000, 3050000, 10000)],
+        'test.avi', R, -20, 20, -20, 20, 0, 0, view='xy', res=50, fps=10
     )
