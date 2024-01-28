@@ -589,37 +589,6 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     Array<T, Dynamic, 2> dEdq_surface_adhesion = cellSurfaceAdhesionForces<T>(
         cells, ss, R, adhesion_energy_density, nz_threshold
     );
-    /*
-    if (cells.rows() >= 3)    // TODO
-    {
-        std::cout << dEdq_cell << std::endl;
-        for (int i = 0; i < n; ++i)
-        {
-            std::cout << cells(i, 2) << " " << cells(i, 5) << " " << R << " "
-                      << cells(i, 7) << " " << ss(i) << std::endl;
-            T int1 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
-            T int2 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
-            T int3 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 2.0, ss(i));
-            T int4 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
-            T int5 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.5, ss(i));
-            T int6 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
-            std::cout << "rep " << int1 << " " << int2 << " " << int3 << " "
-                      << int4 << " " << int5 << " " << int6 << std::endl;
-        }
-        std::cout << dEdq_surface_repulsion << std::endl;
-        for (int i = 0; i < n; ++i)
-        {
-            std::cout << cells(i, 2) << " " << cells(i, 5) << " " << R << " "
-                      << cells(i, 7) << " " << ss(i) << std::endl;
-            T int1 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
-            T int2 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
-            T int3 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
-            T int4 = integral4(cells(i, 2), cells(i, 5), R, cells(i, 7), ss(i));
-            std::cout << "adh " << int1 << " " << int2 << " " << int3 << " " << int4 << std::endl;
-        }
-        std::cout << dEdq_surface_adhesion << std::endl;
-    }
-    */
 
     // For each cell ... 
     for (int i = 0; i < n; ++i)
