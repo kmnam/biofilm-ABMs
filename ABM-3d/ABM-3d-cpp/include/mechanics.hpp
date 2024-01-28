@@ -479,10 +479,13 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
         }
         // Case 2: the overlap is instead greater than R - Rcell (i.e., it 
         // encroaches into the bodies of the two cells)
+        //
+        // TODO Does this change the verticalization trajectory?
         else if (overlap >= R - Rcell)
         {
-            T term = prefactors(3) * std::pow(overlap - R + Rcell, 1.5);
-            prefactor = prefactors(0) * (prefactors(2) + term); 
+            //T term = prefactors(3) * std::pow(overlap - R + Rcell, 1.5);
+            //prefactor = prefactors(0) * (prefactors(2) + term);
+            prefactor = prefactors(1) * std::pow(overlap, 1.5); 
         }
 
         if (overlap > 0)
