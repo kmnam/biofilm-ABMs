@@ -13,6 +13,7 @@ import numpy as np
 from PIL import Image
 import cv2
 import pyvista as pv
+pv.start_xvfb()
 import seaborn as sns
 from utils import read_cells, parse_dir
 
@@ -176,21 +177,22 @@ if __name__ == '__main__':
     filedir = sys.argv[1]
     outprefix = sys.argv[2]
     filenames = parse_dir(filedir)
+    print(filenames)
 
     # Get cell radius and final dimensions from final file
     cells, params = read_cells(filenames[-1])
     R = params['R']
-    xmin = cells[:, 0].min().floor()
-    xmax = cells[:, 0].max().ceil()
-    ymin = cells[:, 1].min().floor()
-    ymax = cells[:, 1].max().ceil()
-    zmin = cells[:, 2].min().floor()
-    zmax = cells[:, 2].max().ceil()
+    xmin = np.floor(cells[:, 0].min())
+    xmax = np.ceil(cells[:, 0].max())
+    ymin = np.floor(cells[:, 1].min())
+    ymax = np.ceil(cells[:, 1].max())
+    zmin = np.floor(cells[:, 2].min())
+    zmax = np.ceil(cells[:, 2].max())
 
     # Plot the simulation in 200-frame increments
     for i in range(len(filenames) // 200 + 1):
         start = i * 200
-        end = start + end
+        end = start + 200
         plot_simulation(
             filenames[start:end], outprefix + '_{}.avi'.format(i), R,
             xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=50, fps=10
