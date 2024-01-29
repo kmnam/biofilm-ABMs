@@ -99,10 +99,6 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
             T int4 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
             T int5 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.5, ss(i));
             T int6 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
-            //dEdq(i, 1) -= prefactor0 * cells(i, 5) * int3;
-            //dEdq(i, 1) -= prefactor0 * (1 - nz2) * int4; 
-            //dEdq(i, 1) += prefactor1 * cells(i, 5) * int5;
-            //dEdq(i, 1) -= prefactor2 * nz2 * int6;
             dEdq(i, 1) -= prefactor0 * (-cells(i, 5)) * int3;
             dEdq(i, 1) -= prefactor0 * (1 - nz2) * int4;
             dEdq(i, 1) += prefactor1 * (-cells(i, 5)) * int5;
@@ -169,10 +165,6 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             T term4 = 0;
             if (ss(i) >= -cells(i, 7) && ss(i) < cells(i, 7))
                 term4 = (prefactor1 / 2) * (R - cells(i, 2));
-            //dEdq(i, 1) += prefactor2 * cells(i, 5) * int2;
-            //dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
-            //dEdq(i, 1) -= prefactor1 * cells(i, 5) * int4;
-            //dEdq(i, 1) -= term4;
             dEdq(i, 1) += prefactor2 * (-cells(i, 5)) * int2; 
             dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
             dEdq(i, 1) -= prefactor1 * (-cells(i, 5)) * int4;
@@ -544,9 +536,7 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
                                                 const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                                 const T E0,
                                                 const T adhesion_energy_density,
-                                                const T nz_threshold, 
-                                                const Ref<const Array<T, 6, 1> >& noise,
-                                                const T noise_strength)
+                                                const T nz_threshold) 
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -618,28 +608,10 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         b(4) = -dEdq_cell(i, 4);
         b(5) = -dEdq_cell(i, 5) - dEdq_surface_repulsion(i, 1) - dEdq_surface_adhesion(i, 1);
 
-        // Solve the corresponding linear system without noise
+        // Solve the corresponding linear system
         auto QR = A.matrix().colPivHouseholderQr(); 
         Array<T, 7, 1> x = QR.solve(b.matrix()).array();
-
-        // If a nonzero noise vector has been specified ... 
-        if ((noise != 0).any())
-        {
-            // Solve the linear system corresponding to the given noise vector
-            Array<T, 7, 1> r = Array<T, 7, 1>::Zero();
-            r(Eigen::seq(0, 5)) = noise;
-            Array<T, 7, 1> y = QR.solve(r.matrix()).array();
-
-            // Determine noise magnitude by comparing magnitudes of x and y
-            T eps = noise_strength * x.head(6).matrix().norm() / y.head(6).matrix().norm();
-
-            // Compute resulting velocities 
-            velocities.row(i) = (x + eps * y).head(6);
-        }
-        else    // Otherwise ... 
-        {
-            velocities.row(i) = x.head(6);
-        }
+        velocities.row(i) = x.head(6);
     }
 
     return velocities;  
@@ -716,10 +688,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
                                         const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                         const T E0,
                                         const T adhesion_energy_density,
-                                        const T nz_threshold,
-                                        boost::random::mt19937& rng,
-                                        std::function<T(boost::random::mt19937&)>& noise_dist,
-                                        const T noise_strength)
+                                        const T nz_threshold)
 {
     // Determine noise to add to each generalized force at each timestep
     Array<T, 6, 1> noise = Array<T, 6, 1>::Zero();
@@ -736,7 +705,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
     velocities.push_back(
         getVelocitiesFromNeighbors<T>(
             cells, neighbors, R, Rcell, cell_cell_prefactors, E0,
-            adhesion_energy_density, nz_threshold, noise, noise_strength
+            adhesion_energy_density, nz_threshold
         )
     );
     for (int i = 1; i < s; ++i)
@@ -750,7 +719,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
         velocities.push_back(
             getVelocitiesFromNeighbors<T>(
                 cells_i, neighbors, R, Rcell, cell_cell_prefactors, E0,
-                adhesion_energy_density, nz_threshold, noise, noise_strength
+                adhesion_energy_density, nz_threshold
             )
         );
     }
