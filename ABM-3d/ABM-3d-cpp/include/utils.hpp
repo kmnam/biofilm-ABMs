@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/18/2024
+ *     1/28/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -72,7 +72,7 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
     {
         for (int j = 0; j < cells.cols(); ++j)
         {
-            if (j == 12)         // If the entry is a group identifier
+            if (j == 13)         // If the entry is a group identifier
                 outfile << static_cast<int>(cells(i, j)) << '\t'; 
             else                 // Otherwise 
                 outfile << cells(i, j) << '\t'; 
