@@ -2,7 +2,7 @@
  * Implementations of cell-cell and cell-surface interaction forces.
  *
  * In what follows, a population of N cells is represented as a 2-D array of
- * size (N, 12+), where each row represents a cell and stores the following 
+ * size (N, 13+), where each row represents a cell and stores the following 
  * data: 
  *
  * 0) x-coordinate of cell center
@@ -17,6 +17,7 @@
  * 9) cell growth rate
  * 10) cell's ambient viscosity with respect to surrounding fluid
  * 11) cell-surface friction coefficient
+ * 12) cell-surface adhesion energy density
  *
  * Additional features may be included in the array but these are not
  * relevant for the computations implemented here. 
@@ -25,7 +26,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/27/2024
+ *     1/28/2024
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -116,7 +117,6 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
  * @param cells Existing population of cells.
  * @param ss Cell-body coordinates at which each cell-surface overlap is zero. 
  * @param R Cell radius.
- * @param adhesion_energy_density Cell-surface adhesion energy density.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero. 
  */
@@ -124,16 +124,15 @@ template <typename T>
 Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                                const Ref<const Array<T, Dynamic, 1> >& ss,
                                                const T R,
-                                               const T adhesion_energy_density, 
                                                const T nz_threshold)
 {
     Array<T, Dynamic, 1> abs_nz = cells(Eigen::all, 5).abs(); 
     Array<T, Dynamic, 2> dEdq = Array<T, Dynamic, 2>::Zero(cells.rows(), 2);
 
     // For each cell ...
-    const T prefactor0 = adhesion_energy_density * std::pow(R, 0.5) / 2;
-    const T prefactor1 = 2 * adhesion_energy_density * boost::math::constants::pi<T>() * R;
-    const T prefactor2 = 2 * adhesion_energy_density * std::pow(R, 0.5);
+    const T prefactor0 = std::pow(R, 0.5) / 2;
+    const T prefactor1 = 2 * boost::math::constants::pi<T>() * R;
+    const T prefactor2 = 2 * std::pow(R, 0.5);
     for (int i = 0; i < cells.rows(); ++i)
     {
         // If the z-coordinate of the cell's orientation is zero ... 
@@ -142,7 +141,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             T phi = R - cells(i, 2);
             // dEdq(i, 0) is nonzero if phi > 0
             if (phi > 0)
-                dEdq(i, 0) = prefactor0 * cells(i, 6) / std::pow(phi, 0.5);
+                dEdq(i, 0) = cells(i, 12) * prefactor0 * cells(i, 6) / std::pow(phi, 0.5);
             // dEdq(i, 1) is zero 
         }
         // Otherwise ... 
@@ -156,6 +155,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             if (ss(i) >= -cells(i, 7) && ss(i) < cells(i, 7)) 
                 term2 = (prefactor1 / 2) * cells(i, 5);
             dEdq(i, 0) = prefactor0 * (1 - nz2) * int1 - term2;
+            dEdq(i, 0) *= cells(i, 12);
 
             // Compute the derivative of the cell-surface adhesion energy
             // with respect to z-orientation
@@ -169,6 +169,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
             dEdq(i, 1) -= prefactor1 * (-cells(i, 5)) * int4;
             dEdq(i, 1) -= term4;
+            dEdq(i, 1) *= cells(i, 12);
         }
     }
 
@@ -521,7 +522,6 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  * @param cell_cell_prefactors Array of four pre-computed prefactors for
  *                             cell-cell interaction forces.
  * @param E0 Elastic modulus of EPS.
- * @param adhesion_energy_density Cell-surface adhesion energy density.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero.
  * @returns Array of translational and orientational velocities.   
@@ -531,9 +531,7 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
                                                 const Ref<const Array<T, Dynamic, 7> >& neighbors,
                                                 const T R, const T Rcell,
                                                 const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                                                const T E0,
-                                                const T adhesion_energy_density,
-                                                const T nz_threshold) 
+                                                const T E0, const T nz_threshold) 
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -574,7 +572,7 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         cells, ss, R, E0, nz_threshold
     );
     Array<T, Dynamic, 2> dEdq_surface_adhesion = cellSurfaceAdhesionForces<T>(
-        cells, ss, R, adhesion_energy_density, nz_threshold
+        cells, ss, R, nz_threshold
     );
 
     // For each cell ... 
@@ -665,7 +663,6 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param cell_cell_prefactors Array of four pre-computed prefactors for
  *                             cell-cell interaction forces.
  * @param E0 Elastic modulus of EPS. 
- * @param adhesion_energy_density Cell-surface adhesion energy density.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero.
  * @returns Updated population of cells, along with the array of errors in
@@ -680,9 +677,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
                                         const Ref<const Array<T, Dynamic, 7> >& neighbors, 
                                         const T dt, const T R, const T Rcell,
                                         const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                                        const T E0,
-                                        const T adhesion_energy_density,
-                                        const T nz_threshold)
+                                        const T E0, const T nz_threshold)
 {
     // Compute velocities at given partial timesteps 
     int n = cells.rows(); 
@@ -690,8 +685,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
     std::vector<Array<T, Dynamic, 6> > velocities; 
     velocities.push_back(
         getVelocitiesFromNeighbors<T>(
-            cells, neighbors, R, Rcell, cell_cell_prefactors, E0,
-            adhesion_energy_density, nz_threshold
+            cells, neighbors, R, Rcell, cell_cell_prefactors, E0, nz_threshold
         )
     );
     for (int i = 1; i < s; ++i)
@@ -704,8 +698,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
         normalizeOrientations<T>(cells_i);    // Renormalize orientations after each modification
         velocities.push_back(
             getVelocitiesFromNeighbors<T>(
-                cells_i, neighbors, R, Rcell, cell_cell_prefactors, E0,
-                adhesion_energy_density, nz_threshold
+                cells_i, neighbors, R, Rcell, cell_cell_prefactors, E0, nz_threshold
             )
         );
     }
