@@ -1,6 +1,6 @@
 /**
  * In what follows, a population of N cells is represented as a 2-D array of 
- * size (N, 12), where each row represents a cell and stores the following data:
+ * size (N, 13), where each row represents a cell and stores the following data:
  * 
  * 0) x-coordinate of cell center
  * 1) y-coordinate of cell center
@@ -14,12 +14,13 @@
  * 9) cell growth rate
  * 10) cell's ambient viscosity with respect to surrounding fluid
  * 11) cell-surface friction coefficient
+ * 12) cell-surface adhesion energy density
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/25/2024
+ *     1/28/2024
  */
 
 #include <iostream>
@@ -166,8 +167,8 @@ int main(int argc, char** argv)
     T t = 0; 
     int i = 0;
     int n = 1;
-    Array<T, Dynamic, Dynamic> cells(n, 12);
-    cells << 0, 0, 0.99 * R, 1, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface;
+    Array<T, Dynamic, Dynamic> cells(n, 13);
+    cells << 0, 0, 0.99 * R, 1, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface, sigma0;
     Array<T, Dynamic, 6> velocities(n, 6);
     velocities << 0, 0, 0, 0, 0, 0;
     
@@ -209,7 +210,7 @@ int main(int argc, char** argv)
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
             A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-            E0, sigma0, nz_threshold
+            E0, nz_threshold
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 6> errors = std::get<1>(result);
@@ -226,7 +227,7 @@ int main(int argc, char** argv)
                 dt *= std::pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
                     A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-                    E0, sigma0, nz_threshold
+                    E0, nz_threshold
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
