@@ -43,12 +43,6 @@ const int max_tries = 3;
 // Minimum error per Runge-Kutta iteration
 const T min_error = static_cast<T>(1e-30);
 
-// Maximum error per Runge-Kutta iteration
-const T max_error_allowed = static_cast<T>(1e-6);
-
-// Maximum stepsize
-const T max_stepsize = static_cast<T>(1e-6); 
-
 // Minimum distance between neighboring cells
 const T min_dist = static_cast<T>(1e-8);
 
@@ -83,7 +77,8 @@ int main(int argc, char** argv)
     const T sigma0 = static_cast<T>(json_data["sigma0"].as_double()); 
     const T eta_ambient = static_cast<T>(json_data["eta_ambient"].as_double()); 
     const T eta_surface = static_cast<T>(json_data["eta_surface"].as_double()); 
-    T dt = static_cast<T>(json_data["dt"].as_double());    // Can be changed 
+    T dt = static_cast<T>(json_data["max_dt"].as_double());    // Can be changed
+    const T max_stepsize = dt; 
     const int iter_write = json_data["iter_write"].as_int64(); 
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
     const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64(); 
@@ -93,8 +88,8 @@ int main(int argc, char** argv)
     const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
     const T theta_xy_bound = static_cast<T>(json_data["max_orientation_angle_xy"].as_double());
     const T theta_z_bound = static_cast<T>(json_data["max_orientation_angle_z"].as_double());
-    const T noise_strength = static_cast<T>(json_data["noise_strength"].as_double());
     const T nz_threshold = static_cast<T>(json_data["nz_threshold"].as_double());
+    const T max_error_allowed = static_cast<T>(json_data["max_rungekutta_error"].as_double());
 
     // Prefactors for cell-cell interaction forces
     const T sqrtR = std::sqrt(R); 
@@ -160,13 +155,6 @@ int main(int argc, char** argv)
             };
     }
 
-    // Net force noise distribution: uniform distribution centered at zero
-    std::function<T(boost::random::mt19937&)> noise_dist_func =
-        [&uniform_dist](boost::random::mt19937& rng)
-        {
-            return -1 + 2 * uniform_dist(rng);
-        };
-
     // Output file prefix
     std::string prefix = argv[2];
 
@@ -221,7 +209,7 @@ int main(int argc, char** argv)
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
             A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-            E0, sigma0, nz_threshold, rng, noise_dist_func, noise_strength
+            E0, sigma0, nz_threshold
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 6> errors = std::get<1>(result);
@@ -238,7 +226,7 @@ int main(int argc, char** argv)
                 dt *= std::pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
                     A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-                    E0, sigma0, nz_threshold, rng, noise_dist_func, noise_strength
+                    E0, sigma0, nz_threshold
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
