@@ -16,16 +16,17 @@
  * 9) cell growth rate
  * 10) cell's ambient viscosity with respect to surrounding fluid
  * 11) cell-surface friction coefficient
- * 12) cell group identifier (integer, optional)
+ * 12) cell-surface adhesion energy density
+ * 13) cell group identifier (integer, optional)
  *
  * Additional features may be included in the array but these are not 
- * relevant for the computations implemented here
+ * relevant for the computations implemented here.
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/25/2024
+ *     1/30/2024
  */
 
 #ifndef BIOFILM_CELL_GROWTH_3D_HPP
