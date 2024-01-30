@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/12/2024
+ *     1/30/2024
  */
 
 #ifndef BIOFILM_CELL_GROWTH_HPP
@@ -33,9 +33,15 @@
 #include <limits>
 #include <tuple>
 #include <Eigen/Dense>
-#include "mechanics.hpp"
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Segment_3.h>
+#include "distances.hpp"
+#include "utils.hpp"
 
 using namespace Eigen; 
+
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
+typedef K::Segment_3 Segment_3;
 
 /**
  * Grow the cells in the given population according to the exponential 
@@ -67,6 +73,50 @@ Array<int, Dynamic, 1> divideMaxLength(const Ref<const Array<T, Dynamic, Dynamic
                                        const T Ldiv)
 {
     return (cells.col(4) > Ldiv).template cast<int>(); 
+}
+
+/**
+ * Get the minimum distance from the indicated cell to the others in 
+ * the given population.
+ *
+ * @param cells Existing population of cells.
+ * @param segments Vector of Segment_3 instances for the cells.
+ * @param i Index of cell to which to calculate distances.
+ * @returns Minimum distance of cell i to the other cells. 
+ */
+template <typename T>
+T minDistToCell(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
+                std::vector<Segment_3>& segments, const int i)
+{
+    // Instantiate kernel to be passed into distBetweenCells()
+    K kernel;
+
+    // Initializing the minimum distance to infinity, run through the 
+    // cells in the population
+    int n = cells.rows(); 
+    T mindist = std::numeric_limits<T>::infinity();
+    for (int j = 0; j < n; ++j)
+    {
+        if (i != j)
+        {
+            auto result = distBetweenCells<T>(
+                segments[i], segments[j],
+                cells(i, Eigen::seq(0, 1)).matrix(), 
+                cells(i, Eigen::seq(2, 3)).matrix(),
+                cells(i, 5),
+                cells(j, Eigen::seq(0, 1)).matrix(),
+                cells(j, Eigen::seq(2, 3)).matrix(),
+                cells(j, 5),
+                kernel
+            );
+            Matrix<T, 2, 1> dij = std::get<0>(result);
+            T dist = dij.norm();
+            if (dist < mindist)
+                mindist = dist;
+        }
+    }
+
+    return mindist;
 }
 
 /**
