@@ -1,6 +1,9 @@
 /**
  * Distance calculations in two dimensions.
  *
+ * Note that the CGAL functions used here pertain to points and objects
+ * in 3-D, for which there is the correct functionality.
+ *
  * Authors:
  *     Kee-Myoung Nam
  *
@@ -14,41 +17,43 @@
 #include <tuple>
 #include <Eigen/Dense>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Point_2.h>
-#include <CGAL/Segment_2.h>
-#include <CGAL/squared_distance_2.h>
+#include <CGAL/Point_3.h>
+#include <CGAL/Segment_3.h>
+#include <CGAL/squared_distance_3.h>
 
 using namespace Eigen; 
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
-typedef K::Point_2 Point_2;
-typedef K::Segment_2 Segment_2;
+typedef K::Point_3 Point_3;
+typedef K::Segment_3 Segment_3;
 
 /**
- * Generate a vector of Segment_2 instances for the given population of cells.
+ * Generate a vector of Segment_3 instances for the given population of cells.
  *
- * Note that Segment_2 is not mutable, and therefore a new vector must be 
+ * Note that Segment_3 is not mutable, and therefore a new vector must be 
  * generated every time the population is updated in some way. 
  *
  * @param cells Existing population of cells.
- * @returns Vector of Segment_2 instances for each cell 
+ * @returns Vector of Segment_3 instances for each cell 
  */
 template <typename T>
-std::vector<Segment_2> generateSegments(const Ref<const Array<T, Dynamic, Dynamic> >& cells)
+std::vector<Segment_3> generateSegments(const Ref<const Array<T, Dynamic, Dynamic> >& cells)
 {
-    std::vector<Segment_2> segments;
+    std::vector<Segment_3> segments;
     for (int i = 0; i < cells.rows(); ++i)
     {
-        // Define the Segment_2 instance from the cell's two endpoints 
-        Point_2 p(
+        // Define the Segment_3 instance from the cell's two endpoints 
+        Point_3 p(
             cells(i, 0) - cells(i, 5) * cells(i, 2),
             cells(i, 1) - cells(i, 5) * cells(i, 3),
+            0.0
         );
-        Point_2 q(
+        Point_3 q(
             cells(i, 0) + cells(i, 5) * cells(i, 2),
             cells(i, 1) + cells(i, 5) * cells(i, 3),
+            0.0
         );
-        segments.push_back(Segment_2(p, q));
+        segments.push_back(Segment_3(p, q));
     }
 
     return segments;
@@ -60,8 +65,8 @@ std::vector<Segment_2> generateSegments(const Ref<const Array<T, Dynamic, Dynami
  *
  * The distance vector returned by this function runs from cell 1 to cell 2.
  *
- * @param cell1 Segment_2 instance for cell 1.
- * @param cell2 Segment_2 instance for cell 2.
+ * @param cell1 Segment_3 instance for cell 1.
+ * @param cell2 Segment_3 instance for cell 2.
  * @param r1 Center of cell 1.
  * @param n1 Orientation of cell 1.
  * @param half_l1 Half of length of cell 1.
@@ -74,8 +79,8 @@ std::vector<Segment_2> generateSegments(const Ref<const Array<T, Dynamic, Dynami
  *          distance is returned as a vector running from cell 1 to cell 2.
  */
 template <typename T>
-std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_2& cell1,
-                                                   const Segment_2& cell2,
+std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
+                                                   const Segment_3& cell2,
                                                    const Ref<const Matrix<T, 2, 1> >& r1,
                                                    const Ref<const Matrix<T, 2, 1> >& n1,
                                                    const T half_l1,
@@ -84,10 +89,10 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_2& cell1,
                                                    const T half_l2,
                                                    const K& k)
 {
-    auto result = CGAL::Distance_2::internal::squared_distance(cell1, cell2, k);
+    auto result = CGAL::Distance_3::internal::squared_distance(cell1, cell2, k);
     T s = static_cast<T>(CGAL::to_double(result.x)) * 2 * half_l1 - half_l1;
     T t = static_cast<T>(CGAL::to_double(result.y)) * 2 * half_l2 - half_l2;
-    Matrix<T, 2, 1> dist = r2 + t * n2 - r1 - s * n1;
+    Matrix<T, 2, 1> dist = (r2 + t * n2 - r1 - s * n1)(Eigen::seq(0, 1));
 
     return std::make_tuple(dist, s, t); 
 }
