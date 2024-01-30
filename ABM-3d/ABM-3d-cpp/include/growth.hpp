@@ -36,10 +36,15 @@
 #include <limits>
 #include <tuple>
 #include <Eigen/Dense>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Segment_3.h>
 #include "distances.hpp"
 #include "utils.hpp"
 
-using namespace Eigen; 
+using namespace Eigen;
+
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
+typedef K::Segment_3 Segment_3;
 
 /**
  * Grow the cells in the given population according to the exponential 
@@ -71,6 +76,50 @@ Array<int, Dynamic, 1> divideMaxLength(const Ref<const Array<T, Dynamic, Dynamic
                                        const T Ldiv)
 {
     return (cells.col(6) > Ldiv).template cast<int>(); 
+}
+
+/**
+ * Get the minimum distance from the indicated cell to the others in 
+ * the given population.
+ *
+ * @param cells Existing population of cells.
+ * @param segments Vector of Segment_3 instances for the cells.
+ * @param i Index of cell to which to calculate distances.
+ * @returns Minimum distance of cell i to the other cells. 
+ */
+template <typename T>
+T minDistToCell(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
+                std::vector<Segment_3>& segments, const int i)
+{
+    // Instantiate kernel to be passed into distBetweenCells()
+    K kernel();
+
+    // Initializing the minimum distance to infinity, run through the 
+    // cells in the population
+    int n = cells.rows(); 
+    T mindist = std::numeric_limits<T>::infinity();
+    for (int j = 0; j < n; ++j)
+    {
+        if (i != j)
+        {
+            auto result = distBetweenCells<T>(
+                segments[i], segments[j],
+                cells(i, Eigen::seq(0, 2)).matrix(), 
+                cells(i, Eigen::seq(3, 5)).matrix(),
+                cells(i, 7),
+                cells(j, Eigen::seq(0, 2)).matrix(),
+                cells(j, Eigen::seq(3, 5)).matrix(),
+                cells(j, 7),
+                kernel
+            );
+            Matrix<T, 3, 1> dij = std::get<0>(result);
+            T dist = dij.norm();
+            if (dist < mindist)
+                mindist = dist;
+        }
+    }
+
+    return mindist;
 }
 
 /**
@@ -140,47 +189,38 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 idx_divide.push_back(i);
         }
 
+        // Generate Segment_3 instances for the cells 
+        std::vector<Segment_3> segments = generateSegments<T>(cells);
+
         // Get an extended copy of the existing population
         Array<T, Dynamic, Dynamic> cells_total(n + n_divide, cells.cols());
 
-        // Get the minimum distance from each dividing cell among all other cells
-        // in the population
+        // Get the minimum distance from each dividing cell among all other
+        // cells in the population
         //
         // If the minimum distance is less than the default value, then the
         // daughter cells do not undergo random re-orientation 
         //
-        // Otherwise, the daughter cells are randomly re-oriented and a minimum
-        // distance criterion is checked for both daughter cells  
+        // Otherwise, the daughter cells are randomly re-oriented and a
+        // minimum distance criterion is checked for both daughter cells  
         Array<int, Dynamic, 1> check_distance = Array<int, Dynamic, 1>::Ones(n_divide); 
         int m = 0;
         const T mindist_default = 2 * Rcell;    // Default value
         for (const int i : idx_divide)
         {
-            T mindist_i = mindist_default;
-            for (int j = 0; j < n; ++j)
-            {
-                if (i != j)
-                {
-                    auto result = distBetweenCells<T>(
-                        cells(i, Eigen::seq(0, 2)).matrix(), 
-                        cells(i, Eigen::seq(3, 5)).matrix(),
-                        cells(i, 7),
-                        cells(j, Eigen::seq(0, 2)).matrix(),
-                        cells(j, Eigen::seq(3, 5)).matrix(),
-                        cells(j, 7)
-                    );
-                    Matrix<T, 3, 1> dij = std::get<0>(result);
-                    T dist = dij.norm();
-                    if (dist < mindist_i)
-                        mindist_i = dist;
-                }
-            }
-            if (mindist_i < mindist_default)
+            // Get the minimum distance to cell i
+            T mindist = minDistToCell<T>(cells, segments, i);
+
+            // If the minimum distance is less than the default value
+            // (there is no room to rotate), then don't re-orient daughter
+            // cells and forgo checking their minimum distances
+            if (mindist < mindist_default)
                 check_distance(m) = 0;
+            m++;
         }
 
-        // Initialize array of indicators for whether each dividing cell satisfies
-        // the corresponding minimum distance criterion
+        // Initialize array of indicators for whether each dividing cell
+        // satisfies the corresponding minimum distance criterion
         Array<int, Dynamic, 1> satisfies_distance = Array<int, Dynamic, 1>::Zero(n_divide);
         for (int i = 0; i < n_divide; ++i)
         {
@@ -191,10 +231,11 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
         // Try to satisfy the distance criterion for all cells up to a fixed 
         // number of iterations
         //
-        // The last iteration is attempted with theta1 = theta2 = 0, in which
-        // case the division should give rise to no change in the minimum 
-        // distance from the dividing cell to the daughter cells; therefore, 
-        // the distance criterion should be satisfied on the last iteration
+        // The last iteration is attempted with no re-orientation of the 
+        // daughter cells, in which case the division should give rise to no
+        // change in the minimum distance from the dividing cell to the
+        // daughter cells; therefore, the distance criterion should be
+        // satisfied on the last iteration
         //
         // If not (due to rare errors in distance calculation), then an 
         // exception is raised
@@ -218,8 +259,11 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             Array<T, Dynamic, 1> theta_z2 = Array<T, Dynamic, 1>::Zero(n_divide);
             for (int i = 0; i < n_divide; ++i)
             {
-                // If the minimum distance for the dividing cell is less
-                // than the default value, then set theta1 = theta2 = 0
+                // Sample angles by which to rotate the daughter cells
+                //
+                // If there is no room to rotate the daughter cells or the
+                // maximum number of tries have been attempted, then set 
+                // both angles to zero
                 if (ntries < ntries_total - 1 && check_distance(i) == 1)
                 {
                     theta_xy1(i) = daughter_angle_xy_dist(rng);
@@ -230,8 +274,6 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             }
             for (int i = 0; i < n_divide; ++i)
             {
-                std::cout << theta_xy1(i) << " " << theta_z1(i) << " "
-                          << theta_xy2(i) << " " << theta_z2(i) << std::endl;
                 Array<T, 3, 1> u = dividing_orientations.row(i).transpose();
                 Array<T, 3, 1> v1 = rotateOutOfXY<T>(rotateXY<T>(u, theta_xy1(i)), theta_z1(i));
                 cells_total(idx_divide[i], Eigen::seq(3, 5)) = v1;
@@ -270,11 +312,12 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             // for the daughter cell centers
             Array<T, Dynamic, 1> delta1 = L1 / 2 + R; 
             Array<T, Dynamic, 1> delta2 = L2 / 2 + R;
-            // Define daughter cell lengths and locate daughter cell centers
+            // Define daughter cell lengths
             cells_total(idx_divide, 6) = L1; 
             cells_total(idx_divide, 7) = L1 / 2;
             new_cells.col(6) = L2;
             new_cells.col(7) = L2 / 2;
+            // Locate daughter cell centers
             cells_total(idx_divide, 0) = (
                 cells_total(idx_divide, 0) + (div - delta1) * cells_total(idx_divide, 3)
             );
@@ -300,11 +343,17 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
 
             // Copy over daughter cell data
             //
-            // Note that each daughter cell inherits its mother cell's viscosity
-            // and friction coefficient
+            // Note that each daughter cell inherits its mother cell's viscosity,
+            // friction coefficient, and surface adhesion energy density
             cells_total(Eigen::seqN(n, n_divide), Eigen::all) = new_cells;
 
-            // Check the distance criterion for each daughter cell
+            // Generate Segment_3 instances for the new population of cells
+            std::vector<Segment_3> segments_total = generateSegments<T>(cells_total);
+
+            // Check the distance criterion for each daughter cell ...
+            //
+            // First compute the minimum distance to each daughter cell
+            // in the new population
             Array<T, Dynamic, 1> daughter_mindists1(n_divide);
             Array<T, Dynamic, 1> daughter_mindists2(n_divide); 
             m = 0;
@@ -312,26 +361,8 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             {
                 if (check_distance(m) == 1)
                 {
-                    T daughter_mindist = std::numeric_limits<T>::infinity(); 
-                    for (int j = 0; j < cells_total.rows(); ++j)
-                    {
-                        if (i != j)
-                        {
-                            auto result = distBetweenCells<T>(
-                                cells_total(i, Eigen::seq(0, 2)).matrix(),
-                                cells_total(i, Eigen::seq(3, 5)).matrix(),
-                                cells_total(i, 7),
-                                cells_total(j, Eigen::seq(0, 2)).matrix(),
-                                cells_total(j, Eigen::seq(3, 5)).matrix(),
-                                cells_total(j, 7) 
-                            );
-                            Matrix<T, 3, 1> dij = std::get<0>(result);
-                            T dist = dij.norm(); 
-                            if (dist < daughter_mindist)
-                                daughter_mindist = dist;
-                        }
-                    }
-                    daughter_mindists1(m) = daughter_mindist;
+                    T mindist = minDistToCell<T>(cells_total, segments_total, i);
+                    daughter_mindists1(m) = mindist;
                 }
                 m++;
             }
@@ -340,32 +371,17 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             {
                 if (check_distance(m) == 1)
                 {
-                    T daughter_mindist = std::numeric_limits<T>::infinity(); 
-                    for (int j = 0; j < cells_total.rows(); ++j)
-                    {
-                        if (i != j)
-                        {
-                            auto result = distBetweenCells<T>(
-                                cells_total(i, Eigen::seq(0, 2)).matrix(),
-                                cells_total(i, Eigen::seq(3, 5)).matrix(),
-                                cells_total(i, 7),
-                                cells_total(j, Eigen::seq(0, 2)).matrix(),
-                                cells_total(j, Eigen::seq(3, 5)).matrix(),
-                                cells_total(j, 7) 
-                            );
-                            Matrix<T, 3, 1> dij = std::get<0>(result);
-                            T dist = dij.norm(); 
-                            if (dist < daughter_mindist)
-                                daughter_mindist = dist;
-                        }
-                    }
-                    daughter_mindists2(m) = daughter_mindist;
+                    T mindist = minDistToCell<T>(cells_total, segments_total, i);
+                    daughter_mindists2(m) = mindist;
                 }
                 m++;
             }
+            // Then determine whether the minimum distance to each pair
+            // of daughter cells is within the desired tolerance 
             for (int i = 0; i < n_divide; ++i)
             {
-                if (check_distance(i) == 1 && daughter_mindists1(i) >= mindist_default &&
+                if (check_distance(i) == 1 &&
+                    daughter_mindists1(i) >= mindist_default &&
                     daughter_mindists2(i) >= mindist_default)
                 {
                     satisfies_distance(i) = 1;
