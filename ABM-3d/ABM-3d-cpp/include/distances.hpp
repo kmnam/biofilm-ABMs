@@ -75,20 +75,21 @@ std::vector<Segment_3> generateSegments(const Ref<const Array<T, Dynamic, Dynami
  *          coordinates at which the shortest distance is achieved. The
  *          distance is returned as a vector running from cell 1 to cell 2.
  */
-std::tuple<Matrix<double, 3, 1>, double, double> distBetweenCells(const Segment_3& cell1,
-                                                                  const Segment_3& cell2,
-                                                                  const Ref<const Matrix<double, 3, 1> >& r1,
-                                                                  const Ref<const Matrix<double, 3, 1> >& n1,
-                                                                  const double half_l1,
-                                                                  const Ref<const Matrix<double, 3, 1> >& r2,
-                                                                  const Ref<const Matrix<double, 3, 1> >& n2,
-                                                                  const double half_l2,
-                                                                  const K& k)
+template <typename T>
+std::tuple<Matrix<T, 3, 1>, T, T> distBetweenCells(const Segment_3& cell1,
+                                                   const Segment_3& cell2,
+                                                   const Ref<const Matrix<T, 3, 1> >& r1,
+                                                   const Ref<const Matrix<T, 3, 1> >& n1,
+                                                   const T half_l1,
+                                                   const Ref<const Matrix<T, 3, 1> >& r2,
+                                                   const Ref<const Matrix<T, 3, 1> >& n2,
+                                                   const T half_l2,
+                                                   const K& k)
 {
     auto result = CGAL::Distance_3::internal::squared_distance(cell1, cell2, k);
-    double s = CGAL::to_double(result.x) * 2 * half_l1 - half_l1;
-    double t = CGAL::to_double(result.y) * 2 * half_l2 - half_l2;
-    Matrix<double, 3, 1> dist = r2 + t * n2 - r1 - s * n1;
+    T s = static_cast<T>(CGAL::to_double(result.x)) * 2 * half_l1 - half_l1;
+    T t = static_cast<T>(CGAL::to_double(result.y)) * 2 * half_l2 - half_l2;
+    Matrix<T, 3, 1> dist = r2 + t * n2 - r1 - s * n1;
 
     return std::make_tuple(dist, s, t); 
 }
