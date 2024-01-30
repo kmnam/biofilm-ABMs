@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/28/2024
+ *     1/30/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -126,6 +126,87 @@ T vonMises(const T mu, const T kappa, boost::random::mt19937& rng,
         return std::fmod(-std::acos(f) + mu, boost::math::constants::two_pi<T>()); 
     else 
         return mu;
+}
+
+/**
+ * Rotate the given orientation vector by the given Tait-Bryan angles. 
+ *
+ * @param n Input orientation vector.
+ * @param alpha Angle to rotate about z-axis.
+ * @param beta Angle to rotate about y-axis.
+ * @param gamma Angle to rotate about x-axis.
+ * @returns Rotated orientation vector.
+ */
+template <typename T>
+Array<T, 3, 1> rotate(const Ref<const Array<T, 3, 1> >& n, const T alpha, 
+                      const T beta, const T gamma)
+{
+    // Define rotation matrices about each axis and apply each rotation
+    // in sequence 
+    Matrix<T, 3, 3> Rx, Ry, Rz;
+    T sin_alpha = std::sin(alpha);
+    T cos_alpha = std::cos(alpha);
+    T sin_beta = std::sin(beta);
+    T cos_beta = std::cos(beta);
+    T sin_gamma = std::sin(gamma);
+    T cos_gamma = std::cos(gamma);
+    Rx << 1, 0, 0,
+          0, cos_gamma, -sin_gamma,
+          0, sin_gamma, cos_gamma;
+    Ry << cos_beta, 0, sin_beta,
+          0, 1, 0,
+          -sin_beta, 0, cos_beta;
+    Rz << cos_alpha, -sin_alpha, 0,
+          sin_alpha, cos_alpha, 0,
+          0, 0, 1;
+    return (Rz * Ry * Rx * n.matrix()).array();
+}
+
+/**
+ * Rotate the given orientation vector by the given angle in the xy-plane.
+ *
+ * @param n Input orientation vector.
+ * @param theta Angle to rotate (about z-axis). 
+ * @returns Rotated orientation vector.
+ */
+template <typename T>
+Array<T, 3, 1> rotateXY(const Ref<const Array<T, 3, 1> >& n, const T theta)
+{
+    Matrix<T, 3, 3> rot;
+    T sin_theta = std::sin(theta);
+    T cos_theta = std::cos(theta);
+    rot << cos_theta, -sin_theta, 0,
+           sin_theta, cos_theta, 0,
+           0, 0, 1;
+    return (rot * n.matrix()).array();
+}
+
+/**
+ * Rotate the given orientation vector by the given angle out of the xy-plane,
+ * maintaining the x- and y-orientations.
+ *
+ * This function rotates the given vector within the plane spanned by itself
+ * and the z-unit vector by the given angle. 
+ *
+ * @param n Input orientation vector.
+ * @param theta Angle to rotate (out of xy-plane). 
+ * @returns Rotated orientation vector.
+ */
+template <typename T>
+Array<T, 3, 1> rotateOutOfXY(const Ref<const Array<T, 3, 1> >& n, const T theta)
+{
+    // Get the unit vector along the axis of rotation
+    Matrix<T, 3, 1> z; 
+    z << 0, 0, 1;
+    Matrix<T, 3, 1> v = n.matrix().cross(z);
+    T norm = v.norm();
+    v /= norm;
+
+    // Use the Rodrigues' rotation formula to rotate the input vector
+    T sin_theta = std::sin(theta);
+    T cos_theta = std::cos(theta);
+    Matrix<T, 3, 1> w = v.cross(n.matrix()); 
+    return (n.matrix() * cos_theta + w * sin_theta).array();   // Third term is zero
 }
 
 /**
