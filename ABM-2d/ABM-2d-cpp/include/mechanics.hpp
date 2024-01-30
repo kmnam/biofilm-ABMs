@@ -26,8 +26,8 @@
  *     1/30/2024
  */
 
-#ifndef BIOFILM_MECHANICS_HPP
-#define BIOFILM_MECHANICS_HPP
+#ifndef BIOFILM_MECHANICS_2D_HPP
+#define BIOFILM_MECHANICS_2D_HPP
 
 #include <cassert>
 #include <cmath>
@@ -35,8 +35,14 @@
 #include <utility>
 #include <tuple>
 #include <Eigen/Dense>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Segment_3.h>
+#include "distances.hpp"
 
 using namespace Eigen;
+
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
+typedef K::Segment_3 Segment_3;
 
 /**
  * Compute the derivatives of the dissipation due to bulk viscosity and 
@@ -97,6 +103,12 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
     if (n == 1)
         return Array<T, Dynamic, 6>::Zero(0, 6);
 
+    // Generate Segment_3 instances for each cell 
+    std::vector<Segment_3> segments = generateSegments(cells);
+
+    // Instantiate kernel to be passed into distBetweenCells()
+    K kernel;
+
     // Maintain array of neighboring cells 
     //
     // Each row contains the following information about each pair of 
@@ -124,10 +136,10 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
                 // In this case, compute their actual distance and check that 
                 // they lie within neighbor_threshold of each other 
                 auto result = distBetweenCells<T>(
-                    cells(i, Eigen::seq(0, 1)).matrix(),
+                    segments[i], segments[j], cells(i, Eigen::seq(0, 1)).matrix(),
                     cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 5),
                     cells(j, Eigen::seq(0, 1)).matrix(),
-                    cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 5)
+                    cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 5), kernel
                 );
                 Matrix<T, 2, 1> dist_ij = std::get<0>(result); 
                 T si = std::get<1>(result);
@@ -162,6 +174,12 @@ template <typename T>
 void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
                              Ref<Array<T, Dynamic, 6> > neighbors)
 {
+    // Generate Segment_3 instances for each cell 
+    std::vector<Segment_3> segments = generateSegments(cells);
+
+    // Instantiate kernel to be passed into distBetweenCells()
+    K kernel;
+
     // Each row contains the following information about each pair of 
     // neighboring cells:
     // 0) Index i of first cell in neighboring pair
@@ -177,10 +195,10 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
         int i = static_cast<int>(neighbors(k, 0)); 
         int j = static_cast<int>(neighbors(k, 1)); 
         auto result = distBetweenCells<T>(
-            cells(i, Eigen::seq(0, 1)).matrix(),
+            segments[i], segments[j], cells(i, Eigen::seq(0, 1)).matrix(),
             cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 5),
             cells(j, Eigen::seq(0, 1)).matrix(),
-            cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 5)
+            cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 5), kernel
         ); 
         Matrix<T, 2, 1> dist_ij = std::get<0>(result); 
         T si = std::get<1>(result);
@@ -202,11 +220,8 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
  * @param R Cell radius, including the EPS. 
- * @param sqrtR Pre-computed square root of `R`.
  * @param Rcell Cell radius, excluding the EPS.
- * @param powRdiff Pre-computed value for `pow(R - Rcell, 1.5)`. 
  * @param E0 Elastic modulus of EPS. 
- * @param Ecell Elastic modulus of cell.
  * @param prefactors Array of four pre-computed prefactors, namely `2.5 * sqrt(R)`,
  *                   `2.5 * E0 * sqrt(R)`, `E0 * pow(R - Rcell, 1.5)`, and `Ecell`.
  * @returns Derivatives of the cell-cell interaction energies with respect 
