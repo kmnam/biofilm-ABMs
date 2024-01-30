@@ -17,7 +17,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/16/2024
+ *     1/30/2024
  */
 
 #include <iostream>
@@ -35,8 +35,17 @@ using namespace Eigen;
 // Define floating-point type to be used 
 typedef double T;
 
-// Upper bound on daughter cell orientation angle 
-const double theta_bound = boost::math::constants::pi<double>() / 90; 
+// Maximum number of attempts to control stepsize per Runge-Kutta iteration 
+const int max_tries = 3;
+
+// Minimum error per Runge-Kutta iteration
+const T min_error = static_cast<T>(1e-30);
+
+// Maximum stepsize TODO
+const T max_stepsize = static_cast<T>(1e-5); 
+
+// Minimum distance between neighboring cells
+const T min_dist = static_cast<T>(1e-8);
 
 int main(int argc, char** argv)
 {
@@ -69,7 +78,8 @@ int main(int argc, char** argv)
     const T sigma0 = static_cast<T>(json_data["sigma0"].as_double()); 
     const T eta_ambient = static_cast<T>(json_data["eta_ambient"].as_double()); 
     const T eta_surface = static_cast<T>(json_data["eta_surface"].as_double()); 
-    T dt = static_cast<T>(json_data["dt"].as_double());    // Can be changed 
+    T dt = static_cast<T>(json_data["max_dt"].as_double());    // Can be changed
+    const T max_stepsize = dt;
     const int iter_write = json_data["iter_write"].as_int64(); 
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
     const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64(); 
@@ -77,6 +87,8 @@ int main(int argc, char** argv)
     const int n_cells = json_data["n_cells"].as_int64();
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
+    const T theta_bound = static_cast<T>(json_data["max_orientation_angle"].as_double());
+    const T max_error_allowed = static_cast<T>(json_data["max_rungekutta_error"].as_double());
 
     // Surface contact area density and powers of cell radius  
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
@@ -110,7 +122,7 @@ int main(int argc, char** argv)
     // mean 0 and given concentration parameter
     boost::random::uniform_01<> uniform_dist;  
     std::function<T(boost::random::mt19937&)> daughter_angle_dist_func =
-        [&orientation_conc, &uniform_dist](boost::random::mt19937& rng)
+        [&orientation_conc, &uniform_dist, &theta_bound](boost::random::mt19937& rng)
         {
             T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
             while (theta > theta_bound || theta < -theta_bound)
@@ -120,12 +132,6 @@ int main(int argc, char** argv)
 
     // Output file prefix
     std::string prefix = argv[2];
-
-    // Maximum number of attempts to control stepsize per iteration 
-    int max_tries = 3;
-
-    // Minimum error 
-    T min_error = static_cast<T>(1e-30); 
 
     // Initialize simulation ...
     //
@@ -182,9 +188,9 @@ int main(int argc, char** argv)
         {
             T max_error = std::max(errors.abs().maxCoeff(), min_error); 
             int j = 0; 
-            while (max_error > 1e-8 && j < max_tries)
+            while (max_error > max_error_allowed && j < max_tries)
             {
-                dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
+                dt *= std::pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
                     A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
                     surface_contact_density
@@ -196,8 +202,8 @@ int main(int argc, char** argv)
                 j++;  
             }
             // If the error is small, increase the stepsize up to a maximum stepsize
-            if (max_error < 1e-8)
-                dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-5);
+            if (max_error < max_error_allowed)
+                dt = std::min(dt * std::pow(max_error_allowed / max_error, 1.0 / (error_order + 1)), max_stepsize);
         }
         cells = cells_new;
         velocities = velocities_new;
@@ -216,19 +222,7 @@ int main(int argc, char** argv)
         // Update neighboring cells 
         if (i % iter_update_neighbors == 0)
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
-
-        // Check for any NaN's or infinities
-        if (cells.isNaN().any() || cells.isInf().any())
-        {
-            // Write final population to file and terminate  
-            json_data["t_curr"] = t;
-            std::stringstream ss_final; 
-            ss_final << prefix << "_finalexcept.txt";
-            std::string filename_final = ss_final.str(); 
-            writeCells<T>(cells, json_data, filename_final); 
-            throw std::runtime_error("Encountered NaN and/or infinity");  
-        }
-
+        
         // Write the current population to file
         if (i % iter_write == 0)
         {

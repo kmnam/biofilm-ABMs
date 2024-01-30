@@ -161,8 +161,9 @@ int main(int argc, char** argv)
 
     // Initialize simulation ...
     //
-    // Define a founder cell at the origin at time zero, parallel to x-axis, 
-    // with mean growth rate and default viscosity and friction coefficients
+    // Define a founder cell at the origin at time zero, parallel to x-axis 
+    // and xy-plane, with mean growth rate and default viscosity and friction
+    // coefficients
     boost::random::mt19937 rng(std::stoi(argv[3]));
     T t = 0; 
     int i = 0;
@@ -188,11 +189,8 @@ int main(int argc, char** argv)
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
         if (to_divide.sum() > 0)
-        {
             std::cout << "... Dividing " << to_divide.sum() << " cells (iteration " << i
                       << ")" << std::endl;
-            std::cout << cells << std::endl;
-        }
         cells = divideCells<T>(
             cells, t, R, Rcell, to_divide, growth_dist_func, rng,
             daughter_length_dist_func, daughter_angle_xy_dist_func,
@@ -204,7 +202,6 @@ int main(int argc, char** argv)
         {
             normalizeOrientations<T>(cells);
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
-            std::cout << cells << std::endl;        // TODO
         }
 
         // Update cell positions and orientations 
@@ -241,12 +238,6 @@ int main(int argc, char** argv)
         }
         cells = cells_new;
         velocities = velocities_new;
-        if (cells.isNaN().any())
-        {
-            std::stringstream ss;
-            ss << "iteration " << i << ": found nan\n";
-            throw std::runtime_error(ss.str()); 
-        }
 
         // Grow the cells
         growCells<T>(cells, dt, R);
