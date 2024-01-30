@@ -282,6 +282,9 @@ Array<T, Dynamic, 7> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
     // Generate Segment_3 instances for each cell 
     std::vector<Segment_3> segments = generateSegments(cells);
 
+    // Instantiate kernel to be passed into distBetweenCells()
+    K kernel();
+
     // Maintain array of neighboring cells 
     //
     // Each row contains the following information about each pair of 
@@ -313,7 +316,7 @@ Array<T, Dynamic, 7> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
                     segments[i], segments[j], cells(i, Eigen::seq(0, 2)).matrix(),
                     cells(i, Eigen::seq(3, 5)).matrix(), cells(i, 7),
                     cells(j, Eigen::seq(0, 2)).matrix(),
-                    cells(j, Eigen::seq(3, 5)).matrix(), cells(j, 7), K()
+                    cells(j, Eigen::seq(3, 5)).matrix(), cells(j, 7), kernel
                 );
                 Matrix<T, 3, 1> dist_ij = std::get<0>(result); 
                 T si = std::get<1>(result);
@@ -351,6 +354,9 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
     // Generate Segment_3 instances for each cell 
     std::vector<Segment_3> segments = generateSegments(cells);
 
+    // Instantiate kernel to be passed into distBetweenCells()
+    K kernel();
+
     // Each row contains the following information about each pair of 
     // neighboring cells:
     // 0) Index i of first cell in neighboring pair
@@ -370,7 +376,7 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
             segments[i], segments[j], cells(i, Eigen::seq(0, 2)).matrix(),
             cells(i, Eigen::seq(3, 5)).matrix(), cells(i, 7),
             cells(j, Eigen::seq(0, 2)).matrix(),
-            cells(j, Eigen::seq(3, 5)).matrix(), cells(j, 7), K()
+            cells(j, Eigen::seq(3, 5)).matrix(), cells(j, 7), kernel
         );
         Matrix<T, 3, 1> dist_ij = std::get<0>(result); 
         T si = std::get<1>(result);
