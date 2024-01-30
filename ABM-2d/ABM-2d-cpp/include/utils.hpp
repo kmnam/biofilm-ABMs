@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/16/2024
+ *     1/30/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -126,6 +126,23 @@ T vonMises(const T mu, const T kappa, boost::random::mt19937& rng,
         return std::fmod(-std::acos(f) + mu, boost::math::constants::two_pi<T>()); 
     else 
         return mu;
+}
+
+/**
+ * Rotate the given orientation vector by the given angle counterclockwise
+ * in the xy-plane.
+ *
+ * @param n Input orientation vector.
+ * @param theta Input angle. 
+ * @returns Rotated orientation vector.
+ */
+template <typename T>
+Array<T, 2, 1> rotate(const Ref<const Array<T, 2, 1> >& n, const T theta)
+{
+    Matrix<T, 2, 2> rot; 
+    rot << std::cos(theta), -std::sin(theta),
+           std::sin(theta), std::cos(theta); 
+    return (rot * n.matrix()).array();
 }
 
 /**
