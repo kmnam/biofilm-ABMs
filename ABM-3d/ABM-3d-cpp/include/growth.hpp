@@ -76,8 +76,6 @@ Array<int, Dynamic, 1> divideMaxLength(const Ref<const Array<T, Dynamic, Dynamic
 /**
  * Divide the indicated cells at the given time.
  *
- * TODO Update docstring and comments to incorporate z-dimension
- *
  * If i is the index of a dividing cell, row i is updated to store one 
  * daughter cell, and a new row is appended to store the other daughter
  * cell.
@@ -94,10 +92,11 @@ Array<int, Dynamic, 1> divideMaxLength(const Ref<const Array<T, Dynamic, Dynamic
  * the dividing cell, R is the cell radius, and M is sampled using
  * daughter_length_dist(). 
  *
- * The function daughter_angle_dist() controls the orientations of the 
- * daughter cells: each daughter cell's orientation is obtained by rotating
- * the dividing cell's orientation by theta, which is sampled using 
- * daughter_angle_dist(). 
+ * The functions daughter_angle_xy_dist() and daughter_angle_z_dist()
+ * control the orientations of the daughter cells: each daughter cell's
+ * orientation is obtained by rotating the dividing cell's orientation
+ * by two angles, one in the xy-plane and one out of the xy-plane, which
+ * are sampled using daughter_angle_xy_dist() and daughter_angle_z_dist().
  *
  * @param cells Existing population of cells.
  * @param t Current time.
@@ -112,7 +111,7 @@ Array<int, Dynamic, 1> divideMaxLength(const Ref<const Array<T, Dynamic, Dynamic
  *                             cell length ratio distribution. 
  * @param daughter_angle_xy_dist Function instance specifying the daughter 
  *                               cell re-orientation distribution in the
- *                               xy-plane (rotation about z-axis).
+ *                               xy-plane (about z-axis).
  * @param daughter_angle_z_dist  Function instance specifying the daughter 
  *                               cell re-orientation distribution out of 
  *                               the xy-plane (in the z-direction).
@@ -391,8 +390,6 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
 /**
  * Divide the indicated cells at the given time.
  *
- * TODO Update docstring and comments to incorporate z-dimension
- *
  * This is an extended version of `divideCells()` that assigns group-specific
  * growth rates. The groups are assumed to be numbered 1, 2, 3, ...
  *
@@ -405,10 +402,12 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
  *                     rate distribution for each group. Each function must
  *                     take boost::random::mt19937& as its single argument.
  * @param rng Random number generator. 
- * @param daughter_length_dist Function instance specifying the daughter 
- *                             cell length ratio distribution. 
- * @param daughter_angle_dist Function instance specifying the daughter 
- *                            cell orientation distribution.
+ * @param daughter_angle_xy_dist Function instance specifying the daughter 
+ *                               cell re-orientation distribution in the
+ *                               xy-plane (about z-axis).
+ * @param daughter_angle_z_dist  Function instance specifying the daughter 
+ *                               cell re-orientation distribution out of 
+ *                               the xy-plane (in the z-direction).
  * @returns Updated population of cells. 
  */
 template <typename T>
@@ -418,7 +417,8 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                                        std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
                                        boost::random::mt19937& rng,
                                        std::function<T(boost::random::mt19937&)>& daughter_length_dist,
-                                       std::function<T(boost::random::mt19937&)>& daughter_angle_dist)
+                                       std::function<T(boost::random::mt19937&)>& daughter_angle_xy_dist,
+                                       std::function<T(boost::random::mt19937&)>& daughter_angle_z_dist)
 {
     // If there are cells to be divided ...
     const int n_divide = to_divide.sum();
