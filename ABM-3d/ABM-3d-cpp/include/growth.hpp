@@ -92,7 +92,7 @@ T minDistToCell(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                 std::vector<Segment_3>& segments, const int i)
 {
     // Instantiate kernel to be passed into distBetweenCells()
-    K kernel();
+    K kernel;
 
     // Initializing the minimum distance to infinity, run through the 
     // cells in the population
@@ -529,8 +529,8 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 // than the default value, then set theta1 = theta2 = 0
                 if (ntries < ntries_total - 1 && check_distance(i) == 1)
                 {
-                    theta1(i) = daughter_angle_dist(rng); 
-                    theta2(i) = daughter_angle_dist(rng);
+                    theta1(i) = daughter_angle_xy_dist(rng);    // TODO Fix
+                    theta2(i) = daughter_angle_xy_dist(rng);    // TODO Fix
                 }
             }
             /*

@@ -283,7 +283,7 @@ Array<T, Dynamic, 7> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
     std::vector<Segment_3> segments = generateSegments(cells);
 
     // Instantiate kernel to be passed into distBetweenCells()
-    K kernel();
+    K kernel;
 
     // Maintain array of neighboring cells 
     //
@@ -312,7 +312,7 @@ Array<T, Dynamic, 7> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
             {
                 // In this case, compute their actual distance and check that 
                 // they lie within neighbor_threshold of each other
-                auto result = distBetweenCells(
+                auto result = distBetweenCells<T>(
                     segments[i], segments[j], cells(i, Eigen::seq(0, 2)).matrix(),
                     cells(i, Eigen::seq(3, 5)).matrix(), cells(i, 7),
                     cells(j, Eigen::seq(0, 2)).matrix(),
@@ -355,7 +355,7 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
     std::vector<Segment_3> segments = generateSegments(cells);
 
     // Instantiate kernel to be passed into distBetweenCells()
-    K kernel();
+    K kernel;
 
     // Each row contains the following information about each pair of 
     // neighboring cells:
@@ -372,7 +372,7 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
     {
         int i = static_cast<int>(neighbors(k, 0)); 
         int j = static_cast<int>(neighbors(k, 1));
-        auto result = distBetweenCells(
+        auto result = distBetweenCells<T>(
             segments[i], segments[j], cells(i, Eigen::seq(0, 2)).matrix(),
             cells(i, Eigen::seq(3, 5)).matrix(), cells(i, 7),
             cells(j, Eigen::seq(0, 2)).matrix(),
