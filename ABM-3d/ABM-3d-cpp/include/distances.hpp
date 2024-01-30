@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/27/2024
+ *     1/30/2024
  */
 
 #ifndef DISTANCES_3D_HPP
@@ -25,22 +25,35 @@ typedef K::Point_3 Point_3;
 typedef K::Segment_3 Segment_3;
 
 /**
- * Construct a Segment_3 instance for the given cell. 
+ * Generate a vector of Segment_3 instances for the given population of cells.
  *
- * @param r Cell center.
- * @param n Cell orientation vector.
- * @param half_l Half of cell length.
- * @returns Segment_3 instance for the given cell. 
+ * Note that Segment_3 is not mutable, and therefore a new vector must be 
+ * generated every time the population is updated in some way. 
+ *
+ * @param cells Existing population of cells.
+ * @returns Vector of Segment_3 instances for each cell 
  */
-Segment_3 cellSegment(const Ref<const Array<double, 3, 1> >& r,
-                      const Ref<const Array<double, 3, 1> >& n, const double half_l)
+template <typename T>
+std::vector<Segment_3> generateSegments(const Ref<const Array<T, Dynamic, Dynamic> >& cells)
 {
-    Array<double, 3, 1> p_ = r - half_l * n;
-    Array<double, 3, 1> q_ = r + half_l * n;
-    Point_3 p(p_(0), p_(1), p_(2));
-    Point_3 q(q_(0), q_(1), q_(2));
+    std::vector<Segment_3> segments;
+    for (int i = 0; i < cells.rows(); ++i)
+    {
+        // Define the Segment_3 instance from the cell's two endpoints 
+        Point_3 p(
+            cells(i, 0) - cells(i, 7) * cells(i, 3),
+            cells(i, 1) - cells(i, 7) * cells(i, 4),
+            cells(i, 2) - cells(i, 7) * cells(i, 5)
+        );
+        Point_3 q(
+            cells(i, 0) + cells(i, 7) * cells(i, 3),
+            cells(i, 1) + cells(i, 7) * cells(i, 4),
+            cells(i, 2) + cells(i, 7) * cells(i, 5)
+        );
+        segments.push_back(Segment_3(p, q));
+    }
 
-    return Segment_3(p, q);
+    return segments;
 }
 
 /**

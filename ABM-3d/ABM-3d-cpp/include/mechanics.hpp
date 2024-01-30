@@ -258,37 +258,6 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
 }
 
 /**
- * Generate a vector of Segment_3 instances for the given population of cells.
- *
- * Note that Segment_3 is not mutable, and therefore a new vector must be 
- * generated every time the population is updated in some way. 
- *
- * @param cells Existing population of cells.
- * @returns Vector of Segment_3 instances for each cell 
- */
-template <typename T>
-std::vector<Segment_3> generateSegments(const Ref<const Array<T, Dynamic, Dynamic> >& cells)
-{
-    std::vector<Segment_3> segments;
-    for (int i = 0; i < cells.rows(); ++i)
-    {
-        Point_3 p(
-            cells(i, 0) - cells(i, 7) * cells(i, 3),
-            cells(i, 1) - cells(i, 7) * cells(i, 4),
-            cells(i, 2) - cells(i, 7) * cells(i, 5)
-        );
-        Point_3 q(
-            cells(i, 0) + cells(i, 7) * cells(i, 3),
-            cells(i, 1) + cells(i, 7) * cells(i, 4),
-            cells(i, 2) + cells(i, 7) * cells(i, 5)
-        );
-        segments.push_back(Segment_3(p, q));
-    }
-
-    return segments;
-}
-
-/**
  * Get all pairs of cells whose distances are within the given threshold.
  *
  * The returned array is given in row-major format.  
