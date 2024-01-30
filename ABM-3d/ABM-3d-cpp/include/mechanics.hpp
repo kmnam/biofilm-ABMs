@@ -26,7 +26,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/28/2024
+ *     1/30/2024
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -480,11 +480,8 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
         }
         // Case 2: the overlap is instead greater than R - Rcell (i.e., it 
         // encroaches into the bodies of the two cells)
-        //
-        // TODO Does this change the verticalization trajectory?
         else if (overlap >= R - Rcell)
         {
-            //prefactor = prefactors(1) * std::pow(overlap, 1.5); 
             T term = prefactors(3) * std::pow(overlap - R + Rcell, 1.5);
             prefactor = prefactors(0) * (prefactors(2) + term);
         }
