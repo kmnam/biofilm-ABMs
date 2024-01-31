@@ -144,7 +144,7 @@ int main(int argc, char** argv)
     // mean 0 and given concentration parameter
     boost::random::uniform_01<> uniform_dist;  
     std::function<T(boost::random::mt19937&)> daughter_angle_dist_func =
-        [&orientation_conc, &uniform_dist](boost::random::mt19937& rng)
+        [&orientation_conc, &uniform_dist, &theta_bound](boost::random::mt19937& rng)
         {
             T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
             while (theta > theta_bound || theta < -theta_bound)
