@@ -1,6 +1,6 @@
 /**
- * An agent-based model that switches cells between two states that exhibit
- * different distributions of growth rates. 
+ * An agent-based model of 2-D biofilm growth that switches cells between two
+ * states that exhibit different distributions of growth rates. 
  *
  * In what follows, a population of N cells is represented as a 2-D array of 
  * size (N, 11), where each row represents a cell and stores the following data:
@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/10/2024
+ *     1/31/2024
  */
 
 #include <iostream>
@@ -38,10 +38,16 @@
 using namespace Eigen;
 
 // Define floating-point type to be used 
-typedef double T; 
+typedef double T;
 
-// Upper bound on daughter cell orientation angle 
-const double theta_bound = boost::math::constants::pi<double>() / 90; 
+// Maximum number of attempts to control stepsize per Runge-Kutta iteration 
+const int max_tries = 3;
+
+// Minimum error per Runge-Kutta iteration
+const T min_error = static_cast<T>(1e-30);
+
+// Minimum distance between neighboring cells
+const T min_dist = static_cast<T>(1e-8);
 
 int main(int argc, char** argv)
 {
@@ -78,7 +84,8 @@ int main(int argc, char** argv)
     const T sigma0 = static_cast<T>(json_data["sigma0"].as_double()); 
     const T eta_ambient = static_cast<T>(json_data["eta_ambient"].as_double()); 
     const T eta_surface = static_cast<T>(json_data["eta_surface"].as_double()); 
-    T dt = static_cast<T>(json_data["dt"].as_double());    // Can be changed 
+    T dt = static_cast<T>(json_data["max_dt"].as_double());    // Can be changed
+    const T max_stepsize = dt; 
     const int iter_write = json_data["iter_write"].as_int64(); 
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
     const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64(); 
@@ -86,6 +93,8 @@ int main(int argc, char** argv)
     const int n_cells = json_data["n_cells"].as_int64();
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
+    const T theta_bound = static_cast<T>(json_data["max_orientation_angle"].as_double());
+    const T max_error_allowed = static_cast<T>(json_data["max_rungekutta_error"].as_double());
 
     // Surface contact area density and powers of cell radius  
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
@@ -126,7 +135,7 @@ int main(int argc, char** argv)
     // mean 0 and given concentration parameter
     boost::random::uniform_01<> uniform_dist;  
     std::function<T(boost::random::mt19937&)> daughter_angle_dist_func =
-        [&orientation_conc, &uniform_dist](boost::random::mt19937& rng)
+        [&orientation_conc, &uniform_dist, &theta_bound](boost::random::mt19937& rng)
         {
             T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
             while (theta > theta_bound || theta < -theta_bound)
@@ -140,12 +149,6 @@ int main(int argc, char** argv)
 
     // Output file prefix
     std::string prefix = argv[2];
-
-    // Maximum number of attempts to control stepsize per iteration 
-    int max_tries = 3;
-
-    // Minimum error 
-    T min_error = static_cast<T>(1e-30); 
 
     // Initialize simulation ...
     //
@@ -179,27 +182,13 @@ int main(int argc, char** argv)
             std::cout << "... Dividing " << to_divide.sum() << " cells (iteration " << i
                       << ")" << std::endl;
         cells = divideCells<T>(
-            cells, t, R, Rcell, to_divide, growth_dist_funcs, rng, daughter_length_dist_func,
-            daughter_angle_dist_func
+            cells, t, R, Rcell, to_divide, growth_dist_funcs, rng,
+            daughter_length_dist_func, daughter_angle_dist_func
         );
 
         // Update the neighboring cells if division has occurred
         if (to_divide.sum() > 0)
-        {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
-            // Check that none of the distances are near zero 
-            if ((neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < 1e-8).any())
-            {
-                // Write final population to file and terminate 
-                std::stringstream ss_final, ss_error;
-                ss_final << prefix << "_finalexcept.txt";
-                std::string filename_final = ss_final.str();
-                json_data["t_curr"] = t;
-                writeCells<T>(cells, json_data, filename_final);
-                ss_error << "Encountered near-zero cell-cell distance (iteration " << i << ")" << std::endl;
-                throw std::runtime_error(ss_error.str()); 
-            }
-        }
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
@@ -216,9 +205,9 @@ int main(int argc, char** argv)
         {
             T max_error = std::max(errors.abs().maxCoeff(), min_error);
             int j = 0; 
-            while (max_error > 1e-8 && j < max_tries)
+            while (max_error > max_error_allowed && j < max_tries)
             {
-                dt *= std::pow(1e-8 / max_error, 1.0 / (error_order + 1));
+                dt *= std::pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
                     A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
                     surface_contact_density
@@ -230,23 +219,8 @@ int main(int argc, char** argv)
                 j++;  
             }
             // If the error is small, increase the stepsize up to a maximum stepsize
-            if (max_error < 1e-8)
-                dt = std::min(dt * std::pow(1e-8 / max_error, 1.0 / (error_order + 1)), 1e-5);
-        }
-        // Check for any NaN's or infinities
-        if (cells_new.isNaN().any() || cells_new.isInf().any())
-        {
-            // Write final population to file and terminate 
-            std::stringstream ss_prev, ss_final, ss_error;
-            ss_prev << prefix << "_finalexceptprev.txt"; 
-            ss_final << prefix << "_finalexcept.txt";
-            std::string filename_prev = ss_prev.str(); 
-            std::string filename_final = ss_final.str();
-            writeCells<T>(cells, json_data, filename_prev);
-            json_data["t_curr"] = t;
-            writeCells<T>(cells_new, json_data, filename_final);
-            ss_error << "Encountered NaN and/or infinity (iteration " << i << ")" << std::endl; 
-            throw std::runtime_error(ss_error.str()); 
+            if (max_error < max_error_allowed)
+                dt = std::min(dt * std::pow(max_error_allowed / max_error, 1.0 / (error_order + 1)), max_stepsize);
         }
         cells = cells_new;
         velocities = velocities_new;
@@ -254,20 +228,8 @@ int main(int argc, char** argv)
         // Grow the cells
         growCells<T>(cells, dt, R);
 
-        // Update distances between neighboring cells (and check that no distances 
-        // are near zero)
+        // Update distances between neighboring cells
         updateNeighborDistances<T>(cells, neighbors);
-        if ((neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < 1e-8).any())
-        {
-            // Write final population to file and terminate 
-            std::stringstream ss_final, ss_error;
-            ss_final << prefix << "_finalexcept.txt";
-            std::string filename_final = ss_final.str();
-            json_data["t_curr"] = t;
-            writeCells<T>(cells, json_data, filename_final);
-            ss_error << "Encountered near-zero cell-cell distance (iteration " << i << ")" << std::endl;
-            throw std::runtime_error(ss_error.str()); 
-        }
 
         // Update current time 
         t += dt;
@@ -276,21 +238,7 @@ int main(int argc, char** argv)
 
         // Update neighboring cells 
         if (i % iter_update_neighbors == 0)
-        {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
-            // Check that none of the distances are near zero 
-            if ((neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < 1e-8).any())
-            {
-                // Write final population to file and terminate 
-                std::stringstream ss_final, ss_error;
-                ss_final << prefix << "_finalexcept.txt";
-                std::string filename_final = ss_final.str();
-                json_data["t_curr"] = t;
-                writeCells<T>(cells, json_data, filename_final);
-                ss_error << "Encountered near-zero cell-cell distance (iteration " << i << ")" << std::endl;
-                throw std::runtime_error(ss_error.str()); 
-            }
-        }
 
         // Switch cells between groups at the given rates
         Array<int, Dynamic, 1> to_switch = chooseCellsToSwitch<T>(
