@@ -1,4 +1,7 @@
 /**
+ * An agent-based model that simulates the growth of the basal layer of a 
+ * 3-D biofilm. 
+ *
  * In what follows, a population of N cells is represented as a 2-D array of 
  * size (N, 13), where each row represents a cell and stores the following data:
  * 
@@ -20,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/28/2024
+ *     1/31/2024
  */
 
 #include <iostream>
