@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    1/11/2024
+    1/31/2024
 """
 import os
 import glob
@@ -14,7 +14,7 @@ import numpy as np
 
 #######################################################################
 # In what follows, a population of N cells is represented as a 2-D array of 
-# size (N, 12+), where each row represents a cell and stores the following data:
+# size (N, 13+), where each row represents a cell and stores the following data:
 # 
 # 0) x-coordinate of cell center
 # 1) y-coordinate of cell center
@@ -28,7 +28,8 @@ import numpy as np
 # 9) cell growth rate
 # 10) cell's ambient viscosity with respect to surrounding fluid
 # 11) cell-surface friction coefficient
-# 12, 13, 14, ...) additional features
+# 12) cell-surface adhesion energy density
+# 13, 14, 15, ...) additional features
 #######################################################################
 def read_cells(path):
     """
@@ -112,7 +113,7 @@ def write_cells(cells, path, fmt=None, params={}):
     path : str
         File path.
     fmt : list of str
-        Formatting strings for any additional features (columns 12, 13, ...) 
+        Formatting strings for any additional features (columns 13, 14, ...) 
         in `cells`. This should be either None (in which case any additional 
         features are assumed to be floats) or a list of strings that has as
         many elements as there are additional features.
@@ -129,7 +130,7 @@ def write_cells(cells, path, fmt=None, params={}):
             path, cells, fmt='%.10g', delimiter='\t', header=header,
             comments='# '
         )
-    elif len(fmt) != cells.shape[1] - 12:
+    elif len(fmt) != cells.shape[1] - 13:   # There are 13 canonical columns
         raise ValueError('Incorrect number of formatting strings specified')
     else:
         with open(path, 'w') as f:
@@ -138,8 +139,8 @@ def write_cells(cells, path, fmt=None, params={}):
                 header += '# {} = {}\n'.format(key, params[key])
             f.write(header)
             for i in range(cells.shape[0]):
-                line = '\t'.join(['{:.10g}'.format(cells[i, j]) for j in range(12)])
-                for j, k in enumerate(range(12, cells.shape[1])):
+                line = '\t'.join(['{:.10g}'.format(cells[i, j]) for j in range(13)])
+                for j, k in enumerate(range(13, cells.shape[1])):
                     line += '\t' + fmt[j].format(cells[i, k])
                 f.write(line + '\n')
 

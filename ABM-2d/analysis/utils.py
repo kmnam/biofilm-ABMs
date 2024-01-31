@@ -5,8 +5,10 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    11/6/2023
+    1/31/2024
 """
+import os
+import glob
 import re
 import numpy as np
 
@@ -56,6 +58,47 @@ def read_cells(path):
     return cells, params
 
 #######################################################################
+def parse_dir(path):
+    """
+    Get the files stored in the given directory and sort them by 
+    iteration.
+
+    Parameters
+    ----------
+    path : str
+        Path to input directory. 
+
+    Returns
+    -------
+    List of files in order of iteration. 
+    """
+    filenames = glob.glob(os.path.join(path, '*'))
+    filenames_sorted = []
+
+    # Find the initial file 
+    for filename in filenames:
+        if 'init' in filename:
+            filenames_sorted.append(filename)
+            break
+
+    # Run through all intermediate files and sort them in order of iteration
+    filenames_iter = [filename for filename in filenames if 'iter' in filename]
+    idx = []
+    for filename in filenames_iter:
+        m = re.search(r'iter([0-9]+)\.txt', filename)
+        idx.append(int(m.group(1)))
+    sorted_idx = np.argsort(idx)
+    filenames_sorted += [filenames_iter[i] for i in sorted_idx]
+    
+    # Find the final file (if one exists)
+    for filename in filenames:
+        if 'final' in filename:
+            filenames_sorted.append(filename)
+            break
+
+    return filenames_sorted
+
+#######################################################################
 def write_cells(cells, path, fmt=None, params={}):
     """
     Write the cells in the given population to the given path. 
@@ -84,7 +127,7 @@ def write_cells(cells, path, fmt=None, params={}):
             path, cells, fmt='%.10g', delimiter='\t', header=header,
             comments='# '
         )
-    elif len(fmt) != cells.shape[1] - 10:
+    elif len(fmt) != cells.shape[1] - 10:   # There are 10 canonical columns
         raise ValueError('Incorrect number of formatting strings specified')
     else:
         with open(path, 'w') as f:
