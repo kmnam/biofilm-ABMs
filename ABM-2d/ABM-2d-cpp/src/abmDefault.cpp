@@ -41,9 +41,6 @@ const int max_tries = 3;
 // Minimum error per Runge-Kutta iteration
 const T min_error = static_cast<T>(1e-30);
 
-// Maximum stepsize TODO
-const T max_stepsize = static_cast<T>(1e-5); 
-
 // Minimum distance between neighboring cells
 const T min_dist = static_cast<T>(1e-8);
 
