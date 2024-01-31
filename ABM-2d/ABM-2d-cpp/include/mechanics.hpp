@@ -369,7 +369,7 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     // Solve the Lagrangian equations of motion
     Array<T, Dynamic, 2> dEdn_constrained = (
         dEdq(Eigen::all, Eigen::seq(2, 3)) -
-        cells(Eigen::all, Eigen::seq(2, 3)).colwise() * mult;
+        cells(Eigen::all, Eigen::seq(2, 3)).colwise() * mult
     );
     velocities.col(0) = -dEdq.col(0) / K;
     velocities.col(1) = -dEdq.col(1) / K; 
