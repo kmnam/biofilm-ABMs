@@ -113,7 +113,7 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
             n_ylabels=2, n_zlabels=2, xtitle='', ytitle='', ztitle='',
             font_family='arial', font_size=12
         )
-    pl.add_title(title, font_family='arial', font_size=14)
+    pl.add_title(title, font='arial', font_size=14)
     pl.add_axes()
     pl.reset_camera(bounds=[xmin, xmax, ymin, ymax, zmin, zmax])
 
@@ -165,7 +165,7 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
         # Parse and plot the cells in the given file
         cells, params = read_cells(filename)
         if uniform_color:
-            colors = [palette_[0] for i in range(cells.shape[0])]
+            colors = [palette[0] for i in range(cells.shape[0])]
         else:
             ngroups = int(max(cells[:, 10]))
             palette_ = palette[:ngroups]
@@ -200,7 +200,7 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
 if __name__ == '__main__':
     filedir = sys.argv[1]
     outprefix = sys.argv[2]
-    uniform_color = (sys.argc == 4 and sys.argv[3] == '--uniform-color')
+    uniform_color = (len(sys.argv)== 4 and sys.argv[3] == '--uniform-color')
     filenames = parse_dir(filedir)
 
     # Get cell radius and final dimensions from final file
