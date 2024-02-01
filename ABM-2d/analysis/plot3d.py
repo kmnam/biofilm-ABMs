@@ -90,8 +90,10 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
         # corresponding color
         pl.add_mesh(cylinder + cap1 + cap2, color=colors[i])
 
-    # Change the view to bird's eye, reconfigure axes, add axes directions,
-    # and save
+    print(xmin, xmax, ymin, ymax, zmin, zmax)
+
+    # Reconfigure axes, add title and axes directions, and save
+    pl.add_title(title, font='arial', font_size=12)
     if view == 'xy':
         pl.view_xy()
         pl.show_bounds(
@@ -113,7 +115,6 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
             n_ylabels=2, n_zlabels=2, xtitle='', ytitle='', ztitle='',
             font_family='arial', font_size=12
         )
-    pl.add_title(title, font='arial', font_size=14)
     pl.add_axes()
     pl.reset_camera(bounds=[xmin, xmax, ymin, ymax, zmin, zmax])
 
@@ -160,6 +161,7 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
         sns.color_palette('muted')[1],
         sns.color_palette('muted')[4]
     ]
+    print(xmin, xmax, ymin, ymax, zmin, zmax)
 
     for filename in filenames:
         # Parse and plot the cells in the given file
@@ -172,7 +174,7 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
             colors = [
                 palette_[int(cells[i, 10]) - 1] for i in range(cells.shape[0])
             ]
-        title = r'$t = {:.10f}$, $n = {}$'.format(params['t_curr'], cells.shape[0])
+        title = r't = {:.10f}, n = {}'.format(params['t_curr'], cells.shape[0])
         print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
         pl = pv.Plotter(off_screen=True)
         pl = plot_cells(
@@ -226,3 +228,4 @@ if __name__ == '__main__':
             xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=50, fps=20,
             uniform_color=uniform_color
         )
+        print('Saving video: {}_{}.avi'.format(outprefix, i))
