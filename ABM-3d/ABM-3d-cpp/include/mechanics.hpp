@@ -26,7 +26,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/30/2024
+ *     2/1/2024
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -37,6 +37,7 @@
 #include <vector>
 #include <utility>
 #include <tuple>
+#include <omp.h>
 #include <Eigen/Dense>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Segment_3.h>
@@ -73,6 +74,7 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
     const T prefactor0 = 2 * E0;
     const T prefactor1 = (8. / 3.) * E0 * std::pow(R, 0.5); 
     const T prefactor2 = 2 * E0 * std::pow(R, 0.5);
+    #pragma omp parallel for
     for (int i = 0; i < cells.rows(); ++i)
     {
         // If the z-coordinate of the cell's orientation is zero ... 
@@ -133,6 +135,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
     const T prefactor0 = std::pow(R, 0.5) / 2;
     const T prefactor1 = 2 * boost::math::constants::pi<T>() * R;
     const T prefactor2 = 2 * std::pow(R, 0.5);
+    #pragma omp parallel for
     for (int i = 0; i < cells.rows(); ++i)
     {
         // If the z-coordinate of the cell's orientation is zero ... 
@@ -368,6 +371,7 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
     // 6) Cell-body coordinate of contact point along centerline of cell j
     //
     // Columns 2, 3, 4, 5, 6 are updated here
+    #pragma omp parallel for
     for (int k = 0; k < neighbors.rows(); ++k)
     {
         int i = static_cast<int>(neighbors(k, 0)); 
@@ -547,7 +551,8 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         cells, ss, R, nz_threshold
     );
 
-    // For each cell ... 
+    // For each cell ...
+    #pragma omp parallel for
     for (int i = 0; i < n; ++i)
     {
         Array<T, 7, 7> A = Array<T, 7, 7>::Zero();
