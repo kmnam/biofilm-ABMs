@@ -19,7 +19,7 @@ from utils import read_cells, parse_dir
 
 #######################################################################
 def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
-               view='xy', res=50):
+               title, view='xy', res=50):
     """
     Plot the given population of cells with the given colors to the given
     PDF file. 
@@ -42,14 +42,16 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
         y-axis bounds.
     zmin, zmax : float, float
         z-axis bounds.
+    title : str
+        Plot title.
     view : str, 'xy' or 'xz' or 'yz'
         Set the view to the given pair of axes. 
     res : int
         Resolution for plotting each cylinder and hemisphere.
     """
     # Define arrays for cell centers and orientations with z-coordinate
-    positions = np.hstack((cells[i, :2], rz * np.ones((cells.shape[0], 1))))
-    orientations = np.hstack((cells[i, 2:4], np.zeros((cells.shape[0], 1))))
+    positions = np.hstack((cells[:, :2], rz * np.ones((cells.shape[0], 1))))
+    orientations = np.hstack((cells[:, 2:4], np.zeros((cells.shape[0], 1))))
 
     # Plot each spherocylinder ... 
     for i in range(cells.shape[0]):
@@ -111,6 +113,7 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
             n_ylabels=2, n_zlabels=2, xtitle='', ytitle='', ztitle='',
             font_family='arial', font_size=12
         )
+    pl.add_title(title, font_family='arial', font_size=14)
     pl.add_axes()
     pl.reset_camera(bounds=[xmin, xmax, ymin, ymax, zmin, zmax])
 
@@ -118,7 +121,8 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
 
 #######################################################################
 def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
-                    ymax, zmin, zmax, view='xy', res=50, fps=10):
+                    ymax, zmin, zmax, view='xy', res=50, fps=10,
+                    uniform_color=False):
     """
     Given an ordered list of files containing cells to be plotted, parse 
     and plot each population of cells and generate a video. 
@@ -133,8 +137,6 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
         Cell radius.
     rz : float
         z-coordinate of each cell center. 
-    colors : list
-        List of colors for each cell.
     xmin, xmax : float, float
         x-axis bounds. 
     ymin, ymax : float, float
@@ -147,6 +149,8 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
         Resolution for plotting each cylinder and hemisphere.
     fps : int
         Frames per second.
+    uniform_color : bool
+        If True, color all cells with a single color (blue). 
     """
     images = []
     palette = [    # Assume a maximum of five groups 
@@ -160,16 +164,20 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
     for filename in filenames:
         # Parse and plot the cells in the given file
         cells, params = read_cells(filename)
-        ngroups = int(max(cells[:, 10]))
-        palette_ = palette[:ngroups]
-        colors = [
-            palette_[int(cells[i, 10]) - 1] for i in range(cells.shape[0])
-        ]
+        if uniform_color:
+            colors = [palette_[0] for i in range(cells.shape[0])]
+        else:
+            ngroups = int(max(cells[:, 10]))
+            palette_ = palette[:ngroups]
+            colors = [
+                palette_[int(cells[i, 10]) - 1] for i in range(cells.shape[0])
+            ]
+        title = r'$t = {:.10f}$, $n = {}$'.format(params['t_curr'], cells.shape[0])
         print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
         pl = pv.Plotter(off_screen=True)
         pl = plot_cells(
             cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
-            view=view, res=res
+            title, view=view, res=res
         )
 
         # Get a screenshot of the plotted cells
@@ -192,18 +200,20 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
 if __name__ == '__main__':
     filedir = sys.argv[1]
     outprefix = sys.argv[2]
+    uniform_color = (sys.argc == 4 and sys.argv[3] == '--uniform-color')
     filenames = parse_dir(filedir)
 
     # Get cell radius and final dimensions from final file
     cells, params = read_cells(filenames[-1])
     R = params['R']
+    L0 = params['L0']
     E0 = params['E0']
     sigma0 = params['sigma0']
     rz = R - (1 / R) * ((R * R * sigma0) / (4 * E0)) ** (2 / 3)
-    xmin = np.floor(cells[:, 0].min())
-    xmax = np.ceil(cells[:, 0].max())
-    ymin = np.floor(cells[:, 1].min())
-    ymax = np.ceil(cells[:, 1].max())
+    xmin = np.floor(cells[:, 0].min() - 4 * L0)
+    xmax = np.ceil(cells[:, 0].max() + 4 * L0)
+    ymin = np.floor(cells[:, 1].min() - 4 * L0)
+    ymax = np.ceil(cells[:, 1].max() + 4 * L0)
     zmin = rz - R
     zmax = rz + R
 
@@ -213,5 +223,6 @@ if __name__ == '__main__':
         end = start + 200
         plot_simulation(
             filenames[start:end], outprefix + '_{}.avi'.format(i), R, rz,
-            xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=50, fps=20
+            xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=50, fps=20,
+            uniform_color=uniform_color
         )
