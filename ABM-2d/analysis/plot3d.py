@@ -48,8 +48,8 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
         Resolution for plotting each cylinder and hemisphere.
     """
     # Define arrays for cell centers and orientations with z-coordinate
-    positions = np.hstack((cells[i, :2], rz * np.ones(cells.shape[0])))
-    orientations = np.hstack((cells[i, 2:4], np.zeros(cells.shape[0])))
+    positions = np.hstack((cells[i, :2], rz * np.ones((cells.shape[0], 1))))
+    orientations = np.hstack((cells[i, 2:4], np.zeros((cells.shape[0], 1))))
 
     # Plot each spherocylinder ... 
     for i in range(cells.shape[0]):
@@ -168,7 +168,7 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
         print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
         pl = pv.Plotter(off_screen=True)
         pl = plot_cells(
-            cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
+            cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
             view=view, res=res
         )
 
@@ -212,6 +212,6 @@ if __name__ == '__main__':
         start = i * 200
         end = start + 200
         plot_simulation(
-            filenames[start:end], outprefix + '_{}.avi'.format(i), R,
+            filenames[start:end], outprefix + '_{}.avi'.format(i), R, rz,
             xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=50, fps=20
         )
