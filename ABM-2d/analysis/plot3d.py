@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    1/27/2024
+    1/31/2024
 """
 
 import sys
@@ -149,13 +149,21 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
         Frames per second.
     """
     images = []
+    palette = [    # Assume a maximum of five groups 
+        sns.color_palette('muted')[0],
+        sns.color_palette('muted')[3],
+        sns.color_palette('muted')[2],
+        sns.color_palette('muted')[1],
+        sns.color_palette('muted')[4]
+    ]
 
     for filename in filenames:
         # Parse and plot the cells in the given file
         cells, params = read_cells(filename)
+        ngroups = int(max(cells[:, 10]))
+        palette_ = palette[:ngroups]
         colors = [
-            sns.color_palette()[0] if cells[i, 5] >= -0.5 else sns.color_palette()[3]
-            for i in range(cells.shape[0])
+            palette_[int(cells[i, 10]) - 1] for i in range(cells.shape[0])
         ]
         print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
         pl = pv.Plotter(off_screen=True)
@@ -185,7 +193,6 @@ if __name__ == '__main__':
     filedir = sys.argv[1]
     outprefix = sys.argv[2]
     filenames = parse_dir(filedir)
-    print(filenames)
 
     # Get cell radius and final dimensions from final file
     cells, params = read_cells(filenames[-1])
@@ -206,5 +213,5 @@ if __name__ == '__main__':
         end = start + 200
         plot_simulation(
             filenames[start:end], outprefix + '_{}.avi'.format(i), R,
-            xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=50, fps=10
+            xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=50, fps=20
         )
