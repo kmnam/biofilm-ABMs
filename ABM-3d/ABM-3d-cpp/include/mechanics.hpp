@@ -576,8 +576,10 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         b(5) = -dEdq_cell(i, 5) - dEdq_surface_repulsion(i, 1) - dEdq_surface_adhesion(i, 1);
 
         // Solve the corresponding linear system
-        auto QR = A.matrix().colPivHouseholderQr(); 
-        Array<T, 7, 1> x = QR.solve(b.matrix()).array();
+        //
+        // TODO Simply solve the system by hand?
+        auto LU = A.matrix().partialPivLu();
+        Array<T, 7, 1> x = LU.solve(b.matrix()).array();
         velocities.row(i) = x.head(6);
     }
 
