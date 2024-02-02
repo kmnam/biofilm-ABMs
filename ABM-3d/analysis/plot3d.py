@@ -84,6 +84,7 @@ def plot_cells(cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
 
     # Change the view to bird's eye, reconfigure axes, add axes directions,
     # and save
+    pl.add_title(title, font='arial', font_size=12)
     if view == 'xy':
         pl.view_xy()
         pl.show_bounds(
@@ -146,14 +147,16 @@ def plot_simulation(filenames, outfilename, R, xmin, xmax, ymin,
         # Parse and plot the cells in the given file
         cells, params = read_cells(filename)
         colors = [
-            sns.color_palette()[0] if cells[i, 5] >= -0.5 else sns.color_palette()[3]
+            sns.color_palette('muted')[0] if cells[i, 5] >= -0.5
+            else sns.color_palette('muted')[3]
             for i in range(cells.shape[0])
         ]
+        title = 't = {:.10f}, n = {}'.format(params['t_curr'], cells.shape[0])
         print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
         pl = pv.Plotter(off_screen=True)
         pl = plot_cells(
             cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
-            view=view, res=res
+            title, view=view, res=res
         )
 
         # Get a screenshot of the plotted cells
@@ -177,17 +180,17 @@ if __name__ == '__main__':
     filedir = sys.argv[1]
     outprefix = sys.argv[2]
     filenames = parse_dir(filedir)
-    print(filenames)
 
     # Get cell radius and final dimensions from final file
     cells, params = read_cells(filenames[-1])
     R = params['R']
-    xmin = np.floor(cells[:, 0].min())
-    xmax = np.ceil(cells[:, 0].max())
-    ymin = np.floor(cells[:, 1].min())
-    ymax = np.ceil(cells[:, 1].max())
-    zmin = np.floor(cells[:, 2].min())
-    zmax = np.ceil(cells[:, 2].max())
+    L0 = params['L0']
+    xmin = np.floor(cells[:, 0].min() - 4 * L0)
+    xmax = np.ceil(cells[:, 0].max() + 4 * L0)
+    ymin = np.floor(cells[:, 1].min() - 4 * L0)
+    ymax = np.ceil(cells[:, 1].max() + 4 * L0)
+    zmin = np.floor(cells[:, 2].min() - 4 * L0)
+    zmax = np.ceil(cells[:, 2].max() + 4 * L0)
 
     # Plot the simulation in 200-frame increments
     for i in range(len(filenames) // 200 + 1):
@@ -195,5 +198,7 @@ if __name__ == '__main__':
         end = start + 200
         plot_simulation(
             filenames[start:end], outprefix + '_{}.avi'.format(i), R,
-            xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=50, fps=10
+            xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=20, fps=20
         )
+        print('Saving video: {}_{}.avi'.format(outprefix, i))
+
