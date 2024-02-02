@@ -118,7 +118,7 @@ double vonMises(const double mu, const double kappa, boost::random::mt19937& rng
     {
         double u1 = uniform_dist(rng); 
         double u2 = uniform_dist(rng);
-        z = cos(boost::math::constants::pi<T>() * u1);
+        z = cos(boost::math::constants::pi<double>() * u1);
         f = (1 + r * z) / (r + z); 
         c = kappa * (r - f); 
         if (c * (2 - c) - u2 > 0)
@@ -129,9 +129,9 @@ double vonMises(const double mu, const double kappa, boost::random::mt19937& rng
 
     double u3 = uniform_dist(rng); 
     if (u3 > 0.5)
-        return std::fmod(std::acos(f) + mu, boost::math::constants::two_pi<T>());
+        return std::fmod(std::acos(f) + mu, boost::math::constants::two_pi<double>());
     else if (u3 < 0.5)
-        return std::fmod(-std::acos(f) + mu, boost::math::constants::two_pi<T>()); 
+        return std::fmod(-std::acos(f) + mu, boost::math::constants::two_pi<double>()); 
     else 
         return mu;
 }
