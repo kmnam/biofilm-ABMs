@@ -26,7 +26,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/1/2024
+ *     2/2/2024
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -92,16 +92,16 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
             // Compute the derivative of the cell-surface repulsion energy 
             // with respect to z-position
             T nz2 = cells(i, 5) * cells(i, 5);
-            T int1 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
-            T int2 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
+            T int1 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
+            T int2 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
             dEdq(i, 0) = -prefactor0 * ((1 - nz2) * int1 + std::pow(R, 0.5) * nz2 * int2);
 
             // Compute the derivative of the cell-surface repulsion energy 
             // with respect to z-orientation
-            T int3 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 2.0, ss(i));
-            T int4 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
-            T int5 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.5, ss(i));
-            T int6 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
+            T int3 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 2.0, ss(i));
+            T int4 = integral2<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
+            T int5 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.5, ss(i));
+            T int6 = integral2<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
             dEdq(i, 1) -= prefactor0 * (-cells(i, 5)) * int3;
             dEdq(i, 1) -= prefactor0 * (1 - nz2) * int4;
             dEdq(i, 1) += prefactor1 * (-cells(i, 5)) * int5;
@@ -153,7 +153,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             // Compute the derivative of the cell-surface adhesion energy 
             // with respect to z-position
             T nz2 = cells(i, 5) * cells(i, 5);
-            T int1 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
+            T int1 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
             T term2 = 0;
             if (ss(i) >= -cells(i, 7) && ss(i) < cells(i, 7)) 
                 term2 = (prefactor1 / 2) * cells(i, 5);
@@ -162,9 +162,9 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
 
             // Compute the derivative of the cell-surface adhesion energy
             // with respect to z-orientation
-            T int2 = integral1(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
-            T int3 = integral2(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
-            T int4 = integral4(cells(i, 2), cells(i, 5), R, cells(i, 7), ss(i));
+            T int2 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
+            T int3 = integral2<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
+            T int4 = integral4<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), ss(i));
             T term4 = 0;
             if (ss(i) >= -cells(i, 7) && ss(i) < cells(i, 7))
                 term4 = (prefactor1 / 2) * (R - cells(i, 2));
