@@ -75,7 +75,10 @@ def parse_dir(path):
     -------
     List of files in order of iteration. 
     """
-    filenames = glob.glob(os.path.join(path, '*'))
+    filenames = [
+        filename for filename in glob.glob(os.path.join(path, '*'))
+        if filename.endswith('.txt')
+    ]
     filenames_sorted = []
 
     # Find the initial file 
