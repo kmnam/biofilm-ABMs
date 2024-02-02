@@ -63,7 +63,7 @@ T phi(const T rz, const T nz, const T R, const T s)
 template <typename T>
 T overlap(const T rz, const T nz, const T R, const T s)
 {
-    T p = phi(rz, nz, R, s);
+    T p = phi<T>(rz, nz, R, s);
     if (p > 0)
         return p;
     else
@@ -84,7 +84,7 @@ T overlap(const T rz, const T nz, const T R, const T s)
 template <typename T>
 T overlapGamma(const T rz, const T nz, const T R, const T s, const T gamma)
 {
-    T p = phi(rz, nz, R, s); 
+    T p = phi<T>(rz, nz, R, s); 
     if (p > 0)
         return pow(p, gamma);
     else
@@ -111,14 +111,14 @@ T integral1(const T rz, const T nz, const T R, const T half_l, const T gamma,
 {
     if (ss < -half_l)
     {
-        T overlap1 = pow(phi(rz, nz, R, -half_l), gamma + 1);
-        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap1 = pow(phi<T>(rz, nz, R, -half_l), gamma + 1);
+        T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
         return -(overlap2 - overlap1) / (nz * (gamma + 1));
     }
     else if (ss < half_l)
     {
         // overlap1 = 0
-        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
         return -overlap2 / (nz * (gamma + 1));
     }
     else 
@@ -146,18 +146,18 @@ template <typename T>
 T integral2(const T rz, const T nz, const T R, const T half_l, const T gamma,
             const T ss)
 {
-    T term1 = integral1(rz, nz, R, half_l, gamma + 1, ss);
+    T term1 = integral1<T>(rz, nz, R, half_l, gamma + 1, ss);
     T term2 = 0; 
     if (ss < -half_l)
     {
-        T overlap1 = pow(phi(rz, nz, R, -half_l), gamma + 1);
-        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap1 = pow(phi<T>(rz, nz, R, -half_l), gamma + 1);
+        T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
         term2 = half_l * overlap2 + half_l * overlap1;    // = ... - (-half_l) * overlap1
     }
     else if (ss < half_l)
     {
         // Overlap at s = ss is zero 
-        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
         term2 = half_l * overlap2;
     }
     return (term1 - term2) / (nz * (gamma + 1)); 
@@ -182,18 +182,18 @@ template <typename T>
 T integral3(const T rz, const T nz, const T R, const T half_l, const T gamma,
             const T ss)
 {
-    T term1 = 2 * integral2(rz, nz, R, half_l, gamma + 1, ss);
+    T term1 = 2 * integral2<T>(rz, nz, R, half_l, gamma + 1, ss);
     T term2 = 0;
     if (ss < -half_l)
     {
-        T overlap1 = pow(phi(rz, nz, R, -half_l), gamma + 1);
-        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap1 = pow(phi<T>(rz, nz, R, -half_l), gamma + 1);
+        T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
         term2 = half_l * half_l * (overlap2 - overlap1);
     }
     else if (ss < half_l)
     {
         // Overlap at s = ss is zero 
-        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
         term2 = half_l * half_l * overlap2;
     }
     return (term1 - term2) / (nz * (gamma + 1));
@@ -243,18 +243,18 @@ T integral4(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T integral5(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
-    T term1 = integral1(rz, nz, R, half_l, 1.0, ss);
+    T term1 = integral1<T>(rz, nz, R, half_l, 1.0, ss);
     T term2 = 0;
     if (ss < -half_l)
     {
-        T overlap1 = phi(rz, nz, R, -half_l);
-        T overlap2 = phi(rz, nz, R, half_l);
+        T overlap1 = phi<T>(rz, nz, R, -half_l);
+        T overlap2 = phi<T>(rz, nz, R, half_l);
         term2 = half_l * overlap2 + half_l * overlap1;   // = ... - (-half_l) * overlap1
     }
     else if (ss < half_l)
     {
         // Overlap at s = ss is zero 
-        T overlap2 = phi(rz, nz, R, half_l);
+        T overlap2 = phi<T>(rz, nz, R, half_l);
         term2 = half_l * overlap2;
     }
     return (term1 - term2) / nz;
@@ -277,18 +277,18 @@ T integral5(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T integral6(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
-    T term1 = 2 * integral2(rz, nz, R, half_l, 1.0, ss);
+    T term1 = 2 * integral2<T>(rz, nz, R, half_l, 1.0, ss);
     T term2 = 0;
     if (ss < -half_l)
     {
-        T overlap1 = phi(rz, nz, R, -half_l);
-        T overlap2 = phi(rz, nz, R, half_l);
+        T overlap1 = phi<T>(rz, nz, R, -half_l);
+        T overlap2 = phi<T>(rz, nz, R, half_l);
         term2 = half_l * half_l * (overlap2 - overlap1);
     }
     else if (ss < half_l)
     {
         // Overlap at s = ss is zero 
-        T overlap2 = phi(rz, nz, R, half_l);
+        T overlap2 = phi<T>(rz, nz, R, half_l);
         term2 = half_l * half_l * overlap2;
     }
     return (term1 - term2) / nz;
@@ -310,8 +310,8 @@ T integral6(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T areaIntegral1(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
-    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral1(rz, nz, R, half_l, 0.5, ss);
-    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral4(rz, nz, R, half_l, ss);
+    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral1<T>(rz, nz, R, half_l, 0.5, ss);
+    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral4<T>(rz, nz, R, half_l, ss);
     return term1 + term2;
 }
 
@@ -332,8 +332,8 @@ T areaIntegral1(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T areaIntegral2(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
-    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral2(rz, nz, R, half_l, 0.5, ss);
-    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral5(rz, nz, R, half_l, ss);
+    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral2<T>(rz, nz, R, half_l, 0.5, ss);
+    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral5<T>(rz, nz, R, half_l, ss);
     return term1 + term2;
 }
 
@@ -354,8 +354,8 @@ T areaIntegral2(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T areaIntegral3(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
-    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral3(rz, nz, R, half_l, 0.5, ss);
-    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral6(rz, nz, R, half_l, ss);
+    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral3<T>(rz, nz, R, half_l, 0.5, ss);
+    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral6<T>(rz, nz, R, half_l, ss);
     return term1 + term2;
 }
 
