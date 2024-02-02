@@ -590,9 +590,11 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
 
         // Solve the corresponding linear system
         //
-        // TODO Simply solve the system by hand?
+        // TODO Which decomposition to use?
         auto LU = A.matrix().partialPivLu();
         Array<T, 7, 1> x = LU.solve(b.matrix()).array();
+        //auto QR = A.matrix().colPivHouseholderQr(); 
+        //Array<T, 7, 1> x = QR.solve(b.matrix()).array();
         velocities.row(i) = x.head(6);
     }
 
