@@ -376,11 +376,19 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
     {
         int i = static_cast<int>(neighbors(k, 0)); 
         int j = static_cast<int>(neighbors(k, 1));
+        //auto result = distBetweenCells<T>(
+        //    segments[i], segments[j], cells(i, Eigen::seq(0, 2)).matrix(),
+        //    cells(i, Eigen::seq(3, 5)).matrix(), cells(i, 7),
+        //    cells(j, Eigen::seq(0, 2)).matrix(),
+        //    cells(j, Eigen::seq(3, 5)).matrix(), cells(j, 7), kernel
+        //);
+        Array<T, 3, 1> ri(cells(i, Eigen::seq(0, 2)));
+        Array<T, 3, 1> ni(cells(i, Eigen::seq(3, 5)));
+        Array<T, 3, 1> rj(cells(j, Eigen::seq(0, 2)));
+        Array<T, 3, 1> nj(cells(j, Eigen::seq(3, 5)));
         auto result = distBetweenCells<T>(
-            segments[i], segments[j], cells(i, Eigen::seq(0, 2)).matrix(),
-            cells(i, Eigen::seq(3, 5)).matrix(), cells(i, 7),
-            cells(j, Eigen::seq(0, 2)).matrix(),
-            cells(j, Eigen::seq(3, 5)).matrix(), cells(j, 7), kernel
+            segments[i], segments[j], ri.matrix(), ni.matrix(), cells(i, 7),
+            rj.matrix(), nj.matrix(), cells(j, 7), kernel
         );
         Matrix<T, 3, 1> dist_ij = std::get<0>(result); 
         T si = std::get<1>(result);
