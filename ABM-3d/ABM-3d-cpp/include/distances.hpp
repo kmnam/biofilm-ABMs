@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/30/2024
+ *     2/2/2024
  */
 
 #ifndef DISTANCES_3D_HPP
@@ -41,14 +41,14 @@ std::vector<Segment_3> generateSegments(const Ref<const Array<T, Dynamic, Dynami
     {
         // Define the Segment_3 instance from the cell's two endpoints 
         Point_3 p(
-            cells(i, 0) - cells(i, 7) * cells(i, 3),
-            cells(i, 1) - cells(i, 7) * cells(i, 4),
-            cells(i, 2) - cells(i, 7) * cells(i, 5)
+            static_cast<double>(cells(i, 0) - cells(i, 7) * cells(i, 3)),
+            static_cast<double>(cells(i, 1) - cells(i, 7) * cells(i, 4)),
+            static_cast<double>(cells(i, 2) - cells(i, 7) * cells(i, 5))
         );
         Point_3 q(
-            cells(i, 0) + cells(i, 7) * cells(i, 3),
-            cells(i, 1) + cells(i, 7) * cells(i, 4),
-            cells(i, 2) + cells(i, 7) * cells(i, 5)
+            static_cast<double>(cells(i, 0) + cells(i, 7) * cells(i, 3)),
+            static_cast<double>(cells(i, 1) + cells(i, 7) * cells(i, 4)),
+            static_cast<double>(cells(i, 2) + cells(i, 7) * cells(i, 5))
         );
         segments.push_back(Segment_3(p, q));
     }
