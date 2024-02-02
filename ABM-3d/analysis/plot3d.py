@@ -19,7 +19,7 @@ from utils import read_cells, parse_dir
 
 #######################################################################
 def plot_cells(cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
-               view='xy', res=50):
+               title, view='xy', res=50):
     """
     Plot the given population of cells with the given colors to the given
     PDF file. 
@@ -40,6 +40,8 @@ def plot_cells(cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
         y-axis bounds.
     zmin, zmax : float, float
         z-axis bounds.
+    title : str
+        Plot title.
     view : str, 'xy' or 'xz' or 'yz'
         Set the view to the given pair of axes. 
     res : int
