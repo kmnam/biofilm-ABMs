@@ -42,10 +42,17 @@
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Segment_3.h>
 #include <boost/math/constants/constants.hpp>
+#include <boost/multiprecision/mpfr.hpp>
 #include "integrals.hpp"
 #include "distances.hpp"
 
 using namespace Eigen;
+
+// Expose math functions for both standard and boost MPFR types
+using std::pow;
+using boost::multiprecision::pow;
+using std::abs;
+using boost::multiprecision::abs;
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Segment_3 Segment_3;
@@ -72,8 +79,8 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
 
     // For each cell ...
     const T prefactor0 = 2 * E0;
-    const T prefactor1 = (8. / 3.) * E0 * std::pow(R, 0.5); 
-    const T prefactor2 = 2 * E0 * std::pow(R, 0.5);
+    const T prefactor1 = (8. / 3.) * E0 * pow(R, 0.5); 
+    const T prefactor2 = 2 * E0 * pow(R, 0.5);
     #pragma omp parallel for
     for (int i = 0; i < cells.rows(); ++i)
     {
@@ -94,7 +101,7 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
             T nz2 = cells(i, 5) * cells(i, 5);
             T int1 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
             T int2 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
-            dEdq(i, 0) = -prefactor0 * ((1 - nz2) * int1 + std::pow(R, 0.5) * nz2 * int2);
+            dEdq(i, 0) = -prefactor0 * ((1 - nz2) * int1 + pow(R, 0.5) * nz2 * int2);
 
             // Compute the derivative of the cell-surface repulsion energy 
             // with respect to z-orientation
@@ -132,9 +139,9 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
     Array<T, Dynamic, 2> dEdq = Array<T, Dynamic, 2>::Zero(cells.rows(), 2);
 
     // For each cell ...
-    const T prefactor0 = std::pow(R, 0.5) / 2;
+    const T prefactor0 = pow(R, 0.5) / 2;
     const T prefactor1 = 2 * boost::math::constants::pi<T>() * R;
-    const T prefactor2 = 2 * std::pow(R, 0.5);
+    const T prefactor2 = 2 * pow(R, 0.5);
     #pragma omp parallel for
     for (int i = 0; i < cells.rows(); ++i)
     {
@@ -144,7 +151,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             T phi = R - cells(i, 2);
             // dEdq(i, 0) is nonzero if phi > 0
             if (phi > 0)
-                dEdq(i, 0) = cells(i, 12) * prefactor0 * cells(i, 6) / std::pow(phi, 0.5);
+                dEdq(i, 0) = cells(i, 12) * prefactor0 * cells(i, 6) / pow(phi, 0.5);
             // dEdq(i, 1) is zero 
         }
         // Otherwise ... 
@@ -219,7 +226,7 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
 {
     Array<T, 6, 6> M = Array<T, 6, 6>::Zero(6, 6);
     
-    T abs_nz = std::abs(nz);
+    T abs_nz = abs(nz);
     T term1 = eta0 * l;
     T term2 = eta0 * l * l * l / 12;
     T term3, term4, term5;
@@ -228,7 +235,7 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
         T phi = R - rz; 
         if (phi > R - rz)
         {
-            T prefactor = std::pow(R * phi, 0.5);
+            T prefactor = pow(R * phi, 0.5);
             term3 = prefactor * l; 
             term4 = 0;
             term5 = prefactor * l * l * l / 12; 
@@ -463,13 +470,13 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
         T prefactor = 0; 
         if (overlap > 0 && overlap < R - Rcell)
         {
-            prefactor = prefactors(1) * std::pow(overlap, 1.5); 
+            prefactor = prefactors(1) * pow(overlap, 1.5); 
         }
         // Case 2: the overlap is instead greater than R - Rcell (i.e., it 
         // encroaches into the bodies of the two cells)
         else if (overlap >= R - Rcell)
         {
-            T term = prefactors(3) * std::pow(overlap - R + Rcell, 1.5);
+            T term = prefactors(3) * pow(overlap - R + Rcell, 1.5);
             prefactor = prefactors(0) * (prefactors(2) + term);
         }
 

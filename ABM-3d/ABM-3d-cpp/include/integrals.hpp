@@ -13,8 +13,12 @@
 #define BIOFILM_3D_AUXILIARY_INTEGRALS_HPP
 
 #include <cmath>
-#include <Eigen/Dense>
 #include <boost/math/constants/constants.hpp>
+#include <boost/multiprecision/mpfr.hpp>
+
+// Expose math functions for both standard and boost MPFR types
+using std::pow;
+using boost::multiprecision::pow;
 
 /**
  * Return the cell-body coordinate at which the cell-surface overlap is zero.
@@ -82,7 +86,7 @@ T overlapGamma(const T rz, const T nz, const T R, const T s, const T gamma)
 {
     T p = phi(rz, nz, R, s); 
     if (p > 0)
-        return std::pow(p, gamma);
+        return pow(p, gamma);
     else
         return 0;
 }
@@ -107,14 +111,14 @@ T integral1(const T rz, const T nz, const T R, const T half_l, const T gamma,
 {
     if (ss < -half_l)
     {
-        T overlap1 = std::pow(phi(rz, nz, R, -half_l), gamma + 1);
-        T overlap2 = std::pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap1 = pow(phi(rz, nz, R, -half_l), gamma + 1);
+        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
         return -(overlap2 - overlap1) / (nz * (gamma + 1));
     }
     else if (ss < half_l)
     {
         // overlap1 = 0
-        T overlap2 = std::pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
         return -overlap2 / (nz * (gamma + 1));
     }
     else 
@@ -146,14 +150,14 @@ T integral2(const T rz, const T nz, const T R, const T half_l, const T gamma,
     T term2 = 0; 
     if (ss < -half_l)
     {
-        T overlap1 = std::pow(phi(rz, nz, R, -half_l), gamma + 1);
-        T overlap2 = std::pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap1 = pow(phi(rz, nz, R, -half_l), gamma + 1);
+        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
         term2 = half_l * overlap2 + half_l * overlap1;    // = ... - (-half_l) * overlap1
     }
     else if (ss < half_l)
     {
         // Overlap at s = ss is zero 
-        T overlap2 = std::pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
         term2 = half_l * overlap2;
     }
     return (term1 - term2) / (nz * (gamma + 1)); 
@@ -182,14 +186,14 @@ T integral3(const T rz, const T nz, const T R, const T half_l, const T gamma,
     T term2 = 0;
     if (ss < -half_l)
     {
-        T overlap1 = std::pow(phi(rz, nz, R, -half_l), gamma + 1);
-        T overlap2 = std::pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap1 = pow(phi(rz, nz, R, -half_l), gamma + 1);
+        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
         term2 = half_l * half_l * (overlap2 - overlap1);
     }
     else if (ss < half_l)
     {
         // Overlap at s = ss is zero 
-        T overlap2 = std::pow(phi(rz, nz, R, half_l), gamma + 1);
+        T overlap2 = pow(phi(rz, nz, R, half_l), gamma + 1);
         term2 = half_l * half_l * overlap2;
     }
     return (term1 - term2) / (nz * (gamma + 1));
@@ -306,7 +310,7 @@ T integral6(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T areaIntegral1(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
-    T term1 = std::pow(R, 0.5) * (1 - nz * nz) * integral1(rz, nz, R, half_l, 0.5, ss);
+    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral1(rz, nz, R, half_l, 0.5, ss);
     T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral4(rz, nz, R, half_l, ss);
     return term1 + term2;
 }
@@ -328,7 +332,7 @@ T areaIntegral1(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T areaIntegral2(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
-    T term1 = std::pow(R, 0.5) * (1 - nz * nz) * integral2(rz, nz, R, half_l, 0.5, ss);
+    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral2(rz, nz, R, half_l, 0.5, ss);
     T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral5(rz, nz, R, half_l, ss);
     return term1 + term2;
 }
@@ -350,7 +354,7 @@ T areaIntegral2(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T areaIntegral3(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
-    T term1 = std::pow(R, 0.5) * (1 - nz * nz) * integral3(rz, nz, R, half_l, 0.5, ss);
+    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral3(rz, nz, R, half_l, 0.5, ss);
     T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral6(rz, nz, R, half_l, ss);
     return term1 + term2;
 }
