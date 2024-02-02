@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/30/2024
+ *     2/2/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -17,6 +17,13 @@
 #include <cmath>
 #include <boost/json/src.hpp>
 #include <boost/math/constants/constants.hpp>
+#include <boost/multiprecision/mpfr.hpp>
+
+// Expose math functions for both standard and boost MPFR types
+using std::sin;
+using boost::multiprecision::sin;
+using std::cos;
+using boost::multiprecision::cos;
 
 /**
  * Parse a JSON file specifying simulation parameters.
@@ -89,7 +96,9 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
  * Sample a value from the von Mises distribution with the given mean and
  * concentration parameter.
  *
- * This is an implementation of Best & Fisher's algorithm. 
+ * This is an implementation of Best & Fisher's algorithm.
+ *
+ * This function takes double parameters and returns a double.
  *
  * @param mu Mean. 
  * @param kappa Concentration parameter.
@@ -97,20 +106,19 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
  * @param uniform_dist Pre-defined instance of standard uniform distribution.
  * @returns A sampled value from the von Mises distribution.
  */
-template <typename T>
-T vonMises(const T mu, const T kappa, boost::random::mt19937& rng,
-           boost::random::uniform_01<>& uniform_dist)
+double vonMises(const double mu, const double kappa, boost::random::mt19937& rng,
+                boost::random::uniform_01<>& uniform_dist)
 {
-    T tau = 1 + std::sqrt(1 + 4 * kappa * kappa);
-    T rho = (tau - std::sqrt(2 * tau)) / (2 * kappa);
-    T r = (1 + rho * rho) / (2 * rho);
-    T z, f, c; 
+    double tau = 1 + std::sqrt(1 + 4 * kappa * kappa);
+    double rho = (tau - std::sqrt(2 * tau)) / (2 * kappa);
+    double r = (1 + rho * rho) / (2 * rho);
+    double z, f, c; 
     bool reject = true; 
     while (reject)
     {
-        T u1 = uniform_dist(rng); 
-        T u2 = uniform_dist(rng);
-        z = std::cos(boost::math::constants::pi<T>() * u1);
+        double u1 = uniform_dist(rng); 
+        double u2 = uniform_dist(rng);
+        z = cos(boost::math::constants::pi<T>() * u1);
         f = (1 + r * z) / (r + z); 
         c = kappa * (r - f); 
         if (c * (2 - c) - u2 > 0)
@@ -119,7 +127,7 @@ T vonMises(const T mu, const T kappa, boost::random::mt19937& rng,
             reject = false;
     }
 
-    T u3 = uniform_dist(rng); 
+    double u3 = uniform_dist(rng); 
     if (u3 > 0.5)
         return std::fmod(std::acos(f) + mu, boost::math::constants::two_pi<T>());
     else if (u3 < 0.5)
@@ -144,12 +152,12 @@ Array<T, 3, 1> rotate(const Ref<const Array<T, 3, 1> >& n, const T alpha,
     // Define rotation matrices about each axis and apply each rotation
     // in sequence 
     Matrix<T, 3, 3> Rx, Ry, Rz;
-    T sin_alpha = std::sin(alpha);
-    T cos_alpha = std::cos(alpha);
-    T sin_beta = std::sin(beta);
-    T cos_beta = std::cos(beta);
-    T sin_gamma = std::sin(gamma);
-    T cos_gamma = std::cos(gamma);
+    T sin_alpha = sin(alpha);
+    T cos_alpha = cos(alpha);
+    T sin_beta = sin(beta);
+    T cos_beta = cos(beta);
+    T sin_gamma = sin(gamma);
+    T cos_gamma = cos(gamma);
     Rx << 1, 0, 0,
           0, cos_gamma, -sin_gamma,
           0, sin_gamma, cos_gamma;
@@ -173,8 +181,8 @@ template <typename T>
 Array<T, 3, 1> rotateXY(const Ref<const Array<T, 3, 1> >& n, const T theta)
 {
     Matrix<T, 3, 3> rot;
-    T sin_theta = std::sin(theta);
-    T cos_theta = std::cos(theta);
+    T sin_theta = sin(theta);
+    T cos_theta = cos(theta);
     rot << cos_theta, -sin_theta, 0,
            sin_theta, cos_theta, 0,
            0, 0, 1;
@@ -203,8 +211,8 @@ Array<T, 3, 1> rotateOutOfXY(const Ref<const Array<T, 3, 1> >& n, const T theta)
     v /= norm;
 
     // Use the Rodrigues' rotation formula to rotate the input vector
-    T sin_theta = std::sin(theta);
-    T cos_theta = std::cos(theta);
+    T sin_theta = sin(theta);
+    T cos_theta = cos(theta);
     Matrix<T, 3, 1> w = v.cross(n.matrix()); 
     return (n.matrix() * cos_theta + w * sin_theta).array();   // Third term is zero
 }
