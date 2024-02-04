@@ -152,33 +152,37 @@ void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
     // Growth rate distribution function: normal distribution with given mean
     // and standard deviation
     boost::random::normal_distribution<> growth_dist(growth_mean, growth_std);
-    std::function<double(boost::random::mt19937&)> growth_dist_func =
+    std::function<T(boost::random::mt19937&)> growth_dist_func =
         [&growth_dist](boost::random::mt19937& rng)
         {
-            return growth_dist(rng); 
+            return static_cast<T>(growth_dist(rng)); 
         };
 
     // Daughter cell length ratio distribution function: normal distribution
     // with mean 0.5 and given standard deviation
     boost::random::normal_distribution<> daughter_length_dist(0.5, daughter_length_std); 
-    std::function<double(boost::random::mt19937&)> daughter_length_dist_func =
+    std::function<T(boost::random::mt19937&)> daughter_length_dist_func =
         [&daughter_length_dist](boost::random::mt19937& rng)
         {
-            return daughter_length_dist(rng); 
+            return static_cast<T>(daughter_length_dist(rng)); 
         };
 
     // Daughter angle distribution functions: two uniform distributions that 
     // are bounded by the given values 
     boost::random::uniform_01<> uniform_dist; 
-    std::function<double(boost::random::mt19937&)> daughter_angle_xy_dist_func = 
+    std::function<T(boost::random::mt19937&)> daughter_angle_xy_dist_func = 
         [&uniform_dist, &daughter_angle_xy_bound](boost::random::mt19937& rng)
         {
-            return -daughter_angle_xy_bound + 2 * daughter_angle_xy_bound * uniform_dist(rng);
+            return static_cast<T>(
+                -daughter_angle_xy_bound + 2 * daughter_angle_xy_bound * uniform_dist(rng)
+            );
         };
-    std::function<double(boost::random::mt19937&)> daughter_angle_z_dist_func =
+    std::function<T(boost::random::mt19937&)> daughter_angle_z_dist_func =
         [&uniform_dist, &daughter_angle_z_bound](boost::random::mt19937& rng)
         {
-            return -daughter_angle_z_bound + 2 * daughter_angle_z_bound * uniform_dist(rng);
+            return static_cast<T>(
+                -daughter_angle_z_bound + 2 * daughter_angle_z_bound * uniform_dist(rng)
+            );
         }; 
 
     // Write simulation parameters to a dictionary
