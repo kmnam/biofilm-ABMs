@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/2/2024
+ *     2/4/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -15,6 +15,7 @@
 #include <string>
 #include <iomanip>
 #include <cmath>
+#include <unordered_map>
 #include <boost/json/src.hpp>
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
@@ -48,6 +49,46 @@ boost::json::value parseConfigFile(const std::string filename)
         return nullptr;
     
     return p.release(); 
+}
+
+/**
+ * Write a population of cells, with the corresponding simulation parameters,
+ * to the given path. 
+ *
+ * @param cells Existing population of cells.
+ * @param params `std::unordered_map<std::string, std::string>` instance 
+ *               containing the simulation parameters.
+ * @param filename Output file. 
+ */
+template <typename T>
+void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
+                std::unordered_map<std::string, std::string>& params, 
+                const std::string filename)
+{
+    // Open output file 
+    std::ofstream outfile(filename);
+    
+    // Run through the simulation parameters ... 
+    for (auto&& param : params)
+        outfile << "# " << param.first << " = " << param.second << std::endl;
+
+    // Write each cell in the population ...
+    outfile << std::setprecision(10);  
+    for (int i = 0; i < cells.rows(); ++i)
+    {
+        for (int j = 0; j < cells.cols(); ++j)
+        {
+            if (j == 13)         // If the entry is a group identifier
+                outfile << static_cast<int>(cells(i, j)) << '\t'; 
+            else                 // Otherwise 
+                outfile << cells(i, j) << '\t'; 
+        }
+        outfile.seekp(-1, std::ios_base::cur);
+        outfile << std::endl;
+    }
+
+    // Close output file 
+    outfile.close();  
 }
 
 /**
