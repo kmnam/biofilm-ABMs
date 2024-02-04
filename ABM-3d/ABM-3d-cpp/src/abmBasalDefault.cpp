@@ -90,9 +90,10 @@ int main(int argc, char** argv)
     // Run the simulation
     runSimulation<T>(
         cells, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, max_stepsize, iter_write,
-        iter_update_stepsize, max_error_allowed, min_error, max_tries_update_stepsize,
-        neighbor_threshold, nz_threshold, outprefix, rng_seed, growth_mean, 
-        growth_std, daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound
+        iter_update_neighbors, iter_update_stepsize, max_error_allowed, min_error,
+        max_tries_update_stepsize, neighbor_threshold, nz_threshold, outprefix,
+        rng_seed, growth_mean, growth_std, daughter_length_std,
+        daughter_angle_xy_bound, daughter_angle_z_bound
     );
     
     return 0; 
