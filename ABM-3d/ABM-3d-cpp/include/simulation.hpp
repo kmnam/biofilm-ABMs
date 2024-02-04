@@ -222,8 +222,9 @@ void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
             std::cout << "... Dividing " << to_divide.sum() << " cells "
                       << "(iteration " << iter << ")" << std::endl;
         cells = divideCells<T>(
-            cells, t, R, Rcell, to_divide, growth_dist, rng, daughter_length_dist,
-            daughter_angle_xy_dist_func, daughter_angle_z_dist_func
+            cells, t, R, Rcell, to_divide, growth_dist_func, rng,
+            daughter_length_dist_func, daughter_angle_xy_dist_func,
+            daughter_angle_z_dist_func
         );
 
         // Update orientations and neighboring cells if division has occurred
