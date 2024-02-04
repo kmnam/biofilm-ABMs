@@ -31,6 +31,8 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <vector>
+#include <unordered_map>
 #include <Eigen/Dense>
 #include <boost/random.hpp>
 #include <boost/multiprecision/mpfr.hpp>
