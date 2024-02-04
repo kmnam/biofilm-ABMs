@@ -23,22 +23,39 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/31/2024
+ *     2/2/2024
  */
+
+#define EIGEN_DONT_PARALLELIZE    // Disable internal parallelization within Eigen
 
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
 #include <cmath>
+#include <omp.h>
 #include <Eigen/Dense>
 #include <boost/random.hpp>
+#include <boost/multiprecision/mpfr.hpp>    // TODO Trying this out?
 #include "../include/growth.hpp"
 #include "../include/mechanics.hpp"
 #include "../include/utils.hpp"
 
 using namespace Eigen;
 
+// Expose math functions for both standard and boost MPFR types
+using std::pow;
+using boost::multiprecision::pow;
+using std::sqrt;
+using boost::multiprecision::sqrt;
+using std::min;
+using boost::multiprecision::min;
+using std::max;
+using boost::multiprecision::max;
+using std::abs;
+using boost::multiprecision::abs;
+
 // Define floating-point type to be used 
+//typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<20> > T;
 typedef double T;
 
 // Maximum number of attempts to control stepsize per Runge-Kutta iteration 
@@ -74,8 +91,8 @@ int main(int argc, char** argv)
     const T Rcell = static_cast<T>(json_data["Rcell"].as_double());
     const T L0 = static_cast<T>(json_data["L0"].as_double());
     const T Ldiv = 2 * L0 + 2 * R;
-    const T growth_mean = static_cast<T>(json_data["growth_mean"].as_double());
-    const T growth_std = static_cast<T>(json_data["growth_std"].as_double()); 
+    const double growth_mean = json_data["growth_mean"].as_double();
+    const double growth_std = json_data["growth_std"].as_double(); 
     const T E0 = static_cast<T>(json_data["E0"].as_double());
     const T Ecell = static_cast<T>(json_data["Ecell"].as_double()); 
     const T sigma0 = static_cast<T>(json_data["sigma0"].as_double()); 
@@ -88,16 +105,16 @@ int main(int argc, char** argv)
     const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64(); 
     const T neighbor_threshold = 2 * (2 * R + L0);
     const int n_cells = json_data["n_cells"].as_int64();
-    const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
-    const T orientation_conc = static_cast<T>(json_data["orientation_conc"].as_double());
-    const T theta_xy_bound = static_cast<T>(json_data["max_orientation_angle_xy"].as_double());
-    const T theta_z_bound = static_cast<T>(json_data["max_orientation_angle_z"].as_double());
+    const double daughter_length_std = json_data["daughter_length_std"].as_double();
+    const double orientation_conc = json_data["orientation_conc"].as_double();
+    const double theta_xy_bound = json_data["max_orientation_angle_xy"].as_double();
+    const double theta_z_bound = json_data["max_orientation_angle_z"].as_double();
     const T nz_threshold = static_cast<T>(json_data["nz_threshold"].as_double());
     const T max_error_allowed = static_cast<T>(json_data["max_rungekutta_error"].as_double());
 
     // Prefactors for cell-cell interaction forces
-    const T sqrtR = std::sqrt(R); 
-    const T powRdiff = std::pow(R - Rcell, 1.5);
+    const T sqrtR = sqrt(R); 
+    const T powRdiff = pow(R - Rcell, 1.5);
     Array<T, 4, 1> cell_cell_prefactors; 
     cell_cell_prefactors << 2.5 * sqrtR,
                             2.5 * E0 * sqrtR,
@@ -110,7 +127,7 @@ int main(int argc, char** argv)
     std::function<T(boost::random::mt19937&)> growth_dist_func =
         [&growth_dist](boost::random::mt19937& rng)
         {
-            return growth_dist(rng); 
+            return static_cast<T>(growth_dist(rng)); 
         };
 
     // Daughter cell length ratio distribution function: normal distribution
@@ -119,7 +136,7 @@ int main(int argc, char** argv)
     std::function<T(boost::random::mt19937&)> daughter_length_dist_func =
         [&daughter_length_dist](boost::random::mt19937& rng)
         {
-            return daughter_length_dist(rng); 
+            return static_cast<T>(daughter_length_dist(rng)); 
         };
 
     // Daughter angle distribution functions: two von Mises distributions with 
@@ -137,10 +154,10 @@ int main(int argc, char** argv)
         daughter_angle_xy_dist_func = 
             [&orientation_conc, &uniform_dist, &theta_xy_bound](boost::random::mt19937& rng)
             {
-                T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
+                double theta = vonMises(0.0, orientation_conc, rng, uniform_dist);
                 while (theta > theta_xy_bound || theta < -theta_xy_bound)
-                    theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
-                return theta;
+                    theta = vonMises(0.0, orientation_conc, rng, uniform_dist);
+                return static_cast<T>(theta);
             };
     }
     if (theta_z_bound == 0.0)
@@ -152,10 +169,10 @@ int main(int argc, char** argv)
         daughter_angle_z_dist_func = 
             [&orientation_conc, &uniform_dist, &theta_z_bound](boost::random::mt19937& rng)
             {
-                T theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
+                double theta = vonMises(0.0, orientation_conc, rng, uniform_dist);
                 while (theta > theta_z_bound || theta < -theta_z_bound)
-                    theta = vonMises<T>(0.0, orientation_conc, rng, uniform_dist);
-                return theta;
+                    theta = vonMises(0.0, orientation_conc, rng, uniform_dist);
+                return static_cast<T>(theta);
             };
     }
 
@@ -180,7 +197,7 @@ int main(int argc, char** argv)
     Array<T, Dynamic, 7> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
 
     // Write the founder cell to file
-    json_data["t_curr"] = t;
+    json_data["t_curr"] = static_cast<double>(t);
     std::stringstream ss_init; 
     ss_init << prefix << "_init.txt";
     std::string filename_init = ss_init.str(); 
@@ -220,11 +237,11 @@ int main(int argc, char** argv)
         // a given maximum number of attempts)
         if (i % iter_update_stepsize == 0)
         {
-            T max_error = std::max(errors.abs().maxCoeff(), min_error); 
+            T max_error = max(errors.abs().maxCoeff(), min_error); 
             int j = 0; 
             while (max_error > max_error_allowed && j < max_tries)
             {
-                dt *= std::pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
+                dt *= pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
                     A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
                     E0, nz_threshold
@@ -232,12 +249,12 @@ int main(int argc, char** argv)
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
                 velocities_new = std::get<2>(result);
-                max_error = std::max(errors.abs().maxCoeff(), min_error);
+                max_error = max(errors.abs().maxCoeff(), min_error);
                 j++;  
             }
             // If the error is small, increase the stepsize up to a maximum stepsize
             if (max_error < max_error_allowed)
-                dt = std::min(dt * std::pow(max_error_allowed / max_error, 1.0 / (error_order + 1)), max_stepsize);
+                dt = min(dt * pow(max_error_allowed / max_error, 1.0 / (error_order + 1)), max_stepsize);
         }
         cells = cells_new;
         velocities = velocities_new;
@@ -260,6 +277,34 @@ int main(int argc, char** argv)
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
         }
 
+        // If there is more than one cell, for each cell whose vertical orientation
+        // is less than the threshold, randomly fix the vertical orientation with a
+        // small probability
+        if (cells.rows() > 1)
+        {
+            for (int j = 0; j < cells.rows(); ++j)
+	    {
+	        if (abs(cells(j, 5)) < nz_threshold)
+		{
+		    double r1 = uniform_dist(rng); 
+                    double r2 = uniform_dist(rng);
+                    T theta = boost::math::constants::pi<T>() / 180;
+		    if (r1 < 0.01)
+                    {
+                        if (r2 < 0.5)
+		            cells(j, 5) = -theta;
+                        else
+                            cells(j, 5) = theta;
+                        T norm = cells(j, 3) * cells(j, 3) + cells(j, 4) * cells(j, 4);
+		        T alpha = (1 - cells(j, 5) * cells(j, 5)) / norm;
+		        cells(j, 3) *= sqrt(alpha);
+		        cells(j, 4) *= sqrt(alpha);
+                    }
+		}
+            }
+            normalizeOrientations<T>(cells);
+        }
+
         // Update distances between neighboring cells
         updateNeighborDistances<T>(cells, neighbors);
 
@@ -278,7 +323,7 @@ int main(int argc, char** argv)
             std::cout << "Iteration " << i << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
                       << ", dt = " << dt << std::endl;
-            json_data["t_curr"] = t;
+            json_data["t_curr"] = static_cast<double>(t);
             std::stringstream ss; 
             ss << prefix << "_iter" << i << ".txt"; 
             std::string filename = ss.str(); 
@@ -287,7 +332,7 @@ int main(int argc, char** argv)
     }
 
     // Write final population to file
-    json_data["t_curr"] = t;
+    json_data["t_curr"] = static_cast<double>(t);
     std::stringstream ss_final; 
     ss_final << prefix << "_final.txt";
     std::string filename_final = ss_final.str(); 
