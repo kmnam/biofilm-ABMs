@@ -206,7 +206,7 @@ void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
     // Write the initial population to file 
     params["t_curr"] = floatToString<T>(t);
     std::stringstream ss_init; 
-    ss_init << prefix << "_init.txt";
+    ss_init << outprefix << "_init.txt";
     std::string filename_init = ss_init.str(); 
     writeCells<T>(cells, params, filename_init); 
     

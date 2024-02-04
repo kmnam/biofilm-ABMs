@@ -61,17 +61,17 @@ int main(int argc, char** argv)
     const T sigma0 = static_cast<T>(json_data["sigma0"].as_double()); 
     const T eta_ambient = static_cast<T>(json_data["eta_ambient"].as_double()); 
     const T eta_surface = static_cast<T>(json_data["eta_surface"].as_double()); 
-    const T max_stepsize = dt; 
+    const T max_stepsize = static_cast<T>(json_data["max_stepsize"].as_double());
     const int iter_write = json_data["iter_write"].as_int64(); 
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
     const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64(); 
     const T neighbor_threshold = 2 * (2 * R + L0);
     const int n_cells = json_data["n_cells"].as_int64();
     const double daughter_length_std = json_data["daughter_length_std"].as_double();
-    const double daughter_angle_xy_bound = json_data["max_orientation_angle_xy"].as_double();
-    const double daughter_angle_z_bound = json_data["max_orientation_angle_z"].as_double();
+    const double daughter_angle_xy_bound = json_data["daughter_angle_xy_bound"].as_double();
+    const double daughter_angle_z_bound = json_data["daughter_angle_z_bound"].as_double();
     const T nz_threshold = static_cast<T>(json_data["nz_threshold"].as_double());
-    const T max_error_allowed = static_cast<T>(json_data["max_rungekutta_error"].as_double());
+    const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
 
     // Output file prefix
     std::string prefix = argv[2];
@@ -84,7 +84,7 @@ int main(int argc, char** argv)
     // Define a founder cell at the origin at time zero, parallel to x-axis 
     // and xy-plane, with mean growth rate and default viscosity and friction
     // coefficients
-    Array<T, Dynamic, Dynamic> cells(n, 13);
+    Array<T, Dynamic, Dynamic> cells(1, 13);
     cells << 0, 0, 0.99 * R, 1, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface, sigma0;
 
     // Run the simulation
