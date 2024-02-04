@@ -100,7 +100,7 @@ std::string floatToString(T x, const int precision = 10)
  * @param daughter_angle_z_bound 
  */
 template <typename T>
-void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
                    const int n_cells, const T R, const T Rcell, const T L0,
                    const T Ldiv, const T E0, const T Ecell, const T max_stepsize, 
                    const int iter_write, const int iter_update_neighbors,
@@ -112,6 +112,7 @@ void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                    const T daughter_length_std, const T daughter_angle_xy_bound,
                    const T daughter_angle_z_bound)
 {
+    Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
     T dt = max_stepsize; 
     int iter = 0;
