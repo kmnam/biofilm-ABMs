@@ -76,7 +76,8 @@ std::string floatToString(T x, const int precision = 10)
  *
  * TODO Complete this docstring.
  *
- * @param cells
+ * @param cells_init
+ * @param max_iter
  * @param n_cells
  * @param R
  * @param Rcell
@@ -103,15 +104,16 @@ std::string floatToString(T x, const int precision = 10)
  */
 template <typename T>
 void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
-                   const int n_cells, const T R, const T Rcell, const T L0,
-                   const T Ldiv, const T E0, const T Ecell, const T max_stepsize, 
-                   const int iter_write, const int iter_update_neighbors,
-                   const int iter_update_stepsize, const T max_error_allowed,
-                   const T min_error, const int max_tries_update_stepsize, 
-                   const T neighbor_threshold, const T nz_threshold,
-                   const std::string outprefix, const int rng_seed,
-                   const double growth_mean, const double growth_std,
-                   const double daughter_length_std, const double daughter_angle_xy_bound,
+                   const int max_iter, const int n_cells, const T R, const T Rcell,
+                   const T L0, const T Ldiv, const T E0, const T Ecell,
+                   const T max_stepsize, const int iter_write,
+                   const int iter_update_neighbors, const int iter_update_stepsize,
+                   const T max_error_allowed, const T min_error,
+                   const int max_tries_update_stepsize, const T neighbor_threshold,
+                   const T nz_threshold, const std::string outprefix,
+                   const int rng_seed, const double growth_mean,
+                   const double growth_std, const double daughter_length_std,
+                   const double daughter_angle_xy_bound,
                    const double daughter_angle_z_bound)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
@@ -217,8 +219,22 @@ void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
     std::string filename_init = ss_init.str(); 
     writeCells<T>(cells, params, filename_init); 
     
-    // Run the simulation ... 
-    while (n < n_cells)
+    // Define termination criterion, assuming that at least one of n_cells
+    // or max_iter is positive
+    std::function<bool(int, int)> terminate = [&n_cells, &max_iter](int n, int iter)
+    {
+        if (n_cells > 0 && max_iter > 0)
+            return (n >= n_cells || iter >= max_iter);
+        else if (n_cells > 0)    // Decide when to terminate only based on cell count
+            return (n >= n_cells); 
+        else if (max_iter > 0)   // Decide when to terminate only based on iteration count
+            return (iter >= max_iter);
+        else    // Otherwise, termination criteria are ill-defined, so always terminate
+            return true;
+    };
+
+    // Run the simulation ...
+    while (!terminate(n, iter))
     {
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
