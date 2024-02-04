@@ -86,6 +86,8 @@ std::string floatToString(T x, const int precision = 10)
  * @param E0
  * @param Ecell
  * @param max_stepsize
+ * @param write
+ * @param outprefix
  * @param iter_write
  * @param iter_update_neighbors
  * @param iter_update_stepsize
@@ -94,27 +96,35 @@ std::string floatToString(T x, const int precision = 10)
  * @param max_tries_update_stepsize
  * @param neighbor_threshold
  * @param nz_threshold
- * @param outprefix
  * @param rng_seed
  * @param growth_mean
  * @param growth_std
  * @param daughter_length_std
  * @param daughter_angle_xy_bound
- * @param daughter_angle_z_bound 
+ * @param daughter_angle_z_bound
+ * @returns Final population of cells.  
  */
 template <typename T>
-void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
-                   const int max_iter, const int n_cells, const T R, const T Rcell,
-                   const T L0, const T Ldiv, const T E0, const T Ecell,
-                   const T max_stepsize, const int iter_write,
-                   const int iter_update_neighbors, const int iter_update_stepsize,
-                   const T max_error_allowed, const T min_error,
-                   const int max_tries_update_stepsize, const T neighbor_threshold,
-                   const T nz_threshold, const std::string outprefix,
-                   const int rng_seed, const double growth_mean,
-                   const double growth_std, const double daughter_length_std,
-                   const double daughter_angle_xy_bound,
-                   const double daughter_angle_z_bound)
+Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
+                                         const int max_iter, const int n_cells,
+                                         const T R, const T Rcell, const T L0,
+                                         const T Ldiv, const T E0, const T Ecell,
+                                         const T max_stepsize, const bool write,
+                                         const std::string outprefix, 
+                                         const int iter_write,
+                                         const int iter_update_neighbors,
+                                         const int iter_update_stepsize,
+                                         const T max_error_allowed,
+                                         const T min_error,
+                                         const int max_tries_update_stepsize,
+                                         const T neighbor_threshold,
+                                         const T nz_threshold,
+                                         const int rng_seed,
+                                         const double growth_mean,
+                                         const double growth_std,
+                                         const double daughter_length_std,
+                                         const double daughter_angle_xy_bound,
+                                         const double daughter_angle_z_bound)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -212,12 +222,15 @@ void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
     params["daughter_angle_xy_bound"] = floatToString<T>(daughter_angle_xy_bound, precision);
     params["daughter_angle_z_bound"] = floatToString<T>(daughter_angle_z_bound, precision);
 
-    // Write the initial population to file 
-    params["t_curr"] = floatToString<T>(t);
-    std::stringstream ss_init; 
-    ss_init << outprefix << "_init.txt";
-    std::string filename_init = ss_init.str(); 
-    writeCells<T>(cells, params, filename_init); 
+    // Write the initial population to file
+    if (write)
+    {
+        params["t_curr"] = floatToString<T>(t);
+        std::stringstream ss_init; 
+        ss_init << outprefix << "_init.txt";
+        std::string filename_init = ss_init.str(); 
+        writeCells<T>(cells, params, filename_init);
+    }
     
     // Define termination criterion, assuming that at least one of n_cells
     // or max_iter is positive
@@ -320,7 +333,7 @@ void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
         
         // Write the current population to file
-        if (iter % iter_write == 0)
+        if (write && (iter % iter_write == 0))
         {
             std::cout << "Iteration " << iter << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
@@ -334,11 +347,16 @@ void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
     }
 
     // Write final population to file
-    params["t_curr"] = floatToString<T>(t);
-    std::stringstream ss_final; 
-    ss_final << outprefix << "_final.txt";
-    std::string filename_final = ss_final.str(); 
-    writeCells<T>(cells, params, filename_final);
+    if (write)
+    {
+        params["t_curr"] = floatToString<T>(t);
+        std::stringstream ss_final; 
+        ss_final << outprefix << "_final.txt";
+        std::string filename_final = ss_final.str(); 
+        writeCells<T>(cells, params, filename_final);
+    }
+
+    return cells;
 }
 
 #endif
