@@ -74,7 +74,7 @@ int main(int argc, char** argv)
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
 
     // Output file prefix
-    std::string prefix = argv[2];
+    std::string outprefix = argv[2];
 
     // Random seed
     const int rng_seed = std::stoi(argv[3]);
