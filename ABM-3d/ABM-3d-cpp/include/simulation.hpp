@@ -110,9 +110,9 @@ void runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
                    const T min_error, const int max_tries_update_stepsize, 
                    const T neighbor_threshold, const T nz_threshold,
                    const std::string outprefix, const int rng_seed,
-                   const T growth_mean, const T growth_std,
-                   const T daughter_length_std, const T daughter_angle_xy_bound,
-                   const T daughter_angle_z_bound)
+                   const double growth_mean, const double growth_std,
+                   const double daughter_length_std, const double daughter_angle_xy_bound,
+                   const double daughter_angle_z_bound)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
