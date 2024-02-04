@@ -66,6 +66,7 @@ int main(int argc, char** argv)
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
     const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64(); 
     const T neighbor_threshold = 2 * (2 * R + L0);
+    const int max_iter = json_data["max_iter"].as_int64();
     const int n_cells = json_data["n_cells"].as_int64();
     const double daughter_length_std = json_data["daughter_length_std"].as_double();
     const double daughter_angle_xy_bound = json_data["daughter_angle_xy_bound"].as_double();
@@ -85,14 +86,15 @@ int main(int argc, char** argv)
     // and xy-plane, with mean growth rate and default viscosity and friction
     // coefficients
     Array<T, Dynamic, Dynamic> cells(1, 13);
-    cells << 0, 0, 0.99 * R, 1, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface, sigma0;
+    cells << 0, 0, 0.99 * R, 1, 0, 0,
+             L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface, sigma0;
 
     // Run the simulation
     runSimulation<T>(
-        cells, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, max_stepsize, iter_write,
-        iter_update_neighbors, iter_update_stepsize, max_error_allowed, min_error,
-        max_tries_update_stepsize, neighbor_threshold, nz_threshold, outprefix,
-        rng_seed, growth_mean, growth_std, daughter_length_std,
+        cells, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, max_stepsize,
+        true, outprefix, iter_write, iter_update_neighbors, iter_update_stepsize,
+        max_error_allowed, min_error, max_tries_update_stepsize, neighbor_threshold,
+        nz_threshold, rng_seed, growth_mean, growth_std, daughter_length_std,
         daughter_angle_xy_bound, daughter_angle_z_bound
     );
     
