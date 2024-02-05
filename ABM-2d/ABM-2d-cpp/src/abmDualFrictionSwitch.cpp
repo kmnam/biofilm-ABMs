@@ -70,7 +70,7 @@ int main(int argc, char** argv)
     const T lifetime_mean1 = static_cast<T>(json_data["lifetime_mean1"].as_double()); 
     const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
     const double daughter_length_std = json_data["daughter_length_std"].as_double();
-    const double daughter_angle_bound= json_data["daughter_angle_bound"].as_double();
+    const double daughter_angle_bound = json_data["daughter_angle_bound"].as_double();
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
 
     // Vectors of growth rate means and standard deviations (identical for
