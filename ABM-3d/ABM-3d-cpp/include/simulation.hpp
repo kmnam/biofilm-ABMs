@@ -32,7 +32,7 @@
 #include <fstream>
 #include <cmath>
 #include <vector>
-#include <unordered_map>
+#include <map>
 #include <Eigen/Dense>
 #include <boost/random.hpp>
 #include <boost/multiprecision/mpfr.hpp>
@@ -198,7 +198,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         }; 
 
     // Write simulation parameters to a dictionary
-    std::unordered_map<std::string, std::string> params;
+    std::map<std::string, std::string> params;
     const int precision = 10;
     params["n_cells"] = std::to_string(n_cells);
     params["R"] = floatToString<T>(R, precision);
