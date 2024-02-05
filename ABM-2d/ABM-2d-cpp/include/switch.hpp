@@ -54,7 +54,7 @@ void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells,
                   std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
                   std::vector<std::function<T(boost::random::mt19937&)> >& attribute_dists,
                   boost::random::mt19937& rng,
-                  boost::random::uniform_distribution<>& uniform_dist)
+                  boost::random::uniform_01<>& uniform_dist)
 {
     // First identify cells to switch groups within the given timestep
     Array<T, Dynamic, Dynamic> switch_probs = dt * switch_rates;

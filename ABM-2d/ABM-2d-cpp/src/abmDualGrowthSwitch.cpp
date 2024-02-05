@@ -97,7 +97,7 @@ int main(int argc, char** argv)
     //
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
     // with mean growth rate and default viscosity and friction coefficients
-    Array<T, Dynamic, Dynamic> cells(n, 11);
+    Array<T, Dynamic, Dynamic> cells(1, 11);
     cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean1, eta_ambient, eta_surface, 1;
 
     // Run the simulation
