@@ -453,7 +453,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         std::function<T(boost::random::mt19937&)> growth_dist_func =
             [&growth_dist](boost::random::mt19937& rng)
             {
-                return static_cast<T>(growth_dists(rng)); 
+                return static_cast<T>(growth_dist(rng)); 
             };
         growth_dist_funcs.push_back(growth_dist_func);
     }
