@@ -447,10 +447,13 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             growth_means[i], growth_stds[i]
         );
         growth_dists.push_back(growth_dist);
+    }
+    for (auto&& growth_dist : growth_dists)
+    {
         std::function<T(boost::random::mt19937&)> growth_dist_func =
             [&growth_dist](boost::random::mt19937& rng)
             {
-                return static_cast<T>(growth_dists[i](rng)); 
+                return static_cast<T>(growth_dists(rng)); 
             };
         growth_dist_funcs.push_back(growth_dist_func);
     }
@@ -465,10 +468,13 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             attribute_means[i], attribute_stds[i]
         );
         attribute_dists.push_back(attribute_dist);
+    }
+    for (auto&& attribute_dist : attribute_dists)
+    {
         std::function<T(boost::random::mt19937&)> attribute_dist_func =
             [&attribute_dist](boost::random::mt19937& rng)
             {
-                return static_cast<T>(attribute_dists[i](rng));
+                return static_cast<T>(attribute_dist(rng));
             };
         attribute_dist_funcs.push_back(attribute_dist_func);
     }
