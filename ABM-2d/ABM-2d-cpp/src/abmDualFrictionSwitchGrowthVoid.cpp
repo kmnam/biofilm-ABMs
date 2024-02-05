@@ -129,7 +129,7 @@ int main(int argc, char** argv)
               cells.col(1).sum() / cells.rows();
     Array<T, Dynamic, 1> dists(cells.rows()); 
     for (int i = 0; i < cells.rows(); ++i)
-        dists(i) = (cells(i, Eigen::seq(0, 1)) - center).matrix().norm();
+        dists(i) = (cells(i, Eigen::seq(0, 1)).transpose() - center).matrix().norm();
 
     // Identify the specified fraction of furthest central cells 
     std::vector<T> dists_vec;
