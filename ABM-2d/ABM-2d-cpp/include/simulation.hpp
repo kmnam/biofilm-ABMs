@@ -439,32 +439,36 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
     // Growth rate distribution functions: normal distributions with given means
     // and standard deviations
+    std::vector<boost::random::normal_distribution<> > growth_dists;
     std::vector<std::function<T(boost::random::mt19937&)> > growth_dist_funcs; 
     for (int i = 0; i < n_groups; ++i)
     { 
         boost::random::normal_distribution<> growth_dist(
             growth_means[i], growth_stds[i]
         );
+        growth_dists.push_back(growth_dist);
         std::function<T(boost::random::mt19937&)> growth_dist_func =
             [&growth_dist](boost::random::mt19937& rng)
             {
-                return static_cast<T>(growth_dist(rng)); 
+                return static_cast<T>(growth_dists[i](rng)); 
             };
         growth_dist_funcs.push_back(growth_dist_func);
     }
 
     // Attribute distribution functions: normal distributions with given means
     // and standard deviations
+    std::vector<boost::random::normal_distribution<> > attribute_dists;
     std::vector<std::function<T(boost::random::mt19937&)> > attribute_dist_funcs;
     for (int i = 0; i < n_groups; ++i)
     {
         boost::random::normal_distribution<> attribute_dist(
             attribute_means[i], attribute_stds[i]
         );
+        attribute_dists.push_back(attribute_dist);
         std::function<T(boost::random::mt19937&)> attribute_dist_func =
             [&attribute_dist](boost::random::mt19937& rng)
             {
-                return static_cast<T>(attribute_dist(rng));
+                return static_cast<T>(attribute_dists[i](rng));
             };
         attribute_dist_funcs.push_back(attribute_dist_func);
     }
