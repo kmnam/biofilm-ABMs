@@ -48,13 +48,13 @@ boost::json::value parseConfigFile(const std::string filename)
  * to the given path. 
  *
  * @param cells Existing population of cells.
- * @param params `std::unordered_map<std::string, std::string>` instance 
- *               containing the simulation parameters.
+ * @param params `std::map<std::string, std::string>` instance containing the
+ *               simulation parameters.
  * @param filename Output file. 
  */
 template <typename T>
 void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
-                std::unordered_map<std::string, std::string>& params, 
+                std::map<std::string, std::string>& params, 
                 const std::string filename)
 {
     // Open output file 
