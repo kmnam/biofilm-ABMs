@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/16/2023
+ *     2/5/2024
  */
 
 #ifndef BIOFILM_SWITCH_HPP
@@ -33,6 +33,65 @@
 #include <Eigen/Dense>
 
 using namespace Eigen;
+
+/**
+ * TODO Complete this docstring.
+ *
+ * @param cells Existing population of cells.
+ * @param switch_attribute
+ * @param n_groups
+ * @param dt
+ * @param switch_rates
+ * @param growth_dists
+ * @param attribute_dists
+ * @param rng
+ * @param uniform_dist
+ */
+template <typename T>
+void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells,
+                  const int switch_attribute, const int n_groups, const T dt,
+                  const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
+                  std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
+                  std::vector<std::function<T(boost::random::mt19937&)> >& attribute_dists,
+                  boost::random::mt19937& rng,
+                  boost::random::uniform_distribution<>& uniform_dist)
+{
+    // First identify cells to switch groups within the given timestep
+    Array<T, Dynamic, Dynamic> switch_probs = dt * switch_rates;
+    for (int i = 0; i < cells.rows(); ++i)
+    {
+        // Which group is the cell currently in? 
+        int group = static_cast<int>(cells(i, 10)) - 1;   // Groups are indexed 1, 2, ...
+
+        // Decide whether to switch to any other group
+        T r = uniform_dist(rng);
+        T total = 0;
+        for (int j = 0; j < n_groups; ++j)
+        {
+            if (j != group)
+            {
+                T switch_prob = switch_probs(group, j);
+                if (r > total && r < total + switch_prob)
+                {
+                    // If the cell is to switch to group j, sample the cell's
+                    // new growth rate and attribute value 
+                    T growth_rate = growth_dists[j](rng);
+                    T attribute = attribute_dists[j](rng);
+                    cells(i, 7) = growth_rate;
+                    cells(i, switch_attribute) = attribute; 
+                    cells(i, 10) = j;
+                    break;
+                }
+                total += switch_prob;
+            }
+        }
+    }
+}
+
+// --------------------------------------------------------------------- //
+
+
+
 
 /**
  * Given rates of switching from group 1 to group 2 and vice versa and a
