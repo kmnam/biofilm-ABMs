@@ -79,7 +79,7 @@ void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells,
                     T attribute = attribute_dists[j](rng);
                     cells(i, 7) = growth_rate;
                     cells(i, switch_attribute) = attribute; 
-                    cells(i, 10) = j;
+                    cells(i, 10) = j + 1;
                     break;
                 }
                 total += switch_prob;
