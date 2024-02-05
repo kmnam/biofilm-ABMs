@@ -103,9 +103,9 @@ int main(int argc, char** argv)
     // Run the simulation
     runSimulation<T>(
         cells, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
-        max_stepsize, write, outprefix, iter_write, iter_update_neighbors,
+        max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
         iter_update_stepsize, max_error_allowed, min_error,
-        max_tries_update_stepsize, neighbor_threshold, rng_seed, n_groups,
+        max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attribute, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound
     ); 

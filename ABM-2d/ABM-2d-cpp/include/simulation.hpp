@@ -571,7 +571,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::cout << "... Dividing " << to_divide.sum() << " cells "
                       << "(iteration " << iter << ")" << std::endl;
         cells = divideCells<T>(
-            cells, t, R, Rcell, to_divide, growth_dist_func, rng,
+            cells, t, R, Rcell, to_divide, growth_dist_funcs, rng,
             daughter_length_dist_func, daughter_angle_dist_func
         );
 
