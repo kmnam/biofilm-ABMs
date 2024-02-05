@@ -15,6 +15,7 @@
 #include <string>
 #include <iomanip>
 #include <cmath>
+#include <map>
 #include <boost/json/src.hpp>
 #include <boost/math/constants/constants.hpp>
 
