@@ -22,7 +22,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/4/2024
+ *     2/5/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -216,11 +216,11 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     params["neighbor_threshold"] = floatToString<T>(neighbor_threshold, precision);
     params["nz_threshold"] = floatToString<T>(nz_threshold, precision);
     params["random_seed"] = std::to_string(rng_seed);
-    params["growth_mean"] = floatToString<T>(growth_mean, precision); 
-    params["growth_std"] = floatToString<T>(growth_std, precision);
-    params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
-    params["daughter_angle_xy_bound"] = floatToString<T>(daughter_angle_xy_bound, precision);
-    params["daughter_angle_z_bound"] = floatToString<T>(daughter_angle_z_bound, precision);
+    params["growth_mean"] = floatToString<double>(growth_mean, precision); 
+    params["growth_std"] = floatToString<double>(growth_std, precision);
+    params["daughter_length_std"] = floatToString<double>(daughter_length_std, precision);
+    params["daughter_angle_xy_bound"] = floatToString<double>(daughter_angle_xy_bound, precision);
+    params["daughter_angle_z_bound"] = floatToString<double>(daughter_angle_z_bound, precision);
 
     // Write the initial population to file
     if (write)
