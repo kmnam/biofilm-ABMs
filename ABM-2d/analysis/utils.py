@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    1/31/2024
+    2/7/2024
 """
 import os
 import glob
@@ -58,7 +58,7 @@ def read_cells(path):
     return cells, params
 
 #######################################################################
-def parse_dir(path):
+def parse_dir(paths):
     """
     Get the files stored in the given directory and sort them by 
     iteration.
@@ -73,8 +73,7 @@ def parse_dir(path):
     List of files in order of iteration. 
     """
     filenames = [
-        filename for filename in glob.glob(os.path.join(path, '*'))
-        if filename.endswith('.txt')
+        filename for filename in glob.glob(paths) if filename.endswith('.txt')
     ]
     filenames_sorted = []
 
