@@ -22,7 +22,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/5/2024
+ *     2/7/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -267,10 +267,21 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
         }
 
+        // Sample vectors of noise components for generalized forces, one
+        // for each cell
+        //
+        // TODO Make this more flexible 
+        Array<T, Dynamic, 6> noise(cells.rows(), 6); 
+        for (int j = 0; j < cells.rows(); ++j)
+        {
+            for (int k = 0; k < 6; ++k)
+                noise(j, k) = -1e-3 + 2e-3 * uniform_dist(rng);
+        }
+
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
             A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-            E0, nz_threshold
+            E0, nz_threshold, noise
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 6> errors = std::get<1>(result);
@@ -287,7 +298,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 dt *= pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
                     A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-                    E0, nz_threshold
+                    E0, nz_threshold, noise
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);

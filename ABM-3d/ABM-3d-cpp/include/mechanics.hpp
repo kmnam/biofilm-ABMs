@@ -26,7 +26,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/2/2024
+ *     2/7/2024
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -515,6 +515,8 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  * @param E0 Elastic modulus of EPS.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero.
+ * @param noise Vectors of noise components for each generalized force for 
+ *              each cell.
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -522,7 +524,8 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
                                                 const Ref<const Array<T, Dynamic, 7> >& neighbors,
                                                 const T R, const T Rcell,
                                                 const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                                                const T E0, const T nz_threshold) 
+                                                const T E0, const T nz_threshold,
+                                                const Ref<const Array<T, Dynamic, 6> >& noise) 
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -595,6 +598,9 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         b(4) = -dEdq_cell(i, 4);
         b(5) = -dEdq_cell(i, 5) - dEdq_surface_repulsion(i, 1) - dEdq_surface_adhesion(i, 1);
 
+        // Add noise component to forces
+        b.head(6) += noise.row(i).transpose();
+
         // Solve the corresponding linear system
         //
         // TODO Which decomposition to use?
@@ -661,6 +667,8 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param E0 Elastic modulus of EPS. 
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero.
+ * @param noise Vectors of noise components for each generalized force for 
+ *              each cell.
  * @returns Updated population of cells, along with the array of errors in
  *          the cell positions and orientations.  
  */
@@ -673,7 +681,8 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
                                         const Ref<const Array<T, Dynamic, 7> >& neighbors, 
                                         const T dt, const T R, const T Rcell,
                                         const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                                        const T E0, const T nz_threshold)
+                                        const T E0, const T nz_threshold,
+                                        const Ref<const Array<T, Dynamic, 6> >& noise)
 {
     // Compute velocities at given partial timesteps 
     int n = cells.rows(); 
@@ -681,7 +690,8 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
     std::vector<Array<T, Dynamic, 6> > velocities; 
     velocities.push_back(
         getVelocitiesFromNeighbors<T>(
-            cells, neighbors, R, Rcell, cell_cell_prefactors, E0, nz_threshold
+            cells, neighbors, R, Rcell, cell_cell_prefactors, E0, nz_threshold,
+            noise
         )
     );
     for (int i = 1; i < s; ++i)
@@ -694,7 +704,8 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
         normalizeOrientations<T>(cells_i);    // Renormalize orientations after each modification
         velocities.push_back(
             getVelocitiesFromNeighbors<T>(
-                cells_i, neighbors, R, Rcell, cell_cell_prefactors, E0, nz_threshold
+                cells_i, neighbors, R, Rcell, cell_cell_prefactors, E0, nz_threshold,
+                noise
             )
         );
     }
