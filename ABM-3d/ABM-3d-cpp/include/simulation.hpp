@@ -22,7 +22,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/7/2024
+ *     2/22/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -74,34 +74,41 @@ std::string floatToString(T x, const int precision = 10)
 /**
  * Run a simulation with the given initial population of cells.
  *
- * TODO Complete this docstring.
- *
- * @param cells_init
- * @param max_iter
- * @param n_cells
- * @param R
- * @param Rcell
- * @param L0
- * @param Ldiv
- * @param E0
- * @param Ecell
- * @param max_stepsize
- * @param write
- * @param outprefix
- * @param iter_write
- * @param iter_update_neighbors
- * @param iter_update_stepsize
- * @param max_error_allowed
- * @param min_error
- * @param max_tries_update_stepsize
- * @param neighbor_threshold
- * @param nz_threshold
- * @param rng_seed
- * @param growth_mean
- * @param growth_std
- * @param daughter_length_std
- * @param daughter_angle_xy_bound
- * @param daughter_angle_z_bound
+ * @param cells_init Initial population of cells. 
+ * @param max_iter Maximum number of iterations. 
+ * @param n_cells Maximum number of cells. 
+ * @param R Cell radius (including the EPS). 
+ * @param Rcell Cell radius (excluding the EPS).
+ * @param L0 Initial cell length.
+ * @param Ldiv Cell division length.
+ * @param E0 Elastic modulus of EPS.
+ * @param Ecell Elastic modulus of cell.
+ * @param max_stepsize Maximum stepsize per iteration. 
+ * @param write If true, write simulation output to file(s). 
+ * @param outprefix Output filename prefix. 
+ * @param iter_write Write cells to file every this many iterations. 
+ * @param iter_update_neighbors Update neighboring cells every this many 
+ *                              iterations. 
+ * @param iter_update_stepsize Update stepsize every this many iterations. 
+ * @param max_error_allowed Maximum Runge-Kutta error allowed per iteration. 
+ * @param min_error Minimum Runge-Kutta error. 
+ * @param max_tries_update_stepsize Maximum number of tries to update stepsize
+ *                                  due to Runge-Kutta error. 
+ * @param neighbor_threshold Threshold for distinguishing between neighboring
+ *                           and non-neighboring cells.
+ * @param nz_threshold Threshold for determining whether the z-orientation of 
+ *                     each cell is zero.  
+ * @param rng_seed Random number generator seed. 
+ * @param growth_mean Mean growth rate. 
+ * @param growth_std Standard deviation of growth rate. 
+ * @param daughter_length_std Standard deviation of daughter length ratio 
+ *                            distribution. 
+ * @param daughter_angle_xy_bound Bound on daughter cell re-orientation angle
+ *                                in xy-plane.
+ * @param daughter_angle_z_bound Bound on daughter cell re-orientation angle 
+ *                               out of xy-plane.
+ * @param noise_scale Scale of noise added to cell-cell and cell-surface
+ *                    interaction forces per iteration. 
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -124,7 +131,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const double growth_std,
                                          const double daughter_length_std,
                                          const double daughter_angle_xy_bound,
-                                         const double daughter_angle_z_bound)
+                                         const double daughter_angle_z_bound,
+                                         const T noise_scale)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -221,6 +229,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     params["daughter_length_std"] = floatToString<double>(daughter_length_std, precision);
     params["daughter_angle_xy_bound"] = floatToString<double>(daughter_angle_xy_bound, precision);
     params["daughter_angle_z_bound"] = floatToString<double>(daughter_angle_z_bound, precision);
+    params["noise_scale"] = floatToString<T>(noise_scale, precision);
 
     // Write the initial population to file
     if (write)
@@ -269,13 +278,11 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
         // Sample vectors of noise components for generalized forces, one
         // for each cell
-        //
-        // TODO Make this more flexible 
         Array<T, Dynamic, 6> noise(cells.rows(), 6); 
         for (int j = 0; j < cells.rows(); ++j)
         {
             for (int k = 0; k < 6; ++k)
-                noise(j, k) = -1e-3 + 2e-3 * uniform_dist(rng);
+                noise(j, k) = -noise_scale + 2 * noise_scale * uniform_dist(rng);
         }
 
         // Update cell positions and orientations 
