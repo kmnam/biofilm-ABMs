@@ -19,7 +19,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/5/2024
+ *     2/22/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -72,33 +72,35 @@ std::string floatToString(T x, const int precision = 10)
 /**
  * Run a simulation with the given initial population of cells.
  *
- * TODO Complete this docstring.
- *
- * @param cells_init
- * @param max_iter
- * @param n_cells
- * @param R
- * @param Rcell
- * @param L0
- * @param Ldiv
- * @param E0
- * @param Ecell
- * @param sigma0
- * @param max_stepsize
- * @param write
- * @param outprefix
- * @param iter_write
- * @param iter_update_neighbors
- * @param iter_update_stepsize
- * @param max_error_allowed
- * @param min_error
- * @param max_tries_update_stepsize
- * @param neighbor_threshold
- * @param rng_seed
- * @param growth_mean
- * @param growth_std
- * @param daughter_length_std
- * @param daughter_angle_bound
+ * @param cells_init Initial population of cells. 
+ * @param max_iter Maximum number of iterations. 
+ * @param n_cells Maximum number of cells. 
+ * @param R Cell radius (including the EPS). 
+ * @param Rcell Cell radius (excluding the EPS).
+ * @param L0 Initial cell length.
+ * @param Ldiv Cell division length.
+ * @param E0 Elastic modulus of EPS.
+ * @param Ecell Elastic modulus of cell.
+ * @param sigma0 Cell-surface adhesion energy density.
+ * @param max_stepsize Maximum stepsize per iteration. 
+ * @param write If true, write simulation output to file(s). 
+ * @param outprefix Output filename prefix. 
+ * @param iter_write Write cells to file every this many iterations. 
+ * @param iter_update_neighbors Update neighboring cells every this many 
+ *                              iterations. 
+ * @param iter_update_stepsize Update stepsize every this many iterations. 
+ * @param max_error_allowed Maximum Runge-Kutta error allowed per iteration. 
+ * @param min_error Minimum Runge-Kutta error. 
+ * @param max_tries_update_stepsize Maximum number of tries to update stepsize
+ *                                  due to Runge-Kutta error. 
+ * @param neighbor_threshold Threshold for distinguishing between neighboring
+ *                           and non-neighboring cells.
+ * @param rng_seed Random number generator seed. 
+ * @param growth_mean Mean growth rate. 
+ * @param growth_std Standard deviation of growth rate. 
+ * @param daughter_length_std Standard deviation of daughter length ratio 
+ *                            distribution. 
+ * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -339,29 +341,30 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  * The growth rate and chosen physical attribute are taken to be normally
  * distributed variables that exhibit a specified mean and standard deviation.
  *
- * TODO Complete this docstring.
- *
- * @param cells_init
- * @param max_iter
- * @param n_cells
- * @param R
- * @param Rcell
- * @param L0
- * @param Ldiv
- * @param E0
- * @param Ecell
- * @param sigma0
- * @param max_stepsize
- * @param write
- * @param outprefix
- * @param iter_write
- * @param iter_update_neighbors
- * @param iter_update_stepsize
- * @param max_error_allowed
- * @param min_error
- * @param max_tries_update_stepsize
- * @param neighbor_threshold
- * @param rng_seed
+ * @param cells_init Initial population of cells. 
+ * @param max_iter Maximum number of iterations. 
+ * @param n_cells Maximum number of cells. 
+ * @param R Cell radius (including the EPS). 
+ * @param Rcell Cell radius (excluding the EPS).
+ * @param L0 Initial cell length.
+ * @param Ldiv Cell division length.
+ * @param E0 Elastic modulus of EPS.
+ * @param Ecell Elastic modulus of cell.
+ * @param sigma0 Cell-surface adhesion energy density.
+ * @param max_stepsize Maximum stepsize per iteration. 
+ * @param write If true, write simulation output to file(s). 
+ * @param outprefix Output filename prefix. 
+ * @param iter_write Write cells to file every this many iterations. 
+ * @param iter_update_neighbors Update neighboring cells every this many 
+ *                              iterations. 
+ * @param iter_update_stepsize Update stepsize every this many iterations. 
+ * @param max_error_allowed Maximum Runge-Kutta error allowed per iteration. 
+ * @param min_error Minimum Runge-Kutta error. 
+ * @param max_tries_update_stepsize Maximum number of tries to update stepsize
+ *                                  due to Runge-Kutta error. 
+ * @param neighbor_threshold Threshold for distinguishing between neighboring
+ *                           and non-neighboring cells.
+ * @param rng_seed Random number generator seed. 
  * @param n_groups Number of groups.
  * @param switch_attribute Index of attribute to change when switching groups.
  * @param growth_means Mean growth rate for cells in each group.
@@ -369,8 +372,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  * @param attribute_means Mean attribute value for cells in each group.
  * @param attribute_stds Standard deviation of attribute for cells in each group.
  * @param switch_rates Array of between-group switching rates. 
- * @param daughter_length_std
- * @param daughter_angle_bound
+ * @param daughter_length_std Standard deviation of daughter length ratio 
+ *                            distribution. 
+ * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
  * @returns Final population of cells.  
  */
 template <typename T>
