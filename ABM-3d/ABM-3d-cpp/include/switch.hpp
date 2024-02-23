@@ -40,15 +40,20 @@ using namespace Eigen;
 /**
  * TODO Complete this docstring.
  *
+ * TODO What about groups that differ by more than one attribute?
+ *
  * @param cells Existing population of cells.
- * @param switch_attribute
- * @param n_groups
- * @param dt
- * @param switch_rates
- * @param growth_dists
- * @param attribute_dists
- * @param rng
- * @param uniform_dist
+ * @param switch_attribute Index of attribute to switch when switching 
+ *                         between the groups (should be 10, 11, or 12). 
+ * @param n_groups Number of distinct groups.
+ * @param dt Timestep. 
+ * @param switch_rates Matrix of switching rates between groups. 
+ * @param growth_dists Vector of growth rate distributions, one for each
+ *                     group.
+ * @param attribute_dists Vector of attribute distributions, one for each
+ *                        group.
+ * @param rng Random number generator. 
+ * @param uniform_dist Pre-defined uniform distribution between 0 and 1.
  */
 template <typename T>
 void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells,
