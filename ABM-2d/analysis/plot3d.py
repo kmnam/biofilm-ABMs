@@ -207,7 +207,7 @@ if __name__ == '__main__':
         mult = len(filenames) // 600 + 1
         filenames = filenames[::mult]
 
-    # Get cell radius and final dimensions from final file
+    # Get cell radius, final dimensions, and final timepoint from final file
     cells, params = read_cells(filenames[-1])
     R = params['R']
     L0 = params['L0']
@@ -220,15 +220,32 @@ if __name__ == '__main__':
     ymax = np.ceil(cells[:, 1].max() + 4 * L0)
     zmin = rz - R
     zmax = rz + R
+    t_final = params['t_curr']
+
+    # Generate array of timepoints
+    timepoints = np.linspace(0, t_final, nframes)
+    
+    # Run through the files and identify, for each timepoint, the file 
+    # whose timepoint is closest
+    file_timepoints = []
+    for filename in filenames:
+        _, params = read_cells(filename)
+        file_timepoints.append(params['t_curr'])
+    filenames_nearest = []
+    for t in timepoints:
+        nearest_idx = np.argmin(np.abs(file_timepoints - t))
+        filenames_nearest.append(filenames[nearest_idx])
 
     # Plot the simulation in 200-frame increments
-    for i in range(len(filenames) // 200 + 1):
-        start = i * 200
-        end = start + 200
+    increment = 200
+    start = 0
+    end = increment
+    while end < nframes:
         plot_simulation(
-            filenames[start:end], outprefix + '_{}.avi'.format(i), R, rz,
-            xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=20, fps=20,
+            filenames_nearest[start:end], outprefix + '_{}.avi'.format(i), R,
+            rz, xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=20, fps=20,
             uniform_color=uniform_color
         )
         print('Saving video: {}_{}.avi'.format(outprefix, i))
-
+        start += increment
+        end += increment
