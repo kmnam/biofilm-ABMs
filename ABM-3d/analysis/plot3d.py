@@ -214,6 +214,7 @@ if __name__ == '__main__':
     increment = 200
     start = 0
     end = increment
+    i = 0
     while end < nframes:
         plot_simulation(
             filenames_nearest[start:end], outprefix + '_{}.avi'.format(i), R,
@@ -222,4 +223,5 @@ if __name__ == '__main__':
         print('Saving video: {}_{}.avi'.format(outprefix, i))
         start += increment
         end += increment
+        i += 1
 
