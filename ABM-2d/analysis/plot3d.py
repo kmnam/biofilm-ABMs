@@ -241,7 +241,7 @@ if __name__ == '__main__':
     start = 0
     end = increment
     i = 0
-    while end < nframes:
+    while end <= nframes:
         plot_simulation(
             filenames_nearest[start:end], outprefix + '_{}.avi'.format(i), R,
             rz, xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=20, fps=20,
