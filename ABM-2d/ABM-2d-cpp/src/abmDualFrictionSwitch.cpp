@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/5/2024
+ *     2/25/2024
  */
 
 #include <Eigen/Dense>
@@ -74,14 +74,18 @@ int main(int argc, char** argv)
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
 
     // Vectors of growth rate means and standard deviations (identical for
-    // both groups 
-    std::vector<double> growth_means { growth_mean, growth_mean };
-    std::vector<double> growth_stds  { growth_std, growth_std };
+    // both groups) 
+    Array<double, Dynamic, 1> growth_means(2);
+    Array<double, Dynamic, 1> growth_stds(2); 
+    growth_means << growth_mean, growth_mean; 
+    growth_stds << growth_std, growth_std; 
 
     // Vectors of friction coefficient means and standard deviations
-    const int switch_attribute = 9;
-    std::vector<double> attribute_means { eta_mean1, eta_mean2 };
-    std::vector<double> attribute_stds  { eta_std1, eta_std2 };
+    std::vector<int> switch_attributes { 9 };
+    Array<double, Dynamic, Dynamic> attribute_means(2);
+    Array<double, Dynamic, Dynamic> attribute_stds(2);
+    attribute_means << eta_mean1, eta_mean2;
+    attribute_stds << eta_std1, eta_std2;
 
     // Switching rates between groups 1 and 2
     Array<T, Dynamic, Dynamic> switch_rates(2, 2); 
@@ -107,7 +111,7 @@ int main(int argc, char** argv)
         max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
         iter_update_stepsize, max_error_allowed, min_error,
         max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
-        switch_attribute, growth_means, growth_stds, attribute_means, 
+        switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound
     ); 
     
