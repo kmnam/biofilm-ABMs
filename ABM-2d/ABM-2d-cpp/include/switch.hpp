@@ -56,7 +56,7 @@ void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells,
                   const int n_groups, const T dt,
                   const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
                   std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
-                  std::unordered_map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> >& attribute_dists,
+                  std::map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> >& attribute_dists,
                   boost::random::mt19937& rng,
                   boost::random::uniform_01<>& uniform_dist)
 {
