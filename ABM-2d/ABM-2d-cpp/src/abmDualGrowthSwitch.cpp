@@ -81,8 +81,8 @@ int main(int argc, char** argv)
     // Define "dummy" attribute with the same constant value for both 
     // groups 1 and 2
     std::vector<int> switch_attributes { 9 };
-    Array<double, Dynamic, Dynamic> attribute_means(2);
-    Array<double, Dynamic, Dynamic> attribute_stds(2);
+    Array<double, Dynamic, Dynamic> attribute_means(2, 1);
+    Array<double, Dynamic, Dynamic> attribute_stds(2, 1);
     attribute_means << eta_surface, eta_surface; 
     attribute_stds << 0.0, 0.0; 
 

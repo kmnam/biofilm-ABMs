@@ -84,8 +84,8 @@ int main(int argc, char** argv)
 
     // Vectors of friction coefficient means and standard deviations
     std::vector<int> switch_attributes { 9 };
-    Array<double, Dynamic, Dynamic> attribute_means(2);
-    Array<double, Dynamic, Dynamic> attribute_stds(2);
+    Array<double, Dynamic, Dynamic> attribute_means(2, 1);
+    Array<double, Dynamic, Dynamic> attribute_stds(2, 1);
     attribute_means << eta_mean1, eta_mean2;
     attribute_stds << eta_std1, eta_std2;
 
