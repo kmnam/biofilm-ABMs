@@ -25,7 +25,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/24/2024
+ *     2/25/2024
  */
 
 #define EIGEN_DONT_PARALLELIZE    // Disable internal parallelization within Eigen
@@ -73,6 +73,10 @@ int main(int argc, char** argv)
     const double eta_std1 = json_data["eta_std1"].as_double(); 
     const double eta_mean2 = json_data["eta_mean2"].as_double();
     const double eta_std2 = json_data["eta_std2"].as_double();
+    const double sigma_mean1 = json_data["sigma_mean1"].as_double();
+    const double sigma_std1 = json_data["sigma_std1"].as_double(); 
+    const double sigma_mean2 = json_data["sigma_mean2"].as_double();
+    const double sigma_std2 = json_data["sigma_std2"].as_double();
     const T lifetime_mean1 = static_cast<T>(json_data["lifetime_mean1"].as_double()); 
     const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
     const double daughter_length_std = json_data["daughter_length_std"].as_double();
@@ -83,14 +87,19 @@ int main(int argc, char** argv)
     const T noise_scale = static_cast<T>(json_data["noise_scale"].as_double());
 
     // Vectors of growth rate means and standard deviations (identical for
-    // both groups) 
-    std::vector<double> growth_means { growth_mean, growth_mean };
-    std::vector<double> growth_stds  { growth_std, growth_std };
+    // both groups)
+    Array<double, Dynamic, 1> growth_means, growth_stds;
+    growth_means << growth_mean, growth_mean;
+    growth_stds << growth_std, growth_std;
 
-    // Vectors of friction coefficient means and standard deviations
-    const int switch_attribute = 11;
-    std::vector<double> attribute_means { eta_mean1, eta_mean2 };
-    std::vector<double> attribute_stds  { eta_std1, eta_std2 };
+    // Matrices of friction coefficient and cell-surface adhesion energy density
+    // means and standard deviations
+    std::vector<int> switch_attributes { 11, 12 };
+    Array<double, Dynamic, Dynamic> attribute_means, attribute_stds;
+    attribute_means << eta_mean1, sigma_mean1,
+                       eta_mean2, sigma_mean2;
+    attribute_stds << eta_std1, sigma_std1,
+                      eta_std2, sigma_std2; 
 
     // Switching rates between groups 1 and 2
     Array<T, Dynamic, Dynamic> switch_rates(2, 2); 
@@ -117,7 +126,7 @@ int main(int argc, char** argv)
         cells, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, max_stepsize,
         true, outprefix, iter_write, iter_update_neighbors, iter_update_stepsize,
         max_error_allowed, min_error, max_tries_update_stepsize, neighbor_threshold,
-        nz_threshold, rng_seed, 2, switch_attribute, growth_means, growth_stds,
+        nz_threshold, rng_seed, 2, switch_attributes, growth_means, growth_stds,
         attribute_means, attribute_stds, switch_rates, daughter_length_std,
         daughter_angle_xy_bound, daughter_angle_z_bound, noise_scale
     );
