@@ -115,7 +115,8 @@ def plot_cells(cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
 
 #######################################################################
 def plot_simulation(filenames, outfilename, R, xmin, xmax, ymin,
-                    ymax, zmin, zmax, view='xy', res=50, fps=10):
+                    ymax, zmin, zmax, view='xy', res=50, fps=10,
+                    uniform_color=False, color_by_orientation=False):
     """
     Given an ordered list of files containing cells to be plotted, parse 
     and plot each population of cells and generate a video. 
@@ -142,17 +143,37 @@ def plot_simulation(filenames, outfilename, R, xmin, xmax, ymin,
         Resolution for plotting each cylinder and hemisphere.
     fps : int
         Frames per second.
+    uniform_color : bool
+        If True, color all cells with a single color (blue).
+    color_by_orientation : bool
+        If True, color all cells based on its z-orientation (blue if >= -0.5,
+        red if < -0.5).
     """
     images = []
+    palette = [    # Assume a maximum of five groups 
+        sns.color_palette('muted')[0],
+        sns.color_palette('muted')[3],
+        sns.color_palette('muted')[2],
+        sns.color_palette('muted')[1],
+        sns.color_palette('muted')[4]
+    ]
 
     for filename in filenames:
         # Parse and plot the cells in the given file
         cells, params = read_cells(filename)
-        colors = [
-            sns.color_palette('muted')[0] if cells[i, 5] >= -0.5
-            else sns.color_palette('muted')[3]
-            for i in range(cells.shape[0])
-        ]
+        if uniform_color:
+            colors = [palette[0] for i in range(cells.shape[0])]
+        elif color_by_orientation:
+            colors = [
+                palette[0] if cells[i, 5] >= -0.5 else palette[1] 
+                for i in range(cells.shape[0])
+            ]
+        else:
+            ngroups = int(max(cells[:, 13]))
+            palette_ = palette[:ngroups]
+            colors = [
+                palette_[int(cells[i, 13]) - 1] for i in range(cells.shape[0])
+            ]
         title = 't = {:.10f}, n = {}'.format(params['t_curr'], cells.shape[0])
         print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
         pl = pv.Plotter(off_screen=True)
@@ -182,6 +203,10 @@ if __name__ == '__main__':
     filedir = sys.argv[1]
     outprefix = sys.argv[2]
     nframes = int(sys.argv[3])
+    uniform_color = (len(sys.argv) == 5 and sys.argv[4] == '--uniform-color')
+    color_by_orientation = (
+        len(sys.argv) == 5 and sys.argv[4] == '--color-by-orientation'
+    )
     filenames = parse_dir(filedir)
 
     # Get cell radius, final dimensions, and final timepoint from final file
@@ -218,7 +243,8 @@ if __name__ == '__main__':
     while end <= nframes:
         plot_simulation(
             filenames_nearest[start:end], outprefix + '_{}.avi'.format(i), R,
-            xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=20, fps=20
+            xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=20, fps=20,
+            uniform_color=uniform_color, color_by_orientation=color_by_orientation
         )
         print('Saving video: {}_{}.avi'.format(outprefix, i))
         start += increment

@@ -199,13 +199,9 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
 if __name__ == '__main__':
     inprefix = sys.argv[1]
     outprefix = sys.argv[2]
-    uniform_color = (len(sys.argv)== 4 and sys.argv[3] == '--uniform-color')
+    nframes = int(sys.argv[3])
+    uniform_color = (len(sys.argv) == 5 and sys.argv[4] == '--uniform-color')
     filenames = parse_dir(inprefix)
-
-    # Cap the number of files to 600 (this will yield a 30-sec video)
-    if len(filenames) > 600:
-        mult = len(filenames) // 600 + 1
-        filenames = filenames[::mult]
 
     # Get cell radius, final dimensions, and final timepoint from final file
     cells, params = read_cells(filenames[-1])
@@ -251,3 +247,4 @@ if __name__ == '__main__':
         start += increment
         end += increment
         i += 1
+
