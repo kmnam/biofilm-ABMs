@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/5/2024
+ *     2/25/2024
  */
 
 #ifndef BIOFILM_SWITCH_HPP
@@ -38,21 +38,25 @@ using namespace Eigen;
  * TODO Complete this docstring.
  *
  * @param cells Existing population of cells.
- * @param switch_attribute
- * @param n_groups
- * @param dt
- * @param switch_rates
- * @param growth_dists
- * @param attribute_dists
- * @param rng
- * @param uniform_dist
+ * @param switch_attributes Indices of attributes to switch when switching 
+ *                          between the groups (should be 8, 9, or 11+). 
+ * @param n_groups Number of distinct groups.
+ * @param dt Timestep.
+ * @param switch_rates Matrix of switching rates between groups. 
+ * @param growth_dists Vector of growth rate distributions, one for each
+ *                     group.
+ * @param attribute_dists Dictionary of attribute distributions, one for each
+ *                        group-attribute pair.
+ * @param rng Random number generator.
+ * @param uniform_dist Pre-defined uniform distribution between 0 and 1.
  */
 template <typename T>
 void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells,
-                  const int switch_attribute, const int n_groups, const T dt,
+                  std::vector<int>& switch_attributes,
+                  const int n_groups, const T dt,
                   const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
                   std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
-                  std::vector<std::function<T(boost::random::mt19937&)> >& attribute_dists,
+                  std::unordered_map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> >& attribute_dists,
                   boost::random::mt19937& rng,
                   boost::random::uniform_01<>& uniform_dist)
 {
@@ -74,12 +78,16 @@ void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells,
                 if (r > total && r < total + switch_prob)
                 {
                     // If the cell is to switch to group j, sample the cell's
-                    // new growth rate and attribute value 
-                    T growth_rate = growth_dists[j](rng);
-                    T attribute = attribute_dists[j](rng);
-                    cells(i, 7) = growth_rate;
-                    cells(i, switch_attribute) = attribute; 
+                    // new growth rate and attribute values 
                     cells(i, 10) = j + 1;
+                    T growth_rate = growth_dists[j](rng);
+                    cells(i, 7) = growth_rate;
+                    for (int k = 0; k < switch_attributes.size(); ++k)
+                    {
+                        auto pair = std::make_pair(j, k);
+                        T attribute = attribute_dists[pair](rng);
+                        cells(i, switch_attributes[k]) = attribute; 
+                    }
                     break;
                 }
                 total += switch_prob;
