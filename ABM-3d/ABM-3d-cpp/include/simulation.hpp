@@ -520,8 +520,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     // Attribute distribution functions: normal distributions with given means
     // and standard deviations
     const int n_attributes = switch_attributes.size();
-    std::unordered_map<std::pair<int, int>, boost::random::normal_distribution<> > attribute_dists;
-    std::unordered_map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> > attribute_dist_funcs;
+    std::map<std::pair<int, int>, boost::random::normal_distribution<> > attribute_dists;
+    std::map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> > attribute_dist_funcs;
     for (int i = 0; i < n_groups; ++i)
     {
         for (int j = 0; j < n_attributes; ++j)
