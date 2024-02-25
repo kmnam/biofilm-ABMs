@@ -22,7 +22,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/23/2024
+ *     2/25/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -445,11 +445,16 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const T nz_threshold,
                                          const int rng_seed,
                                          const int n_groups,
-                                         const int switch_attribute,
-                                         std::vector<double>& growth_means,
-                                         std::vector<double>& growth_stds,
-                                         std::vector<double>& attribute_means,
-                                         std::vector<double>& attribute_stds,
+                                         std::vector<int>& switch_attributes,
+                                         const Ref<const Array<double, Dynamic, 1> >& growth_means,
+                                         const Ref<const Array<double, Dynamic, 1> >& growth_stds,
+                                         const Ref<const Array<double, Dynamic, Dynamic> >& attribute_means,
+                                         const Ref<const Array<double, Dynamic, Dynamic> >& attribute_stds,
+                                         //const int switch_attribute,
+                                         //std::vector<double>& growth_means,
+                                         //std::vector<double>& growth_stds,
+                                         //std::vector<double>& attribute_means,
+                                         //std::vector<double>& attribute_stds,
                                          const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
                                          const double daughter_length_std,
                                          const double daughter_angle_xy_bound,
@@ -498,7 +503,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     for (int i = 0; i < n_groups; ++i)
     { 
         boost::random::normal_distribution<> growth_dist(
-            growth_means[i], growth_stds[i]
+            growth_means(i), growth_stds(i)
         );
         growth_dists.push_back(growth_dist);
     }
@@ -514,23 +519,32 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
     // Attribute distribution functions: normal distributions with given means
     // and standard deviations
-    std::vector<boost::random::normal_distribution<> > attribute_dists;
-    std::vector<std::function<T(boost::random::mt19937&)> > attribute_dist_funcs;
+    const int n_attributes = switch_attributes.size();
+    std::unordered_map<std::pair<int, int>, boost::random::normal_distribution<> > attribute_dists;
+    std::unordered_map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> > attribute_dist_funcs;
     for (int i = 0; i < n_groups; ++i)
     {
-        boost::random::normal_distribution<> attribute_dist(
-            attribute_means[i], attribute_stds[i]
-        );
-        attribute_dists.push_back(attribute_dist);
+        for (int j = 0; j < n_attributes; ++j)
+        {
+            auto pair = std::make_pair(i, j);
+            boost::random::normal_distribution<> attribute_dist(
+                attribute_means(i, j), attribute_stds(i, j)
+            );
+            attribute_dists[pair] = attribute_dist;
+        }
     }
-    for (auto&& attribute_dist : attribute_dists)
+    for (int i = 0; i < n_groups; ++i)
     {
-        std::function<T(boost::random::mt19937&)> attribute_dist_func =
-            [&attribute_dist](boost::random::mt19937& rng)
-            {
-                return static_cast<T>(attribute_dist(rng));
-            };
-        attribute_dist_funcs.push_back(attribute_dist_func);
+        for (int j = 0; j < n_attributes; ++j)
+        {
+            auto pair = std::make_pair(i, j);
+            std::function<T(boost::random::mt19937&)> attribute_dist_func =
+                [&attribute_dists, &pair](boost::random::mt19937& rng)
+                {
+                    return static_cast<T>(attribute_dists[pair](rng));
+                };
+            attribute_dist_funcs[pair] = attribute_dist_func;
+        }
     }
 
     // Daughter cell length ratio distribution function: normal distribution
@@ -580,29 +594,37 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     params["nz_threshold"] = floatToString<T>(nz_threshold, precision);
     params["random_seed"] = std::to_string(rng_seed);
     params["n_groups"] = std::to_string(n_groups);
-    params["switch_attribute"] = std::to_string(switch_attribute);
+    for (int i = 0; i < n_attributes; ++i)
+    {
+        std::stringstream ss; 
+        ss << "switch_attribute" << i + 1;
+        params[ss.str()] = std::to_string(switch_attributes[i]);
+    }
     for (int i = 0; i < n_groups; ++i)
     {
         std::stringstream ss; 
         ss << "growth_mean" << i + 1;
-        params[ss.str()] = floatToString<double>(growth_means[i], precision);
+        params[ss.str()] = floatToString<double>(growth_means(i), precision);
         ss.str(std::string());
         ss << "growth_std" << i + 1; 
-        params[ss.str()] = floatToString<double>(growth_stds[i], precision);
+        params[ss.str()] = floatToString<double>(growth_stds(i), precision);
         ss.str(std::string());
-        ss << "attribute_mean" << i + 1;
-        params[ss.str()] = floatToString<double>(attribute_means[i], precision);
-        ss.str(std::string());
-        ss << "attribute_std" << i + 1;
-        params[ss.str()] = floatToString<double>(attribute_stds[i], precision);
-        ss.str(std::string());
-        for (int j = 1; j < n_groups; ++j)
+        for (int j = i + 1; j < n_groups; ++j)
         {
             ss << "switch_rate_" << i + 1 << "_" << j + 1;
             params[ss.str()] = floatToString<T>(switch_rates(i, j), precision);
-            ss.str(std::string()); 
+            ss.str(std::string());
             ss << "switch_rate_" << j + 1 << "_" << i + 1;
             params[ss.str()] = floatToString<T>(switch_rates(j, i), precision);
+            ss.str(std::string()); 
+        }
+        for (int j = 0; j < n_attributes; ++j)
+        {
+            ss << "attribute_mean_" << i + 1 << "_" << j + 1;
+            params[ss.str()] = floatToString<double>(attribute_means(i, j), precision);
+            ss.str(std::string());
+            ss << "attribute_std_" << i + 1 << "_" << j + 1;
+            params[ss.str()] = floatToString<double>(attribute_stds(i, j), precision);
             ss.str(std::string());
         }
     }
@@ -732,7 +754,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
         // Switch cells between groups
         switchGroups<T>(
-            cells, switch_attribute, n_groups, dt, switch_rates, growth_dist_funcs,
+            cells, switch_attributes, n_groups, dt, switch_rates, growth_dist_funcs,
             attribute_dist_funcs, rng, uniform_dist
         );
         
