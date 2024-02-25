@@ -62,6 +62,7 @@ void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells,
 {
     // First identify cells to switch groups within the given timestep
     Array<T, Dynamic, Dynamic> switch_probs = dt * switch_rates;
+    const int n_attributes = switch_attributes.size();
     for (int i = 0; i < cells.rows(); ++i)
     {
         // Which group is the cell currently in? 
@@ -82,7 +83,7 @@ void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells,
                     cells(i, 10) = j + 1;
                     T growth_rate = growth_dists[j](rng);
                     cells(i, 7) = growth_rate;
-                    for (int k = 0; k < switch_attributes.size(); ++k)
+                    for (int k = 0; k < n_attributes; ++k)
                     {
                         auto pair = std::make_pair(j, k);
                         T attribute = attribute_dists[pair](rng);
