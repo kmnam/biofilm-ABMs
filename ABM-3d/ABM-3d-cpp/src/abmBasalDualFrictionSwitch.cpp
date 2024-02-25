@@ -88,14 +88,16 @@ int main(int argc, char** argv)
 
     // Vectors of growth rate means and standard deviations (identical for
     // both groups)
-    Array<double, Dynamic, 1> growth_means, growth_stds;
+    Array<double, Dynamic, 1> growth_means(2);
+    Array<double, Dynamic, 1> growth_stds(2);
     growth_means << growth_mean, growth_mean;
     growth_stds << growth_std, growth_std;
 
     // Matrices of friction coefficient and cell-surface adhesion energy density
     // means and standard deviations
     std::vector<int> switch_attributes { 11, 12 };
-    Array<double, Dynamic, Dynamic> attribute_means, attribute_stds;
+    Array<double, Dynamic, Dynamic> attribute_means(2, 2);
+    Array<double, Dynamic, Dynamic> attribute_stds(2, 2);
     attribute_means << eta_mean1, sigma_mean1,
                        eta_mean2, sigma_mean2;
     attribute_stds << eta_std1, sigma_std1,
