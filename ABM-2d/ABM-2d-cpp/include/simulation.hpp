@@ -19,7 +19,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/25/2024
+ *     2/26/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -119,10 +119,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const int max_tries_update_stepsize,
                                          const T neighbor_threshold,
                                          const int rng_seed,
-                                         const double growth_mean,
-                                         const double growth_std,
-                                         const double daughter_length_std,
-                                         const double daughter_angle_bound)
+                                         const T growth_mean,
+                                         const T growth_std,
+                                         const T daughter_length_std,
+                                         const T daughter_angle_bound)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -164,31 +164,34 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
     // Growth rate distribution function: normal distribution with given mean
     // and standard deviation
-    boost::random::normal_distribution<> growth_dist(growth_mean, growth_std);
-    std::function<T(boost::random::mt19937&)> growth_dist_func =
-        [&growth_dist](boost::random::mt19937& rng)
+    boost::random::uniform_01<> uniform_dist; 
+    std::function<T(boost::random::mt19937&)> growth_dist =
+        [growth_mean, growth_std, &uniform_dist](boost::random::mt19937& rng)
         {
-            return static_cast<T>(growth_dist(rng)); 
+            return growth_mean + growth_std * standardNormal<T>(rng, uniform_dist);
         };
 
     // Daughter cell length ratio distribution function: normal distribution
     // with mean 0.5 and given standard deviation
-    boost::random::normal_distribution<> daughter_length_dist(0.5, daughter_length_std); 
-    std::function<T(boost::random::mt19937&)> daughter_length_dist_func =
-        [&daughter_length_dist](boost::random::mt19937& rng)
+    std::function<T(boost::random::mt19937&)> daughter_length_dist =
+        [daughter_length_std, &uniform_dist](boost::random::mt19937& rng)
         {
-            return static_cast<T>(daughter_length_dist(rng)); 
+            T r = 0.5 + daughter_length_std * standardNormal<T>(rng, uniform_dist);
+            if (r < 0)
+                return 0.0;
+            else if (r > 1)
+                return 1.0;
+            else
+                return r; 
         };
 
-    // Daughter angle distribution function: uniform distributions that is
+    // Daughter angle distribution function: uniform distribution that is
     // bounded by the given value 
-    boost::random::uniform_01<> uniform_dist; 
-    std::function<T(boost::random::mt19937&)> daughter_angle_dist_func = 
-        [&uniform_dist, &daughter_angle_bound](boost::random::mt19937& rng)
+    std::function<T(boost::random::mt19937&)> daughter_angle_dist = 
+        [daughter_angle_bound, &uniform_dist](boost::random::mt19937& rng)
         {
-            return static_cast<T>(
-                -daughter_angle_bound + 2 * daughter_angle_bound * uniform_dist(rng)
-            );
+            T r = static_cast<T>(uniform_dist(rng));
+            return -daughter_angle_bound + 2 * daughter_angle_bound * r;
         };
 
     // Write simulation parameters to a dictionary
@@ -210,10 +213,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     params["max_tries_update_stepsize"] = std::to_string(max_tries_update_stepsize);
     params["neighbor_threshold"] = floatToString<T>(neighbor_threshold, precision);
     params["random_seed"] = std::to_string(rng_seed);
-    params["growth_mean"] = floatToString<double>(growth_mean, precision); 
-    params["growth_std"] = floatToString<double>(growth_std, precision);
-    params["daughter_length_std"] = floatToString<double>(daughter_length_std, precision);
-    params["daughter_angle_bound"] = floatToString<double>(daughter_angle_bound, precision);
+    params["growth_mean"] = floatToString<T>(growth_mean, precision); 
+    params["growth_std"] = floatToString<T>(growth_std, precision);
+    params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
+    params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
 
     // Write the initial population to file
     if (write)
@@ -248,8 +251,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::cout << "... Dividing " << to_divide.sum() << " cells "
                       << "(iteration " << iter << ")" << std::endl;
         cells = divideCells<T>(
-            cells, t, R, Rcell, to_divide, growth_dist_func, rng,
-            daughter_length_dist_func, daughter_angle_dist_func
+            cells, t, R, Rcell, to_divide, growth_dist, rng,
+            daughter_length_dist, daughter_angle_dist
         );
 
         // Update neighboring cells if division has occurred
@@ -395,15 +398,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const int rng_seed,
                                          const int n_groups,
                                          std::vector<int>& switch_attributes,
-                                         const Ref<const Array<double, Dynamic, 1> >& growth_means,
-                                         const Ref<const Array<double, Dynamic, 1> >& growth_stds,
-                                         const Ref<const Array<double, Dynamic, Dynamic> >& attribute_means,
-                                         const Ref<const Array<double, Dynamic, Dynamic> >& attribute_stds,
-                                         //const int switch_attribute,
-                                         //std::vector<double>& growth_means,
-                                         //std::vector<double>& growth_stds,
-                                         //std::vector<double>& attribute_means,
-                                         //std::vector<double>& attribute_stds,
+                                         const Ref<const Array<T, Dynamic, 1> >& growth_means,
+                                         const Ref<const Array<T, Dynamic, 1> >& growth_stds,
+                                         const Ref<const Array<T, Dynamic, Dynamic> >& attribute_means,
+                                         const Ref<const Array<T, Dynamic, Dynamic> >& attribute_stds,
                                          const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
                                          const double daughter_length_std,
                                          const double daughter_angle_bound)
@@ -448,77 +446,61 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
     // Growth rate distribution functions: normal distributions with given means
     // and standard deviations
-    std::vector<boost::random::normal_distribution<> > growth_dists;
-    std::vector<std::function<T(boost::random::mt19937&)> > growth_dist_funcs; 
+    boost::random::uniform_01<> uniform_dist; 
+    std::vector<std::function<T(boost::random::mt19937&)> > growth_dists; 
     for (int i = 0; i < n_groups; ++i)
-    { 
-        boost::random::normal_distribution<> growth_dist(
-            growth_means(i), growth_stds(i)
-        );
-        growth_dists.push_back(growth_dist);
-    }
-    for (auto&& growth_dist : growth_dists)
     {
-        std::function<T(boost::random::mt19937&)> growth_dist_func =
-            [&growth_dist](boost::random::mt19937& rng)
+        T growth_mean = growth_means(i);
+        T growth_std = growth_stds(i);
+        std::function<T(boost::random::mt19937&)> growth_dist =
+            [growth_mean, growth_std, &uniform_dist](boost::random::mt19937& rng)
             {
-                return static_cast<T>(growth_dist(rng)); 
+                return growth_mean + growth_std * standardNormal<T>(rng, uniform_dist);
             };
-        growth_dist_funcs.push_back(growth_dist_func);
+        growth_dists.push_back(growth_dist);
     }
 
     // Attribute distribution functions: normal distributions with given means
     // and standard deviations
     const int n_attributes = switch_attributes.size();
-    std::cout << "switching " << n_attributes << " attributes:" << std::endl;
-    for (int i = 0; i < n_attributes; ++i)
-        std::cout << switch_attributes[i] << std::endl;
-    std::map<std::pair<int, int>, boost::random::normal_distribution<> > attribute_dists;
-    std::map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> > attribute_dist_funcs;
+    std::map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> > attribute_dists;
     for (int i = 0; i < n_groups; ++i)
     {
         for (int j = 0; j < n_attributes; ++j)
         {
+            T attribute_mean = attribute_means(i, j); 
+            T attribute_std = attribute_stds(i, j);
             auto pair = std::make_pair(i, j);
-            std::cout << "group " << i << " attribute " << j << " mean: " << attribute_means(i, j) << " std: " << attribute_stds(i, j) << std::endl;
-            boost::random::normal_distribution<> attribute_dist(
-                attribute_means(i, j), attribute_stds(i, j)
-            );
-            attribute_dists[pair] = attribute_dist;
-        }
-    }
-    for (int i = 0; i < n_groups; ++i)
-    {
-        for (int j = 0; j < n_attributes; ++j)
-        {
-            auto pair = std::make_pair(i, j);
-            std::function<T(boost::random::mt19937&)> attribute_dist_func =
-                [&attribute_dists, &pair](boost::random::mt19937& rng)
+            std::function<T(boost::random::mt19937&)> attribute_dist =
+                [attribute_mean, attribute_std, &uniform_dist](boost::random::mt19937& rng)
                 {
-                    return static_cast<T>(attribute_dists[pair](rng));
+                    return attribute_mean + attribute_std * standardNormal<T>(rng, uniform_dist);
                 };
-            attribute_dist_funcs[pair] = attribute_dist_func;
+            attribute_dists[pair] = attribute_dist;
         }
     }
 
     // Daughter cell length ratio distribution function: normal distribution
     // with mean 0.5 and given standard deviation
-    boost::random::normal_distribution<> daughter_length_dist(0.5, daughter_length_std); 
-    std::function<T(boost::random::mt19937&)> daughter_length_dist_func =
-        [&daughter_length_dist](boost::random::mt19937& rng)
+    std::function<T(boost::random::mt19937&)> daughter_length_dist =
+        [daughter_length_std, &uniform_dist](boost::random::mt19937& rng)
         {
-            return static_cast<T>(daughter_length_dist(rng)); 
+            T r = 0.5 + daughter_length_std * standardNormal<T>(rng, uniform_dist);
+            if (r < 0)
+                return 0.0;
+            else if (r > 1)
+                return 1.0;
+            else
+                return r; 
         };
 
-    // Daughter angle distribution function: uniform distributions that is
+    // Daughter angle distribution function: uniform distribution that is
     // bounded by the given value 
-    boost::random::uniform_01<> uniform_dist; 
-    std::function<T(boost::random::mt19937&)> daughter_angle_dist_func = 
-        [&uniform_dist, &daughter_angle_bound](boost::random::mt19937& rng)
+    std::function<T(boost::random::mt19937&)> daughter_angle_dist = 
+        [daughter_angle_bound, &uniform_dist](boost::random::mt19937& rng)
         {
-            return static_cast<T>(
-                -daughter_angle_bound + 2 * daughter_angle_bound * uniform_dist(rng)
-            );
+            T r = static_cast<T>(uniform_dist(rng));
+            return -daughter_angle_bound + 2 * daughter_angle_bound * r;
         };
 
     // Write simulation parameters to a dictionary
@@ -568,15 +550,15 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         for (int j = 0; j < n_attributes; ++j)
         {
             ss << "attribute_mean_" << i + 1 << "_" << j + 1;
-            params[ss.str()] = floatToString<double>(attribute_means(i, j), precision);
+            params[ss.str()] = floatToString<T>(attribute_means(i, j), precision);
             ss.str(std::string());
             ss << "attribute_std_" << i + 1 << "_" << j + 1;
-            params[ss.str()] = floatToString<double>(attribute_stds(i, j), precision);
+            params[ss.str()] = floatToString<T>(attribute_stds(i, j), precision);
             ss.str(std::string());
         }
     }
-    params["daughter_length_std"] = floatToString<double>(daughter_length_std, precision);
-    params["daughter_angle_bound"] = floatToString<double>(daughter_angle_bound, precision);
+    params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
+    params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
 
     // Write the initial population to file
     if (write)
@@ -611,8 +593,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::cout << "... Dividing " << to_divide.sum() << " cells "
                       << "(iteration " << iter << ")" << std::endl;
         cells = divideCells<T>(
-            cells, t, R, Rcell, to_divide, growth_dist_funcs, rng,
-            daughter_length_dist_func, daughter_angle_dist_func
+            cells, t, R, Rcell, to_divide, growth_dists, rng,
+            daughter_length_dist, daughter_angle_dist
         );
 
         // Update neighboring cells if division has occurred
@@ -671,8 +653,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
         // Switch cells between groups
         switchGroups<T>(
-            cells, switch_attributes, n_groups, dt, switch_rates, growth_dist_funcs,
-            attribute_dist_funcs, rng, uniform_dist
+            cells, switch_attributes, n_groups, dt, switch_rates, growth_dists,
+            attribute_dists, rng, uniform_dist
         );
         
         // Write the current population to file
