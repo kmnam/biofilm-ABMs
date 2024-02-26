@@ -470,6 +470,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     // Attribute distribution functions: normal distributions with given means
     // and standard deviations
     const int n_attributes = switch_attributes.size();
+    std::cout << "switching " << n_attributes << " attributes:" << std::endl;
+    for (int i = 0; i < n_attributes; ++i)
+        std::cout << switch_attributes[i] << std::endl;
     std::map<std::pair<int, int>, boost::random::normal_distribution<> > attribute_dists;
     std::map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> > attribute_dist_funcs;
     for (int i = 0; i < n_groups; ++i)
@@ -477,6 +480,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         for (int j = 0; j < n_attributes; ++j)
         {
             auto pair = std::make_pair(i, j);
+            std::cout << "group " << i << " attribute " << j << " mean: " << attribute_means(i, j) << " std: " << attribute_stds(i, j) << std::endl;
             boost::random::normal_distribution<> attribute_dist(
                 attribute_means(i, j), attribute_stds(i, j)
             );

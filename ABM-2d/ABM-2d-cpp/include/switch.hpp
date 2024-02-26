@@ -80,14 +80,17 @@ void switchGroups(Ref<Array<T, Dynamic, Dynamic> > cells,
                 {
                     // If the cell is to switch to group j, sample the cell's
                     // new growth rate and attribute values 
+                    std::cout << "switching from group " << group + 1 << " to " << j + 1 << std::endl; 
                     cells(i, 10) = j + 1;
                     T growth_rate = growth_dists[j](rng);
+                    std::cout << "new growth rate " << growth_rate << std::endl; 
                     cells(i, 7) = growth_rate;
                     for (int k = 0; k < n_attributes; ++k)
                     {
                         auto pair = std::make_pair(j, k);
                         T attribute = attribute_dists[pair](rng);
-                        cells(i, switch_attributes[k]) = attribute; 
+                        cells(i, switch_attributes[k]) = attribute;
+                        std::cout << "new value for attribute " << switch_attributes[k] << " " << attribute << std::endl;  
                     }
                     break;
                 }
