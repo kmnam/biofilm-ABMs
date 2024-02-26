@@ -120,7 +120,7 @@ int main(int argc, char** argv)
     // coefficients
     Array<T, Dynamic, Dynamic> cells(1, 14);
     cells << 0, 0, 0.99 * R, 1, 0, 0,
-             L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1, sigma0, 1;
+             L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1, sigma_mean1, 1;
 
     // Run the simulation
     runSimulation<T>(
