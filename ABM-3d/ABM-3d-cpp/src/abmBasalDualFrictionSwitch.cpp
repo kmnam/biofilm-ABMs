@@ -58,7 +58,6 @@ int main(int argc, char** argv)
     const T Ldiv = 2 * L0 + 2 * R;
     const T E0 = static_cast<T>(json_data["E0"].as_double());
     const T Ecell = static_cast<T>(json_data["Ecell"].as_double()); 
-    const T sigma0 = static_cast<T>(json_data["sigma0"].as_double()); 
     const T eta_ambient = static_cast<T>(json_data["eta_ambient"].as_double()); 
     const T max_stepsize = static_cast<T>(json_data["max_stepsize"].as_double());
     const int iter_write = json_data["iter_write"].as_int64(); 
@@ -121,7 +120,7 @@ int main(int argc, char** argv)
     // coefficients
     Array<T, Dynamic, Dynamic> cells(1, 14);
     cells << 0, 0, 0.99 * R, 1, 0, 0,
-             L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1, sigma0, 1;
+             L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1, sigma_mean1, 1;
 
     // Run the simulation
     runSimulation<T>(
