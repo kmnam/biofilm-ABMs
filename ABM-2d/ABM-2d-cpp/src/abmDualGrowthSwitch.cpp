@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/25/2024
+ *     2/26/2024
  */
 
 #include <Eigen/Dense>
@@ -62,27 +62,27 @@ int main(int argc, char** argv)
     const T neighbor_threshold = 2 * (2 * R + L0);
     const int max_iter = json_data["max_iter"].as_int64();
     const int n_cells = json_data["n_cells"].as_int64();
-    const double growth_mean1 = json_data["growth_mean1"].as_double();
-    const double growth_std1 = json_data["growth_std1"].as_double();
-    const double growth_mean2 = json_data["growth_mean2"].as_double(); 
-    const double growth_std2 = json_data["growth_std2"].as_double();
+    const T growth_mean1 = static_cast<T>(json_data["growth_mean1"].as_double());
+    const T growth_std1 = static_cast<T>(json_data["growth_std1"].as_double());
+    const T growth_mean2 = static_cast<T>(json_data["growth_mean2"].as_double()); 
+    const T growth_std2 = static_cast<T>(json_data["growth_std2"].as_double());
     const T lifetime_mean1 = static_cast<T>(json_data["lifetime_mean1"].as_double()); 
     const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
-    const double daughter_length_std = json_data["daughter_length_std"].as_double();
-    const double daughter_angle_bound = json_data["daughter_angle_bound"].as_double();
+    const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
+    const T daughter_angle_bound = static_cast<T>(json_data["daughter_angle_bound"].as_double());
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
 
     // Vectors of growth rate means and standard deviations
-    Array<double, Dynamic, 1> growth_means(2);
-    Array<double, Dynamic, 1> growth_stds(2); 
+    Array<T, Dynamic, 1> growth_means(2);
+    Array<T, Dynamic, 1> growth_stds(2); 
     growth_means << growth_mean1, growth_mean2; 
     growth_stds << growth_std1, growth_std2; 
 
     // Define "dummy" attribute with the same constant value for both 
     // groups 1 and 2
     std::vector<int> switch_attributes { 9 };
-    Array<double, Dynamic, Dynamic> attribute_means(2, 1);
-    Array<double, Dynamic, Dynamic> attribute_stds(2, 1);
+    Array<T, Dynamic, Dynamic> attribute_means(2, 1);
+    Array<T, Dynamic, Dynamic> attribute_stds(2, 1);
     attribute_means << eta_surface, eta_surface; 
     attribute_stds << 0.0, 0.0; 
 
