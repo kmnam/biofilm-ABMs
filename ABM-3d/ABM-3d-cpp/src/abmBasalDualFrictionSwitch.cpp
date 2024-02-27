@@ -25,7 +25,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/25/2024
+ *     2/26/2024
  */
 
 #define EIGEN_DONT_PARALLELIZE    // Disable internal parallelization within Eigen
@@ -66,37 +66,37 @@ int main(int argc, char** argv)
     const T neighbor_threshold = 2 * (2 * R + L0);
     const int max_iter = json_data["max_iter"].as_int64();
     const int n_cells = json_data["n_cells"].as_int64();
-    const double growth_mean = json_data["growth_mean"].as_double();
-    const double growth_std = json_data["growth_std"].as_double();
-    const double eta_mean1 = json_data["eta_mean1"].as_double();
-    const double eta_std1 = json_data["eta_std1"].as_double(); 
-    const double eta_mean2 = json_data["eta_mean2"].as_double();
-    const double eta_std2 = json_data["eta_std2"].as_double();
-    const double sigma_mean1 = json_data["sigma_mean1"].as_double();
-    const double sigma_std1 = json_data["sigma_std1"].as_double(); 
-    const double sigma_mean2 = json_data["sigma_mean2"].as_double();
-    const double sigma_std2 = json_data["sigma_std2"].as_double();
+    const T growth_mean = static_cast<T>(json_data["growth_mean"].as_double());
+    const T growth_std = static_cast<T>(json_data["growth_std"].as_double());
+    const T eta_mean1 = static_cast<T>(json_data["eta_mean1"].as_double());
+    const T eta_std1 = static_cast<T>(json_data["eta_std1"].as_double()); 
+    const T eta_mean2 = static_cast<T>(json_data["eta_mean2"].as_double());
+    const T eta_std2 = static_cast<T>(json_data["eta_std2"].as_double());
+    const T sigma_mean1 = static_cast<T>(json_data["sigma_mean1"].as_double());
+    const T sigma_std1 = static_cast<T>(json_data["sigma_std1"].as_double()); 
+    const T sigma_mean2 = static_cast<T>(json_data["sigma_mean2"].as_double());
+    const T sigma_std2 = static_cast<T>(json_data["sigma_std2"].as_double());
     const T lifetime_mean1 = static_cast<T>(json_data["lifetime_mean1"].as_double()); 
     const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
-    const double daughter_length_std = json_data["daughter_length_std"].as_double();
-    const double daughter_angle_xy_bound = json_data["daughter_angle_xy_bound"].as_double();
-    const double daughter_angle_z_bound = json_data["daughter_angle_z_bound"].as_double();
+    const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
+    const T daughter_angle_xy_bound = static_cast<T>(json_data["daughter_angle_xy_bound"].as_double());
+    const T daughter_angle_z_bound = static_cast<T>(json_data["daughter_angle_z_bound"].as_double());
     const T nz_threshold = static_cast<T>(json_data["nz_threshold"].as_double());
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
     const T noise_scale = static_cast<T>(json_data["noise_scale"].as_double());
 
     // Vectors of growth rate means and standard deviations (identical for
     // both groups)
-    Array<double, Dynamic, 1> growth_means(2);
-    Array<double, Dynamic, 1> growth_stds(2);
+    Array<T, Dynamic, 1> growth_means(2);
+    Array<T, Dynamic, 1> growth_stds(2);
     growth_means << growth_mean, growth_mean;
     growth_stds << growth_std, growth_std;
 
     // Matrices of friction coefficient and cell-surface adhesion energy density
     // means and standard deviations
     std::vector<int> switch_attributes { 11, 12 };
-    Array<double, Dynamic, Dynamic> attribute_means(2, 2);
-    Array<double, Dynamic, Dynamic> attribute_stds(2, 2);
+    Array<T, Dynamic, Dynamic> attribute_means(2, 2);
+    Array<T, Dynamic, Dynamic> attribute_stds(2, 2);
     attribute_means << eta_mean1, sigma_mean1,
                        eta_mean2, sigma_mean2;
     attribute_stds << eta_std1, sigma_std1,
