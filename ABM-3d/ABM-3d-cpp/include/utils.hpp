@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/5/2024
+ *     2/26/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -25,6 +25,10 @@ using std::sin;
 using boost::multiprecision::sin;
 using std::cos;
 using boost::multiprecision::cos;
+using std::sqrt;
+using boost::multiprecision::sqrt;
+using std::log;
+using boost::multiprecision::log;
 
 /**
  * Parse a JSON file specifying simulation parameters.
@@ -131,6 +135,23 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
 
     // Close output file 
     outfile.close();  
+}
+
+/**
+ * Sample a value from the standard normal distribution with the Box-Muller
+ * method.
+ *
+ * @param rng Random number generator.
+ * @param uniform_dist Pre-defined instance of standard uniform distribution.
+ * @returns Sampled value. 
+ */
+template <typename T>
+T standardNormal(boost::random::mt19937& rng, boost::random::uniform_01<>& uniform_dist)
+{
+    T u = static_cast<T>(uniform_dist(rng)); 
+    T v = static_cast<T>(uniform_dist(rng)); 
+    T c = sqrt(-2 * log(u));
+    return c * cos(boost::math::constants::two_pi<T>() * v); 
 }
 
 /**
