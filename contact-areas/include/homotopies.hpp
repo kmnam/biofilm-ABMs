@@ -48,7 +48,7 @@ Matrix<std::complex<RealType>, N + 1, 1> euler(
     const RealType t, const RealType dt)
 {
     // Evaluate J and u at the given values of x and t 
-    Matrix<std::complex<RealType>, N + 1, 1> k = (-J(x, t)).colPivHouseholderQr().solve(u(x, t)); 
+    Matrix<std::complex<RealType>, N + 1, 1> k = (-J(x, t)).householderQr().solve(u(x, t)); 
 
     // Return the update 
     return dt * k;
@@ -98,7 +98,7 @@ Matrix<std::complex<RealType>, N + 1, 1> rungeKutta(
             y += A(s, i) * k.col(i); 
         RealType ts = t - c(s) * dt;
         Matrix<std::complex<RealType>, N + 1, 1> xs = x + y * dt;
-        k.col(s) = (-J(xs, ts)).colPivHouseholderQr().solve(u(xs, ts));
+        k.col(s) = (-J(xs, ts)).householderQr().solve(u(xs, ts));
     }
 
     // Return the update 
@@ -382,7 +382,7 @@ class ProjectiveStraightLineHomotopy
                         Matrix<ComplexType, NVariables, NVariables + 1> J_next
                             = jacobian(root_next, t_next);
                         Matrix<ComplexType, NVariables + 1, 1> newton_update
-                            = (-J_next).colPivHouseholderQr().solve(h_next);
+                            = (-J_next).householderQr().solve(h_next);
                         root_next += newton_update; 
 
                         // Re-evaluate the homotopy at the updated root
