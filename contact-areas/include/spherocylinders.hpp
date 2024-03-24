@@ -258,6 +258,7 @@ std::pair<Matrix<RealType, Dynamic, 5>, RealType>
             f[0] = sc1.sphere2().evalElim(2, z0);
         else    // z0 > -half_l1 and z0 < half_l1
             f[0] = sc1.cylinder().evalElim(2, z0);
+        std::cout << f[0].toString() << std::endl;
 
         // TODO Think about how to make this run faster!
         //
@@ -292,6 +293,7 @@ std::pair<Matrix<RealType, Dynamic, 5>, RealType>
         Matrix<std::complex<RealType>, Dynamic, 2> roots = h.solve(
             tol, correct_tol, max_correct_iter, min_dt, max_dt
         );
+        std::cout << "solved\n";
 
         // Keep track of the finite real roots that satisfy the corresponding 
         // planar constraints pertaining to the cylinder in spherocylinder 2
@@ -354,6 +356,7 @@ std::pair<Matrix<RealType, Dynamic, 5>, RealType>
             f[1] = sc2.sphere2().evalElim(2, z0);
         h.setEnd(f);
         roots = h.solve(tol, correct_tol, max_correct_iter, min_dt, max_dt);
+        std::cout << "solved\n";
 
         // Keep track of the finite real roots that satisfy the corresponding 
         // planar constraints pertaining to the either hemispherical cap in
