@@ -209,8 +209,6 @@ class ProjectiveStraightLineHomotopy
             // The (i, j)-th coordinate is the derivative of polynomial i 
             // with respect to variable j, where i runs through 0, ...,
             // NVariables - 1 and j runs through 0, ..., NVariables
-            std::array<std::array<HomogeneousPolynomial, NVariables + 1>, NVariables>
-                gderivs, fderivs;
             for (int i = 0; i < NVariables; ++i)
             {
                 for (int j = 0; j < NVariables + 1; ++j)
@@ -252,6 +250,15 @@ class ProjectiveStraightLineHomotopy
                 RealType root_norm = this->g_roots.row(i).norm();
                 this->g_roots.row(i) /= root_norm;
             }
+
+            // Differentiate each polynomial with respect to each variable 
+            for (int i = 0; i < NVariables; ++i)
+            {
+                for (int j = 0; j < NVariables + 1; ++j)
+                {
+                    this->gderivs[i][j] = this->g[i].deriv(j);
+                }
+            }
         }
 
         /**
@@ -262,6 +269,15 @@ class ProjectiveStraightLineHomotopy
             // Homogenize the input polynomials 
             for (int i = 0; i < NVariables; ++i)
                 this->f[i] = f[i].homogenize(); 
+
+            // Differentiate each polynomial with respect to each variable 
+            for (int i = 0; i < NVariables; ++i)
+            {
+                for (int j = 0; j < NVariables + 1; ++j)
+                {
+                    this->fderivs[i][j] = this->f[i].deriv(j);
+                }
+            }
         }
 
         /**
@@ -297,7 +313,7 @@ class ProjectiveStraightLineHomotopy
             Matrix<ComplexType, Dynamic, NVariables + 1> roots_end_hom(nroots, NVariables + 1);
 
             // Define the Jacobian matrix function for the homotopy 
-            auto jacobian = [&gderivs, &fderivs](
+            auto jacobian = [this](
                 const Ref<const Matrix<ComplexType, NVariables + 1, 1> >& x,
                 const RealType t
             ) -> Matrix<ComplexType, NVariables, NVariables + 1>
@@ -307,7 +323,7 @@ class ProjectiveStraightLineHomotopy
                 {
                     for (int j = 0; j < NVariables + 1; ++j)
                     {
-                        J(i, j) = t * gderivs[i][j].eval(x) + (1 - t) * fderivs[i][j].eval(x);
+                        J(i, j) = t * this->gderivs[i][j].eval(x) + (1 - t) * this->fderivs[i][j].eval(x);
                     }
                 }
                 return J;
