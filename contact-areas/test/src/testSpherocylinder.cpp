@@ -32,7 +32,7 @@ void testContactParallel()
 
     auto tableau = eulerTableau<double>();
     auto contact = getContactRegion<double, 1>(
-        r2, n2, l, R, l, R, g, g_roots, 10,
+        r2, n2, l, R, l, R, g, g_roots, 50,
         std::get<0>(tableau), std::get<1>(tableau), std::get<2>(tableau),
         1e-8, 1e-8, 2, 0.1, 0.001, 1e-8, 1e+5
     );
@@ -56,7 +56,7 @@ void testContactPerpendicular()
 
     auto tableau = eulerTableau<double>();
     auto contact = getContactRegion<double, 1>(
-        r2, n2, l, R, l, R, g, g_roots, 10,
+        r2, n2, l, R, l, R, g, g_roots, 50,
         std::get<0>(tableau), std::get<1>(tableau), std::get<2>(tableau),
         1e-8, 1e-8, 2, 0.01, 0.001, 1e-8, 1e+5
     );
@@ -82,7 +82,7 @@ void testContactSlanted()
 
     auto tableau = eulerTableau<double>();
     auto contact = getContactRegion<double, 1>(
-        r2, n2, l, R, l, R, g, g_roots, 10,
+        r2, n2, l, R, l, R, g, g_roots, 50,
         std::get<0>(tableau), std::get<1>(tableau), std::get<2>(tableau),
         1e-8, 1e-8, 2, 0.01, 0.001, 1e-8, 1e+5
     );
@@ -125,7 +125,7 @@ void testContactSlantedAlternativeStart()
     );
     Matrix<std::complex<double>, Dynamic, 2> f_roots = h.solve(1e-8, 1e-8, 2, 0.001, 0.01);
     auto contact = getContactRegion<double, 1>(
-        r2, n2, l, R, l, R, g, g_roots, 10,
+        r2, n2, l, R, l, R, g, g_roots, 50,
         std::get<0>(tableau), std::get<1>(tableau), std::get<2>(tableau),
         1e-8, 1e-8, 2, 0.01, 0.001, 1e-8, 1e+5
     );
