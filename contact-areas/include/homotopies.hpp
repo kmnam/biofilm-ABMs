@@ -396,8 +396,8 @@ class ProjectiveStraightLineHomotopy
                     // the stepsize is already too small)
                     if (h_next.norm() > correct_tol && dt > min_dt)
                     {
-                        for (int i = 0; i < 4; ++i)
-                            success(i) = success(i + 1);
+                        for (int j = 0; j < 4; ++j)
+                            success(j) = success(j + 1);
                         success(4) = false;
                         dt /= 2;
                     }
@@ -407,8 +407,8 @@ class ProjectiveStraightLineHomotopy
                     // is already too large)
                     else
                     {
-                        for (int i = 0; i < 4; ++i)
-                            success(i) = success(i + 1); 
+                        for (int j = 0; j < 4; ++j)
+                            success(j) = success(j + 1); 
                         success(4) = true;
                         t_curr = t_next;
                         RealType root_norm = root_next.norm();
