@@ -554,7 +554,12 @@ class MultivariatePolynomial
                 ComplexType coef = term.second;
                 ComplexType vars(1, 0); 
                 for (int i = 0; i < NVariables; ++i)
-                    vars *= std::pow(values[i], static_cast<RealType>(p[i])); 
+                {
+                    for (int j = 0; j < p[i]; ++j)
+                    {
+                        vars *= values[i];
+                    }
+                }
                 total += coef * vars;
             }
             return total;
@@ -580,7 +585,12 @@ class MultivariatePolynomial
                 ComplexType coef = term.second;
                 ComplexType vars(1, 0); 
                 for (int i = 0; i < NVariables; ++i)
-                    vars *= std::pow(values(i), static_cast<RealType>(p[i])); 
+                {
+                    for (int j = 0; j < p[i]; ++j)
+                    {
+                        vars *= values(i);
+                    }
+                }
                 total += coef * vars;
             }
             return total;
