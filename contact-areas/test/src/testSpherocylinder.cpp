@@ -114,8 +114,8 @@ void testContactSlantedAlternativeStart()
     g[0] = gamma * polynomialOfUnity<double, 2>(0, 2);
     g[1] = gamma * polynomialOfUnity<double, 2>(1, 2);
     Matrix<std::complex<double>, Dynamic, 2> g_roots = rootsOfUnity<double>(2, 2); 
-    f[0] = getCylinder<double>(r0, n0, 0.8).evalElim(2, z0);
-    f[1] = getCylinder<double>(r, n, 0.8).evalElim(2, z0);
+    f[0] = getCylinder<double>(r0, n0, 0.8).eval(2, z0);
+    f[1] = getCylinder<double>(r, n, 0.8).eval(2, z0);
     std::cout << f[0].toString() << std::endl; 
     std::cout << f[1].toString() << std::endl;
 

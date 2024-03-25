@@ -55,7 +55,8 @@ void testEvalCircle()
     MultivariatePolynomial<double, 2> p(coefs);
     std::cout << p.toString() << std::endl;
     std::cout << p.eval(1, 0.5).toString() << std::endl;
-    std::array<std::complex<double>, 2> xy { 0.2, 0.5 };
+    Matrix<std::complex<double>, 2, 1> xy; 
+    xy << 0.2, 0.5;
     std::cout << p.eval(xy) << std::endl;
 }
 
@@ -72,7 +73,7 @@ void testEvalElimSphere()
     coefs.insert({{0, 0, 2}, std::complex<double>(1, 0)});
     MultivariatePolynomial<double, 3> p(coefs); 
     std::cout << p.toString() << std::endl; 
-    std::cout << p.evalElim(2, 0.2).toString() << std::endl;
+    std::cout << p.eval(2, 0.2).toString() << std::endl;
 }
 
 /**
