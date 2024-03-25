@@ -515,7 +515,7 @@ class MultivariatePolynomial
         }
 
         /**
-         * Evaluate the polynomial at the given array of values for all 
+         * Evaluate the polynomial at the given vector of real values for all
          * the variables. 
          *
          * The returned value is a complex scalar.
@@ -523,8 +523,11 @@ class MultivariatePolynomial
          * The evaluation is done term-by-term, as opposed to using a 
          * scheme like Horner's method, with the assumption that the 
          * polynomial is relatively low-degree.
+         *
+         * @param values Vector of values for each variable. 
+         * @returns Polynomial value.
          */
-        ComplexType eval(std::array<ComplexType, NVariables>& values)
+        ComplexType eval(const Ref<const Matrix<RealType, NVariables, 1> >& values)
         {
             // Evaluate the polynomial, one term at a time
             ComplexType total(0, 0);
@@ -537,7 +540,7 @@ class MultivariatePolynomial
                 {
                     for (int j = 0; j < p[i]; ++j)
                     {
-                        vars *= values[i];
+                        vars *= values(i);
                     }
                 }
                 total += coef * vars;
@@ -546,14 +549,17 @@ class MultivariatePolynomial
         }
 
         /**
-         * Evaluate the polynomial at the given (Eigen) vector of values 
-         * for all the variables. 
+         * Evaluate the polynomial at the given vector of complex values for
+         * all the variables. 
          *
          * The returned value is a complex scalar.
          *
          * The evaluation is done term-by-term, as opposed to using a 
          * scheme like Horner's method, with the assumption that the 
          * polynomial is relatively low-degree.
+         *
+         * @param values Vector of values for each variable. 
+         * @returns Polynomial value.
          */
         ComplexType eval(const Ref<const Matrix<ComplexType, NVariables, 1> >& values)
         {
@@ -580,7 +586,9 @@ class MultivariatePolynomial
          * Return a string representation of the polynomial.
          *
          * The variables are written as x0, x1, x2, ..., and powers are 
-         * denoted by x^y. 
+         * denoted by x^y.
+         *
+         * @returns String representation of the polynomial. 
          */
         std::string toString()
         {
@@ -637,8 +645,11 @@ class MultivariatePolynomial
 
         /**
          * Return the product of the polynomial with the given complex scalar.
+         *
+         * @param mult Complex scalar. 
+         * @returns The product polynomial.
          */
-        MultivariatePolynomial<RealType, NVariables> operator*(const ComplexType a)
+        MultivariatePolynomial<RealType, NVariables> operator*(const ComplexType mult)
         {
             // Instantiate a new polynomial with updated coefficients 
             CoefMapType coefs; 
@@ -646,23 +657,26 @@ class MultivariatePolynomial
             {
                 MonomialType p = term.first;
                 ComplexType coef = term.second; 
-                coefs.insert({p, a * coef}); 
+                coefs.insert({p, mult * coef}); 
             }
 
             return MultivariatePolynomial<RealType, NVariables>(coefs); 
         }
 
         /**
-         * Multiply the polynomial by the given complex scalar. 
+         * Multiply the polynomial by the given complex scalar.
+         *
+         * @param mult Complex scalar.
+         * @returns Reference to updated polynomial.
          */
-        MultivariatePolynomial<RealType, NVariables>& operator*=(const ComplexType a)
+        MultivariatePolynomial<RealType, NVariables>& operator*=(const ComplexType mult)
         {
             // Update each coefficient in the polynomial 
             for (auto&& term : this->coefs)
             {
                 MonomialType p = term.first;
                 ComplexType coef = term.second; 
-                this->coefs[p] = a * coef; 
+                this->coefs[p] = mult * coef; 
             }
             
             return *this;
@@ -671,6 +685,10 @@ class MultivariatePolynomial
         /**
          * Return the partial derivative of the polynomial in the indicated
          * variable.
+         *
+         * @param idx Index of variable to differentiate the polynomial with
+         *            respect to. 
+         * @returns The partial derivative polynomial. 
          */
         MultivariatePolynomial<RealType, NVariables> deriv(const int idx)
         {
@@ -718,6 +736,8 @@ class MultivariatePolynomial
         /**
          * Return a homogenization of the polynomial, containing an additional 
          * variable.
+         *
+         * @returns The homogenized polynomial.
          */
         MultivariatePolynomial<RealType, NVariables + 1> homogenize()
         {
