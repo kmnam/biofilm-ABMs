@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/20/2024
+ *     3/25/2024
  */
 
 #ifndef HOMOTOPIES_HPP
@@ -28,7 +28,14 @@ using namespace Eigen;
  * where x has dimension N + 1, u(x, t) has dimension N, and J has dimension
  * (N, N + 1).
  *
- * Note that we are decreasing t by dt. 
+ * Note that we are decreasing t by dt.
+ *
+ * @param J A std::function instance that calculates the left-hand Jacobian.
+ * @param u A std::function instance that calculates the right-hand vector.
+ * @param x Current vector iterate. 
+ * @param t Input timepoint.
+ * @param dt Time increment. 
+ * @returns Next vector iterate. 
  */
 template <typename RealType, int N>
 Matrix<std::complex<RealType>, N + 1, 1> euler(
@@ -66,6 +73,16 @@ Matrix<std::complex<RealType>, N + 1, 1> euler(
  * (N, N + 1).
  *
  * Note that we are decreasing t by dt.
+ *
+ * @param J A std::function instance that calculates the left-hand Jacobian.
+ * @param u A std::function instance that calculates the right-hand vector.
+ * @param x Current vector iterate.
+ * @param t Current timepoint. 
+ * @param dt Time increment. 
+ * @param A Runge-Kutta matrix. 
+ * @param b Runge-Kutta weights. 
+ * @param c Runge-Kutta nodes.
+ * @returns Next vector iterate. 
  */
 template <typename RealType, int N, int S>
 Matrix<std::complex<RealType>, N + 1, 1> rungeKutta(
@@ -112,6 +129,8 @@ Matrix<std::complex<RealType>, N + 1, 1> rungeKutta(
 
 /**
  * Return the Butcher tableau for Euler's method.
+ *
+ * @returns The Butcher tableau for Euler's method. 
  */
 template <typename RealType>
 std::tuple<Matrix<RealType, 1, 1>, Matrix<RealType, 1, 1>, Matrix<RealType, 1, 1> > eulerTableau()
@@ -125,6 +144,8 @@ std::tuple<Matrix<RealType, 1, 1>, Matrix<RealType, 1, 1>, Matrix<RealType, 1, 1
 
 /**
  * Return the Butcher tableau for the classic 4th-order Runge-Kutta method.
+ *
+ * @returns The Butcher tableau for the classic 4th-order Runge-Kutta method.
  */
 template <typename RealType>
 std::tuple<Matrix<RealType, 4, 4>, Matrix<RealType, 4, 1>, Matrix<RealType, 4, 1> > rk4Tableau()
@@ -172,6 +193,13 @@ class ProjectiveStraightLineHomotopy
         /**
          * Constructor with input polynomials and roots for the start system
          * in affine coordinates, plus the Runge-Kutta Butcher tableau.
+         *
+         * @param g Input array of starting polynomials (in affine coordinates).
+         * @param f Input array of ending polynomials (in affine coordinates).
+         * @param g_roots Roots of the start system (in affine coordinates).
+         * @param rkA Runge-Kutta matrix. 
+         * @param rkb Runge-Kutta weights.
+         * @param rkc Runge-Kutta nodes.  
          */
         ProjectiveStraightLineHomotopy(std::array<AffinePolynomial, NVariables>& g,
                                        std::array<AffinePolynomial, NVariables>& f,
@@ -226,7 +254,10 @@ class ProjectiveStraightLineHomotopy
 
         /**
          * Update the start system to the given array of polynomials, and 
-         * update the corresponding roots.  
+         * update the corresponding roots. 
+         *
+         * @param g Input array of starting polynomials (in affine coordinates).
+         * @param g_roots Roots of the start system (in affine coordinates).  
          */
         void setStart(std::array<AffinePolynomial, NVariables>& g,
                       const Ref<const Matrix<ComplexType, Dynamic, NVariables> >& g_roots)
@@ -263,6 +294,8 @@ class ProjectiveStraightLineHomotopy
 
         /**
          * Update the end system to the given array of polynomials.
+         *
+         * @param f Input array of ending polynomials (in affine coordinates). 
          */
         void setEnd(std::array<AffinePolynomial, NVariables>& f)
         {
@@ -283,6 +316,10 @@ class ProjectiveStraightLineHomotopy
         /**
          * Evaluate the straight-line homotopy at the given values of the 
          * variables (including the homogenizing variable) and t.
+         *
+         * @param values Input values for the variables. 
+         * @param t Value of the homotopy parameter.
+         * @returns Homotopy value. 
          */
         Matrix<ComplexType, NVariables, 1> eval(const Ref<const Matrix<ComplexType, NVariables + 1, 1> >& values,
                                                 const RealType t)
@@ -303,9 +340,18 @@ class ProjectiveStraightLineHomotopy
         /**
          * Use a Runge-Kutta predictor (with the given Butcher tableau) and a
          * Newton corrector to solve for the roots of the end system.
+         *
+         * @param track_tol Value of t at which to terminate path tracking. 
+         * @param correct_tol Homotopy value at which to terminate Newton 
+         *                    correction during each iteration. 
+         * @param max_correct_iter Maximum number of Newton corrections to 
+         *                         apply per iteration. 
+         * @param min_dt Minimum path tracking stepsize.
+         * @param max_dt Maximum path tracking stepsize.
+         * @returns Approximations of roots for the end system.  
          */
         Matrix<ComplexType, Dynamic, NVariables> solve(
-            const RealType tol, const RealType correct_tol,
+            const RealType track_tol, const RealType correct_tol,
             const int max_correct_iter, const RealType min_dt,
             const RealType max_dt)
         {
@@ -367,6 +413,10 @@ class ProjectiveStraightLineHomotopy
                     );
                     Matrix<ComplexType, NVariables + 1, 1> root_next = root_curr + update;
 
+                    // Normalize the updated root 
+                    RealType root_norm = root_next.norm(); 
+                    root_next /= root_norm;
+
                     // Evaluate the homotopy at the updated root 
                     Matrix<ComplexType, NVariables, 1> h_next = this->eval(root_next, t_next);
 
@@ -384,6 +434,10 @@ class ProjectiveStraightLineHomotopy
                         Matrix<ComplexType, NVariables + 1, 1> newton_update
                             = (-J_next).householderQr().solve(h_next);
                         root_next += newton_update; 
+
+                        // Normalize the updated root 
+                        root_norm = root_next.norm();
+                        root_next /= root_norm;
 
                         // Re-evaluate the homotopy at the updated root
                         h_next = this->eval(root_next, t_next);
@@ -411,8 +465,7 @@ class ProjectiveStraightLineHomotopy
                             success(j) = success(j + 1); 
                         success(4) = true;
                         t_curr = t_next;
-                        RealType root_norm = root_next.norm();
-                        root_curr = root_next / root_norm;
+                        root_curr = root_next;
                         if (success.all() && dt < max_dt)
                             dt *= 2;
                     }
