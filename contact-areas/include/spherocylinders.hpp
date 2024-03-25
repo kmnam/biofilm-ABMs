@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/20/2024
+ *     3/25/2024
  */
 
 #ifndef SPHEROCYLINDERS_HPP
@@ -42,7 +42,12 @@ class Spherocylinder
     public:
         /**
          * Constructor from input center, orientation vector, length, and
-         * radius.  
+         * radius.
+         *
+         * @param r Spherocylinder center. 
+         * @param n Spherocylinder orientation vector. 
+         * @param l Spherocylinder length. 
+         * @param R Spherocylinder radius.  
          */
         Spherocylinder(const Ref<const Matrix<RealType, 3, 1> >& r,
                        const Ref<const Matrix<RealType, 3, 1> >& n,
@@ -70,7 +75,9 @@ class Spherocylinder
         }
 
         /**
-         * Return the cylinder polynomial. 
+         * Return the cylinder polynomial.
+         *
+         * @returns Polynomial for the cylinder in Cartesian coordinates. 
          */
         MultivariatePolynomial<RealType, 3> cylinder()
         {
@@ -80,6 +87,9 @@ class Spherocylinder
         /**
          * Return the first sphere polynomial (corresponding to the centerline
          * coordinate s = -l / 2).
+         *
+         * @returns Polynomial for the sphere at s = -l / 2 in Cartesian 
+         *          coordinates. 
          */
         MultivariatePolynomial<RealType, 3> sphere1()
         {
@@ -89,6 +99,9 @@ class Spherocylinder
         /**
          * Return the second sphere polynomial (corresponding to the centerline
          * coordinate s = l / 2).
+         *
+         * @returns Polynomial for the sphere at s = l / 2 in Cartesian 
+         *          coordinates. 
          */
         MultivariatePolynomial<RealType, 3> sphere2()
         {
@@ -98,6 +111,9 @@ class Spherocylinder
         /**
          * Return the first plane polynomial (corresponding to the centerline 
          * coordinate s = -l / 2).
+         * 
+         * @returns Polynomial for the plane at s = -l / 2 in Cartesian 
+         *          coordinates. 
          */
         MultivariatePolynomial<RealType, 3> plane1()
         {
@@ -107,6 +123,9 @@ class Spherocylinder
         /**
          * Return the second plane polynomial (corresponding to the centerline
          * coordinate s = l / 2).
+         *
+         * @returns Polynomial for the plane at s = l / 2 in Cartesian 
+         *          coordinates. 
          */
         MultivariatePolynomial<RealType, 3> plane2()
         {
@@ -115,7 +134,10 @@ class Spherocylinder
 
         /**
          * Given a query point, return the coordinate along the spherocylinder
-         * centerline that is nearest to the query point. 
+         * centerline that is nearest to the query point.
+         *
+         * @param p Query point. 
+         * @returns Centerline coordinate that is nearest to p.  
          */
         RealType nearestCoord(const Ref<const Matrix<RealType, 3, 1> >& p)
         {
@@ -136,7 +158,13 @@ class Spherocylinder
          * coordinate may not actually be contained within the spherocylinder. 
          *
          * If no such coordinate exists (because the centerline is parallel
-         * to the plane), then NaN is returned.  
+         * to the plane), then NaN is returned.
+         *
+         * @param p Input point. 
+         * @param v Input normal vector.  
+         * @returns Centerline coordinate (which may not lie between -l / 2
+         *          and l / 2) that crosses the plane containing p that is 
+         *          normal to v. 
          */
         RealType planeIntersect(const Ref<const Matrix<RealType, 3, 1> >& p,
                                 const Ref<const Matrix<RealType, 3, 1> >& v)
@@ -162,6 +190,32 @@ class Spherocylinder
  *     orientation, length, and radius.
  *
  * A start system and its roots must be supplied by the user.
+ *
+ * @param r2 Center of spherocylinder 2.
+ * @param n2 Orientation vector of spherocylinder 2.
+ * @param l1 Length of spherocylinder 1.
+ * @param R1 Radius of spherocylinder 1.
+ * @param l2 Length of spherocylinder 2.
+ * @param R2 Radius of spherocylinder 2.
+ * @param g Start system of polynomials (in two variables, x and y). 
+ * @param g_roots Roots to the start system.
+ * @param meshsize Number of centerline coordinates at which to solve for 
+ *                 roots. 
+ * @param rkA Runge-Kutta matrix. 
+ * @param rkb Runge-Kutta weights.
+ * @param rkc Runge-Kutta nodes.  
+ * @param track_tol Tracking tolerance for homotopy continuation. 
+ * @param correct_tol Correction tolerance for homotopy continuation. 
+ * @param max_correct_iter Maximum number of Newton corrections per iteration
+ *                         during homotopy continuation. 
+ * @param min_dt Minimum stepsize for homotopy continuation.
+ * @param max_dt Maximum stepsize for homotopy continuation.
+ * @param imag_tol Tolerance for judging whether a complex root is real or 
+ *                 imaginary. 
+ * @param inf_tol Tolerance for judging whether a complex root is finite or 
+ *                infinite. 
+ * @returns A matrix of points (x0, y0, x1, y1, z), where (x0, y0, z) and 
+ *          (x1, y1, z) are points of intersection between the spherocylinders.  
  */
 template <typename RealType, int NStages>
 std::pair<Matrix<RealType, Dynamic, 5>, RealType>
@@ -177,7 +231,7 @@ std::pair<Matrix<RealType, Dynamic, 5>, RealType>
                      const Ref<const Matrix<RealType, NStages, NStages> >& rkA,
                      const Ref<const Matrix<RealType, NStages, 1> >& rkb,
                      const Ref<const Matrix<RealType, NStages, 1> >& rkc,
-                     const RealType tol, 
+                     const RealType track_tol, 
                      const RealType correct_tol, 
                      const int max_correct_iter,
                      const RealType min_dt,
@@ -291,7 +345,7 @@ std::pair<Matrix<RealType, Dynamic, 5>, RealType>
         f[1] = sc2.cylinder().eval(2, z0);
         h.setEnd(f);
         Matrix<std::complex<RealType>, Dynamic, 2> roots = h.solve(
-            tol, correct_tol, max_correct_iter, min_dt, max_dt
+            track_tol, correct_tol, max_correct_iter, min_dt, max_dt
         );
         std::cout << "solved\n";
 
@@ -355,7 +409,7 @@ std::pair<Matrix<RealType, Dynamic, 5>, RealType>
         else 
             f[1] = sc2.sphere2().eval(2, z0);
         h.setEnd(f);
-        roots = h.solve(tol, correct_tol, max_correct_iter, min_dt, max_dt);
+        roots = h.solve(track_tol, correct_tol, max_correct_iter, min_dt, max_dt);
         std::cout << "solved\n";
 
         // Keep track of the finite real roots that satisfy the corresponding 
