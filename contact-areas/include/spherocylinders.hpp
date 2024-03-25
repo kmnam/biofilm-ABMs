@@ -234,8 +234,8 @@ std::pair<Matrix<RealType, Dynamic, 5>, RealType>
 
     // Initialize a straight-line homotopy with a placeholder end system 
     std::array<MultivariatePolynomial<RealType, 2>, 2> f;
-    f[0] = sc1.cylinder().evalElim(2, 0); 
-    f[1] = sc2.cylinder().evalElim(2, 0);
+    f[0] = sc1.cylinder().eval(2, 0); 
+    f[1] = sc2.cylinder().eval(2, 0);
     ProjectiveStraightLineHomotopy<RealType, 2, NStages> h(g, f, g_roots, rkA, rkb, rkc);
 
     // For each point along the centerline of spherocylinder 1 ...
@@ -253,11 +253,11 @@ std::pair<Matrix<RealType, Dynamic, 5>, RealType>
         // The first polynomial is for either sphere or the cylinder in 
         // spherocylinder 1, depending on the value of z0
         if (z0 <= -half_l1)
-            f[0] = sc1.sphere1().evalElim(2, z0);
+            f[0] = sc1.sphere1().eval(2, z0);
         else if (z0 >= half_l1)
-            f[0] = sc1.sphere2().evalElim(2, z0);
+            f[0] = sc1.sphere2().eval(2, z0);
         else    // z0 > -half_l1 and z0 < half_l1
-            f[0] = sc1.cylinder().evalElim(2, z0);
+            f[0] = sc1.cylinder().eval(2, z0);
         std::cout << f[0].toString() << std::endl;
 
         // TODO Think about how to make this run faster!
@@ -288,7 +288,7 @@ std::pair<Matrix<RealType, Dynamic, 5>, RealType>
         
         // First, try calculating a circle-cylinder intersection
         std::cout << z0 << " getting circle-cylinder\n";
-        f[1] = sc2.cylinder().evalElim(2, z0);
+        f[1] = sc2.cylinder().eval(2, z0);
         h.setEnd(f);
         Matrix<std::complex<RealType>, Dynamic, 2> roots = h.solve(
             tol, correct_tol, max_correct_iter, min_dt, max_dt
@@ -351,9 +351,9 @@ std::pair<Matrix<RealType, Dynamic, 5>, RealType>
         std::cout << z0 << " getting circle-sphere\n";
         RealType s = sc2.nearestCoord(p);
         if (s < 0)
-            f[1] = sc2.sphere1().evalElim(2, z0); 
+            f[1] = sc2.sphere1().eval(2, z0); 
         else 
-            f[1] = sc2.sphere2().evalElim(2, z0);
+            f[1] = sc2.sphere2().eval(2, z0);
         h.setEnd(f);
         roots = h.solve(tol, correct_tol, max_correct_iter, min_dt, max_dt);
         std::cout << "solved\n";
