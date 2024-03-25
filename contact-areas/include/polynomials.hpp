@@ -501,9 +501,9 @@ class MultivariatePolynomial
                 for (int i = 0; i < NVariables; ++i)
                 {
                     if (i < idx)
-                        q[i] = power[i];
+                        q[i] = p[i];
                     else if (i > idx)
-                        q[i - 1] = power[i];
+                        q[i - 1] = p[i];
                 }
                 if (coefs_reduced.find(q) == coefs_reduced.end())
                     coefs_reduced[q] = new_coef;
