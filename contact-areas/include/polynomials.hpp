@@ -1,9 +1,11 @@
 /**
+ * A lightweight implementation of univariate and multivariate polynomials.
+ *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/20/2024
+ *     3/24/2024
  */
 
 #ifndef POLYNOMIALS_HPP
@@ -50,6 +52,8 @@ class Polynomial
 
         /**
          * Constructor with input real-valued coefficients.
+         *
+         * @param coefs Input coefficients. 
          */
         Polynomial(const Ref<const Matrix<RealType, Dynamic, 1> >& coefs)
         {
@@ -63,6 +67,8 @@ class Polynomial
 
         /**
          * Constructor with input complex-valued coefficients.
+         *
+         * @param coefs Input coefficients.
          */
         Polynomial(const Ref<const Matrix<ComplexType, Dynamic, 1> >& coefs)
         {
@@ -92,6 +98,9 @@ class Polynomial
         /**
          * Evaluate the polynomial at the given complex value with Horner's
          * method.
+         *
+         * @param x Input value for variable. 
+         * @returns Polynomial value. 
          */
         ComplexType eval(const ComplexType x)
         {
@@ -103,7 +112,9 @@ class Polynomial
         }
 
         /**
-         * Get the derivative of the polynomial. 
+         * Get the derivative of the polynomial.
+         *
+         * @returns Derivative polynomial. 
          */
         Polynomial<RealType> deriv()
         {
@@ -126,7 +137,8 @@ class Polynomial
          * Solve for the roots of the polynomial by computing the eigenvalues
          * of the corresponding companion matrix.
          *
-         * If real is true, then the coefficients are assumed to be real. 
+         * @param real If true, the coefficients are assumed to be real.
+         * @returns Vector of polynomial roots.  
          */
         Matrix<ComplexType, Dynamic, 1> solveCompanion(const bool real = false)
         {
@@ -167,6 +179,10 @@ class Polynomial
 
         /**
          * Solve for the roots of the polynomial with the Durand-Kerner method.
+         *
+         * @param tol Tolerance for judging whether the difference between 
+         *            consecutive root approximations is zero.
+         * @returns Vector of polynomial roots. 
          */
         Matrix<ComplexType, Dynamic, 1> solveDurandKerner(const RealType tol)
         {
@@ -239,7 +255,11 @@ class Polynomial
         }
 
         /**
-         * Solve for the roots of the polynomial with Aberth's method. 
+         * Solve for the roots of the polynomial with Aberth's method.
+         *
+         * @param tol Tolerance for judging whether the difference between 
+         *            consecutive root approximations is zero.
+         * @returns Vector of polynomial roots. 
          */
         Matrix<ComplexType, Dynamic, 1> solveAberth(const RealType tol)
         {
@@ -349,6 +369,8 @@ class MultivariatePolynomial
         /**
          * Constructor for a multivariate polynomial with complex-valued
          * coefficients.
+         *
+         * @param Input map of polynomial coefficients. 
          */
         MultivariatePolynomial(CoefMapType& coefs)
         {
@@ -400,6 +422,8 @@ class MultivariatePolynomial
 
         /**
          * Return the degrees of the polynomial.
+         *
+         * @returns Array of polynomial degrees. 
          */
         MonomialType getDegrees()
         {
@@ -408,14 +432,26 @@ class MultivariatePolynomial
 
         /**
          * Return the coefficient of the given monomial.
+         *
+         * @param p Input monomial. 
+         * @returns Coefficient corresponding to the input monomial.
          */
         ComplexType getCoef(MonomialType& p)
         {
-            return this->coefs[p];
+            try
+            {
+                return this->coefs.at(p);
+            }
+            catch (const std::out_of_range& e)
+            {
+                throw;
+            }
         }
 
         /**
          * Return the coefficients of the polynomial.
+         *
+         * @returns Map of polynomial coefficients. 
          */
         CoefMapType& getCoefs()
         {
@@ -426,109 +462,53 @@ class MultivariatePolynomial
          * Evaluate the polynomial with the given value for the indicated
          * variable and return the reduced polynomial.
          *
-         * The original number of variables is maintained.
-         */
-        MultivariatePolynomial<RealType, NVariables> eval(const int idx,
-                                                          const ComplexType value)
-        {
-            // Define a new map of coefficients 
-            CoefMapType coefs_reduced;
-            
-            // Get every possible combination of powers in the other variables
-            std::vector<std::vector<int> > ranges; 
-            for (int i = 0; i < NVariables; ++i)
-            {
-                if (i == idx)
-                {
-                    std::vector<int> range { 0 }; 
-                    ranges.push_back(range);
-                }
-                else
-                {
-                    std::vector<int> range; 
-                    for (int j = 0; j <= this->degrees[i]; ++j)
-                        range.push_back(j);
-                    ranges.push_back(range);
-                }
-            }
-            std::vector<std::vector<int> > powers_other = getProduct(ranges);
-
-            // For each such combination of powers, group all coefficients
-            // into a single polynomial in the chosen variable and evaluate
-            for (auto&& power : powers_other)
-            {
-                MonomialType p; 
-                for (int i = 0; i < NVariables; ++i)
-                    p[i] = power[i];
-                Matrix<ComplexType, Dynamic, 1> combined_coefs(this->degrees[idx] + 1);
-                for (int j = 0; j <= this->degrees[idx]; ++j)
-                {
-                    MonomialType q(p);
-                    q[idx] = j;
-                    combined_coefs(j) = this->coefs[q];
-                }
-                Polynomial<RealType> combined_coefs_poly(combined_coefs);
-                coefs_reduced.insert({p, combined_coefs_poly.eval(value)});
-            }
-
-            return MultivariatePolynomial<RealType, NVariables>(coefs_reduced);
-        }
-
-        /**
-         * Evaluate the polynomial with the given value for the indicated
-         * variable and return the reduced polynomial.
+         * The indicated variable is eliminated from the polynomial. An
+         * exception is raised if the indicated variable does not exist 
+         * in the polynomial (i.e., if idx >= NVariables), or if there 
+         * are fewer than two variables to begin with.
          *
-         * The indicated variable is eliminated from the polynomial.
+         * @param idx Index of variable to evaluate. 
+         * @param value Input value for indicated variable. 
+         * @returns Evaluated polynomial with one fewer variable. 
          */
-        MultivariatePolynomial<RealType, NVariables - 1> evalElim(const int idx,
-                                                                  const ComplexType value)
+        MultivariatePolynomial<RealType, NVariables - 1> eval(const int idx,
+                                                              const ComplexType value)
         {
+            // The indicated variable has to be less than the number of variables
+            if (idx >= NVariables)
+                throw std::invalid_argument(
+                    "Invalid variable specified for polynomial evaluation"
+                );
+
+            // The polynomial should have two or more variables
+            if (NVariables < 2)
+                throw std::runtime_error(
+                    "Cannot evaluate and eliminate variable in polynomial with < 2 variables"
+                );
+
             // Define a new map of coefficients (with the indicated variable
             // eliminated) 
             std::map<std::array<int, NVariables - 1>, ComplexType> coefs_reduced;
            
-            // Get every possible combination of powers in the other variables
-            std::vector<std::vector<int> > ranges; 
-            for (int i = 0; i < NVariables; ++i)
+            // For each term in the polynomial, evaluate the term and update
+            // the new map of coefficients
+            for (auto&& term : this->coefs)
             {
-                if (i == idx)
-                {
-                    std::vector<int> range { 0 }; 
-                    ranges.push_back(range);
-                }
-                else
-                {
-                    std::vector<int> range; 
-                    for (int j = 0; j <= this->degrees[i]; ++j)
-                        range.push_back(j);
-                    ranges.push_back(range);
-                }
-            }
-            std::vector<std::vector<int> > powers_other = getProduct(ranges);
-
-            // For each such combination of powers, group all coefficients
-            // into a single polynomial in the chosen variable and evaluate
-            for (auto&& power : powers_other)
-            {
-                MonomialType p;
-                std::array<int, NVariables - 1> q; 
+                MonomialType p = term.first;
+                ComplexType coef = term.second;
+                ComplexType new_coef = coef * std::pow(value, p[idx]);
+                std::array<int, NVariables - 1> q;
                 for (int i = 0; i < NVariables; ++i)
                 {
-                    p[i] = power[i];
                     if (i < idx)
                         q[i] = power[i];
                     else if (i > idx)
                         q[i - 1] = power[i];
                 }
-                Matrix<ComplexType, Dynamic, 1> combined_coefs(this->degrees[idx] + 1);
-                for (int j = 0; j <= this->degrees[idx]; ++j)
-                {
-                    MonomialType r(p);
-                    r[idx] = j;
-                    combined_coefs(j) = this->coefs[r];
-                }
-                Polynomial<RealType> combined_coefs_poly(combined_coefs);
-                coefs_reduced.insert({q, combined_coefs_poly.eval(value)});
+                if (coefs_reduced.find(q) == coefs_reduced.end())
+                    coefs_reduced[q] = new_coef;
+                else 
+                    coefs_reduced[q] += new_coef;
             }
 
             return MultivariatePolynomial<RealType, NVariables - 1>(coefs_reduced);
