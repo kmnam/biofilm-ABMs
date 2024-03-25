@@ -399,7 +399,7 @@ class ProjectiveStraightLineHomotopy
                 // Starting from t = 1 ...
                 RealType t_curr = 1.0;
                 RealType dt = max_dt;
-                while (t_curr > tol)
+                while (t_curr > track_tol)
                 {
                     RealType t_next = t_curr - dt;
 
