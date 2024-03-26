@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/25/2024
+ *     3/26/2024
  */
 
 #ifndef SPHEROCYLINDERS_HPP
@@ -13,11 +13,18 @@
 #include <complex>
 #include <functional>
 #include <Eigen/Dense>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Point_3.h>
+#include <CGAL/Segment_3.h>
 #include "quadrics.hpp"
 #include "homotopies.hpp"
 #include "utils.hpp"
 
 using namespace Eigen;
+
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
+typedef K::Point_3 Point_3; 
+typedef K::Segment_3 Segment_3;
 
 template <typename RealType>
 class Spherocylinder
@@ -179,6 +186,28 @@ class Spherocylinder
             else 
                 return v.dot(p - this->r) / prod;
         }
+
+        /**
+         * Return the centerline as a Segment_3 instance.
+         *
+         * @returns Centerline as a Segment_3 instance. 
+         */
+        Segment_3 segment()
+        {
+            Matrix<RealType, 3, 1> p = this->r - this->half_l * this->n; 
+            Matrix<RealType, 3, 1> q = this->r + this->half_l * this->n;
+            Point_3 p_(
+                static_cast<double>(p(0)),
+                static_cast<double>(p(1)), 
+                static_cast<double>(p(2))
+            );
+            Point_3 q_(
+                static_cast<double>(q(0)),
+                static_cast<double>(q(1)),
+                static_cast<double>(q(2))
+            ); 
+            return Segment_3(p_, q_);
+        }
 };
 
 /**
@@ -314,32 +343,6 @@ std::pair<Matrix<RealType, Dynamic, 5>, RealType>
             f[0] = sc1.cylinder().eval(2, z0);
         std::cout << f[0].toString() << std::endl;
 
-        // TODO Think about how to make this run faster!
-        //
-        // If the two spherocylinders are not orthogonal to each other ... 
-        if (not_orthogonal)
-        {
-            // Identify the point along the centerline of spherocylinder 2 
-            // that intersects the plane z = z0 
-            RealType sint = sc2.planeIntersect(p, n1);
-            Matrix<RealType, 3, 1> pint = r2 + sint * n2;
-
-            // Identify the furthest possible point on the surface of
-            // spherocylinder 2 that lies between the two centerline points 
-            Matrix<RealType, 3, 1> sc2_to_sc1 = (p - pint) / (p - pint).norm();
-            RealType theta = std::acos(n2.dot(sc2_to_sc1));
-            Matrix<RealType, 3, 1> qint = pint + (R2 / std::sin(theta)) * sc2_to_sc1;
-
-            // If this point is more than the radius of spherocylinder 1 
-            // away from the point along the centerline of spherocylinder 1,
-            // then there is no intersection within the plane z = z0 
-            if ((p - qint).norm() > R1)
-            {
-                std::cout << "moving on\n";
-                continue;
-            }
-        }
-        
         // First, try calculating a circle-cylinder intersection
         std::cout << z0 << " getting circle-cylinder\n";
         f[1] = sc2.cylinder().eval(2, z0);
