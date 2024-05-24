@@ -19,7 +19,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/26/2024
+ *     5/23/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -101,6 +101,8 @@ std::string floatToString(T x, const int precision = 10)
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param adhesion_strength
+ * @param adhesion_force_delta
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -122,7 +124,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const T growth_mean,
                                          const T growth_std,
                                          const T daughter_length_std,
-                                         const T daughter_angle_bound)
+                                         const T daughter_angle_bound,
+                                         const T adhesion_strength,
+                                         const T adhesion_force_delta)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -158,6 +162,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
     // Compute initial array of neighboring cells
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+
+    // Allow adhesion between all pairs of neighboring cells 
+    Array<int, Dynamic, 1> to_adhere = Array<int, Dynamic, 1>::Ones(neighbors.rows()); 
 
     // Initialize velocities to zero
     Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4);
@@ -217,6 +224,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     params["growth_std"] = floatToString<T>(growth_std, precision);
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["adhesion_strength"] = floatToString<T>(adhesion_strength, precision);
+    params["adhesion_force_delta"] = floatToString<T>(adhesion_force_delta, precision);
 
     // Write the initial population to file
     if (write)
@@ -257,12 +266,16 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
         // Update neighboring cells if division has occurred
         if (to_divide.sum() > 0)
+        {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+            to_adhere = Array<int, Dynamic, 1>::Ones(neighbors.rows()); 
+        }
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-            A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-            surface_contact_density
+            A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
+            cell_cell_prefactors, surface_contact_density, adhesion_strength,
+            adhesion_force_delta
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 4> errors = std::get<1>(result);
@@ -278,8 +291,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             {
                 dt *= pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-                    A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-                    surface_contact_density
+                    A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
+                    cell_cell_prefactors, surface_contact_density,
+                    adhesion_strength, adhesion_force_delta
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
@@ -307,7 +321,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
         // Update neighboring cells 
         if (iter % iter_update_neighbors == 0)
+        {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+            to_adhere = Array<int, Dynamic, 1>::Ones(neighbors.rows()); 
+        }
         
         // Write the current population to file
         if (write && (iter % iter_write == 0))
@@ -378,6 +395,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param adhesion_strength
+ * @param adhesion_force_delta
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -403,8 +422,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const Ref<const Array<T, Dynamic, Dynamic> >& attribute_means,
                                          const Ref<const Array<T, Dynamic, Dynamic> >& attribute_stds,
                                          const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
-                                         const double daughter_length_std,
-                                         const double daughter_angle_bound)
+                                         const T daughter_length_std,
+                                         const T daughter_angle_bound, 
+                                         const T adhesion_strength, 
+                                         const T adhesion_force_delta)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -440,6 +461,15 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
     // Compute initial array of neighboring cells
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+
+    // Allow adhesion between all pairs of neighboring cells in state 1 
+    Array<int, Dynamic, 1> to_adhere = Array<int, Dynamic, 1>::Zero(neighbors.rows());
+    for (int k = 0; k < neighbors.rows(); ++k)
+    {
+        int ni = neighbors(k, 0); 
+        int nj = neighbors(k, 1); 
+        to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1); 
+    }
 
     // Initialize velocities to zero
     Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4);
@@ -559,6 +589,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["adhesion_strength"] = floatToString<T>(adhesion_strength, precision); 
+    params["adhesion_force_delta"] = floatToString<T>(adhesion_force_delta, precision);
 
     // Write the initial population to file
     if (write)
@@ -599,12 +631,22 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
         // Update neighboring cells if division has occurred
         if (to_divide.sum() > 0)
+        {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+            to_adhere.resize(neighbors.rows());
+            for (int k = 0; k < neighbors.rows(); ++k)
+            {
+                int ni = neighbors(k, 0); 
+                int nj = neighbors(k, 1); 
+                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1); 
+            }
+        }
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-            A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-            surface_contact_density
+            A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
+            cell_cell_prefactors, surface_contact_density, adhesion_strength,
+            adhesion_force_delta
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 4> errors = std::get<1>(result);
@@ -620,8 +662,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             {
                 dt *= pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
                 result = stepRungeKuttaAdaptiveFromNeighbors<T>(
-                    A, b, bs, cells, neighbors, dt, R, Rcell, cell_cell_prefactors,
-                    surface_contact_density
+                    A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
+                    cell_cell_prefactors, surface_contact_density,
+                    adhesion_strength, adhesion_force_delta
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
@@ -649,13 +692,28 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
         // Update neighboring cells 
         if (iter % iter_update_neighbors == 0)
+        {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+            to_adhere.resize(neighbors.rows());
+            for (int k = 0; k < neighbors.rows(); ++k)
+            {
+                int ni = neighbors(k, 0); 
+                int nj = neighbors(k, 1); 
+                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1); 
+            }
+        }
 
         // Switch cells between groups
         switchGroups<T>(
             cells, switch_attributes, n_groups, dt, switch_rates, growth_dists,
             attribute_dists, rng, uniform_dist
         );
+        for (int k = 0; k < neighbors.rows(); ++k)
+        {
+            int ni = neighbors(k, 0); 
+            int nj = neighbors(k, 1); 
+            to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1); 
+        }
         
         // Write the current population to file
         if (write && (iter % iter_write == 0))
