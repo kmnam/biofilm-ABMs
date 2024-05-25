@@ -201,6 +201,7 @@ MainType attractivePotential2D(const MainType x0, const MainType p0, const MainT
     Matrix<MainType, Dynamic, 1> terms = attractivePotentialHelper2D<MainType>(
         x0, p0, sin_theta, cot_theta, half_l1, half_l2
     );
+    std::cout << "terms :\n" << terms.transpose() << std::endl; 
 
     // Are any of the terms large in magnitude? 
     bool large = false; 
@@ -212,12 +213,14 @@ MainType attractivePotential2D(const MainType x0, const MainType p0, const MainT
             break;
         }
     }
+    std::cout << "large? " << large << std::endl; 
 
     // If so, re-compute the terms in PreciseType and calculate the corresponding
     // potential 
     MainType sum = 0;
     if (large)
     {
+        std::cout << "in precise mode\n";
         Matrix<PreciseType, Dynamic, 1> terms2 = attractivePotentialHelper2D<PreciseType>(
             static_cast<PreciseType>(x0),
             static_cast<PreciseType>(p0),
@@ -225,7 +228,8 @@ MainType attractivePotential2D(const MainType x0, const MainType p0, const MainT
             static_cast<PreciseType>(cot_theta),
             static_cast<PreciseType>(half_l1),
             static_cast<PreciseType>(half_l2)
-        ); 
+        );
+        std::cout << "terms2 : \n" << terms2.transpose() << std::endl;  
         sum = static_cast<MainType>(neumaierSum<PreciseType>(terms2));
     }
     else 
@@ -233,6 +237,8 @@ MainType attractivePotential2D(const MainType x0, const MainType p0, const MainT
         sum = neumaierSum<MainType>(terms);
     }
     MainType potential = -sum / (32 * sin_theta);
+    std::cout << "sum = " << sum << std::endl; 
+    std::cout << "potential = " << potential << std::endl; 
 
     return potential;
 }
@@ -249,11 +255,16 @@ MainType attractivePotential2D(const Ref<const Matrix<MainType, 3, 1> >& r1,
                                const Ref<const Matrix<MainType, 3, 1> >& n2,
                                const MainType half_l2, const K& kernel)
 {
-    MainType l1 = 2 * half_l1; 
-    MainType l2 = 2 * half_l2;
+    std::cout << r1.transpose() << std::endl; 
+    std::cout << n1.transpose() << std::endl; 
+    std::cout << half_l1 << std::endl; 
+    std::cout << r2.transpose() << std::endl; 
+    std::cout << n2.transpose() << std::endl; 
+    std::cout << half_l2 << std::endl; 
 
     // Are the two rods parallel?
     MainType cos_theta = n1.dot(n2);
+    std::cout << "cos_theta = " << cos_theta << std::endl; 
     if (cos_theta == 1)
     {
         // If so, get the separation between the two rods
@@ -298,7 +309,10 @@ MainType attractivePotential2D(const Ref<const Matrix<MainType, 3, 1> >& r1,
         MainType p0 = q2.norm();
         MainType phi = acos(q1.dot(q2) / (x0 * p0));
 
-        // Compute the corresponding potential 
+        // Compute the corresponding potential
+        std::cout << "x0 = " << x0 << std::endl; 
+        std::cout << "p0 = " << p0 << std::endl; 
+        std::cout << "phi = " << phi << std::endl; 
         return attractivePotential2D<MainType, PreciseType>(
             x0, p0, phi, half_l1, half_l2
         );
@@ -323,7 +337,8 @@ Matrix<MainType, 2, 4> attractiveForces2D(const Ref<const Matrix<MainType, 3, 1>
     
     // Compute each partial derivative as a finite-difference approximation
     Matrix<MainType, 8, 1> x;
-    x << r1(0), r1(1), n1(0), n1(1), r2(0), r2(1), n2(0), n2(1); 
+    x << r1(0), r1(1), n1(0), n1(1), r2(0), r2(1), n2(0), n2(1);
+    std::cout << x.transpose() << std::endl; 
     for (int i = 0; i < 8; ++i)
     {
         Matrix<MainType, 3, 1> rt1 = Matrix<MainType, 3, 1>::Zero();
