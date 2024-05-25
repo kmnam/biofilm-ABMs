@@ -323,7 +323,7 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  */
 template <typename T,
           typename PreciseType
-              = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<50> > >
+              = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<30> > >
 Array<T, Dynamic, 4> cellCellAdhesiveForcesFromNeighbors(
     const Ref<const Array<T, Dynamic, Dynamic> >& cells,
     const Ref<const Array<T, Dynamic, 6> >& neighbors,
@@ -405,7 +405,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForcesFromNeighbors(
  */
 template <typename T,
           typename PreciseType
-              = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<50> > >
+              = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<30> > >
 Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                                 const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                                 const Ref<const Array<int, Dynamic, 1> >& to_adhere,
@@ -523,7 +523,7 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  */
 template <typename T,
           typename PreciseType
-              = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<50> > >
+              = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<30> > >
 std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4> >
     stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& A,
                                         const Ref<const Array<T, Dynamic, 1> >& b,
