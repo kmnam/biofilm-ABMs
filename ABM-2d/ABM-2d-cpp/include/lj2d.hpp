@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     5/22/2024
+ *     6/8/2024
  */
 
 #ifndef ROD_LENNARD_JONES_POTENTIALS_2D_HPP
@@ -15,9 +15,6 @@
 #include <tuple>
 #include <Eigen/Dense>
 #include <boost/multiprecision/mpfr.hpp>
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Segment_3.h>
-#include "distances.hpp"
 
 using namespace Eigen;
 
@@ -25,6 +22,8 @@ using std::abs;
 using boost::multiprecision::abs;
 using std::pow;
 using boost::multiprecision::pow;
+using std::sqrt;
+using boost::multiprecision::sqrt; 
 using std::sin;
 using boost::multiprecision::sin; 
 using std::tan;
@@ -34,194 +33,289 @@ using boost::multiprecision::acos;
 using std::atan;
 using boost::multiprecision::atan;
 
-typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
-typedef K::Point_3 Point_3;
-typedef K::Segment_3 Segment_3;
-
+// -------------------------------------------------------------------- //
+//                           HELPER FUNCTIONS
+// -------------------------------------------------------------------- //
 /**
- * Compute the floating-point sum of two numbers and the corresponding 
- * round-off error via the Fast2Sum algorithm. 
+ * Get the perpendicular distance between two parallel lines in 2-D,
+ * where the two lines are parametrized as r1 + s * n and r2 + s * n.
  */
 template <typename T>
-std::pair<T, T> fast2Sum(const T a, const T b)
+T distBetweenLines(const Ref<const Matrix<T, 2, 1> >& r1,
+                   const Ref<const Matrix<T, 2, 1> >& r2, 
+                   const Ref<const Matrix<T, 2, 1> >& n)
 {
-    T s = a + b; 
-    T t = b - (s - a);
-    return std::make_pair(s, t);
+    T m = n(1) / n(0); 
+    T b1 = r1(1) - m * r1(0); 
+    T b2 = r2(1) - m * r2(0); 
+    return abs(b2 - b1) / sqrt(m * m + 1);
 }
 
 /**
- * Compute the recursive sum of the given vector of floating-point numbers.
+ * Get the projection of the given point `p` onto the line passing through
+ * `q` which is parallel to the unit vector `n`. 
  */
 template <typename T>
-T vecSum(const Ref<const Matrix<T, Dynamic, 1> >& x)
+Matrix<T, 2, 1> projectPointOntoLine(const Ref<const Matrix<T, 2, 1> >& p,
+                                     const Ref<const Matrix<T, 2, 1> >& q,
+                                     const Ref<const Matrix<T, 2, 1> >& n)
 {
-    T sum = 0;    // Running sum
-    for (const T& a : x)
-        sum += a;
-    return sum;
+    return q + (p - q).dot(n) * n;
+}
+
+// -------------------------------------------------------------------- //
+//                ATTRACTIVE POTENTIAL FOR COLLINEAR RODS               //
+// -------------------------------------------------------------------- //
+/**
+ * Compute the four terms that contribute to the 2-D attractive potential 
+ * between two collinear spherocylindrical rods. 
+ */
+template <typename T>
+Matrix<T, 4, 1> attractivePotentialCollinearTerms2D(const T x0, const T p0,
+                                                    const T half_l1, 
+                                                    const T half_l2)
+{
+    // Compute the terms that contribute to the potential 
+    T offset = x0 - p0; 
+    Matrix<T, 4, 1> terms;
+    terms << pow(offset + half_l1 + half_l2, -4.0),
+             -pow(offset + half_l1 - half_l2, -4.0),
+             -pow(offset - half_l1 + half_l2, -4.0),
+             pow(offset - half_l1 - half_l2, -4.0);
+
+    return terms;
 }
 
 /**
- * Compute the sum of the given vector of floating-point numbers using 
- * Kahan summation. 
- */
-template <typename T>
-T kahanSum(const Ref<const Matrix<T, Dynamic, 1> >& x)
-{
-    T sum = 0;    // Running sum 
-    T c = 0;      // Running compensation
-    for (const T& a : x)
-    {
-        T y = a + c; 
-        auto result = fast2Sum(sum, y);
-        sum = result.first; 
-        c = result.second;
-    }
-
-    return sum; 
-}
-
-/**
- * Compute the sum of the given vector of floating-point numbers using 
- * Neumaier summation. 
- */
-template <typename T>
-T neumaierSum(const Ref<const Matrix<T, Dynamic, 1> >& x)
-{
-    T sum = 0;    // Running sum
-    T c = 0;      // Running compensation
-    for (const T& a : x)
-    {
-        T y = sum + a;
-        if (abs(sum) >= abs(a))
-            c += (sum - y) + a;
-        else    // abs(sum) < abs(a)
-            c += (a - y) + sum;
-        sum = y;
-    }
-
-    return sum + c;
-}
-
-/**
- * Compute the helper function for the 2-D attractive potential between 
- * two parallel spherocylindrical rods. 
- */
-template <typename T>
-T attractivePotentialParallelHelper2D(const T x, const T a, const T r)
-{
-    T term1 = 1.0 / (8 * r * r * (pow(a - x, 2) + r * r));
-    T term2 = -3 * (a - x) / (8 * pow(r, 5)) * atan((a - x) / r);
-    return term1 + term2;
-}
-
-/**
- * Compute the 2-D attractive potential between two parallel spherocylindrical 
+ * Compute the 2-D attractive potential between two collinear spherocylindrical 
  * rods. 
  */
 template <typename T>
-T attractivePotentialParallel2D(const T x0, const T p0, const T r, const T half_l1,
-                                const T half_l2)
+T attractivePotentialCollinear2D(const Ref<const Matrix<T, 2, 1> >& r1, 
+                                 const T half_l1, 
+                                 const Ref<const Matrix<T, 2, 1> >& r2, 
+                                 const T half_l2)
 {
-    T term1 = attractivePotentialParallelHelper2D<T>(x0 + half_l1, p0 + half_l2, r); 
-    T term2 = attractivePotentialParallelHelper2D<T>(x0 + half_l1, p0 - half_l2, r); 
-    T term3 = attractivePotentialParallelHelper2D<T>(x0 - half_l1, p0 + half_l2, r); 
-    T term4 = attractivePotentialParallelHelper2D<T>(x0 - half_l1, p0 - half_l2, r);
-    return -(term1 - term2 - term3 + term4);
+    // Compute the arguments to pass to the helper function
+    T x0 = 0; 
+    T p0 = (r2 - r1).norm();
+
+    // Compute the terms contributing to the potential in T
+    Matrix<T, 4, 1> terms = attractivePotentialCollinearTerms2D<T>(
+        x0, p0, half_l1, half_l2
+    );
+    T sum = terms.sum();
+
+    return -sum / 20.0;
 }
 
+// -------------------------------------------------------------------- //
+//                ATTRACTIVE POTENTIAL FOR PARALLEL RODS                //
+// -------------------------------------------------------------------- //
 /**
- * Compute the 12 terms that contribute to the 2-D attractive potential
- * between two skew spherocylindrical rods. 
+ * Compute the eight terms that contribute to the 2-D attractive potential 
+ * between two parallel spherocylindrical rods. 
  */
 template <typename T>
-Matrix<T, Dynamic, 1> attractivePotentialHelper2D(const T x0, const T p0,
-                                                  const T sin_theta,
-                                                  const T cot_theta,
-                                                  const T half_l1,
-                                                  const T half_l2)
+Matrix<T, 8, 1> attractivePotentialParallelTerms2D(const T x0, const T p0,
+                                                   const T r, const T half_l1,
+                                                   const T half_l2)
 {
-    // Compute the terms that contribute to the potential (4 groups of 3)
-    Matrix<T, Dynamic, Dynamic> terms = Matrix<T, Dynamic, Dynamic>::Zero(4, 3);
+    // Compute the terms that contribute to the potential (4 groups of 2)
+    Matrix<T, 8, 1> terms = Matrix<T, 8, 1>::Zero();
     std::vector<T> delta1 { half_l1, -half_l1 }; 
     std::vector<T> delta2 { half_l2, -half_l2 };
-    const T b = cot_theta; 
-    const T c = sin_theta;
     int i = 0;
     for (const T& d1 : delta1)
     {
         for (const T& d2 : delta2)
         {
             T x = x0 + d1; 
-            T a = (p0 + d2) * c;
-            T arg1 = b - (x / a);
-            T arg2 = -((b * b + 1) * a - b * x) / x;
-            T term1 = 3 * atan(arg1) / pow(a, 4);
-            T term2a = b * b + 1;
-            T term2b = 3 * pow(term2a, 2) * pow(a, 4);
-            T term2c = -3 * b * term2a * pow(a, 3) * x; 
-            T term2d = 2 * a * a * x * x; 
-            T term2e = -3 * b * a * pow(x, 3); 
-            T term2f = 3 * pow(x, 4);
-            T term2g = pow(a, 3) * pow(x, 3); 
-            T term2h = a * a * term2a; 
-            T term2i = -2 * b * a * x; 
-            T term2j = x * x;
-            Matrix<T, Dynamic, 1> numer(5);
-            Matrix<T, Dynamic, 1> denom(3); 
-            numer << term2b, term2c, term2d, term2e, term2f; 
-            denom << term2h, term2i, term2j; 
-            T term2 = -vecSum<T>(numer) / (term2g * vecSum<T>(denom));
-            T term3 = 3 * pow(term2a, 2) * atan(arg2) / pow(x, 4);
-            terms(i, 0) = term1; 
-            terms(i, 1) = term2; 
-            terms(i, 2) = term3;
+            T a = p0 + d2;
+            T r2 = r * r; 
+            T offset = a - x;
+            T term1 = 1.0 / (8 * r2 * (pow(offset, 2) + r2));
+            T term2 = -3 * offset / (8 * pow(r, 5)) * atan(offset / r);
+            terms(i) = term1; 
+            terms(4 + i) = term2;
             i++;
         }
     }
 
     // Negate half the terms and re-organize into a vector 
-    terms.row(1) *= -1; 
-    terms.row(2) *= -1;
-    return terms.reshaped(12, 1);
+    terms(1) *= -1;
+    terms(2) *= -1; 
+    terms(5) *= -1; 
+    terms(6) *= -1;
+    return terms;
+}
+
+/**
+ * Compute the 2-D attractive potential between two parallel spherocylindrical 
+ * rods.
+ *
+ * Here, the orientation vector of spherocylinder 2 is assumed to be the same 
+ * as the orientation vector of spherocylinder 1, given here as `n1`.
+ */
+template <typename T>
+T attractivePotentialParallel2D(const Ref<const Matrix<T, 2, 1> >& r1, 
+                                const Ref<const Matrix<T, 2, 1> >& n1, 
+                                const T half_l1,
+                                const Ref<const Matrix<T, 2, 1> >& r2,
+                                const T half_l2, const T dist)
+{
+    // Compute the arguments to pass to the helper function
+    //
+    // Set x0 to 0 and set p0 to the position of rod 2 when projected 
+    // onto the axis of rod 1
+    T x0 = 0;
+    Matrix<T, 2, 1> v2 = projectPointOntoLine<T>(r2, r1, n1);
+    T p0 = (v2 - r1).norm();
+
+    // Compute the terms contributing to the potential in MainType
+    Matrix<T, 8, 1> terms = attractivePotentialParallelTerms2D<T>(
+        x0, p0, dist, half_l1, half_l2
+    );
+    T sum = terms.sum();
+
+    return -sum;
+}
+
+// -------------------------------------------------------------------- //
+//                  ATTRACTIVE POTENTIAL FOR SKEW RODS                  //
+// -------------------------------------------------------------------- //
+/**
+ * Compute the 8 terms that contribute to the 2-D attractive potential
+ * between two skew spherocylindrical rods.
+ *
+ * The terms are arranged as a vector, with elements:
+ *
+ * [  G1(x2, a2, b) - G1(x1, a2, b)  ]
+ * [  G1(x1, a1, b) - G1(x2, a1, b)  ]
+ * [         -G2(x1, a1, b)          ]
+ * [         +G2(x1, a2, b)          ]
+ * [         +G2(x2, a1, b)          ]
+ * [         -G2(x2, a2, b)          ]
+ * [  G3(x2, a2, b) - G3(x2, a1, b)  ]
+ * [  G3(x1, a1, b) - G3(x1, a2, b)  ],
+ *
+ * where G1, G2, and G3 are the three terms in the function G(x, a, b).
+ */
+template <typename T>
+Matrix<T, 8, 1> attractivePotentialSkewTerms2D(const T x0, const T p0,
+                                               const T sin_theta,
+                                               const T cot_theta,
+                                               const T half_l1,
+                                               const T half_l2)
+{
+    // Compute the terms that contribute to the potential
+    Matrix<T, 8, 1> terms = Matrix<T, 8, 1>::Zero();
+    const T x1 = x0 - half_l1; 
+    const T x2 = x0 + half_l1;
+    const T a1 = (p0 - half_l2) * sin_theta; 
+    const T a2 = (p0 + half_l2) * sin_theta; 
+    const T b = cot_theta; 
+    const T b2_plus1 = b * b + 1; 
+    const T b2_plus1_sq = b2_plus1 * b2_plus1;
+
+    // The first two terms are differences of arctangents
+    const T x1_2 = x1 * x1; 
+    const T x1_3 = x1_2 * x1; 
+    const T x1_4 = x1_3 * x1;
+    const T x2_2 = x2 * x2; 
+    const T x2_3 = x2_2 * x2; 
+    const T x2_4 = x2_3 * x2;
+    const T a1_2 = a1 * a1; 
+    const T a1_3 = a1_2 * a1; 
+    const T a1_4 = a1_3 * a1; 
+    const T a2_2 = a2 * a2; 
+    const T a2_3 = a2_2 * a2; 
+    const T a2_4 = a2_3 * a2;
+    const T arg1 = b - (x2 / a2); 
+    const T arg2 = b - (x1 / a2);
+    const T arg3 = b - (x1 / a1); 
+    const T arg4 = b - (x2 / a1);
+    terms(0) = 3 * (atan(arg1) - atan(arg2)) / a2_4;
+    terms(1) = 3 * (atan(arg3) - atan(arg4)) / a1_4;
+
+    // The last two terms are also differences of arctangents
+    const T arg5 = -(b2_plus1 * a2 / x2 - b); 
+    const T arg6 = -(b2_plus1 * a1 / x2 - b);
+    const T arg7 = -(b2_plus1 * a1 / x1 - b);
+    const T arg8 = -(b2_plus1 * a2 / x1 - b);
+    terms(6) = 3 * b2_plus1_sq * (atan(arg5) - atan(arg6)) / x2_4;
+    terms(7) = 3 * b2_plus1_sq * (atan(arg7) - atan(arg8)) / x1_4;
+
+    // Compute the middle four terms
+    //
+    // The first middle term is for x = x1, a = a1
+    const T numer1 = 3 * b2_plus1_sq * a1_4 - 3 * b * b2_plus1 * a1_3 * x1 + 2 * a1_2 * x1_2 - 3 * b * a1 * x1_3 + 3 * x1_4;
+    const T denom1 = a1_3 * x1_3 * (a1_2 * b2_plus1 - 2 * b * a1 * x1 + x1_2);
+    terms(2) = -numer1 / denom1;
+
+    // The second middle term is for x = x1, a = a2
+    const T numer2 = 3 * b2_plus1_sq * a2_4 - 3 * b * b2_plus1 * a2_3 * x1 + 2 * a2_2 * x1_2 - 3 * b * a2 * x1_3 + 3 * x1_4; 
+    const T denom2 = a2_3 * x1_3 * (a2_2 * b2_plus1 - 2 * b * a2 * x1 + x1_2); 
+    terms(3) = numer2 / denom2; 
+
+    // The third middle term is for x = x2, a = a1
+    const T numer3 = 3 * b2_plus1_sq * a1_4 - 3 * b * b2_plus1 * a1_3 * x2 + 2 * a1_2 * x2_2 - 3 * b * a1 * x2_3 + 3 * x2_4;
+    const T denom3 = a1_3 * x2_3 * (a1_2 * b2_plus1 - 2 * b * a1 * x2 + x2_2);
+    terms(4) = numer3 / denom3;
+
+    // The fourth middle term is for x = x2, a = a2
+    const T numer4 = 3 * b2_plus1_sq * a2_4 - 3 * b * b2_plus1 * a2_3 * x2 + 2 * a2_2 * x2_2 - 3 * b * a2 * x2_3 + 3 * x2_4; 
+    const T denom4 = a2_3 * x2_3 * (a2_2 * b2_plus1 - 2 * b * a2 * x2 + x2_2); 
+    terms(5) = -numer4 / denom4;
+
+    return terms; 
 }
 
 /**
  * Compute the 2-D attractive potential between two skew spherocylindrical rods.
  */
 template <typename MainType, typename PreciseType>
-MainType attractivePotential2D(const MainType x0, const MainType p0, const MainType theta,
-                               const MainType half_l1, const MainType half_l2)
+MainType attractivePotentialSkew2D(const Ref<const Matrix<MainType, 2, 1> >& r1,
+                                   const Ref<const Matrix<MainType, 2, 1> >& n1,
+                                   const MainType half_l1,
+                                   const Ref<const Matrix<MainType, 2, 1> >& r2,
+                                   const Ref<const Matrix<MainType, 2, 1> >& n2,
+                                   const MainType half_l2)
 {
+    // Identify the intersection of the lines spanned by the orientation vectors
+    Matrix<MainType, 2, 2> A; 
+    A << n1(0), -n2(0),
+         n1(1), -n2(1); 
+    Matrix<MainType, 2, 1> b = r2 - r1;
+    Matrix<MainType, 2, 1> y = A.partialPivLu().solve(b);
+    Matrix<MainType, 2, 1> origin = r1 + y(0) * n1; 
+
+    // Find the angle formed by the two rods with respect to the origin
+    Matrix<MainType, 2, 1> v1 = r1 - origin; 
+    Matrix<MainType, 2, 1> v2 = r2 - origin;
+    MainType x0 = v1.norm(); 
+    MainType p0 = v2.norm();
+    MainType theta = acos(v1.dot(v2) / (x0 * p0));
     MainType cot_theta = 1.0 / tan(theta); 
     MainType sin_theta = sin(theta);
 
     // First compute the terms contributing to the potential in MainType
-    Matrix<MainType, Dynamic, 1> terms = attractivePotentialHelper2D<MainType>(
+    Matrix<MainType, 8, 1> terms = attractivePotentialSkewTerms2D<MainType>(
         x0, p0, sin_theta, cot_theta, half_l1, half_l2
     );
-    std::cout << "terms :\n" << terms.transpose() << std::endl; 
 
-    // Are any of the terms large in magnitude? 
-    bool large = false; 
-    for (const MainType& term : terms)
-    {
-        if (abs(term) > 1e+8)
-        {
-            large = true; 
-            break;
-        }
-    }
-    std::cout << "large? " << large << std::endl; 
+    // What is the gap between the largest and smallest term?
+    Matrix<MainType, 8, 1> abs_terms = terms.cwiseAbs(); 
+    MainType max_term = abs_terms.maxCoeff(); 
+    MainType min_term = abs_terms.minCoeff();
+    bool large_diff = (max_term - min_term > 1e+10);
 
     // If so, re-compute the terms in PreciseType and calculate the corresponding
     // potential 
     MainType sum = 0;
-    if (large)
+    if (large_diff)
     {
-        std::cout << "in precise mode\n";
-        Matrix<PreciseType, Dynamic, 1> terms2 = attractivePotentialHelper2D<PreciseType>(
+        Matrix<PreciseType, 8, 1> terms2 = attractivePotentialSkewTerms2D<PreciseType>(
             static_cast<PreciseType>(x0),
             static_cast<PreciseType>(p0),
             static_cast<PreciseType>(sin_theta),
@@ -229,92 +323,68 @@ MainType attractivePotential2D(const MainType x0, const MainType p0, const MainT
             static_cast<PreciseType>(half_l1),
             static_cast<PreciseType>(half_l2)
         );
-        std::cout << "terms2 : \n" << terms2.transpose() << std::endl;  
-        sum = static_cast<MainType>(neumaierSum<PreciseType>(terms2));
+        sum = static_cast<MainType>(terms2.sum());
     }
     else 
     {
-        sum = neumaierSum<MainType>(terms);
+        sum = terms.sum();
     }
     MainType potential = -sum / (32 * sin_theta);
-    std::cout << "sum = " << sum << std::endl; 
-    std::cout << "potential = " << potential << std::endl; 
 
     return potential;
 }
 
+// -------------------------------------------------------------------- //
+//             COMPOSITE FUNCTIONS FOR POTENTIAL AND FORCES             //
+// -------------------------------------------------------------------- //
 /**
  * Compute the 2-D attractive potential between two spherocylindrical rods
  * from their center orientations, orientation vectors, and lengths. 
  */
 template <typename MainType, typename PreciseType>
-MainType attractivePotential2D(const Ref<const Matrix<MainType, 3, 1> >& r1, 
-                               const Ref<const Matrix<MainType, 3, 1> >& n1,
-                               const MainType half_l1, 
-                               const Ref<const Matrix<MainType, 3, 1> >& r2, 
-                               const Ref<const Matrix<MainType, 3, 1> >& n2,
-                               const MainType half_l2, const K& kernel)
+MainType attractivePotentialLJ2D(const Ref<const Matrix<MainType, 2, 1> >& r1, 
+                                 const Ref<const Matrix<MainType, 2, 1> >& n1,
+                                 const MainType half_l1, 
+                                 const Ref<const Matrix<MainType, 2, 1> >& r2, 
+                                 const Ref<const Matrix<MainType, 2, 1> >& n2,
+                                 const MainType half_l2,
+                                 const MainType cos_eps_parallel,
+                                 const MainType eps_collinear)
 {
-    std::cout << r1.transpose() << std::endl; 
-    std::cout << n1.transpose() << std::endl; 
-    std::cout << half_l1 << std::endl; 
-    std::cout << r2.transpose() << std::endl; 
-    std::cout << n2.transpose() << std::endl; 
-    std::cout << half_l2 << std::endl; 
+    // Get the angle formed by the two orientation vectors
+    MainType cos_theta = n1.dot(n2); 
+    if (cos_theta <= -1)    // Note that cos(theta) should lie between -1 and 1
+        cos_theta = -1;
+    else if (cos_theta >= 1)
+        cos_theta = 1;
 
     // Are the two rods parallel?
-    MainType cos_theta = n1.dot(n2);
-    std::cout << "cos_theta = " << cos_theta << std::endl; 
-    if (cos_theta == 1)
+    if (cos_theta > cos_eps_parallel || cos_theta < -cos_eps_parallel)
     {
-        // If so, get the separation between the two rods
-        Matrix<double, 3, 1> p1 = (r1 - half_l1 * n1).template cast<double>(); 
-        Matrix<double, 3, 1> q1 = (r1 + half_l1 * n1).template cast<double>();
-        Matrix<double, 3, 1> p2 = (r2 - half_l2 * n2).template cast<double>();
-        Matrix<double, 3, 1> q2 = (r2 + half_l2 * n2).template cast<double>();
-        Point_3 p1_(p1(0), p1(1), p1(2)); 
-        Point_3 q1_(q1(0), q1(1), q1(2)); 
-        Point_3 p2_(p2(0), p2(1), p2(2)); 
-        Point_3 q2_(q2(0), q2(1), q2(2)); 
-        Segment_3 seg1(p1_, q1_), seg2(p2_, q2_);
-        auto result = distBetweenCells<MainType>(
-            seg1, seg2, r1.head(2), n1.head(2), half_l1, r2.head(2), n2.head(2),
-            half_l2, kernel
-        );
-        MainType dist = static_cast<MainType>(std::get<0>(result).norm());
+        // If so, get the perpendicular distance between the axes of the two rods
+        MainType dist1 = distBetweenLines<MainType>(r1, r2, n1);
+        MainType dist2 = distBetweenLines<MainType>(r1, r2, n2);
+        MainType dist = (dist1 + dist2) / 2.0;
 
-        // Set x0 to 0 and set p0 to the position of rod 2 when projected 
-        // onto the axis of rod 1
-        MainType x0 = 0;
-        MainType p0;    // TODO What to set for p0?
-        return attractivePotentialParallel2D<MainType>(x0, p0, dist, half_l1, half_l2); 
+        // Is the distance close to zero (are the axes actually collinear)? 
+        if (dist < eps_collinear)
+        {
+            return attractivePotentialCollinear2D<MainType>(
+                r1, half_l1, r2, half_l2
+            );
+        }
+        else 
+        {
+            return attractivePotentialParallel2D<MainType>(
+                r1, n1, half_l1, r2, half_l2, dist
+            );
+        }
     }
+    // Otherwise, the two rods are skew 
     else 
     {
-        // If not, identify the intersection of the lines spanned by the
-        // orientation vectors
-        Matrix<MainType, 3, 1> origin;
-        Matrix<MainType, 2, 2> A; 
-        A << n1(0), -n2(0),
-             n1(1), -n2(1); 
-        Matrix<MainType, 2, 1> b = r2.head(2) - r1.head(2); 
-        Matrix<MainType, 2, 1> y = A.partialPivLu().solve(b);
-        Matrix<MainType, 2, 1> z = r1.head(2) + y(0) * n1.head(2); 
-        origin << z(0), z(1), 0;
-
-        // Find the angle formed by the two rods with respect to the origin
-        Matrix<MainType, 3, 1> q1 = r1 - origin; 
-        Matrix<MainType, 3, 1> q2 = r2 - origin;
-        MainType x0 = q1.norm(); 
-        MainType p0 = q2.norm();
-        MainType phi = acos(q1.dot(q2) / (x0 * p0));
-
-        // Compute the corresponding potential
-        std::cout << "x0 = " << x0 << std::endl; 
-        std::cout << "p0 = " << p0 << std::endl; 
-        std::cout << "phi = " << phi << std::endl; 
-        return attractivePotential2D<MainType, PreciseType>(
-            x0, p0, phi, half_l1, half_l2
+        return attractivePotentialSkew2D<MainType, PreciseType>(
+            r1, n1, half_l1, r2, n2, half_l2
         );
     }
 }
@@ -324,46 +394,53 @@ MainType attractivePotential2D(const Ref<const Matrix<MainType, 3, 1> >& r1,
  * between two spherocylindrical rods. 
  */
 template <typename MainType, typename PreciseType>
-Matrix<MainType, 2, 4> attractiveForces2D(const Ref<const Matrix<MainType, 3, 1> >& r1,
-                                          const Ref<const Matrix<MainType, 3, 1> >& n1, 
-                                          const MainType half_l1, 
-                                          const Ref<const Matrix<MainType, 3, 1> >& r2, 
-                                          const Ref<const Matrix<MainType, 3, 1> >& n2, 
-                                          const MainType half_l2,
-                                          const MainType delta, 
-                                          const K& kernel) 
+Matrix<MainType, 2, 4> attractiveForcesLJ2D(const Ref<const Matrix<MainType, 2, 1> >& r1,
+                                            const Ref<const Matrix<MainType, 2, 1> >& n1, 
+                                            const MainType half_l1, 
+                                            const Ref<const Matrix<MainType, 2, 1> >& r2, 
+                                            const Ref<const Matrix<MainType, 2, 1> >& n2, 
+                                            const MainType half_l2,
+                                            const MainType cos_eps_parallel, 
+                                            const MainType eps_collinear,
+                                            const MainType delta) 
 {
     Matrix<MainType, 2, 4> dEdq; 
     
     // Compute each partial derivative as a finite-difference approximation
-    Matrix<MainType, 8, 1> x;
-    x << r1(0), r1(1), n1(0), n1(1), r2(0), r2(1), n2(0), n2(1);
-    std::cout << x.transpose() << std::endl; 
-    for (int i = 0; i < 8; ++i)
+    Matrix<MainType, 6, 1> x;
+    x << r1(0), r1(1), n1(0), n1(1), n2(0), n2(1);
+    for (int i = 0; i < 6; ++i)
     {
-        Matrix<MainType, 3, 1> rt1 = Matrix<MainType, 3, 1>::Zero();
-        Matrix<MainType, 3, 1> nt1 = Matrix<MainType, 3, 1>::Zero();
-        Matrix<MainType, 3, 1> rt2 = Matrix<MainType, 3, 1>::Zero();
-        Matrix<MainType, 3, 1> nt2 = Matrix<MainType, 3, 1>::Zero();
         x(i) += delta;
-        rt1.head(2) = x(Eigen::seq(0, 1)); 
-        nt1.head(2) = x(Eigen::seq(2, 3)) / x(Eigen::seq(2, 3)).norm(); 
-        rt2.head(2) = x(Eigen::seq(4, 5)); 
-        nt2.head(2) = x(Eigen::seq(6, 7)) / x(Eigen::seq(6, 7)).norm();
-        MainType term1 = attractivePotential2D<MainType, PreciseType>(
-            rt1, nt1, half_l1, rt2, nt2, half_l2, kernel
+        Matrix<MainType, 2, 1> rt1 = x(Eigen::seq(0, 1)); 
+        Matrix<MainType, 2, 1> nt1 = x(Eigen::seq(2, 3)) / x(Eigen::seq(2, 3)).norm(); 
+        Matrix<MainType, 2, 1> nt2 = x(Eigen::seq(4, 5)) / x(Eigen::seq(4, 5)).norm();
+        MainType term1 = attractivePotentialLJ2D<MainType, PreciseType>(
+            rt1, nt1, half_l1, r2, nt2, half_l2, cos_eps_parallel,
+            eps_collinear
         );
         x(i) -= 2 * delta;
-        rt1.head(2) = x(Eigen::seq(0, 1)); 
-        nt1.head(2) = x(Eigen::seq(2, 3)) / x(Eigen::seq(2, 3)).norm(); 
-        rt2.head(2) = x(Eigen::seq(4, 5)); 
-        nt2.head(2) = x(Eigen::seq(6, 7)) / x(Eigen::seq(6, 7)).norm();
-        MainType term2 = attractivePotential2D<MainType, PreciseType>(
-            rt1, nt1, half_l1, rt2, nt2, half_l2, kernel
+        rt1 = x(Eigen::seq(0, 1)); 
+        nt1 = x(Eigen::seq(2, 3)) / x(Eigen::seq(2, 3)).norm(); 
+        nt2 = x(Eigen::seq(4, 5)) / x(Eigen::seq(4, 5)).norm();
+        MainType term2 = attractivePotentialLJ2D<MainType, PreciseType>(
+            rt1, nt1, half_l1, r2, nt2, half_l2, cos_eps_parallel,
+            eps_collinear
         );
-        int j = static_cast<int>(i / 4);
-        int k = i % 4;
-        dEdq(j, k) = (term1 - term2) / (2 * delta);
+        MainType deriv = (term1 - term2) / (2 * delta); 
+        if (i == 0 || i == 1)
+        {
+            dEdq(0, i) = deriv; 
+            dEdq(1, i) = -deriv;
+        }
+        else if (i == 2 || i == 3)
+        {
+            dEdq(0, i) = deriv; 
+        }
+        else    // i == 4 || i == 5
+        {
+            dEdq(1, i - 2) = deriv; 
+        }
         x(i) += delta;
     }
 
