@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     5/22/2024
+ *     6/9/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -40,11 +40,23 @@
 #include <CGAL/Segment_3.h>
 #include "distances.hpp"
 #include "lj2d.hpp"
+#include "kihara.hpp"
 
 using namespace Eigen;
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Segment_3 Segment_3;
+
+/**
+ * An enum that enumerates the different adhesion force types. 
+ */
+enum AdhesionMode
+{
+    NONE,
+    KIHARA,
+    GBK,
+    LJ
+}; 
 
 /**
  * Compute the derivatives of the dissipation due to bulk viscosity and 
@@ -230,10 +242,10 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  *          to cell positions and orientations.   
  */
 template <typename T>
-Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                                 const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                                 const T R, const T Rcell,
-                                                 const Ref<const Array<T, 4, 1> >& prefactors)
+Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                             const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                             const T R, const T Rcell,
+                                             const Ref<const Array<T, 4, 1> >& prefactors)
 {
     int n = cells.rows();   // Number of cells
 
@@ -303,6 +315,8 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
 }
 
 /**
+ * TODO Update
+ *
  * Compute the derivatives of the cell-cell adhesion energies, modeled as 
  * Lennard-Jones attractive interactive energies, for each cell with respect
  * to the cell's position and orientation coordinates.
@@ -316,19 +330,19 @@ Array<T, Dynamic, 4> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  * @param to_adhere Boolean array specifying whether, for each pair of 
  *                  neighboring cells, the adhesive force is nonzero. 
  * @param R Cell radius, including the EPS. 
- * @param strength Generalized adhesion strength parameter.
- * @param delta Increment for finite-difference approximation. 
+ * @param mode
+ * @param params
  * @returns Derivatives of the cell-cell adhesion energies with respect to  
  *          cell positions and orientations.   
  */
 template <typename T,
           typename PreciseType
               = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<30> > >
-Array<T, Dynamic, 4> cellCellAdhesiveForcesFromNeighbors(
-    const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-    const Ref<const Array<T, Dynamic, 6> >& neighbors,
-    const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-    const T R, const T strength, const T delta)
+Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                            const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                            const Ref<const Array<int, Dynamic, 1> >& to_adhere,
+                                            const T R, const AdhesionMode mode, 
+                                            std::unordered_map<std::string, T>& params)
 {
     int n = cells.rows();   // Number of cells
 
@@ -358,30 +372,75 @@ Array<T, Dynamic, 4> cellCellAdhesiveForcesFromNeighbors(
         if (to_adhere(k) && overlaps(k) > 0)
         {
             // Extract the cell position and orientation vectors 
-            Matrix<T, 3, 1> ri = Matrix<T, 3, 1>::Zero();
-            Matrix<T, 3, 1> ni = Matrix<T, 3, 1>::Zero();
-            Matrix<T, 3, 1> rj = Matrix<T, 3, 1>::Zero();
-            Matrix<T, 3, 1> nj = Matrix<T, 3, 1>::Zero(); 
-            ri.head(2) = cells(i, Eigen::seq(0, 1)).matrix();
-            ni.head(2) = cells(i, Eigen::seq(2, 3)).matrix();
-            rj.head(2) = cells(j, Eigen::seq(0, 1)).matrix();
-            nj.head(2) = cells(j, Eigen::seq(2, 3)).matrix();
+            Matrix<T, 2, 1> ri = cells(i, Eigen::seq(0, 1)).matrix();
+            Matrix<T, 2, 1> ni = cells(i, Eigen::seq(2, 3)).matrix();
+            Matrix<T, 2, 1> rj = cells(j, Eigen::seq(0, 1)).matrix();
+            Matrix<T, 2, 1> nj = cells(j, Eigen::seq(2, 3)).matrix();
             T half_li = cells(i, 5);
             T half_lj = cells(j, 5);
+            Matrix<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3)).matrix();
+            T si = neighbors(k, 4); 
+            T sj = neighbors(k, 5); 
 
-            // Get the corresponding forces 
-            Matrix<T, 2, 4> forces = attractiveForces2D<T, PreciseType>(
-                ri, ni, half_li, rj, nj, half_lj, delta, kernel
-            );
+            // Get the corresponding forces
+            Matrix<T, 2, 4> forces; 
+            if (mode == KIHARA) 
+            {
+                const T strength = params["strength"];
+                forces = strength * attractiveForcesKihara2D<T>(
+                    ri, ni, half_li, rj, nj, half_lj, dij, si, sj
+                );
+            }
+            else if (mode == LJ)
+            {
+                const T strength = params["strength"];
+                const T cos_eps_parallel = params["cos_eps_parallel"]; 
+                const T eps_collinear = params["eps_collinear"];  
+                const T delta = params["delta"]; 
+                forces = strength * attractiveForcesLJ2D<T, PreciseType>(
+                    ri, ni, half_li, rj, nj, half_lj, cos_eps_parallel, 
+                    eps_collinear, delta
+                ); 
+            }
+            else if (mode == GBK)
+            {
+                const T strength = params["strength"];
+                const T exp1 = params["anisotropy_exp1"];
+                const T exp2 = params["anisotropy_exp2"];
+                const T well_depth_delta = params["well_depth_delta"];
+                forces = strength * attractiveForcesGBK2D<T>(
+                    ri, ni, half_li, rj, nj, half_lj, R, dij, si, sj, exp1,
+                    exp2, well_depth_delta
+                ); 
+            }
+            /*
+            if (forces.array().isNaN().any())
+            {
+                std::cout << "found nan in adhesive forces!\n";
+                std::cout << "i = " << i << " ; j = " << j << std::endl; 
+                std::cout << ri.transpose() << " | " << ni.transpose() << std::endl;
+                std::cout << rj.transpose() << " | " << nj.transpose() << std::endl; 
+                std::cout << half_li << std::endl; 
+                std::cout << half_lj << std::endl; 
+                std::cout << forces << std::endl;
+                attractiveForces2D<T, PreciseType>(
+                    ri, ni, half_li, rj, nj, half_lj, abs_cos_eps_parallel, 
+                    eps_collinear, delta
+                );
+                throw std::runtime_error("exiting now");
+            }
+            */
             dEdq.row(i) += forces.row(0).array(); 
             dEdq.row(j) += forces.row(1).array();
         }
     }
 
-    return strength * dEdq;   // Scale all forces by the adhesion strength  
+    return dEdq;
 }
 
 /**
+ * TODO Update
+ *
  * Given the current positions, orientations, lengths, viscosity coefficients,
  * and surface friction coefficients for the given population of cells, compute
  * their translational and orientational velocities.
@@ -399,21 +458,21 @@ Array<T, Dynamic, 4> cellCellAdhesiveForcesFromNeighbors(
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
- * @param adhesion_strength
- * @param delta
+ * @param adhesion_mode
+ * @param adhesion_params
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T,
           typename PreciseType
               = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<30> > >
-Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                                const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                                const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                                                const T R, const T Rcell,
-                                                const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                                                const T surface_contact_density,
-                                                const T adhesion_strength,
-                                                const T delta)
+Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                   const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                   const Ref<const Array<int, Dynamic, 1> >& to_adhere,
+                                   const T R, const T Rcell,
+                                   const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                                   const T surface_contact_density,
+                                   const AdhesionMode adhesion_mode,
+                                   std::unordered_map<std::string, T>& adhesion_params)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -449,15 +508,17 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     );
     Array<T, Dynamic, 1> K = prefactors.col(0);
     Array<T, Dynamic, 1> L = prefactors.col(1);
-    Array<T, Dynamic, 4> dEdq = cellCellForcesFromNeighbors<T>(
+    Array<T, Dynamic, 4> dEdq_repulsion = cellCellRepulsiveForces<T>(
         cells, neighbors, R, Rcell, cell_cell_prefactors
     );
-    if (adhesion_strength > 0)
+    Array<T, Dynamic, 4> dEdq_adhesion = Array<T, Dynamic, 4>::Zero(n, 4); 
+    if (adhesion_mode != NONE)
     {
-        dEdq += cellCellAdhesiveForcesFromNeighbors<T, PreciseType>(
-            cells, neighbors, to_adhere, R, adhesion_strength, delta
+        dEdq_adhesion = cellCellAdhesiveForces<T, PreciseType>(
+            cells, neighbors, to_adhere, R, adhesion_mode, adhesion_params
         );
     }
+    Array<T, Dynamic, 4> dEdq = dEdq_repulsion + dEdq_adhesion; 
 
     // Set mult = 2 * lambda
     Array<T, Dynamic, 1> mult = cells.col(2) * dEdq.col(2) + cells.col(3) * dEdq.col(3);
@@ -471,6 +532,14 @@ Array<T, Dynamic, 4> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     velocities.col(1) = -dEdq.col(1) / K; 
     velocities.col(2) = -dEdn_constrained.col(0) / L;
     velocities.col(3) = -dEdn_constrained.col(1) / L;
+
+    //if (velocities.isNaN().any())
+    //{
+    //    std::cout << "found nan in getVelocities ...\n";
+    //    std::cout << velocities << "\n--\n";
+    //    std::cout << dEdq_repulsion << "\n--\n";
+    //    std::cout << dEdq_adhesion << "\n--\n";
+    //}
 
     return velocities;  
 }
@@ -492,6 +561,8 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
 }
 
 /**
+ * TODO Update
+ *
  * Run one step of an adaptive Runge-Kutta method with the given Butcher 
  * tableau for the given timestep.
  *
@@ -516,8 +587,8 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
- * @param adhesion_strength
- * @param delta
+ * @param adhesion_mode
+ * @param adhesion_params
  * @returns Updated population of cells, along with the array of errors in
  *          the cell positions and orientations.  
  */
@@ -525,25 +596,26 @@ template <typename T,
           typename PreciseType
               = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<30> > >
 std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4> >
-    stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& A,
-                                        const Ref<const Array<T, Dynamic, 1> >& b,
-                                        const Ref<const Array<T, Dynamic, 1> >& bs, 
-                                        const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
-                                        const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                        const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                                        const T dt, const T R, const T Rcell,
-                                        const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                                        const T surface_contact_density,
-                                        const T adhesion_strength, const T delta)
+    stepRungeKuttaAdaptive(const Ref<const Array<T, Dynamic, Dynamic> >& A,
+                           const Ref<const Array<T, Dynamic, 1> >& b,
+                           const Ref<const Array<T, Dynamic, 1> >& bs, 
+                           const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
+                           const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                           const Ref<const Array<int, Dynamic, 1> >& to_adhere,
+                           const T dt, const T R, const T Rcell,
+                           const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                           const T surface_contact_density,
+                           const AdhesionMode adhesion_mode, 
+                           std::unordered_map<std::string, T>& adhesion_params)
 {
     // Compute velocities at given partial timesteps 
     int n = cells.rows(); 
     int s = b.size(); 
     std::vector<Array<T, Dynamic, 4> > velocities; 
     velocities.push_back(
-        getVelocitiesFromNeighbors<T, PreciseType>(
+        getVelocities<T, PreciseType>(
             cells, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
-            surface_contact_density, adhesion_strength, delta
+            surface_contact_density, adhesion_mode, adhesion_params
         )
     );
     for (int i = 1; i < s; ++i)
@@ -555,9 +627,9 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
         cells_i(Eigen::all, Eigen::seq(0, 3)) += multipliers * dt;
         normalizeOrientations<T>(cells_i);    // Renormalize orientations after each modification
         velocities.push_back(
-            getVelocitiesFromNeighbors<T, PreciseType>(
+            getVelocities<T, PreciseType>(
                 cells_i, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
-                surface_contact_density, adhesion_strength, delta
+                surface_contact_density, adhesion_mode, adhesion_params
             )
         );
     }
