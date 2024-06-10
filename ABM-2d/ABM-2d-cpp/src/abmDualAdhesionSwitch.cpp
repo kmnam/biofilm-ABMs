@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     5/23/2024
+ *     6/8/2024
  */
 
 #include <Eigen/Dense>
@@ -82,8 +82,21 @@ int main(int argc, char** argv)
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T daughter_angle_bound = static_cast<T>(json_data["daughter_angle_bound"].as_double());
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
-    const T adhesion_strength = static_cast<T>(json_data["adhesion_strength"].as_double());
-    const T adhesion_force_delta = static_cast<T>(json_data["adhesion_force_delta"].as_double()); 
+    const AdhesionMode adhesion_mode = static_cast<AdhesionMode>(json_data["adhesion_mode"].as_int64()); 
+    std::unordered_map<std::string, T> adhesion_params;
+    adhesion_params["strength"] = static_cast<T>(json_data["adhesion_strength"].as_double()); 
+    if (adhesion_mode == GBK) 
+    {
+        adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double()); 
+        adhesion_params["anisotropy_exp2"] = static_cast<T>(json_data["adhesion_anisotropy_exp2"].as_double()); 
+        adhesion_params["well_depth_delta"] = static_cast<T>(json_data["adhesion_well_depth_delta"].as_double()); 
+    }
+    else if (adhesion_mode == LJ)
+    {
+        adhesion_params["cos_eps_parallel"] = static_cast<T>(std::cos(json_data["adhesion_eps_parallel"].as_double()));
+        adhesion_params["eps_collinear"] = static_cast<T>(json_data["adhesion_eps_collinear"].as_double());
+        adhesion_params["delta"] = static_cast<T>(json_data["adhesion_delta"].as_double()); 
+    }
 
     // Surface contact area density and powers of cell radius 
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
@@ -126,7 +139,7 @@ int main(int argc, char** argv)
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
     // with mean growth rate and default viscosity and friction coefficients
     Array<T, Dynamic, Dynamic> cells(1, 11);
-    cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface, 1;
+    cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface, 2;
     
     // Run the simulation
     runSimulation<T>(
@@ -136,7 +149,7 @@ int main(int argc, char** argv)
         max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        adhesion_strength, adhesion_force_delta
+        adhesion_mode, adhesion_params
     ); 
    
     return 0; 
