@@ -284,7 +284,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             for (int k = 0; k < neighbors.rows(); ++k)
             {
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-                to_adhere(k) = (dist > 2.5 * Rcell && dist < 2 * R);
+                to_adhere(k) = (dist > R + Rcell && dist < 2 * R);
             }
         }
 
@@ -343,7 +343,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             for (int k = 0; k < neighbors.rows(); ++k)
             {
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-                to_adhere(k) = (dist > 2.5 * Rcell && dist < 2 * R);
+                to_adhere(k) = (dist > R + Rcell && dist < 2 * R);
             }
         }
         
@@ -492,7 +492,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         int ni = neighbors(k, 0); 
         int nj = neighbors(k, 1);
         T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-        to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > 2.5 * Rcell && dist < 2 * R); 
+        to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
     }
 
     // Initialize velocities to zero
@@ -671,7 +671,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 int ni = neighbors(k, 0); 
                 int nj = neighbors(k, 1);
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > 2.5 * Rcell && dist < 2 * R); 
+                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
             }
         }
 
@@ -748,7 +748,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 int ni = neighbors(k, 0); 
                 int nj = neighbors(k, 1);
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > 2.5 * Rcell && dist < 2 * R); 
+                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
             }
         }
 
@@ -762,7 +762,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             int ni = neighbors(k, 0); 
             int nj = neighbors(k, 1); 
             T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-            to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > 2.5 * Rcell && dist < 2 * R); 
+            to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
         }
         
         // Write the current population to file
