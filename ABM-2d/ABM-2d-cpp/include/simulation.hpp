@@ -19,7 +19,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     5/23/2024
+ *     6/10/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -51,6 +51,8 @@ using std::max;
 using boost::multiprecision::max;
 using std::abs;
 using boost::multiprecision::abs;
+using std::cos; 
+using boost::multiprecision::cos;
 
 /**
  * Return a string containing a floating-point number, specified to the 
@@ -70,6 +72,8 @@ std::string floatToString(T x, const int precision = 10)
 } 
 
 /**
+ * TODO Update
+ *
  * Run a simulation with the given initial population of cells.
  *
  * @param cells_init Initial population of cells. 
@@ -101,8 +105,8 @@ std::string floatToString(T x, const int precision = 10)
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
- * @param adhesion_strength
- * @param adhesion_force_delta
+ * @param adhesion_mode
+ * @param adhesion_params
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -125,8 +129,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const T growth_std,
                                          const T daughter_length_std,
                                          const T daughter_angle_bound,
-                                         const T adhesion_strength,
-                                         const T adhesion_force_delta)
+                                         const AdhesionMode adhesion_mode,
+                                         std::unordered_map<std::string, T>& adhesion_params)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -224,8 +228,15 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     params["growth_std"] = floatToString<T>(growth_std, precision);
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
-    params["adhesion_strength"] = floatToString<T>(adhesion_strength, precision);
-    params["adhesion_force_delta"] = floatToString<T>(adhesion_force_delta, precision);
+    params["adhesion_mode"] = std::to_string(adhesion_mode);
+    for (auto&& item : adhesion_params)
+    {
+        std::stringstream ss; 
+        std::string key = item.first; 
+        T value = item.second;
+        ss << "adhesion_" << key; 
+        params[ss.str()] = floatToString<T>(value); 
+    }
 
     // Write the initial population to file
     if (write)
@@ -263,19 +274,20 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             cells, t, R, Rcell, to_divide, growth_dist, rng,
             daughter_length_dist, daughter_angle_dist
         );
+        n = cells.rows(); 
 
         // Update neighboring cells if division has occurred
         if (to_divide.sum() > 0)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
-            to_adhere = Array<int, Dynamic, 1>::Ones(neighbors.rows()); 
+            to_adhere = Array<int, Dynamic, 1>::Ones(neighbors.rows());
         }
 
         // Update cell positions and orientations 
-        auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
+        auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, adhesion_strength,
-            adhesion_force_delta
+            cell_cell_prefactors, surface_contact_density, adhesion_mode, 
+            adhesion_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 4> errors = std::get<1>(result);
@@ -290,10 +302,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             while (max_error > max_error_allowed && j < max_tries_update_stepsize)
             {
                 dt *= pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
-                result = stepRungeKuttaAdaptiveFromNeighbors<T>(
+                result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-                    cell_cell_prefactors, surface_contact_density,
-                    adhesion_strength, adhesion_force_delta
+                    cell_cell_prefactors, surface_contact_density, adhesion_mode,
+                    adhesion_params
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
@@ -317,7 +329,6 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         // Update current time 
         t += dt;
         iter++;
-        n = cells.rows(); 
 
         // Update neighboring cells 
         if (iter % iter_update_neighbors == 0)
@@ -337,7 +348,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str(); 
             writeCells<T>(cells, params, filename); 
-        } 
+        }
     }
 
     // Write final population to file
@@ -354,6 +365,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 }
 
 /**
+ * TODO Update
+ *
  * Run a simulation with the given initial population of cells.
  *
  * This function runs simulations in which the cells switch between two 
@@ -395,8 +408,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
- * @param adhesion_strength
- * @param adhesion_force_delta
+ * @param adhesion_mode
+ * @param adhesion_params
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -424,8 +437,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
                                          const T daughter_length_std,
                                          const T daughter_angle_bound, 
-                                         const T adhesion_strength, 
-                                         const T adhesion_force_delta)
+                                         const AdhesionMode adhesion_mode, 
+                                         std::unordered_map<std::string, T>& adhesion_params)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -589,8 +602,15 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
-    params["adhesion_strength"] = floatToString<T>(adhesion_strength, precision); 
-    params["adhesion_force_delta"] = floatToString<T>(adhesion_force_delta, precision);
+    params["adhesion_mode"] = std::to_string(adhesion_mode);
+    for (auto&& item : adhesion_params)
+    {
+        std::stringstream ss; 
+        std::string key = item.first; 
+        T value = item.second;
+        ss << "adhesion_" << key; 
+        params[ss.str()] = floatToString<T>(value); 
+    }
 
     // Write the initial population to file
     if (write)
@@ -628,6 +648,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             cells, t, R, Rcell, to_divide, growth_dists, rng,
             daughter_length_dist, daughter_angle_dist
         );
+        n = cells.rows();
 
         // Update neighboring cells if division has occurred
         if (to_divide.sum() > 0)
@@ -642,15 +663,22 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             }
         }
 
-        // Update cell positions and orientations 
-        auto result = stepRungeKuttaAdaptiveFromNeighbors<T>(
+        // Update cell positions and orientations
+        auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, adhesion_strength,
-            adhesion_force_delta
+            cell_cell_prefactors, surface_contact_density, adhesion_mode,
+            adhesion_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 4> errors = std::get<1>(result);
         Array<T, Dynamic, 4> velocities_new = std::get<2>(result);
+        //if (errors.isNaN().any())
+        //{
+        //    std::cout << "found nan!\n";
+        //    std::cout << cells_new << "\n--\n";
+        //    std::cout << errors << "\n--\n";
+        //    break;
+        //}
 
         // If the error is big, retry the step with a smaller stepsize (up to
         // a given maximum number of attempts)
@@ -661,17 +689,26 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             while (max_error > max_error_allowed && j < max_tries_update_stepsize)
             {
                 dt *= pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
-                result = stepRungeKuttaAdaptiveFromNeighbors<T>(
+                result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-                    cell_cell_prefactors, surface_contact_density,
-                    adhesion_strength, adhesion_force_delta
+                    cell_cell_prefactors, surface_contact_density, adhesion_mode,
+                    adhesion_params
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
                 velocities_new = std::get<2>(result);
+                //if (errors.isNaN().any())
+                //{
+                //    std::cout << "found nan!\n";
+                //    std::cout << cells_new << "\n--\n";
+                //    std::cout << errors << "\n--\n";
+                //    break; 
+                //}
                 max_error = max(errors.abs().maxCoeff(), min_error);
                 j++;  
             }
+            //if (errors.isNaN().any())
+            //    break; 
             // If the error is small, increase the stepsize up to a maximum stepsize
             if (max_error < max_error_allowed)
                 dt = min(dt * pow(max_error_allowed / max_error, 1.0 / (error_order + 1)), max_stepsize);
@@ -688,7 +725,6 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         // Update current time 
         t += dt;
         iter++;
-        n = cells.rows(); 
 
         // Update neighboring cells 
         if (iter % iter_update_neighbors == 0)
@@ -726,7 +762,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str(); 
             writeCells<T>(cells, params, filename); 
-        } 
+        }
     }
 
     // Write final population to file
