@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/9/2024
+ *     6/15/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -345,9 +345,6 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                                             std::unordered_map<std::string, T>& params)
 {
     int n = cells.rows();   // Number of cells
-
-    // Instantiate kernel to be passed into distBetweenCells()
-    K kernel;
 
     // If there is only one cell, return zero
     if (n == 1)
