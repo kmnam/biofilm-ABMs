@@ -407,10 +407,10 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                 const T strength = params["strength"];
                 const T exp1 = params["anisotropy_exp1"];
                 const T exp2 = params["anisotropy_exp2"];
-                const T well_depth_delta = params["well_depth_delta"];
+                const T kappa0 = params["well_depth_delta"];
                 forces = strength * attractiveForcesGBK2D<T>(
                     ri, ni, half_li, rj, nj, half_lj, R, dij, si, sj, exp1,
-                    exp2, well_depth_delta
+                    exp2, kappa0
                 ); 
             }
             /*

@@ -414,6 +414,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
 {
     // If there are cells to be divided ...
     const int n_divide = to_divide.sum();
+
     if (n_divide > 0)
     {
         // Get indices of cells to be divided
@@ -427,7 +428,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
 
         // Generate Segment_3 instances for the cells 
         std::vector<Segment_3> segments = generateSegments<T>(cells);
-
+        
         // Get an extended copy of the existing population
         Array<T, Dynamic, Dynamic> cells_total(n + n_divide, cells.cols());
 

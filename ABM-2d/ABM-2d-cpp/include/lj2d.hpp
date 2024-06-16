@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/8/2024
+ *     6/15/2024
  */
 
 #ifndef ROD_LENNARD_JONES_POTENTIALS_2D_HPP
