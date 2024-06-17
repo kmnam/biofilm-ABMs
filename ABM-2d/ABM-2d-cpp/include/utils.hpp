@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/26/2024
+ *     6/16/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -19,6 +19,7 @@
 #include <boost/json/src.hpp>
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
+#include <boost/random.hpp>
 
 using std::sin;
 using boost::multiprecision::sin;
@@ -194,6 +195,55 @@ T vonMises(const T mu, const T kappa, boost::random::mt19937& rng,
         return std::fmod(-std::acos(f) + mu, boost::math::constants::two_pi<T>()); 
     else 
         return mu;
+}
+
+/**
+ * Sample `k` items from the range from `0` to `n - 1` without replacement. 
+ *
+ * It is assumed that `k <= n`. 
+ */
+std::vector<int> sampleWithoutReplacement(const int n, const int k,
+                                          boost::random::mt19937& rng)
+{
+    if (k < 0)
+    {
+        throw std::invalid_argument("Cannot sample k items from list of n if k < 0"); 
+    }
+    else if (n < 1) 
+    {
+        throw std::invalid_argument("Cannot sample k items from list of n if n < 1"); 
+    }
+    if (k > n)
+    {
+        throw std::invalid_argument("Cannot sample k items from list of n if k > n");
+    }
+    else if (k == n)
+    {
+        std::vector<int> sample; 
+        for (int i = 0; i < n; ++i)
+            sample.push_back(i); 
+        return sample; 
+    }
+    else    // 0 <= k < n and n >= 1
+    {
+        // Initialize an array with 0, ..., n - 1
+        std::vector<int> array; 
+        for (int i = 0; i < n; ++i)
+            array.push_back(i);
+
+        // Perform a Fisher-Yates shuffle
+        for (int i = n - 1; i > 0; --i)
+        {
+            boost::random::uniform_int_distribution<> dist(0, i); 
+            int j = dist(rng);
+            int arr_i = array[i]; 
+            array[i] = array[j]; 
+            array[j] = arr_i; 
+        }
+
+        // Return the first k items in the shuffled array 
+        return std::vector<int>(array.begin(), array.begin() + k); 
+    }
 }
 
 /**
