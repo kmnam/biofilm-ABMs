@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/28/2024
+ *     7/1/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -222,8 +222,9 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
 } 
 
 /**
- * Compute the derivatives of the cell-cell interaction energies for each 
- * cell with respect to the cell's position and orientation coordinates.
+ * Compute the derivatives of the cell-cell repulsion energy for each pair
+ * of neighboring cells, with respect to each cell's position and orientation
+ * coordinates.
  *
  * In this function, the pairs of neighboring cells in the population have
  * been pre-computed. 
@@ -313,11 +314,9 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
 }
 
 /**
- * TODO Update
- *
- * Compute the derivatives of the cell-cell adhesion energies, modeled as 
- * Lennard-Jones attractive interactive energies, for each cell with respect
- * to the cell's position and orientation coordinates.
+ * Compute the derivatives of the cell-cell adhesion potential energy for
+ * each pair of neighboring cells, with respect to each cell's position and
+ * orientation coordinates.
  *
  * In this function, the pairs of neighboring cells in the population have
  * been pre-computed. 
@@ -329,14 +328,13 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
  *                  neighboring cells, the adhesive force is nonzero. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
- * @param mode
- * @param params
+ * @param mode Choice of potential used to model cell-cell adhesion. Can be
+ *             NONE (0), KIHARA (1), or GBK (2).
+ * @param params Parameters required to compute cell-cell adhesion forces. 
  * @returns Derivatives of the cell-cell adhesion energies with respect to  
  *          cell positions and orientations.   
  */
-template <typename T,
-          typename PreciseType
-              = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<30> > >
+template <typename T>
 Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                             const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                             const Ref<const Array<int, Dynamic, 1> >& to_adhere,
@@ -386,7 +384,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                 const T strength = params["strength"];
                 const T expd = params["distance_exp"]; 
                 const T dmin = params["mindist"];
-                forces = strength * forcesKihara2D<T>(
+                forces = strength * forcesKihara2D<T, 2>(
                     ri, ni, half_li, rj, nj, half_lj, R, dij, si, sj, expd,
                     dmin
                 );
@@ -399,7 +397,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                 const T expd = params["distance_exp"]; 
                 const T kappa0 = params["well_depth_delta"];
                 const T dmin = params["mindist"];
-                forces = strength * forcesGBK2D<T>(
+                forces = strength * forcesGBK2D<T, 2>(
                     ri, ni, half_li, rj, nj, half_lj, R, Rcell, dij, si, sj,
                     expd, exp1, exp2, kappa0, dmin
                 ); 
@@ -413,8 +411,6 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
 }
 
 /**
- * TODO Update
- *
  * Given the current positions, orientations, lengths, viscosity coefficients,
  * and surface friction coefficients for the given population of cells, compute
  * their translational and orientational velocities.
@@ -432,13 +428,13 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
- * @param adhesion_mode
- * @param adhesion_params
+ * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
+ *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ * @param adhesion_params Parameters required to compute cell-cell adhesion
+ *                        forces. 
  * @returns Array of translational and orientational velocities.   
  */
-template <typename T,
-          typename PreciseType
-              = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<30> > >
+template <typename T>
 Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                    const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                    const Ref<const Array<int, Dynamic, 1> >& to_adhere,
@@ -488,7 +484,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     Array<T, Dynamic, 4> dEdq_adhesion = Array<T, Dynamic, 4>::Zero(n, 4); 
     if (adhesion_mode != NONE)
     {
-        dEdq_adhesion = cellCellAdhesiveForces<T, PreciseType>(
+        dEdq_adhesion = cellCellAdhesiveForces<T>(
             cells, neighbors, to_adhere, R, Rcell, adhesion_mode, adhesion_params
         );
     }
@@ -527,8 +523,6 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
 }
 
 /**
- * TODO Update
- *
  * Run one step of an adaptive Runge-Kutta method with the given Butcher 
  * tableau for the given timestep.
  *
@@ -553,14 +547,14 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
- * @param adhesion_mode
- * @param adhesion_params
+ * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
+ *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ * @param adhesion_params Parameters required to compute cell-cell adhesion
+ *                        forces. 
  * @returns Updated population of cells, along with the array of errors in
  *          the cell positions and orientations.  
  */
-template <typename T,
-          typename PreciseType
-              = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<30> > >
+template <typename T>
 std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4> >
     stepRungeKuttaAdaptive(const Ref<const Array<T, Dynamic, Dynamic> >& A,
                            const Ref<const Array<T, Dynamic, 1> >& b,
@@ -579,7 +573,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
     int s = b.size(); 
     std::vector<Array<T, Dynamic, 4> > velocities; 
     velocities.push_back(
-        getVelocities<T, PreciseType>(
+        getVelocities<T>(
             cells, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
             surface_contact_density, adhesion_mode, adhesion_params
         )
@@ -593,7 +587,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
         cells_i(Eigen::all, Eigen::seq(0, 3)) += multipliers * dt;
         normalizeOrientations<T>(cells_i);    // Renormalize orientations after each modification
         velocities.push_back(
-            getVelocities<T, PreciseType>(
+            getVelocities<T>(
                 cells_i, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
                 surface_contact_density, adhesion_mode, adhesion_params
             )
