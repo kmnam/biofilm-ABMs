@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/28/2024
+ *     7/1/2024
  */
 
 #ifndef KIHARA_GBK_POTENTIAL_FORCES_HPP
@@ -19,8 +19,31 @@ using boost::multiprecision::pow;
 using std::min;
 using boost::multiprecision::min;
 
+/* --------------------------------------------------------------------- //
+ *                               2-D FORCES                              //
+ * --------------------------------------------------------------------- */
 /**
- * TODO Write this docstring  
+ * Compute the generalized forces between two neighboring cells that arise
+ * from the Kihara potential in 2-D.
+ *
+ * This implementation of the Kihara potential is nonzero over a finite range
+ * of distances at which the potential is nonzero (from `dmin` to `2 * R`). 
+ *
+ * @param r1 Center of cell 1.
+ * @param n1 Orientation of cell 1.
+ * @param half_l1 Half of length of cell 1.
+ * @param r2 Center of cell 2.
+ * @param n2 Orientation of cell 2.
+ * @param half_l2 Half of length of cell 2. 
+ * @param R Cell radius, including the EPS. 
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved. 
+ * @param exp Exponent in Kihara potential.
+ * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @returns Matrix of generalized forces arising from the Kihara potential. 
  */
 template <typename T>
 Matrix<T, 2, 4> forcesKihara2D(const Ref<const Matrix<T, 2, 1> >& r1, 
@@ -65,9 +88,13 @@ Matrix<T, 2, 4> forcesKihara2D(const Ref<const Matrix<T, 2, 1> >& r1,
 }
 
 /**
- * TODO Write
+ * Compute the squared aspect ratio parameter in the first anisotropy 
+ * parameter of the Gay-Berne-Kihara potential in 2-D.  
  *
- * This function returns chi^2. 
+ * @param half_l1 Half of length of cell 1.
+ * @param half_l2 Half of length of cell 2. 
+ * @param Rcell Cell radius, excluding the EPS.
+ * @returns Squared aspect ratio parameter. 
  */
 template <typename T>
 T squaredAspectRatioParam(const T half_l1, const T half_l2, const T Rcell)
@@ -87,7 +114,18 @@ T squaredAspectRatioParam(const T half_l1, const T half_l2, const T Rcell)
 }
 
 /**
- * TODO Write
+ * Compute the first anisotropy parameter in the Gay-Berne-Kihara potential
+ * in 2-D, as well as its partial derivatives with respect to the cell
+ * coordinates. 
+ *
+ * @param n1 Orientation of cell 1.
+ * @param half_l1 Half of length of cell 1.
+ * @param n2 Orientation of cell 2.
+ * @param half_l2 Half of length of cell 2. 
+ * @param Rcell Cell radius, excluding the EPS.
+ * @param exp Exponent of anisotropy parameter. 
+ * @returns The first anisotropy parameter and its partial derivatives with 
+ *          respect to the cell coordinates. 
  */
 template <typename T>
 std::pair<T, Matrix<T, 2, 4> > anisotropyParamGBK1(const Ref<const Matrix<T, 2, 1> >& n1,
@@ -128,7 +166,23 @@ std::pair<T, Matrix<T, 2, 4> > anisotropyParamGBK1(const Ref<const Matrix<T, 2, 
 }
 
 /**
- * TODO Write
+ * Compute the second anisotropy parameter in the Gay-Berne-Kihara potential
+ * in 2-D, as well as its partial derivatives with respect to the cell
+ * coordinates. 
+ *
+ * @param r1 Center of cell 1.
+ * @param n1 Orientation of cell 1.
+ * @param half_l1 Half of length of cell 1.
+ * @param r2 Center of cell 2.
+ * @param n2 Orientation of cell 2.
+ * @param half_l2 Half of length of cell 2. 
+ * @param Rcell Cell radius, excluding the EPS.
+ * @param exp Exponent of anisotropy parameter.
+ * @param kappa0 Constant multiplier for the fold-difference in well-depths
+ *               between the side-by-side and head-to-head parallel cell-cell
+ *               configurations.
+ * @returns The second anisotropy parameter and its partial derivatives with 
+ *          respect to the cell coordinates. 
  */
 template <typename T>
 std::pair<T, Matrix<T, 2, 4> > anisotropyParamGBK2(const Ref<const Matrix<T, 2, 1> >& r1, 
@@ -210,7 +264,35 @@ std::pair<T, Matrix<T, 2, 4> > anisotropyParamGBK2(const Ref<const Matrix<T, 2, 
 }
 
 /**
- * TODO Write
+ * Compute the generalized forces between two neighboring cells that arise
+ * from the Gay-Berne-Kihara potential in 2-D.
+ *
+ * This implementation of the Gay-Berne-Kihara potential is nonzero over a
+ * finite range of distances at which the potential is nonzero (from `dmin`
+ * to `2 * R`). 
+ *
+ * @param r1 Center of cell 1.
+ * @param n1 Orientation of cell 1.
+ * @param half_l1 Half of length of cell 1.
+ * @param r2 Center of cell 2.
+ * @param n2 Orientation of cell 2.
+ * @param half_l2 Half of length of cell 2. 
+ * @param R Cell radius, including the EPS.
+ * @param Rcell Cell radius, excluding the EPS. 
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved. 
+ * @param expd Exponent determining the distance dependence in the
+ *             Gay-Berne-Kihara potential.
+ * @param exp1 Exponent of first anisotropy parameter.
+ * @param exp2 Exponent of second anisotropy parameter. 
+ * @param kappa0 Constant multiplier for the fold-difference in well-depths
+ *               between the side-by-side and head-to-head parallel cell-cell
+ *               configurations.
+ * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @returns Matrix of generalized forces arising from the Kihara potential. 
  */
 template <typename T>
 Matrix<T, 2, 4> forcesGBK2D(const Ref<const Matrix<T, 2, 1> >& r1,
