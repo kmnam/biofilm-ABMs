@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/8/2024
+ *     6/28/2024
  */
 
 #include <Eigen/Dense>
@@ -84,18 +84,14 @@ int main(int argc, char** argv)
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
     const AdhesionMode adhesion_mode = static_cast<AdhesionMode>(json_data["adhesion_mode"].as_int64()); 
     std::unordered_map<std::string, T> adhesion_params;
-    adhesion_params["strength"] = static_cast<T>(json_data["adhesion_strength"].as_double()); 
+    adhesion_params["strength"] = static_cast<T>(json_data["adhesion_strength"].as_double());
+    adhesion_params["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double()); 
+    adhesion_params["mindist"] = static_cast<T>(json_data["adhesion_mindist"].as_double()); 
     if (adhesion_mode == GBK) 
     {
         adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double()); 
-        adhesion_params["anisotropy_exp2"] = static_cast<T>(json_data["adhesion_anisotropy_exp2"].as_double()); 
+        adhesion_params["anisotropy_exp2"] = static_cast<T>(json_data["adhesion_anisotropy_exp2"].as_double());
         adhesion_params["well_depth_delta"] = static_cast<T>(json_data["adhesion_well_depth_delta"].as_double()); 
-    }
-    else if (adhesion_mode == LJ)
-    {
-        adhesion_params["cos_eps_parallel"] = static_cast<T>(std::cos(json_data["adhesion_eps_parallel"].as_double()));
-        adhesion_params["eps_collinear"] = static_cast<T>(json_data["adhesion_eps_collinear"].as_double());
-        adhesion_params["delta"] = static_cast<T>(json_data["adhesion_delta"].as_double()); 
     }
 
     // Surface contact area density and powers of cell radius 
