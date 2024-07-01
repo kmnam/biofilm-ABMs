@@ -257,7 +257,7 @@ std::pair<T, Matrix<T, 2, 2 * Dim> > anisotropyParamGBK2(const Ref<const Matrix<
     // generalized coordinate 
     Matrix<T, 2, 2 * Dim> derivs3 = Matrix<T, 2, 2 * Dim>::Zero(); 
     derivs3(0, Eigen::seq(Dim, 2 * Dim - 1)) = n2;
-    derivs3(1, Eigen::Seq(Dim, 2 * Dim - 1)) = n1; 
+    derivs3(1, Eigen::seq(Dim, 2 * Dim - 1)) = n1; 
 
     // Compute the partial derivative of the anisotropy parameter with
     // respect to each generalized coordinate
