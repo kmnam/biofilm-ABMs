@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/15/2024
+ *     6/28/2024
  */
 
 #ifndef KIHARA_GBK_POTENTIAL_FORCES_HPP
@@ -11,6 +11,8 @@
 
 #include <Eigen/Dense>
 #include <boost/multiprecision/mpfr.hpp>
+
+using namespace Eigen;
 
 using std::pow; 
 using boost::multiprecision::pow;
@@ -21,39 +23,43 @@ using boost::multiprecision::min;
  * TODO Write this docstring  
  */
 template <typename T>
-Matrix<T, 2, 4> attractiveForcesKihara2D(const Ref<const Matrix<T, 2, 1> >& r1, 
-                                         const Ref<const Matrix<T, 2, 1> >& n1, 
-                                         const T half_l1,
-                                         const Ref<const Matrix<T, 2, 1> >& r2, 
-                                         const Ref<const Matrix<T, 2, 1> >& n2, 
-                                         const T half_l2,
-                                         const Ref<const Matrix<T, 2, 1> >& d12, 
-                                         const T s, const T t)
+Matrix<T, 2, 4> forcesKihara2D(const Ref<const Matrix<T, 2, 1> >& r1, 
+                               const Ref<const Matrix<T, 2, 1> >& n1,
+                               const T half_l1,
+                               const Ref<const Matrix<T, 2, 1> >& r2,
+                               const Ref<const Matrix<T, 2, 1> >& n2,
+                               const T half_l2, const T R, 
+                               const Ref<const Matrix<T, 2, 1> >& d12,
+                               const T s, const T t, const T exp, const T dmin)
 {
-    Matrix<T, 2, 4> dEdq;
+    Matrix<T, 2, 4> dEdq = Matrix<T, 2, 4>::Zero();
 
     // Normalize the distance vector 
     T dist = d12.norm(); 
     Matrix<T, 2, 1> d12n = d12 / dist; 
 
-    // Get the derivative of the potential with respect to the cell-cell
-    // distance
-    T deriv = 6.0 / pow(dist, 7.0);
+    // If the distance falls within the desired range ... 
+    if (dist > dmin && dist <= 2 * R)
+    {
+        // Get the derivative of the potential with respect to the cell-cell
+        // distance
+        T deriv = exp / pow(dist, exp + 1);
 
-    // Use the above to get the partial derivative of the potential with
-    // respect to each coordinate
-    //
-    // Partial derivatives w.r.t cell 1 center 
-    dEdq(0, Eigen::seq(0, 1)) = -deriv * d12n; 
+        // Use the above to get the partial derivative of the potential with
+        // respect to each coordinate
+        //
+        // Partial derivatives w.r.t cell 1 center 
+        dEdq(0, Eigen::seq(0, 1)) = -deriv * d12n; 
 
-    // Partial derivatives w.r.t cell 1 orientation 
-    dEdq(0, Eigen::seq(2, 3)) = -deriv * d12n * s; 
+        // Partial derivatives w.r.t cell 1 orientation 
+        dEdq(0, Eigen::seq(2, 3)) = -deriv * d12n * s; 
 
-    // Partial derivatives w.r.t cell 2 center 
-    dEdq(1, Eigen::seq(0, 1)) = -dEdq(0, Eigen::seq(0, 1)); 
+        // Partial derivatives w.r.t cell 2 center 
+        dEdq(1, Eigen::seq(0, 1)) = -dEdq(0, Eigen::seq(0, 1)); 
 
-    // Partial derivatives w.r.t cell 2 orientation 
-    dEdq(1, Eigen::seq(2, 3)) = deriv * d12n * t;
+        // Partial derivatives w.r.t cell 2 orientation 
+        dEdq(1, Eigen::seq(2, 3)) = deriv * d12n * t;
+    }
 
     return dEdq; 
 }
@@ -64,11 +70,11 @@ Matrix<T, 2, 4> attractiveForcesKihara2D(const Ref<const Matrix<T, 2, 1> >& r1,
  * This function returns chi^2. 
  */
 template <typename T>
-T squaredAspectRatioParam(const T half_l1, const T half_l2, const T R)
+T squaredAspectRatioParam(const T half_l1, const T half_l2, const T Rcell)
 {
-    T total_l1 = half_l1 + R; 
-    T total_l2 = half_l2 + R; 
-    T width = R;
+    T total_l1 = half_l1 + Rcell; 
+    T total_l2 = half_l2 + Rcell; 
+    T width = Rcell;
     T total_l1_sq = total_l1 * total_l1; 
     T total_l2_sq = total_l2 * total_l2; 
     T width_sq = width * width; 
@@ -84,19 +90,17 @@ T squaredAspectRatioParam(const T half_l1, const T half_l2, const T R)
  * TODO Write
  */
 template <typename T>
-std::pair<T, Matrix<T, 2, 4> > anisotropyParamsGBK1(const Ref<const Matrix<T, 2, 1> >& r1, 
-                                                    const Ref<const Matrix<T, 2, 1> >& n1,
-                                                    const T half_l1,
-                                                    const Ref<const Matrix<T, 2, 1> >& r2, 
-                                                    const Ref<const Matrix<T, 2, 1> >& n2,
-                                                    const T half_l2, const T R,
-                                                    const T exp)
+std::pair<T, Matrix<T, 2, 4> > anisotropyParamGBK1(const Ref<const Matrix<T, 2, 1> >& n1,
+                                                   const T half_l1,
+                                                   const Ref<const Matrix<T, 2, 1> >& n2,
+                                                   const T half_l2,
+                                                   const T Rcell, const T exp)
 {
     // Compute the anisotropy parameter
-    T chi2 = squaredAspectRatioParam<T>(half_l1, half_l2, R);
+    T chi2 = squaredAspectRatioParam<T>(half_l1, half_l2, Rcell);
     T n1_dot_n2 = n1.dot(n2);
     T arg = 1.0 - chi2 * n1_dot_n2 * n1_dot_n2;
-    T eps = pow(arg, -0.5);
+    T eps = pow(arg, -0.5 * exp);
 
     // Get the partial derivative of the anisotropy parameter w.r.t each 
     // coordinate 
@@ -127,19 +131,18 @@ std::pair<T, Matrix<T, 2, 4> > anisotropyParamsGBK1(const Ref<const Matrix<T, 2,
  * TODO Write
  */
 template <typename T>
-std::pair<T, Matrix<T, 2, 4> > anisotropyParamsGBK2(const Ref<const Matrix<T, 2, 1> >& r1, 
-                                                    const Ref<const Matrix<T, 2, 1> >& n1,
-                                                    const T half_l1,
-                                                    const Ref<const Matrix<T, 2, 1> >& r2, 
-                                                    const Ref<const Matrix<T, 2, 1> >& n2,
-                                                    const T half_l2, const T R,
-                                                    const Ref<const Matrix<T, 2, 1> >& d12,
-                                                    const T exp, const T kappa0)
+std::pair<T, Matrix<T, 2, 4> > anisotropyParamGBK2(const Ref<const Matrix<T, 2, 1> >& r1, 
+                                                   const Ref<const Matrix<T, 2, 1> >& n1,
+                                                   const T half_l1,
+                                                   const Ref<const Matrix<T, 2, 1> >& r2, 
+                                                   const Ref<const Matrix<T, 2, 1> >& n2,
+                                                   const T half_l2, const T Rcell,
+                                                   const T exp, const T kappa0)
 {
     // Compute the anisotropy parameter ... 
     //
     // First compute the well-depth parameters \kappa and \chi'
-    T kappa = pow(kappa0 * ((min(half_l1, half_l2) / R) + 1), 1 / exp); 
+    T kappa = pow(kappa0 * ((min(half_l1, half_l2) / Rcell) + 1), 1 / exp); 
     T chi = (kappa - 1) / (kappa + 1);
 
     // Compute the vector r12 from r1 to r2 and its normalized vector 
@@ -159,7 +162,7 @@ std::pair<T, Matrix<T, 2, 4> > anisotropyParamsGBK2(const Ref<const Matrix<T, 2,
     T numer2 = r12n_dot_diff * r12n_dot_diff; 
     T denom1 = 1 + chi * n1_dot_n2; 
     T denom2 = 1 - chi * n1_dot_n2; 
-    T eps = 1.0 - (chi / 2) * (numer1 / denom1 + numer2 / denom2);
+    T eps = pow(1 - (chi / 2) * (numer1 / denom1 + numer2 / denom2), exp);
 
     // Compute the partial derivatives of (r12n, n1) with respect to each 
     // generalized coordinate 
@@ -210,24 +213,22 @@ std::pair<T, Matrix<T, 2, 4> > anisotropyParamsGBK2(const Ref<const Matrix<T, 2,
  * TODO Write
  */
 template <typename T>
-Matrix<T, 2, 4> attractiveForcesGBK2D(const Ref<const Matrix<T, 2, 1> >& r1, 
-                                      const Ref<const Matrix<T, 2, 1> >& n1, 
-                                      const T half_l1, 
-                                      const Ref<const Matrix<T, 2, 1> >& r2, 
-                                      const Ref<const Matrix<T, 2, 1> >& n2, 
-                                      const T half_l2, const T R, 
-                                      const Ref<const Matrix<T, 2, 1> >& d12, 
-                                      const T s, const T t, const T exp1,
-                                      const T exp2, const T kappa0)
+Matrix<T, 2, 4> forcesGBK2D(const Ref<const Matrix<T, 2, 1> >& r1,
+                            const Ref<const Matrix<T, 2, 1> >& n1, 
+                            const T half_l1,
+                            const Ref<const Matrix<T, 2, 1> >& r2, 
+                            const Ref<const Matrix<T, 2, 1> >& n2,
+                            const T half_l2, const T R, const T Rcell,
+                            const Ref<const Matrix<T, 2, 1> >& d12, 
+                            const T s, const T t, const T expd, const T exp1,
+                            const T exp2, const T kappa0, const T dmin)
 {
     // Get the anisotropy parameters and their partial derivatives 
-    auto result1 = anisotropyParamsGBK1<T>(
-        r1, n1, half_l1, r2, n2, half_l2, R, exp1
-    );
+    auto result1 = anisotropyParamGBK1<T>(n1, half_l1, n2, half_l2, Rcell, exp1);
     T eps1 = result1.first; 
     Matrix<T, 2, 4> deps1 = result1.second; 
-    auto result2 = anisotropyParamsGBK2<T>(
-        r1, n1, half_l1, r2, n2, half_l2, R, d12, exp2, kappa0
+    auto result2 = anisotropyParamGBK2<T>(
+        r1, n1, half_l1, r2, n2, half_l2, Rcell, exp2, kappa0
     );
     T eps2 = result2.first; 
     Matrix<T, 2, 4> deps2 = result2.second; 
@@ -236,15 +237,27 @@ Matrix<T, 2, 4> attractiveForcesGBK2D(const Ref<const Matrix<T, 2, 1> >& r1,
     // anisotropy parameter
     Matrix<T, 2, 4> deps_combined = eps1 * deps2 + eps2 * deps1;
 
-    // Get the attractive Kihara potential and its partial derivatives 
+    // Compute the forces ...
+    Matrix<T, 2, 4> dEdq;
     T dist = d12.norm(); 
-    T potential = -pow(dist, -6.0);
-    Matrix<T, 2, 4> forces = attractiveForcesKihara2D<T>(
-        r1, n1, half_l1, r2, n2, half_l2, d12, s, t
-    ); 
+    if (dist > 0 && dist <= dmin)
+    {
+        dEdq = deps_combined * (-pow(dmin, -expd) + pow(2 * R, -expd));
+    }
+    else if (dist > dmin && dist <= 2 * R)
+    {
+        Matrix<T, 2, 1> d12n = d12 / dist; 
+        dEdq << -d12n(0), -d12n(1), -s * d12n(0), -s * d12n(1),
+                   d12n(0),  d12n(1),  t * d12n(0),  t * d12n(1);
+        dEdq *= (eps1 * eps2 * expd / pow(dist, expd + 1)); 
+        dEdq += deps_combined * (-pow(dist, -expd) + pow(2 * R, -expd)); 
+    }
+    else 
+    {
+        dEdq = Matrix<T, 2, 4>::Zero(); 
+    }
 
-    // Use the product rule to get the overall partial derivatives 
-    return potential * deps_combined + eps1 * eps2 * forces; 
+    return dEdq; 
 }
 
 #endif 
