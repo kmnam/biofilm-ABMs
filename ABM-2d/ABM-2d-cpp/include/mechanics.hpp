@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/15/2024
+ *     6/28/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -39,8 +39,7 @@
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Segment_3.h>
 #include "distances.hpp"
-#include "lj2d.hpp"
-#include "kihara.hpp"
+#include "kiharaGBK.hpp"
 
 using namespace Eigen;
 
@@ -54,8 +53,7 @@ enum AdhesionMode
 {
     NONE,
     KIHARA,
-    GBK,
-    LJ
+    GBK
 }; 
 
 /**
@@ -329,7 +327,8 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
  *                  population.
  * @param to_adhere Boolean array specifying whether, for each pair of 
  *                  neighboring cells, the adhesive force is nonzero. 
- * @param R Cell radius, including the EPS. 
+ * @param R Cell radius, including the EPS.
+ * @param Rcell Cell radius, excluding the EPS.
  * @param mode
  * @param params
  * @returns Derivatives of the cell-cell adhesion energies with respect to  
@@ -341,7 +340,8 @@ template <typename T,
 Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                             const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                             const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                                            const T R, const AdhesionMode mode, 
+                                            const T R, const T Rcell, 
+                                            const AdhesionMode mode, 
                                             std::unordered_map<std::string, T>& params)
 {
     int n = cells.rows();   // Number of cells
@@ -384,49 +384,26 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
             if (mode == KIHARA) 
             {
                 const T strength = params["strength"];
-                forces = strength * attractiveForcesKihara2D<T>(
-                    ri, ni, half_li, rj, nj, half_lj, dij, si, sj
+                const T expd = params["distance_exp"]; 
+                const T dmin = params["mindist"];
+                forces = strength * forcesKihara2D<T>(
+                    ri, ni, half_li, rj, nj, half_lj, R, dij, si, sj, expd,
+                    dmin
                 );
-            }
-            else if (mode == LJ)
-            {
-                const T strength = params["strength"];
-                const T cos_eps_parallel = params["cos_eps_parallel"]; 
-                const T eps_collinear = params["eps_collinear"];  
-                const T delta = params["delta"]; 
-                forces = strength * attractiveForcesLJ2D<T, PreciseType>(
-                    ri, ni, half_li, rj, nj, half_lj, cos_eps_parallel, 
-                    eps_collinear, delta
-                ); 
             }
             else if (mode == GBK)
             {
                 const T strength = params["strength"];
                 const T exp1 = params["anisotropy_exp1"];
                 const T exp2 = params["anisotropy_exp2"];
+                const T expd = params["distance_exp"]; 
                 const T kappa0 = params["well_depth_delta"];
-                forces = strength * attractiveForcesGBK2D<T>(
-                    ri, ni, half_li, rj, nj, half_lj, R, dij, si, sj, exp1,
-                    exp2, kappa0
+                const T dmin = params["mindist"];
+                forces = strength * forcesGBK2D<T>(
+                    ri, ni, half_li, rj, nj, half_lj, R, Rcell, dij, si, sj,
+                    expd, exp1, exp2, kappa0, dmin
                 ); 
             }
-            /*
-            if (forces.array().isNaN().any())
-            {
-                std::cout << "found nan in adhesive forces!\n";
-                std::cout << "i = " << i << " ; j = " << j << std::endl; 
-                std::cout << ri.transpose() << " | " << ni.transpose() << std::endl;
-                std::cout << rj.transpose() << " | " << nj.transpose() << std::endl; 
-                std::cout << half_li << std::endl; 
-                std::cout << half_lj << std::endl; 
-                std::cout << forces << std::endl;
-                attractiveForces2D<T, PreciseType>(
-                    ri, ni, half_li, rj, nj, half_lj, abs_cos_eps_parallel, 
-                    eps_collinear, delta
-                );
-                throw std::runtime_error("exiting now");
-            }
-            */
             dEdq.row(i) += forces.row(0).array(); 
             dEdq.row(j) += forces.row(1).array();
         }
@@ -512,7 +489,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     if (adhesion_mode != NONE)
     {
         dEdq_adhesion = cellCellAdhesiveForces<T, PreciseType>(
-            cells, neighbors, to_adhere, R, adhesion_mode, adhesion_params
+            cells, neighbors, to_adhere, R, Rcell, adhesion_mode, adhesion_params
         );
     }
     Array<T, Dynamic, 4> dEdq = dEdq_repulsion + dEdq_adhesion; 
@@ -529,14 +506,6 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     velocities.col(1) = -dEdq.col(1) / K; 
     velocities.col(2) = -dEdn_constrained.col(0) / L;
     velocities.col(3) = -dEdn_constrained.col(1) / L;
-
-    //if (velocities.isNaN().any())
-    //{
-    //    std::cout << "found nan in getVelocities ...\n";
-    //    std::cout << velocities << "\n--\n";
-    //    std::cout << dEdq_repulsion << "\n--\n";
-    //    std::cout << dEdq_adhesion << "\n--\n";
-    //}
 
     return velocities;  
 }

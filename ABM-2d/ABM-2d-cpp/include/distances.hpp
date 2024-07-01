@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/30/2024
+ *     6/30/2024
  */
 
 #ifndef DISTANCES_2D_HPP
@@ -28,13 +28,31 @@ typedef K::Point_3 Point_3;
 typedef K::Segment_3 Segment_3;
 
 /**
+ * Generate a Segment_3 instance for the given cell. 
+ *
+ * @param r Center of cell 1.
+ * @param n Orientation of cell 1.
+ * @param half_l Half of length of cell 1.
+ * @returns Segment_3 instance for the given cell. 
+ */
+template <typename T>
+Segment_3 generateSegment(const Ref<const Matrix<T, 2, 1> >& r, 
+                          const Ref<const Matrix<T, 2, 1> >& n, const T half_l)
+{
+    // Define the Segment_3 instance from the cell's two endpoints 
+    Point_3 p(r(0) - half_l * n(0), r(1) - half_l * n(1), 0.0); 
+    Point_3 q(r(0) + half_l * n(0), r(1) + half_l * n(1), 0.0);
+    return Segment_3(p, q); 
+}
+
+/**
  * Generate a vector of Segment_3 instances for the given population of cells.
  *
  * Note that Segment_3 is not mutable, and therefore a new vector must be 
  * generated every time the population is updated in some way. 
  *
  * @param cells Existing population of cells.
- * @returns Vector of Segment_3 instances for each cell 
+ * @returns Vector of Segment_3 instances for each cell. 
  */
 template <typename T>
 std::vector<Segment_3> generateSegments(const Ref<const Array<T, Dynamic, Dynamic> >& cells)
