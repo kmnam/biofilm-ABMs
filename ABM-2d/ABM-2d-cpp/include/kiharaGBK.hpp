@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/1/2024
+ *     7/2/2024
  */
 
 #ifndef KIHARA_GBK_POTENTIAL_FORCES_HPP
@@ -139,6 +139,10 @@ std::pair<T, Matrix<T, 2, 2 * Dim> > anisotropyParamGBK1(const Ref<const Matrix<
                                                          const T Rcell,
                                                          const T exp)
 {
+    // Is the exponent zero? 
+    if (exp == 0)
+        return std::make_pair(1.0, Matrix<T, 2, 2 * Dim>::Zero()); 
+
     // Compute the anisotropy parameter
     T chi2 = squaredAspectRatioParam<T>(half_l1, half_l2, Rcell);
     T n1_dot_n2 = n1.dot(n2);
@@ -194,6 +198,10 @@ std::pair<T, Matrix<T, 2, 2 * Dim> > anisotropyParamGBK2(const Ref<const Matrix<
                                                          const T exp,
                                                          const T kappa0)
 {
+    // Is the exponent zero? 
+    if (exp == 0)
+        return std::make_pair(1.0, Matrix<T, 2, 2 * Dim>::Zero()); 
+
     // Compute the anisotropy parameter ... 
     //
     // First compute the well-depth parameters \kappa and \chi'
