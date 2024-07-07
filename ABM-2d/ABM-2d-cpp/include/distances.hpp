@@ -8,13 +8,16 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/30/2024
+ *     7/7/2024
  */
 
 #ifndef DISTANCES_2D_HPP
 #define DISTANCES_2D_HPP
 
+#include <utility>
 #include <tuple>
+#include <vector>
+#include <unordered_set>
 #include <Eigen/Dense>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Point_3.h>
@@ -77,6 +80,31 @@ std::vector<Segment_3> generateSegments(const Ref<const Array<T, Dynamic, Dynami
     return segments;
 }
 
+/** 
+ * Return the cell-body coordinate along a cell centerline that is nearest to
+ * a given point.
+ *
+ * @param r Cell center.
+ * @param n Cell orientation.
+ * @param half_l Half of cell length.  
+ * @param q Input point.
+ * @returns Distance from cell to input point.
+ */
+template <typename T>
+T nearestCellBodyCoordToPoint(const Ref<const Matrix<T, 2, 1> >& r, 
+                              const Ref<const Matrix<T, 2, 1> >& n,
+                              const T half_l,
+                              const Ref<const Matrix<T, 2, 1> >& q)
+{
+    T s = (q - r).dot(n);
+    if (std::abs(s) <= half_l)
+        return s;
+    else if (s > half_l)
+        return half_l;
+    else    // s < -half_l
+        return -half_l;
+}
+
 /**
  * Return the shortest distance between the centerlines of two cells, along
  * with the cell-body coordinates at which the shortest distance is achieved.
@@ -107,40 +135,133 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                                                    const T half_l2,
                                                    const K& k)
 {
-    auto result = CGAL::Distance_3::internal::squared_distance(cell1, cell2, k);
-    T s = static_cast<T>(CGAL::to_double(result.x)) * 2 * half_l1 - half_l1;
-    T t = static_cast<T>(CGAL::to_double(result.y)) * 2 * half_l2 - half_l2;
-    Matrix<T, 2, 1> dist = (r2 + t * n2 - r1 - s * n1)(Eigen::seq(0, 1));
+    // Are the two cells (nearly) parallel?
+    //
+    // We say that two cells are nearly parallel if they have are at an angle
+    // of theta <= 0.01 radians, which translates to cos(theta) >= 0.9999
+    T norm_n1 = n1.norm();    // Allow for n1 and n2 to not be normalized 
+    T norm_n2 = n2.norm(); 
+    T cos_theta = n1.dot(n2) / (norm_n1 * norm_n2); 
+    if (cos_theta >= 0.9999 || cos_theta <= -0.9999)
+    {
+        // Identify the four endpoint vectors 
+        Matrix<T, 2, 1> p1 = r1 - half_l1 * n1; 
+        Matrix<T, 2, 1> q1 = r1 + half_l1 * n1; 
+        Matrix<T, 2, 1> p2 = r2 - half_l2 * n2; 
+        Matrix<T, 2, 1> q2 = r2 + half_l2 * n2; 
 
-    return std::make_tuple(dist, s, t); 
+        // Get the distance vectors between the endpoints of cell 1 and the
+        // body of cell 2  
+        T s_p1_to_cell2 = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, p1); 
+        T s_q1_to_cell2 = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, q1);
+        Matrix<T, 2, 1> d_p1_to_cell2 = r2 + s_p1_to_cell2 * n2 - p1; 
+        Matrix<T, 2, 1> d_q1_to_cell2 = r2 + s_q1_to_cell2 * n2 - q1;
+        T dist_p1_to_cell2 = d_p1_to_cell2.norm(); 
+        T dist_q1_to_cell2 = d_q1_to_cell2.norm(); 
+
+        // If the two distance vectors point to the same point along cell 2
+        // (which should be an endpoint), return the shorter of the two
+        if (s_p1_to_cell2 == s_q1_to_cell2)
+        {
+            if (dist_p1_to_cell2 < dist_q1_to_cell2)
+                return std::make_tuple(d_p1_to_cell2, -half_l1, s_p1_to_cell2);
+            else 
+                return std::make_tuple(d_q1_to_cell2, half_l1, s_q1_to_cell2); 
+        }
+        // Otherwise, get the distance vectors between the endpoints of cell 2
+        // and the body of cell 1
+        else 
+        {
+            T s_p2_to_cell1 = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, p2); 
+            T s_q2_to_cell1 = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, q2); 
+            Matrix<T, 2, 1> d_p2_to_cell1 = r1 + s_p2_to_cell1 * n1 - p2; 
+            Matrix<T, 2, 1> d_q2_to_cell1 = r1 + s_q2_to_cell1 * n1 - q2;
+            T dist_p2_to_cell1 = d_p2_to_cell1.norm(); 
+            T dist_q2_to_cell1 = d_q2_to_cell1.norm(); 
+
+            // Get the two shortest distance vectors among the four
+            std::vector<std::pair<T, int> > dists {
+                std::make_pair(dist_p1_to_cell2, 0),
+                std::make_pair(dist_q1_to_cell2, 1),
+                std::make_pair(dist_p2_to_cell1, 2),
+                std::make_pair(dist_q2_to_cell1, 3)
+            }; 
+            std::sort(
+                dists.begin(), dists.end(),
+                [](std::pair<T, int>& left, std::pair<T, int>& right)
+                {
+                    return left.first < right.first; 
+                }
+            );
+            std::unordered_set<int> min_idx { dists[0].second, dists[1].second };
+            if (min_idx.find(0) != min_idx.end())
+            {
+                if (min_idx.find(1) != min_idx.end())
+                {
+                    // Average between d_p1_to_cell2 and d_q1_to_cell2
+                    T s = 0.0; 
+                    T t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1);
+                    Matrix<T, 2, 1> d = r2 + t * n2 - r1; 
+                    return std::make_tuple(d, s, t); 
+                }
+                else if (min_idx.find(2) != min_idx.end())
+                {
+                    // Average between d_p1_to_cell2 and d_p2_to_cell1
+                    T s = (-half_l1 + s_p2_to_cell1) / 2; 
+                    T t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
+                    Matrix<T, 2, 1> d = r2 + t * n2 - r1 - s * n1; 
+                    return std::make_tuple(d, s, t); 
+                }
+                else    // min_idx.find(3) != min_idx.end()
+                {
+                    // Average between d_p1_to_cell2 and d_q2_to_cell1
+                    T s = (-half_l1 + s_q2_to_cell1) / 2; 
+                    T t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
+                    Matrix<T, 2, 1> d = r2 + t * n2 - r1 - s * n1; 
+                    return std::make_tuple(d, s, t); 
+                }
+            }
+            else if (min_idx.find(1) != min_idx.end())
+            {
+                if (min_idx.find(2) != min_idx.end())
+                {
+                    // Average between d_q1_to_cell2 and d_p2_to_cell1
+                    T s = (half_l1 + s_p2_to_cell1) / 2; 
+                    T t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
+                    Matrix<T, 2, 1> d = r2 + t * n2 - r1 - s * n1; 
+                    return std::make_tuple(d, s, t); 
+                }
+                else    // min_idx.find(3) != min_idx.end()
+                {
+                    // Average between d_q1_to_cell2 and d_q2_to_cell1
+                    T s = (half_l1 + s_q2_to_cell2) / 2; 
+                    T t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
+                    Matrix<T, 2, 1> d = r2 + t * n2 - r1 - s * n1; 
+                    return std::make_tuple(d, s, t); 
+                }
+            }
+            else    // min_idx.find(2) != min_idx.end() && min_idx.find(3) != min_idx.end()
+            {
+                // Average between d_p2_to_cell1 and d_q2_to_cell1
+                T t = 0.0;
+                T s = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, r2); 
+                Matrix<T, 2, 1> d = r2 - r1 - s * n1; 
+                return std::make_tuple(d, s, t); 
+            }
+        }
+    }
+    else 
+    {
+        // Otherwise, compute the distance vector 
+        auto result = CGAL::Distance_3::internal::squared_distance(cell1, cell2, k);
+        T s = static_cast<T>(CGAL::to_double(result.x)) * 2 * half_l1 - half_l1;
+        T t = static_cast<T>(CGAL::to_double(result.y)) * 2 * half_l2 - half_l2;
+        Matrix<T, 2, 1> dist = (r2 + t * n2 - r1 - s * n1)(Eigen::seq(0, 1));
+        return std::make_tuple(dist, s, t); 
+    }
 }
 
 // ----------------------------------------------------------------------- //
-/** 
- * Return the cell-body coordinate along a cell centerline that is nearest to
- * a given point.
- *
- * @param r Cell center.
- * @param n Cell orientation.
- * @param half_l Half of cell length.  
- * @param q Input point.
- * @returns Distance from cell to input point.
- */
-template <typename T>
-T nearestCellBodyCoordToPoint(const Ref<const Matrix<T, 2, 1> >& r, 
-                              const Ref<const Matrix<T, 2, 1> >& n,
-                              const T half_l,
-                              const Ref<const Matrix<T, 2, 1> >& q)
-{
-    T s = (q - r).dot(n);
-    if (std::abs(s) <= half_l)
-        return s;
-    else if (s > half_l)
-        return half_l;
-    else    // s < -half_l
-        return -half_l;
-}
-
 /**
  * Return the shortest distance between the centerlines of two cells, along
  * with the cell-body coordinates at which the shortest distance is achieved.
