@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/7/2024
+ *     7/8/2024
  */
 
 #ifndef DISTANCES_2D_HPP
@@ -106,6 +106,30 @@ T nearestCellBodyCoordToPoint(const Ref<const Matrix<T, 2, 1> >& r,
 }
 
 /**
+ * Output an error message pertaining to the given cell-cell configuration. 
+ *
+ * @param r1 Center of cell 1.
+ * @param v1 Orientation of cell 1. May not be normalized. 
+ * @param half_l1 Half of length of cell 1.
+ * @param r2 Center of cell 2.
+ * @param v2 Orientation of cell 2. May not be normalized. 
+ * @param half_l2 Half of length of cell 2.
+ */
+template <typename T>
+void configSummary(const Ref<const Matrix<T, 2, 1> >& r1,
+                   const Ref<const Matrix<T, 2, 1> >& v1, const T half_l1,
+                   const Ref<const Matrix<T, 2, 1> >& r2,
+                   const Ref<const Matrix<T, 2, 1> >& v2, const T half_l2)
+{
+    std::cerr << "Cell 1 center = (" << r1(0) << ", " << r1(1) << ")" << std::endl
+              << "Cell 1 orientation = (" << v1(0) << ", " << v1(1) << ")" << std::endl
+              << "Cell 1 half-length = " << half_l1 << std::endl
+              << "Cell 2 center = (" << r2(0) << ", " << r2(1) << ")" << std::endl
+              << "Cell 2 orientation = (" << v2(0) << ", " << v2(1) << ")" << std::endl
+              << "Cell 2 half-length = " << half_l2 << std::endl;
+}
+
+/**
  * Return the shortest distance between the centerlines of two cells, along
  * with the cell-body coordinates at which the shortest distance is achieved.
  *
@@ -114,12 +138,12 @@ T nearestCellBodyCoordToPoint(const Ref<const Matrix<T, 2, 1> >& r,
  * @param cell1 Segment_3 instance for cell 1.
  * @param cell2 Segment_3 instance for cell 2.
  * @param r1 Center of cell 1.
- * @param n1 Orientation of cell 1.
+ * @param v1 Orientation of cell 1. May not be normalized. 
  * @param half_l1 Half of length of cell 1.
  * @param r2 Center of cell 2.
- * @param n2 Orientation of cell 2.
+ * @param v2 Orientation of cell 2. May not be normalized. 
  * @param half_l2 Half of length of cell 2.
- * @param k CGAL kernel instance to be passed to CGAL::...::squared_distance().
+ * @param kernel CGAL kernel instance to be passed to CGAL::...::squared_distance().
  * @returns Shortest distance between the two cells, along with the cell-body
  *          coordinates at which the shortest distance is achieved. The
  *          distance is returned as a vector running from cell 1 to cell 2.
@@ -128,26 +152,53 @@ template <typename T>
 std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                                                    const Segment_3& cell2,
                                                    const Ref<const Matrix<T, 2, 1> >& r1,
-                                                   const Ref<const Matrix<T, 2, 1> >& n1,
-                                                   const T half_l1,
+                                                   const Ref<const Matrix<T, 2, 1> >& v1,
+                                                   T half_l1,
                                                    const Ref<const Matrix<T, 2, 1> >& r2,
-                                                   const Ref<const Matrix<T, 2, 1> >& n2,
-                                                   const T half_l2,
-                                                   const K& k)
+                                                   const Ref<const Matrix<T, 2, 1> >& v2,
+                                                   T half_l2,
+                                                   const K& kernel)
 {
+    Matrix<T, 2, 1> d = Matrix<T, 2, 1>::Zero(); 
+    T s = 0;
+    T t = 0;
+
+    // If n1 or n2 are not normalized, normalize and rescale the half-lengths
+    Matrix<T, 2, 1> n1(v1);
+    Matrix<T, 2, 1> n2(v2); 
+    T sqnorm_v1 = v1.squaredNorm(); 
+    T sqnorm_v2 = v2.squaredNorm(); 
+    if (std::abs(sqnorm_v1 - 1.0) > 2e-8)
+    {
+        T norm_v1 = std::sqrt(sqnorm_v1); 
+        n1 /= norm_v1;
+        half_l1 *= norm_v1;
+    }
+    if (std::abs(sqnorm_v2 - 1.0) > 2e-8)
+    {
+        T norm_v2 = std::sqrt(sqnorm_v2);
+        n2 /= norm_v2; 
+        half_l2 *= norm_v2; 
+    }
+
     // Are the two cells (nearly) parallel?
     //
     // We say that two cells are nearly parallel if they have are at an angle
     // of theta <= 0.01 radians, which translates to cos(theta) >= 0.9999
-    T norm_n1 = n1.norm();    // Allow for n1 and n2 to not be normalized 
-    T norm_n2 = n2.norm(); 
-    T cos_theta = n1.dot(n2) / (norm_n1 * norm_n2); 
+    T cos_theta = n1.dot(n2);
     if (cos_theta >= 0.9999 || cos_theta <= -0.9999)
     {
+        // From here, we exclusively use the orientation vector for cell 1,
+        // setting n2 to either n1 or -n1 depending on the value of theta
+        if (cos_theta >= 0.9999)
+            n2 = n1; 
+        else 
+            n2 = -n1; 
+        
         // Identify the four endpoint vectors 
         Matrix<T, 2, 1> p1 = r1 - half_l1 * n1; 
         Matrix<T, 2, 1> q1 = r1 + half_l1 * n1; 
-        Matrix<T, 2, 1> p2 = r2 - half_l2 * n2; 
+        Matrix<T, 2, 1> p2 = r2 - half_l2 * n2;  
         Matrix<T, 2, 1> q2 = r2 + half_l2 * n2; 
 
         // Get the distance vectors between the endpoints of cell 1 and the
@@ -164,9 +215,26 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
         if (s_p1_to_cell2 == s_q1_to_cell2)
         {
             if (dist_p1_to_cell2 < dist_q1_to_cell2)
-                return std::make_tuple(d_p1_to_cell2, -half_l1, s_p1_to_cell2);
-            else 
-                return std::make_tuple(d_q1_to_cell2, half_l1, s_q1_to_cell2); 
+            {
+                s = -half_l1; 
+                t = s_p1_to_cell2; 
+                d = d_p1_to_cell2;
+            }
+            else    // dist_p1_to_cell2 >= dist_q1_to_cell2
+            {
+                s = half_l1; 
+                t = s_q1_to_cell2; 
+                d = d_q1_to_cell2; 
+            }
+            #ifdef DEBUG_CHECK_NAN
+                if (d.array().isNaN().any())
+                {
+                    std::cerr << "Found nan in distance vector:" << std::endl;
+                    configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
+                    throw std::runtime_error();
+                }
+            #endif
+            return std::make_tuple(d, s, t); 
         }
         // Otherwise, get the distance vectors between the endpoints of cell 2
         // and the body of cell 1
@@ -199,25 +267,49 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                 if (min_idx.find(1) != min_idx.end())
                 {
                     // Average between d_p1_to_cell2 and d_q1_to_cell2
-                    T s = 0.0; 
-                    T t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1);
-                    Matrix<T, 2, 1> d = r2 + t * n2 - r1; 
+                    s = 0.0; 
+                    t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1);
+                    d = r2 + t * n2 - r1;
+                    #ifdef DEBUG_CHECK_NAN
+                        if (d.array().isNaN().any())
+                        {
+                            std::cerr << "Found nan in distance vector:" << std::endl;
+                            configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
+                            throw std::runtime_error();
+                        }
+                    #endif
                     return std::make_tuple(d, s, t); 
                 }
                 else if (min_idx.find(2) != min_idx.end())
                 {
                     // Average between d_p1_to_cell2 and d_p2_to_cell1
-                    T s = (-half_l1 + s_p2_to_cell1) / 2; 
-                    T t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
-                    Matrix<T, 2, 1> d = r2 + t * n2 - r1 - s * n1; 
+                    s = (-half_l1 + s_p2_to_cell1) / 2; 
+                    t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
+                    d = r2 + t * n2 - r1 - s * n1;
+                    #ifdef DEBUG_CHECK_NAN
+                        if (d.array().isNaN().any())
+                        {
+                            std::cerr << "Found nan in distance vector:" << std::endl;
+                            configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
+                            throw std::runtime_error();
+                        }
+                    #endif
                     return std::make_tuple(d, s, t); 
                 }
                 else    // min_idx.find(3) != min_idx.end()
                 {
                     // Average between d_p1_to_cell2 and d_q2_to_cell1
-                    T s = (-half_l1 + s_q2_to_cell1) / 2; 
-                    T t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
-                    Matrix<T, 2, 1> d = r2 + t * n2 - r1 - s * n1; 
+                    s = (-half_l1 + s_q2_to_cell1) / 2; 
+                    t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
+                    d = r2 + t * n2 - r1 - s * n1;
+                    #ifdef DEBUG_CHECK_NAN
+                        if (d.array().isNaN().any())
+                        {
+                            std::cerr << "Found nan in distance vector:" << std::endl;
+                            configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
+                            throw std::runtime_error();
+                        }
+                    #endif
                     return std::make_tuple(d, s, t); 
                 }
             }
@@ -226,26 +318,50 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                 if (min_idx.find(2) != min_idx.end())
                 {
                     // Average between d_q1_to_cell2 and d_p2_to_cell1
-                    T s = (half_l1 + s_p2_to_cell1) / 2; 
-                    T t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
-                    Matrix<T, 2, 1> d = r2 + t * n2 - r1 - s * n1; 
+                    s = (half_l1 + s_p2_to_cell1) / 2; 
+                    t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
+                    d = r2 + t * n2 - r1 - s * n1;
+                    #ifdef DEBUG_CHECK_NAN
+                        if (d.array().isNaN().any())
+                        {
+                            std::cerr << "Found nan in distance vector:" << std::endl;
+                            configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
+                            throw std::runtime_error();
+                        }
+                    #endif
                     return std::make_tuple(d, s, t); 
                 }
                 else    // min_idx.find(3) != min_idx.end()
                 {
                     // Average between d_q1_to_cell2 and d_q2_to_cell1
-                    T s = (half_l1 + s_q2_to_cell2) / 2; 
-                    T t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
-                    Matrix<T, 2, 1> d = r2 + t * n2 - r1 - s * n1; 
+                    s = (half_l1 + s_q2_to_cell1) / 2; 
+                    t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
+                    d = r2 + t * n2 - r1 - s * n1;
+                    #ifdef DEBUG_CHECK_NAN
+                        if (d.array().isNaN().any())
+                        {
+                            std::cerr << "Found nan in distance vector:" << std::endl;
+                            configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
+                            throw std::runtime_error();
+                        }
+                    #endif
                     return std::make_tuple(d, s, t); 
                 }
             }
             else    // min_idx.find(2) != min_idx.end() && min_idx.find(3) != min_idx.end()
             {
                 // Average between d_p2_to_cell1 and d_q2_to_cell1
-                T t = 0.0;
-                T s = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, r2); 
-                Matrix<T, 2, 1> d = r2 - r1 - s * n1; 
+                t = 0.0;
+                s = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, r2); 
+                d = r2 - r1 - s * n1;
+                #ifdef DEBUG_CHECK_NAN
+                    if (d.array().isNaN().any())
+                    {
+                        std::cerr << "Found nan in distance vector:" << std::endl;
+                        configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
+                        throw std::runtime_error();
+                    }
+                #endif
                 return std::make_tuple(d, s, t); 
             }
         }
@@ -253,14 +369,25 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
     else 
     {
         // Otherwise, compute the distance vector 
-        auto result = CGAL::Distance_3::internal::squared_distance(cell1, cell2, k);
-        T s = static_cast<T>(CGAL::to_double(result.x)) * 2 * half_l1 - half_l1;
-        T t = static_cast<T>(CGAL::to_double(result.y)) * 2 * half_l2 - half_l2;
-        Matrix<T, 2, 1> dist = (r2 + t * n2 - r1 - s * n1)(Eigen::seq(0, 1));
-        return std::make_tuple(dist, s, t); 
+        auto result = CGAL::Distance_3::internal::squared_distance(cell1, cell2, kernel);
+        s = static_cast<T>(CGAL::to_double(result.x)) * 2 * half_l1 - half_l1;
+        t = static_cast<T>(CGAL::to_double(result.y)) * 2 * half_l2 - half_l2;
+        d = (r2 + t * n2 - r1 - s * n1)(Eigen::seq(0, 1));
+        #ifdef DEBUG_CHECK_NAN
+            if (d.array().isNaN().any())
+            {
+                std::cerr << "Found nan in distance vector:" << std::endl;
+                configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
+                throw std::runtime_error();
+            }
+        #endif
+
+        return std::make_tuple(d, s, t); 
     }
 }
 
+// ----------------------------------------------------------------------- //
+//                   CUSTOM DISTANCE FUNCTION (DEPRECATED)                 //
 // ----------------------------------------------------------------------- //
 /**
  * Return the shortest distance between the centerlines of two cells, along
