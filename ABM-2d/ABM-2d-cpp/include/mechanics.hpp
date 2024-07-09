@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/1/2024
+ *     7/8/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -54,7 +54,50 @@ enum AdhesionMode
     NONE,
     KIHARA,
     GBK
-}; 
+};
+
+/**
+ * Output an error message pertaining to the given cell-cell configuration
+ * and the generalized forces between them. 
+ *
+ * @param r1 Center of cell 1.
+ * @param n1 Orientation of cell 1.
+ * @param half_l1 Half of length of cell 1.
+ * @param r2 Center of cell 2.
+ * @param n2 Orientation of cell 2.
+ * @param half_l2 Half of length of cell 2.
+ * @param d12 Distance vector from cell 1 to cell 2. 
+ * @param s Cell-body coordinate of contact point along cell 1.
+ * @param t Cell-body coordinate of contact point along cell 2.
+ * @param dEdq Array of generalized forces. 
+ */
+template <typename T>
+void forcesSummary(const Ref<const Array<T, 2, 1> >& r1,
+                   const Ref<const Array<T, 2, 1> >& n1, const T half_l1,
+                   const Ref<const Array<T, 2, 1> >& r2,
+                   const Ref<const Array<T, 2, 1> >& n2, const T half_l2,
+                   const Ref<const Array<T, 2, 1> >& d12, const T s, const T t,
+                   const Ref<const Array<T, 2, 4> >& dEdq)
+{
+    std::cerr << "Cell 1 center = (" << r1(0) << ", " << r1(1) << ")" << std::endl
+              << "Cell 1 orientation = (" << n1(0) << ", " << n1(1) << ")" << std::endl
+              << "Cell 1 half-length = " << half_l1 << std::endl
+              << "Cell 2 center = (" << r2(0) << ", " << r2(1) << ")" << std::endl
+              << "Cell 2 orientation = (" << n2(0) << ", " << n2(1) << ")" << std::endl
+              << "Cell 2 half-length = " << half_l2 << std::endl
+              << "Distance vector = (" << d12(0) << ", " << d12(1) << ")" << std::endl 
+              << "Cell-body coordinate of contact point along cell 1 = " << s << std::endl
+              << "Cell-body coordinate of contact point along cell 2 = " << t << std::endl 
+              << "Generalized forces: " << std::endl
+              << " - w.r.t r1(0) = " << dEdq(0, 0) << std::endl
+              << " - w.r.t r1(1) = " << dEdq(0, 1) << std::endl 
+              << " - w.r.t n1(0) = " << dEdq(0, 2) << std::endl
+              << " - w.r.t n1(1) = " << dEdq(0, 3) << std::endl
+              << " - w.r.t r2(0) = " << dEdq(1, 0) << std::endl
+              << " - w.r.t r2(1) = " << dEdq(1, 1) << std::endl 
+              << " - w.r.t n2(0) = " << dEdq(1, 2) << std::endl
+              << " - w.r.t n2(1) = " << dEdq(1, 3) << std::endl;
+}
 
 /**
  * Compute the derivatives of the dissipation due to bulk viscosity and 
@@ -298,15 +341,29 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
 
         if (overlap > 0)
         {
-            // Derivative of cell-cell interaction energy w.r.t position of cell i
             Array<T, 2, 1> vij = prefactor * dir_ij;
-            dEdq(i, Eigen::seq(0, 1)) += vij; 
-            // Derivative of cell-cell interaction energy w.r.t orientation of cell i
-            dEdq(i, Eigen::seq(2, 3)) += vij * si; 
-            // Derivative of cell-cell interaction energy w.r.t position of cell j
-            dEdq(j, Eigen::seq(0, 1)) -= vij; 
-            // Derivative of cell-cell interaction energy w.r.t orientation of cell j
-            dEdq(j, Eigen::seq(2, 3)) -= vij * sj;
+            Array<T, 2, 4> forces;
+            forces << vij(0),       vij(1),        // Derivatives w.r.t position of cell i
+                      vij(0) * si,  vij(1) * si,   // Derivatives w.r.t orientation of cell i
+                      -vij(0),      -vij(1),       // Derivatives w.r.t position of cell j
+                      -vij(0) * sj, -vij(1) * sj;  // Derivatives w.r.t orientation of cell j
+            #ifdef DEBUG_CHECK_REPULSIVE_FORCES_NAN
+                if (forces.isNaN().any())
+                {
+                    std::cerr << "Found nan in repulsive forces between cells " 
+                              << i << " and " << j << std::endl;
+                    forcesSummary<T>(
+                        cells(i, Eigen::seq(0, 1)), cells(i, Eigen::seq(2, 3)),
+                        cells(i, 5),
+                        cells(j, Eigen::seq(0, 1)), cells(j, Eigen::seq(2, 3)), 
+                        cells(j, 5), neighbors(k, Eigen::seq(2, 3)), si, sj, 
+                        forces
+                    );
+                    throw std::runtime_error("Found nan in repulsive forces"); 
+                }
+            #endif
+            dEdq.row(i) += forces.row(0); 
+            dEdq.row(j) += forces.row(1); 
         }
     }
 
@@ -378,7 +435,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
             T sj = neighbors(k, 5); 
 
             // Get the corresponding forces
-            Matrix<T, 2, 4> forces; 
+            Array<T, 2, 4> forces; 
             if (mode == KIHARA) 
             {
                 const T strength = params["strength"];
@@ -402,8 +459,20 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                     expd, exp1, exp2, kappa0, dmin
                 ); 
             }
-            dEdq.row(i) += forces.row(0).array(); 
-            dEdq.row(j) += forces.row(1).array();
+            #ifdef DEBUG_CHECK_ADHESIVE_FORCES_NAN
+                if (forces.isNaN().any())
+                {
+                    std::cerr << "Found nan in adhesive forces between cells " 
+                              << i << " and " << j << std::endl;
+                    forcesSummary<T>(
+                        ri.array(), ni.array(), half_li, rj.array(), nj.array(), 
+                        half_lj, dij.array(), si, sj, forces
+                    );
+                    throw std::runtime_error("Found nan in adhesive forces"); 
+                }
+            #endif
+            dEdq.row(i) += forces.row(0); 
+            dEdq.row(j) += forces.row(1);
         }
     }
 
@@ -568,6 +637,26 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
                            const AdhesionMode adhesion_mode, 
                            std::unordered_map<std::string, T>& adhesion_params)
 {
+    #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
+        for (int k = 0; k < neighbors.rows(); ++k)
+        {
+            if (neighbors(k, Eigen::seq(2, 3)).matrix().norm() < 1e-8)
+            {
+                int i = neighbors(k, 0); 
+                int j = neighbors(k, 1); 
+                std::cerr << "Found near-zero distance between cells "
+                          << i << " and " << j << std::endl;
+                configSummary<T>(
+                    cells(i, Eigen::seq(0, 1)).matrix(),
+                    cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 5),
+                    cells(j, Eigen::seq(0, 1)).matrix(),
+                    cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 5)
+                );
+                throw std::runtime_error("Found near-zero distance");
+            }
+        }
+    #endif
+
     // Compute velocities at given partial timesteps 
     int n = cells.rows(); 
     int s = b.size(); 
@@ -609,7 +698,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
     Array<T, Dynamic, 4> errors = delta1 - delta2; 
     
     // Renormalize orientations 
-    normalizeOrientations<T>(cells_new); 
+    normalizeOrientations<T>(cells_new);
 
     return std::make_tuple(cells_new, errors, velocities_final1); 
 }
