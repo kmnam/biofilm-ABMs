@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/2/2024
+ *     7/8/2024
  */
 
 #ifndef KIHARA_GBK_POTENTIAL_FORCES_HPP
@@ -75,15 +75,15 @@ T squaredAspectRatioParam(const T half_l1, const T half_l2, const T Rcell)
  * @returns Matrix of generalized forces arising from the Kihara potential. 
  */
 template <typename T, int Dim>
-Matrix<T, 2, 2 * Dim> forcesKihara2D(const Ref<const Matrix<T, Dim, 1> >& r1, 
-                                     const Ref<const Matrix<T, Dim, 1> >& n1,
-                                     const T half_l1,
-                                     const Ref<const Matrix<T, Dim, 1> >& r2,
-                                     const Ref<const Matrix<T, Dim, 1> >& n2,
-                                     const T half_l2, const T R, 
-                                     const Ref<const Matrix<T, Dim, 1> >& d12,
-                                     const T s, const T t, const T exp,
-                                     const T dmin)
+Array<T, 2, 2 * Dim> forcesKihara2D(const Ref<const Matrix<T, Dim, 1> >& r1, 
+                                    const Ref<const Matrix<T, Dim, 1> >& n1,
+                                    const T half_l1,
+                                    const Ref<const Matrix<T, Dim, 1> >& r2,
+                                    const Ref<const Matrix<T, Dim, 1> >& n2,
+                                    const T half_l2, const T R, 
+                                    const Ref<const Matrix<T, Dim, 1> >& d12,
+                                    const T s, const T t, const T exp,
+                                    const T dmin)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
 
@@ -114,7 +114,7 @@ Matrix<T, 2, 2 * Dim> forcesKihara2D(const Ref<const Matrix<T, Dim, 1> >& r1,
         dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = deriv * d12n * t;
     }
 
-    return dEdq; 
+    return dEdq.array(); 
 }
 
 /**
@@ -308,15 +308,15 @@ std::pair<T, Matrix<T, 2, 2 * Dim> > anisotropyParamGBK2(const Ref<const Matrix<
  * @returns Matrix of generalized forces arising from the Kihara potential. 
  */
 template <typename T, int Dim>
-Matrix<T, 2, 2 * Dim> forcesGBK2D(const Ref<const Matrix<T, Dim, 1> >& r1,
-                                  const Ref<const Matrix<T, Dim, 1> >& n1, 
-                                  const T half_l1,
-                                  const Ref<const Matrix<T, Dim, 1> >& r2, 
-                                  const Ref<const Matrix<T, Dim, 1> >& n2,
-                                  const T half_l2, const T R, const T Rcell,
-                                  const Ref<const Matrix<T, Dim, 1> >& d12, 
-                                  const T s, const T t, const T expd, const T exp1,
-                                  const T exp2, const T kappa0, const T dmin)
+Array<T, 2, 2 * Dim> forcesGBK2D(const Ref<const Matrix<T, Dim, 1> >& r1,
+                                 const Ref<const Matrix<T, Dim, 1> >& n1, 
+                                 const T half_l1,
+                                 const Ref<const Matrix<T, Dim, 1> >& r2, 
+                                 const Ref<const Matrix<T, Dim, 1> >& n2,
+                                 const T half_l2, const T R, const T Rcell,
+                                 const Ref<const Matrix<T, Dim, 1> >& d12, 
+                                 const T s, const T t, const T expd, const T exp1,
+                                 const T exp2, const T kappa0, const T dmin)
 {
     // Get the anisotropy parameters and their partial derivatives 
     auto result1 = anisotropyParamGBK1<T, Dim>(n1, half_l1, n2, half_l2, Rcell, exp1);
@@ -354,7 +354,7 @@ Matrix<T, 2, 2 * Dim> forcesGBK2D(const Ref<const Matrix<T, Dim, 1> >& r1,
         dEdq = Matrix<T, 2, 2 * Dim>::Zero(); 
     }
 
-    return dEdq; 
+    return dEdq.array(); 
 }
 
 #endif 
