@@ -20,7 +20,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/16/2024
+ *     7/9/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -312,26 +312,72 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         // a given maximum number of attempts)
         if (iter % iter_update_stepsize == 0)
         {
-            T max_error = max(errors.abs().maxCoeff(), min_error); 
-            int j = 0; 
-            while (max_error > max_error_allowed && j < max_tries_update_stepsize)
+            // Enforce a composite error of the form e * (1 + y)
+            Array<T, Dynamic, 4> scale = max_error_allowed * (
+                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
+            );
+            //T error = max((errors / scale).abs().maxCoeff(), min_error);
+            T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
+
+            // Ensure that the updated stepsize is between 0.2 times and 10 times
+            // the previous stepsize 
+            T factor = 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
+            if (factor >= 10)
+                factor = 10;
+            else if (factor < 0.2)
+                factor = 0.2;
+            int j = 0;
+            while (error > 1 && j < max_tries_update_stepsize && factor > 0.2 && factor < 10)
             {
-                dt *= pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
+                T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
-                    A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
+                    A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, adhesion_mode,
                     adhesion_params
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
                 velocities_new = std::get<2>(result);
-                max_error = max(errors.abs().maxCoeff(), min_error);
+                //error = max((errors / scale).abs().maxCoeff(), min_error);
+                error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error);
+                factor *= 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
+                if (factor >= 10)
+                    factor = 10;
+                else if (factor < 0.2)
+                    factor = 0.2;
                 j++;  
             }
-            // If the error is small, increase the stepsize up to a maximum stepsize
-            if (max_error < max_error_allowed)
-                dt = min(dt * pow(max_error_allowed / max_error, 1.0 / (error_order + 1)), max_stepsize);
+            
+            // Ensure that the proposed stepsize is less than the maximum 
+            if (dt * factor > max_stepsize)
+                factor = max_stepsize / dt;
+
+            // Re-do the integration with the new stepsize
+            dt *= factor;
+            result = stepRungeKuttaAdaptive<T>(
+                A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
+                cell_cell_prefactors, surface_contact_density, adhesion_mode,
+                adhesion_params
+            ); 
+            cells_new = std::get<0>(result);
+            errors = std::get<1>(result);
+            velocities_new = std::get<2>(result);
         }
+        // If desired, print a warning message if the error is big
+        #ifdef DEBUG_WARN_LARGE_ERROR
+            Array<T, Dynamic, 4> scale = max_error_allowed * (
+                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
+            );
+            //T error = max((errors / scale).abs().maxCoeff(), min_error);
+            T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
+            if (error > 5)
+            {
+                std::cout << "[WARN] Average error is > 5 times the desired error "
+                          << "(absolute tol = relative tol = " << max_error_allowed
+                          << ", iteration " << iter << ", time = " << t
+                          << ", dt = " << dt << ")" << std::endl;
+            }
+        #endif
         cells = cells_new;
         velocities = velocities_new;
 
@@ -364,6 +410,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         {
             std::cout << "Iteration " << iter << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
+                      << ", avg error = " << errors.abs().sum() / (4 * n)
                       << ", dt = " << dt << std::endl;
             params["t_curr"] = floatToString<T>(t);
             std::stringstream ss; 
@@ -696,47 +743,76 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 4> errors = std::get<1>(result);
         Array<T, Dynamic, 4> velocities_new = std::get<2>(result);
-        //if (errors.isNaN().any())
-        //{
-        //    std::cout << "found nan!\n";
-        //    std::cout << cells_new << "\n--\n";
-        //    std::cout << errors << "\n--\n";
-        //    break;
-        //}
 
         // If the error is big, retry the step with a smaller stepsize (up to
         // a given maximum number of attempts)
         if (iter % iter_update_stepsize == 0)
         {
-            T max_error = max(errors.abs().maxCoeff(), min_error); 
-            int j = 0; 
-            while (max_error > max_error_allowed && j < max_tries_update_stepsize)
+            // Enforce a composite error of the form e * (1 + y)
+            Array<T, Dynamic, 4> scale = max_error_allowed * (
+                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
+            );
+            //T error = max((errors / scale).abs().maxCoeff(), min_error);
+            T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
+
+            // Ensure that the updated stepsize is between 0.2 times and 10 times
+            // the previous stepsize 
+            T factor = 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
+            if (factor >= 10)
+                factor = 10;
+            else if (factor < 0.2)
+                factor = 0.2;
+            int j = 0;
+            while (error > 1 && j < max_tries_update_stepsize && factor > 0.2 && factor < 10)
             {
-                dt *= pow(max_error_allowed / max_error, 1.0 / (error_order + 1));
+                T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
-                    A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
+                    A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, adhesion_mode,
                     adhesion_params
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
                 velocities_new = std::get<2>(result);
-                //if (errors.isNaN().any())
-                //{
-                //    std::cout << "found nan!\n";
-                //    std::cout << cells_new << "\n--\n";
-                //    std::cout << errors << "\n--\n";
-                //    break; 
-                //}
-                max_error = max(errors.abs().maxCoeff(), min_error);
+                //error = max((errors / scale).abs().maxCoeff(), min_error);
+                error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error);
+                factor *= 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
+                if (factor >= 10)
+                    factor = 10;
+                else if (factor < 0.2)
+                    factor = 0.2;
                 j++;  
             }
-            //if (errors.isNaN().any())
-            //    break; 
-            // If the error is small, increase the stepsize up to a maximum stepsize
-            if (max_error < max_error_allowed)
-                dt = min(dt * pow(max_error_allowed / max_error, 1.0 / (error_order + 1)), max_stepsize);
+            
+            // Ensure that the proposed stepsize is less than the maximum 
+            if (dt * factor > max_stepsize)
+                factor = max_stepsize / dt;
+
+            // Re-do the integration with the new stepsize
+            dt *= factor;
+            result = stepRungeKuttaAdaptive<T>(
+                A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
+                cell_cell_prefactors, surface_contact_density, adhesion_mode,
+                adhesion_params
+            ); 
+            cells_new = std::get<0>(result);
+            errors = std::get<1>(result);
+            velocities_new = std::get<2>(result);
         }
+        #ifdef DEBUG_WARN_LARGE_ERROR
+            Array<T, Dynamic, 4> scale = max_error_allowed * (
+                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
+            );
+            //T error = max((errors / scale).abs().maxCoeff(), min_error);
+            T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
+            if (error > 5)
+            {
+                std::cout << "[WARN] Average error is > 5 times the desired error "
+                          << "(absolute tol = relative tol = " << max_error_allowed
+                          << ", iteration " << iter << ", time = " << t
+                          << ", dt = " << dt << ")" << std::endl;
+            }
+        #endif
         cells = cells_new;
         velocities = velocities_new;
 
@@ -782,6 +858,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         {
             std::cout << "Iteration " << iter << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
+                      << ", avg error = " << errors.abs().sum() / (4 * n)
                       << ", dt = " << dt << std::endl;
             params["t_curr"] = floatToString<T>(t);
             std::stringstream ss; 
