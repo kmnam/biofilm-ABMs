@@ -14,6 +14,7 @@
 #ifndef DISTANCES_2D_HPP
 #define DISTANCES_2D_HPP
 
+#include <stdexcept>
 #include <utility>
 #include <tuple>
 #include <vector>
@@ -226,12 +227,12 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                 t = s_q1_to_cell2; 
                 d = d_q1_to_cell2; 
             }
-            #ifdef DEBUG_CHECK_NAN
+            #ifdef DEBUG_CHECK_DISTANCE_NAN
                 if (d.array().isNaN().any())
                 {
                     std::cerr << "Found nan in distance vector:" << std::endl;
                     configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
-                    throw std::runtime_error();
+                    throw std::runtime_error("Found nan in distance vector");
                 }
             #endif
             return std::make_tuple(d, s, t); 
@@ -270,12 +271,12 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                     s = 0.0; 
                     t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1);
                     d = r2 + t * n2 - r1;
-                    #ifdef DEBUG_CHECK_NAN
+                    #ifdef DEBUG_CHECK_DISTANCE_NAN
                         if (d.array().isNaN().any())
                         {
                             std::cerr << "Found nan in distance vector:" << std::endl;
                             configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
-                            throw std::runtime_error();
+                            throw std::runtime_error("Found nan in distance vector");
                         }
                     #endif
                     return std::make_tuple(d, s, t); 
@@ -286,12 +287,12 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                     s = (-half_l1 + s_p2_to_cell1) / 2; 
                     t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
                     d = r2 + t * n2 - r1 - s * n1;
-                    #ifdef DEBUG_CHECK_NAN
+                    #ifdef DEBUG_CHECK_DISTANCE_NAN
                         if (d.array().isNaN().any())
                         {
                             std::cerr << "Found nan in distance vector:" << std::endl;
                             configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
-                            throw std::runtime_error();
+                            throw std::runtime_error("Found nan in distance vector");
                         }
                     #endif
                     return std::make_tuple(d, s, t); 
@@ -302,12 +303,12 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                     s = (-half_l1 + s_q2_to_cell1) / 2; 
                     t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
                     d = r2 + t * n2 - r1 - s * n1;
-                    #ifdef DEBUG_CHECK_NAN
+                    #ifdef DEBUG_CHECK_DISTANCE_NAN
                         if (d.array().isNaN().any())
                         {
                             std::cerr << "Found nan in distance vector:" << std::endl;
                             configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
-                            throw std::runtime_error();
+                            throw std::runtime_error("Found nan in distance vector");
                         }
                     #endif
                     return std::make_tuple(d, s, t); 
@@ -321,12 +322,12 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                     s = (half_l1 + s_p2_to_cell1) / 2; 
                     t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
                     d = r2 + t * n2 - r1 - s * n1;
-                    #ifdef DEBUG_CHECK_NAN
+                    #ifdef DEBUG_CHECK_DISTANCE_NAN
                         if (d.array().isNaN().any())
                         {
                             std::cerr << "Found nan in distance vector:" << std::endl;
                             configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
-                            throw std::runtime_error();
+                            throw std::runtime_error("Found nan in distance vector");
                         }
                     #endif
                     return std::make_tuple(d, s, t); 
@@ -337,12 +338,12 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                     s = (half_l1 + s_q2_to_cell1) / 2; 
                     t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
                     d = r2 + t * n2 - r1 - s * n1;
-                    #ifdef DEBUG_CHECK_NAN
+                    #ifdef DEBUG_CHECK_DISTANCE_NAN
                         if (d.array().isNaN().any())
                         {
                             std::cerr << "Found nan in distance vector:" << std::endl;
                             configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
-                            throw std::runtime_error();
+                            throw std::runtime_error("Found nan in distance vector");
                         }
                     #endif
                     return std::make_tuple(d, s, t); 
@@ -354,12 +355,12 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                 t = 0.0;
                 s = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, r2); 
                 d = r2 - r1 - s * n1;
-                #ifdef DEBUG_CHECK_NAN
+                #ifdef DEBUG_CHECK_DISTANCE_NAN
                     if (d.array().isNaN().any())
                     {
                         std::cerr << "Found nan in distance vector:" << std::endl;
                         configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
-                        throw std::runtime_error();
+                        throw std::runtime_error("Found nan in distance vector");
                     }
                 #endif
                 return std::make_tuple(d, s, t); 
@@ -373,12 +374,12 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
         s = static_cast<T>(CGAL::to_double(result.x)) * 2 * half_l1 - half_l1;
         t = static_cast<T>(CGAL::to_double(result.y)) * 2 * half_l2 - half_l2;
         d = (r2 + t * n2 - r1 - s * n1)(Eigen::seq(0, 1));
-        #ifdef DEBUG_CHECK_NAN
+        #ifdef DEBUG_CHECK_DISTANCE_NAN
             if (d.array().isNaN().any())
             {
                 std::cerr << "Found nan in distance vector:" << std::endl;
                 configSummary<T>(r1, v1, half_l1, r2, v2, half_l2); 
-                throw std::runtime_error();
+                throw std::runtime_error("Found nan in distance vector");
             }
         #endif
 
