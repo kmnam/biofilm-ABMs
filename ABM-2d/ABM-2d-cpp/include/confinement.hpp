@@ -186,26 +186,38 @@ std::pair<std::vector<int>, T> getBoundary(const Ref<const Array<T, Dynamic, Dyn
  */
 template <typename T>
 Array<T, Dynamic, 4> radialConfinementForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                             const bool find_boundary,
                                              const T R, const T area_tol, 
                                              const T meshsize, 
                                              const Ref<const Array<T, 2, 1> >& center,
                                              const T rest_radius_factor, 
                                              const T spring_const)
 {
-    // Get the indices of the peripheral cells 
-    auto result = getBoundary<T>(cells, R, area_tol, meshsize);
-    std::vector<int> boundary = result.first; 
-    T max_area = result.second; 
+    // If desired, get the indices of the peripheral cells
+    const int n = cells.rows(); 
+    std::vector<int> idx;
+    T max_area; 
+    if (find_boundary)
+    {
+        auto result = getBoundary<T>(cells, R, area_tol, meshsize);
+        idx = result.first; 
+        max_area = result.second;
+    }
+    else 
+    {
+        for (int j = 0; j < n; ++j)
+            idx.push_back(j);
+        max_area = getMaxArea<T>(cells, R); 
+    }
 
     // Obtain a corresponding rest radius for the confining membrane 
     T rest_radius = rest_radius_factor * sqrt(max_area / boost::math::constants::pi<T>());
 
     // Maintain an array of generalized forces on each cell
-    const int n = cells.rows(); 
     Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(n, 4); 
 
-    // For each peripheral cell ... 
-    for (const int j : boundary)
+    // For each cell ... 
+    for (const int j : idx)
     {
         Matrix<T, 2, 1> rj = cells(j, Eigen::seq(0, 1)).transpose().matrix(); 
         Matrix<T, 2, 1> nj = cells(j, Eigen::seq(2, 3)).transpose().matrix();
