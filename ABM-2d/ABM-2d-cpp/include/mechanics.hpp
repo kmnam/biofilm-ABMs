@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/8/2024
+ *     7/12/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -500,7 +500,11 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
- *                        forces. 
+ *                        forces.
+ * @param confine If true, introduce an additional radial confinement on the 
+ *                peripheral cells. 
+ * @param confine_params Parameters required to compute radial confinement
+ *                       forces.
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -511,7 +515,9 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                    const T surface_contact_density,
                                    const AdhesionMode adhesion_mode,
-                                   std::unordered_map<std::string, T>& adhesion_params)
+                                   std::unordered_map<std::string, T>& adhesion_params,
+                                   const bool confine,
+                                   std::unordered_map<std::string, T>& confine_params)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -547,9 +553,13 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     );
     Array<T, Dynamic, 1> K = prefactors.col(0);
     Array<T, Dynamic, 1> L = prefactors.col(1);
+
+    // Compute the repulsive forces ... 
     Array<T, Dynamic, 4> dEdq_repulsion = cellCellRepulsiveForces<T>(
         cells, neighbors, R, Rcell, cell_cell_prefactors
     );
+
+    // ... the adhesive forces (if adhesion is present) ... 
     Array<T, Dynamic, 4> dEdq_adhesion = Array<T, Dynamic, 4>::Zero(n, 4); 
     if (adhesion_mode != NONE)
     {
@@ -557,7 +567,19 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
             cells, neighbors, to_adhere, R, Rcell, adhesion_mode, adhesion_params
         );
     }
-    Array<T, Dynamic, 4> dEdq = dEdq_repulsion + dEdq_adhesion; 
+
+    // ... and the radial confinement forces (if confinement is present)
+    Array<T, Dynamic, 4> dEdq_confine = Array<T, Dynamic, 4>::Zero(n, 4); 
+    if (confine_spring_const > 0)
+    {
+        dEdq_confine = radialConfinementForces<T>(
+            cells, Array<T, 2, 1>::Zero(), confine_params["rest_radius_factor"],
+            confine_params["spring_const"]
+        );
+    }
+
+    // Combine the three types of forces 
+    Array<T, Dynamic, 4> dEdq = dEdq_repulsion + dEdq_adhesion + dEdq_confine; 
 
     // Set mult = 2 * lambda
     Array<T, Dynamic, 1> mult = cells.col(2) * dEdq.col(2) + cells.col(3) * dEdq.col(3);
@@ -619,7 +641,11 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
- *                        forces. 
+ *                        forces.
+ * @param confine If true, introduce an additional radial confinement on the 
+ *                peripheral cells. 
+ * @param confine_params Parameters required to compute radial confinement
+ *                       forces.
  * @returns Updated population of cells, along with the array of errors in
  *          the cell positions and orientations.  
  */
@@ -635,7 +661,9 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
                            const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                            const T surface_contact_density,
                            const AdhesionMode adhesion_mode, 
-                           std::unordered_map<std::string, T>& adhesion_params)
+                           std::unordered_map<std::string, T>& adhesion_params,
+                           const bool confine, 
+                           std::unordered_map<std::string, T>& confine_params)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
         for (int k = 0; k < neighbors.rows(); ++k)
@@ -664,7 +692,8 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
     velocities.push_back(
         getVelocities<T>(
             cells, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
-            surface_contact_density, adhesion_mode, adhesion_params
+            surface_contact_density, adhesion_mode, adhesion_params, confine,
+            confine_params
         )
     );
     for (int i = 1; i < s; ++i)
@@ -678,7 +707,8 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
         velocities.push_back(
             getVelocities<T>(
                 cells_i, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
-                surface_contact_density, adhesion_mode, adhesion_params
+                surface_contact_density, adhesion_mode, adhesion_params,
+                confine, confine_params
             )
         );
     }
