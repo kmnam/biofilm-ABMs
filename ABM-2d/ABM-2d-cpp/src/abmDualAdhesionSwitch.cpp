@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/28/2024
+ *     7/12/2024
  */
 
 #include <Eigen/Dense>
@@ -130,6 +130,10 @@ int main(int argc, char** argv)
     // Random seed
     const int rng_seed = std::stoi(argv[3]);
 
+    // No radial confinement forces
+    const bool confine = false;
+    std::unordered_map<std::string, T> confine_params; 
+
     // Initialize simulation ...
     //
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
@@ -145,7 +149,7 @@ int main(int argc, char** argv)
         max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        adhesion_mode, adhesion_params
+        adhesion_mode, adhesion_params, confine, confine_params
     ); 
    
     return 0; 
