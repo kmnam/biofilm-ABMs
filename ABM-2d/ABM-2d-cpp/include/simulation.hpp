@@ -20,7 +20,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/9/2024
+ *     7/12/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -108,6 +108,8 @@ std::string floatToString(T x, const int precision = 10)
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
  * @param adhesion_mode
  * @param adhesion_params
+ * @param confine
+ * @param confine_params
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -131,7 +133,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const T daughter_length_std,
                                          const T daughter_angle_bound,
                                          const AdhesionMode adhesion_mode,
-                                         std::unordered_map<std::string, T>& adhesion_params)
+                                         std::unordered_map<std::string, T>& adhesion_params,
+                                         const bool confine,
+                                         std::unordered_map<std::string, T>& confine_params)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -237,13 +241,28 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
     params["adhesion_mode"] = std::to_string(adhesion_mode);
-    for (auto&& item : adhesion_params)
+    if (adhesion_mode != NONE)
     {
-        std::stringstream ss; 
-        std::string key = item.first; 
-        T value = item.second;
-        ss << "adhesion_" << key; 
-        params[ss.str()] = floatToString<T>(value); 
+        for (auto&& item : adhesion_params)
+        {
+            std::stringstream ss; 
+            std::string key = item.first; 
+            T value = item.second;
+            ss << "adhesion_" << key; 
+            params[ss.str()] = floatToString<T>(value); 
+        }
+    }
+    params["confine"] = confine;
+    if (confine)
+    {
+        for (auto&& item : confine_params)
+        {
+            std::stringstream ss;
+            std::string key = item.first;
+            T value = item.second;
+            ss << "confine_" << key; 
+            params[ss.str()] = floatToString<T>(value);
+        }
     }
 
     // Write the initial population to file
@@ -302,7 +321,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
             cell_cell_prefactors, surface_contact_density, adhesion_mode, 
-            adhesion_params
+            adhesion_params, confine, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 4> errors = std::get<1>(result);
@@ -333,7 +352,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                    adhesion_params
+                    adhesion_params, confine, confine_params
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
@@ -357,7 +376,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                adhesion_params
+                adhesion_params, confine, confine_params
             ); 
             cells_new = std::get<0>(result);
             errors = std::get<1>(result);
@@ -479,6 +498,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
  * @param adhesion_mode
  * @param adhesion_params
+ * @param confine
+ * @param confine_params
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -507,7 +528,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const T daughter_length_std,
                                          const T daughter_angle_bound, 
                                          const AdhesionMode adhesion_mode, 
-                                         std::unordered_map<std::string, T>& adhesion_params)
+                                         std::unordered_map<std::string, T>& adhesion_params,
+                                         const bool confine,
+                                         std::unordered_map<std::string, T>& confine_params)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -673,13 +696,28 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
     params["adhesion_mode"] = std::to_string(adhesion_mode);
-    for (auto&& item : adhesion_params)
+    if (adhesion_mode != NONE)
     {
-        std::stringstream ss; 
-        std::string key = item.first; 
-        T value = item.second;
-        ss << "adhesion_" << key; 
-        params[ss.str()] = floatToString<T>(value); 
+        for (auto&& item : adhesion_params)
+        {
+            std::stringstream ss; 
+            std::string key = item.first; 
+            T value = item.second;
+            ss << "adhesion_" << key; 
+            params[ss.str()] = floatToString<T>(value); 
+        }
+    }
+    params["confine"] = confine;
+    if (confine)
+    {
+        for (auto&& item : confine_params)
+        {
+            std::stringstream ss;
+            std::string key = item.first;
+            T value = item.second;
+            ss << "confine_" << key; 
+            params[ss.str()] = floatToString<T>(value);
+        }
     }
 
     // Write the initial population to file
@@ -738,7 +776,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
             cell_cell_prefactors, surface_contact_density, adhesion_mode,
-            adhesion_params
+            adhesion_params, confine, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 4> errors = std::get<1>(result);
@@ -769,7 +807,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                    adhesion_params
+                    adhesion_params, confine, confine_params
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
@@ -793,7 +831,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                adhesion_params
+                adhesion_params, confine, confine_params
             ); 
             cells_new = std::get<0>(result);
             errors = std::get<1>(result);
