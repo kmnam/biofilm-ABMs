@@ -102,10 +102,10 @@ std::pair<AlphaShape2DProperties, std::vector<int> >
         //
         // First generate the cylinder ...
         int m = static_cast<int>(li / meshsize) + 1;
-        Array<T, 2, 1> mesh = Array<T, 2, 1>::LinSpaced(m, -half_li, half_li);
+        Array<T, 2, 1> mesh1 = Array<T, 2, 1>::LinSpaced(m, -half_li, half_li);
         for (int j = 0; j < m; ++j)
         {
-            Array<T, 2, 1> p = ri + mesh(j) * ni;
+            Array<T, 2, 1> p = ri + mesh1(j) * ni;
             Array<T, 2, 1> q = p + ni_rot;
             Array<T, 2, 1> s = p - ni_rot;
 
@@ -124,7 +124,7 @@ std::pair<AlphaShape2DProperties, std::vector<int> >
 
         // ... then generate the hemispherical caps
         m = static_cast<int>(boost::math::constants::pi<T>() * R / meshsize) + 1;
-        Array<T, 2, 1> mesh = Array<T, 2, 1>::LinSpaced(
+        Array<T, 2, 1> mesh2 = Array<T, 2, 1>::LinSpaced(
             m, -boost::math::constants::half_pi<T>(), boost::math::constants::half_pi<T>()
         );
         Array<T, 2, 1> pi = ri - half_li * ni;
@@ -132,8 +132,8 @@ std::pair<AlphaShape2DProperties, std::vector<int> >
         for (int j = 0; j < m; ++j)
         {
             Matrix<T, 2, 2> rot; 
-            T cos_theta = cos(mesh(j)); 
-            T sin_theta = sin(mesh(j)); 
+            T cos_theta = cos(mesh2(j)); 
+            T sin_theta = sin(mesh2(j)); 
             rot << cos_theta, -sin_theta,
                    sin_theta,  cos_theta; 
             Matrix<T, 2, 1> v = pi.matrix() + R * rot * (-ni).matrix();
@@ -239,7 +239,7 @@ Array<T, Dynamic, 4> radialConfinementForces(const Ref<const Array<T, Dynamic, D
                                              const bool find_boundary,
                                              const T R, const T area_factor, 
                                              const T meshsize, 
-                                             const Ref<const Array<T, 2, 1> >& center,
+                                             const Ref<const Matrix<T, 2, 1> >& center,
                                              const T rest_radius_factor, 
                                              const T spring_const)
 {
