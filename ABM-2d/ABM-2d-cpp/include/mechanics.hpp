@@ -527,7 +527,8 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
  * @param confine If true, introduce an additional radial confinement on the 
- *                peripheral cells. 
+ *                peripheral cells.
+ * @param boundary_idx Pre-computed vector of indices of peripheral cells. 
  * @param confine_params Parameters required to compute radial confinement
  *                       forces.
  * @returns Array of translational and orientational velocities.   
@@ -542,6 +543,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const AdhesionMode adhesion_mode,
                                    std::unordered_map<std::string, T>& adhesion_params,
                                    const bool confine,
+                                   std::vector<int>& boundary_idx,
                                    std::unordered_map<std::string, T>& confine_params)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
@@ -597,12 +599,11 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     Array<T, Dynamic, 4> dEdq_confine = Array<T, Dynamic, 4>::Zero(n, 4); 
     if (confine_params["spring_const"] > 0)
     {
-        const T meshsize = 0.1; 
+        const T rest_radius_factor = confine_params["rest_radius_factor"]; 
+        const T spring_const = confine_params["spring_const"];
         Matrix<T, 2, 1> center = Matrix<T, 2, 1>::Zero();
         dEdq_confine = radialConfinementForces<T>(
-            cells, confine_params["find_boundary"], R, confine_params["area_factor"],
-            meshsize, center, confine_params["rest_radius_factor"],
-            confine_params["spring_const"]
+            cells, boundary_idx, R, center, rest_radius_factor, spring_const
         );
         #ifdef DEBUG_CHECK_CONFINEMENT_FORCES_NAN
             for (int i = 0; i < n; ++i)
@@ -685,7 +686,8 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
  * @param confine If true, introduce an additional radial confinement on the 
- *                peripheral cells. 
+ *                peripheral cells.
+ * @param boundary_idx Pre-computed vector of indices of peripheral cells. 
  * @param confine_params Parameters required to compute radial confinement
  *                       forces.
  * @returns Updated population of cells, along with the array of errors in
@@ -704,7 +706,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
                            const T surface_contact_density,
                            const AdhesionMode adhesion_mode, 
                            std::unordered_map<std::string, T>& adhesion_params,
-                           const bool confine, 
+                           const bool confine, std::vector<int>& boundary_idx, 
                            std::unordered_map<std::string, T>& confine_params)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
@@ -735,7 +737,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
         getVelocities<T>(
             cells, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
             surface_contact_density, adhesion_mode, adhesion_params, confine,
-            confine_params
+            boundary_idx, confine_params
         )
     );
     for (int i = 1; i < s; ++i)
@@ -750,7 +752,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
             getVelocities<T>(
                 cells_i, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
                 surface_contact_density, adhesion_mode, adhesion_params,
-                confine, confine_params
+                confine, boundary_idx, confine_params
             )
         );
     }
