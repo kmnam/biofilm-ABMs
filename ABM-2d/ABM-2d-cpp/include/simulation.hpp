@@ -93,6 +93,8 @@ std::string floatToString(T x, const int precision = 10)
  * @param iter_write Write cells to file every this many iterations. 
  * @param iter_update_neighbors Update neighboring cells every this many 
  *                              iterations. 
+ * @param iter_update_boundary Update peripheral cells every this many 
+ *                             iterations (only if `confine` is true).
  * @param iter_update_stepsize Update stepsize every this many iterations. 
  * @param max_error_allowed Maximum Runge-Kutta error allowed per iteration. 
  * @param min_error Minimum Runge-Kutta error. 
@@ -122,6 +124,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const std::string outprefix, 
                                          const int iter_write,
                                          const int iter_update_neighbors,
+                                         const int iter_update_boundary,
                                          const int iter_update_stepsize,
                                          const T max_error_allowed,
                                          const T min_error,
@@ -231,6 +234,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     params["max_stepsize"] = floatToString<T>(max_stepsize, precision);
     params["iter_write"] = std::to_string(iter_write);
     params["iter_update_neighbors"] = std::to_string(iter_update_neighbors);
+    params["iter_update_boundary"] = std::to_string(iter_update_boundary);
     params["iter_update_stepsize"] = std::to_string(iter_update_stepsize);
     params["max_error_allowed"] = floatToString<T>(max_error_allowed, precision);
     params["max_tries_update_stepsize"] = std::to_string(max_tries_update_stepsize);
@@ -260,8 +264,35 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::stringstream ss;
             std::string key = item.first;
             T value = item.second;
-            ss << "confine_" << key; 
-            params[ss.str()] = floatToString<T>(value);
+            ss << "confine_" << key;
+            if (key == "find_boundary")
+                params[ss.str()] = (value == 0 ? "0" : "1");
+            else if (key == "mincells_for_center_boundary")
+                params[ss.str()] = std::to_string(static_cast<int>(value));
+            else
+                params[ss.str()] = floatToString<T>(value);
+        }
+    }
+
+    // Get initial subset of peripheral cells 
+    const bool find_boundary = (confine_params["find_boundary"] != 0);
+    const T area_factor = confine_params["area_factor"]; 
+    const T outline_meshsize = confine_params["outline_meshsize"];
+    const int mincells_for_center_boundary
+        = static_cast<int>(confine_params["mincells_for_center_boundary"]);
+    std::vector<int> boundary_idx;
+    if (confine)
+    {
+        if (find_boundary)
+        {
+            boundary_idx = getBoundary<T>(
+                cells, R, area_factor, outline_meshsize, mincells_for_center_boundary
+            );
+        }
+        else
+        {
+            boundary_idx.resize(n); 
+            std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
         }
     }
 
@@ -303,7 +334,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         );
         n = cells.rows(); 
 
-        // Update neighboring cells if division has occurred
+        // Update neighboring cells and peripheral cells if division has occurred
         if (to_divide.sum() > 0)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
@@ -315,13 +346,28 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
                 to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
             }
+            if (confine)
+            {
+                if (find_boundary)
+                {
+                    boundary_idx = getBoundary<T>(
+                        cells, R, area_factor, outline_meshsize,
+                        mincells_for_center_boundary
+                    );
+                }
+                else
+                {
+                    boundary_idx.resize(n); 
+                    std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
+                }
+            }
         }
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
             cell_cell_prefactors, surface_contact_density, adhesion_mode, 
-            adhesion_params, confine, confine_params
+            adhesion_params, confine, boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 4> errors = std::get<1>(result);
@@ -352,12 +398,11 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                    adhesion_params, confine, confine_params
+                    adhesion_params, confine, boundary_idx, confine_params
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
                 velocities_new = std::get<2>(result);
-                //error = max((errors / scale).abs().maxCoeff(), min_error);
                 error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error);
                 factor *= 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
                 if (factor >= 10)
@@ -376,7 +421,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                adhesion_params, confine, confine_params
+                adhesion_params, boundary_idx, confine, confine_params
             ); 
             cells_new = std::get<0>(result);
             errors = std::get<1>(result);
@@ -421,6 +466,22 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 int nj = neighbors(k, 1);
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
                 to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+            }
+        }
+
+        // Update peripheral cells
+        if (confine && iter % iter_update_boundary == 0)
+        {
+            if (find_boundary)
+            {
+                boundary_idx = getBoundary<T>(
+                    cells, R, area_factor, outline_meshsize, mincells_for_center_boundary
+                );
+            }
+            else
+            {
+                boundary_idx.resize(n); 
+                std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
             }
         }
         
@@ -477,7 +538,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  * @param outprefix Output filename prefix. 
  * @param iter_write Write cells to file every this many iterations. 
  * @param iter_update_neighbors Update neighboring cells every this many 
- *                              iterations. 
+ *                              iterations.
+ * @param iter_update_boundary Update peripheral cells every this many 
+ *                             iterations (only if `confine` is true).
  * @param iter_update_stepsize Update stepsize every this many iterations. 
  * @param max_error_allowed Maximum Runge-Kutta error allowed per iteration. 
  * @param min_error Minimum Runge-Kutta error. 
@@ -512,6 +575,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const std::string outprefix, 
                                          const int iter_write,
                                          const int iter_update_neighbors,
+                                         const int iter_update_boundary,
                                          const int iter_update_stepsize,
                                          const T max_error_allowed,
                                          const T min_error,
@@ -653,6 +717,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     params["max_stepsize"] = floatToString<T>(max_stepsize, precision);
     params["iter_write"] = std::to_string(iter_write);
     params["iter_update_neighbors"] = std::to_string(iter_update_neighbors);
+    params["iter_update_boundary"] = std::to_string(iter_update_boundary);
     params["iter_update_stepsize"] = std::to_string(iter_update_stepsize);
     params["max_error_allowed"] = floatToString<T>(max_error_allowed, precision);
     params["max_tries_update_stepsize"] = std::to_string(max_tries_update_stepsize);
@@ -716,7 +781,34 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::string key = item.first;
             T value = item.second;
             ss << "confine_" << key; 
-            params[ss.str()] = floatToString<T>(value);
+            if (key == "find_boundary")
+                params[ss.str()] = (value == 0 ? "0" : "1");
+            else if (key == "mincells_for_center_boundary")
+                params[ss.str()] = std::to_string(static_cast<int>(value));
+            else
+                params[ss.str()] = floatToString<T>(value);
+        }
+    }
+
+    // Get initial subset of peripheral cells 
+    const bool find_boundary = (confine_params["find_boundary"] != 0);
+    const T area_factor = confine_params["area_factor"]; 
+    const T outline_meshsize = confine_params["outline_meshsize"];
+    const int mincells_for_center_boundary
+        = static_cast<int>(confine_params["mincells_for_center_boundary"]);
+    std::vector<int> boundary_idx;
+    if (confine)
+    {
+        if (find_boundary)
+        {
+            boundary_idx = getBoundary<T>(
+                cells, R, area_factor, outline_meshsize, mincells_for_center_boundary
+            );
+        }
+        else
+        {
+            boundary_idx.resize(n); 
+            std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
         }
     }
 
@@ -758,7 +850,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         );
         n = cells.rows();
 
-        // Update neighboring cells if division has occurred
+        // Update neighboring cells and peripheral cells if division has occurred
         if (to_divide.sum() > 0)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
@@ -770,13 +862,29 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
                 to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
             }
+
+            if (confine)
+            {
+                if (find_boundary)
+                {
+                    boundary_idx = getBoundary<T>(
+                        cells, R, area_factor, outline_meshsize,
+                        mincells_for_center_boundary
+                    );
+                }
+                else
+                {
+                    boundary_idx.resize(n); 
+                    std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
+                }
+            }
         }
 
         // Update cell positions and orientations
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
             cell_cell_prefactors, surface_contact_density, adhesion_mode,
-            adhesion_params, confine, confine_params
+            adhesion_params, confine, boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
         Array<T, Dynamic, 4> errors = std::get<1>(result);
@@ -807,12 +915,11 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                    adhesion_params, confine, confine_params
+                    adhesion_params, confine, boundary_idx, confine_params
                 ); 
                 cells_new = std::get<0>(result);
                 errors = std::get<1>(result);
                 velocities_new = std::get<2>(result);
-                //error = max((errors / scale).abs().maxCoeff(), min_error);
                 error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error);
                 factor *= 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
                 if (factor >= 10)
@@ -831,7 +938,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                adhesion_params, confine, confine_params
+                adhesion_params, confine, boundary_idx, confine_params
             ); 
             cells_new = std::get<0>(result);
             errors = std::get<1>(result);
@@ -875,6 +982,22 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 int nj = neighbors(k, 1);
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
                 to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+            }
+        }
+
+        // Update peripheral cells
+        if (confine && iter % iter_update_boundary == 0)
+        {
+            if (find_boundary)
+            {
+                boundary_idx = getBoundary<T>(
+                    cells, R, area_factor, outline_meshsize, mincells_for_center_boundary
+                );
+            }
+            else
+            {
+                boundary_idx.resize(n); 
+                std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
             }
         }
 
