@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/9/2024
+ *     7/12/2024
  */
 
 #ifndef BIOFILM_RADIAL_CONFINEMENT_HPP
@@ -41,6 +41,8 @@ using boost::multiprecision::sqrt;
 template <typename T>
 T getMaxArea(const Ref<const Array<T, Dynamic, Dynamic> >& cells, const T R)
 {
+    //std::cout << "in getMaxArea()\n";
+
     T caps_area = cells.rows() * boost::math::constants::pi<T>() * R * R;
     T cylinders_area = 0; 
     for (int i = 0; i < cells.rows(); ++i)
@@ -52,6 +54,8 @@ T getMaxArea(const Ref<const Array<T, Dynamic, Dynamic> >& cells, const T R)
  * Get the peripheral subset of the given cells from a simply connected
  * alpha-shape built from the cell centers.
  *
+ * It is assumed that there are 3 or more cells. 
+ *
  * @param cells Input population of cells.
  * @returns An object containing the alpha-shape built from the cell centers.
  *          See `include/boundaries.hpp` for details. 
@@ -59,6 +63,8 @@ T getMaxArea(const Ref<const Array<T, Dynamic, Dynamic> >& cells, const T R)
 template <typename T>
 AlphaShape2DProperties getBoundaryFromCenters(const Ref<const Array<T, Dynamic, Dynamic> >& cells)
 {
+    //std::cout << "in getBoundaryFromCenters()\n";
+
     std::vector<double> x, y;
     for (int i = 0; i < cells.rows(); ++i)
     {
@@ -72,10 +78,12 @@ AlphaShape2DProperties getBoundaryFromCenters(const Ref<const Array<T, Dynamic, 
  * Get the peripheral subset of the given cells from a simply connected
  * alpha-shape built from 2-D cross-sectional outlines of the cells.
  *
- * @param cells    Input population of cells. 
- * @param R        Cell radius. 
- * @param meshsize Approximate meshsize with which to obtain points from each
- *                 cell outline.
+ * It is assumed that there are 3 or more cells. 
+ *
+ * @param cells            Input population of cells. 
+ * @param R                Cell radius. 
+ * @param outline_meshsize Approximate meshsize with which to obtain points
+ *                         from each cell outline.
  * @returns An object containing the alpha-shape built from the cell outlines,
  *          together with a vector of indices that assigns each outline point
  *          to the cell from which it originates. 
@@ -83,8 +91,10 @@ AlphaShape2DProperties getBoundaryFromCenters(const Ref<const Array<T, Dynamic, 
 template <typename T>
 std::pair<AlphaShape2DProperties, std::vector<int> >
     getBoundaryFromOutlines(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                            const T R, const T meshsize)
+                            const T R, const T outline_meshsize)
 {
+    //std::cout << "in getBoundaryFromOutlines()\n";
+
     std::vector<double> x, y;
     std::vector<int> idx;
 
@@ -101,7 +111,7 @@ std::pair<AlphaShape2DProperties, std::vector<int> >
         // Generate a 2-D outline with approximately the given meshsize
         //
         // First generate the cylinder ...
-        int m = static_cast<int>(li / meshsize) + 1;
+        int m = static_cast<int>(li / outline_meshsize) + 1;
         Array<T, 2, 1> mesh1 = Array<T, 2, 1>::LinSpaced(m, -half_li, half_li);
         for (int j = 0; j < m; ++j)
         {
@@ -123,7 +133,7 @@ std::pair<AlphaShape2DProperties, std::vector<int> >
         }
 
         // ... then generate the hemispherical caps
-        m = static_cast<int>(boost::math::constants::pi<T>() * R / meshsize) + 1;
+        m = static_cast<int>(boost::math::constants::pi<T>() * R / outline_meshsize) + 1;
         Array<T, 2, 1> mesh2 = Array<T, 2, 1>::LinSpaced(
             m, -boost::math::constants::half_pi<T>(), boost::math::constants::half_pi<T>()
         );
@@ -170,29 +180,53 @@ std::pair<AlphaShape2DProperties, std::vector<int> >
  *                    by the center-based alpha-shape exceeds this value times
  *                    the maximum area of the given cells. Should be greater 
  *                    than 1.
- * @param meshsize    Approximate meshsize with which to obtain points from 
- *                    each cell outline, while building the outline-based 
- *                    alpha-shape.
+ * @param outline_meshsize Approximate meshsize with which to obtain points 
+ *                         from each cell outline, while building the outline-
+ *                         based alpha-shape.
+ * @param mincells_for_center_boundary Minimum number of cells required for 
+ *                                     computing a center-based alpha-shape.
  * @returns Vector of peripheral cell indices, together with the maximum area 
  *          of the given cells.  
  */
 template <typename T>
-std::pair<std::vector<int>, T> getBoundary(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                           const T R, const T area_factor,
-                                           const T meshsize)
+std::vector<int> getBoundary(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                             const T R, const T area_factor, const T outline_meshsize,
+                             const int mincells_for_center_boundary)
 {
+    //std::cout << "in getBoundary()\n";
+
+    // If there are fewer than 4 cells, then return all the cells 
+    const int n = cells.rows();
+    if (n < 4)
+    {
+        std::vector<int> idx;
+        for (int i = 0; i < n; ++i)
+            idx.push_back(i); 
+        return idx;
+    }
+
     // Get the maximum area of the cells in the xy-plane  
     const T max_area = getMaxArea<T>(cells, R);
 
-    // Get the center-based alpha-shape
-    AlphaShape2DProperties shape1 = getBoundaryFromCenters<T>(cells);
+    // If there are more than the minimum number of cells for calculating 
+    // the center-based alpha-shape, calculate the center-based alpha-shape
+    bool success = false; 
+    AlphaShape2DProperties shape1; 
+    if (n >= mincells_for_center_boundary)
+    {
+        // Get the center-based alpha-shape
+        shape1 = getBoundaryFromCenters<T>(cells);
 
-    // If the area enclosed by the center-based alpha-shape far exceeds the
-    // maximum area of the cells ... 
-    if (shape1.area > area_factor * max_area)
+        // Does the area enclosed by the center-based alpha-shape far exceed
+        // the maximum area of the cells? 
+        success = (shape1.area < area_factor * max_area); 
+    }
+
+    // Compute the outline-based alpha-shape if necessary
+    if (!success)
     {
         // Get the outline-based alpha-shape 
-        auto result = getBoundaryFromOutlines<T>(cells, R, meshsize);
+        auto result = getBoundaryFromOutlines<T>(cells, R, outline_meshsize);
         AlphaShape2DProperties shape2 = result.first; 
         std::vector<int> idx = result.second; 
 
@@ -201,73 +235,66 @@ std::pair<std::vector<int>, T> getBoundary(const Ref<const Array<T, Dynamic, Dyn
         for (const int j : shape2.vertices)
             cell_idx.insert(idx[j]);
 
-        return std::make_pair(std::vector<int>(cell_idx.begin(), cell_idx.end()), max_area); 
+        return std::vector<int>(cell_idx.begin(), cell_idx.end()); 
     }
     // Otherwise, return the vertices of the center-based alpha-shape
     else 
     {
-        return std::make_pair(shape1.vertices, max_area); 
+        return shape1.vertices;
     }
 }
 
 /**
  * Compute radial confinement forces on the given array of cells.
  *
- * @param cells              Input population of cells. 
- * @param find_boundary      If false, compute confinement forces for all cells
- *                           in the population; if true, compute confinement
- *                           forces only for the peripheral cells in the
- *                           population. 
+ * @param cells              Input population of cells.
+ * @param boundary_idx       Pre-computed vector of indices of peripheral cells. 
  * @param R                  Cell radius. 
- * @param area_factor        Build the outline-based alpha-shape if the area
- *                           enclosed by the center-based alpha-shape exceeds
- *                           this value times the maximum area of the given
- *                           cells. Should be greater than 1.
- * @param meshsize           Approximate meshsize with which to obtain points
- *                           from each cell outline, while building the
- *                           outline-based alpha-shape.
  * @param center             Fixed center for the elastic membrane. 
  * @param rest_radius_factor Multiply the effective radius obtained from the
  *                           maximum area of the given cells by this value to 
  *                           obtain the rest radius of the elastic membrane. 
  * @param spring_const       Effective spring constant for the elastic 
- *                           membrane. 
+ *                           membrane.
  * @returns Array of generalized radial confinement forces. 
  */
 template <typename T>
 Array<T, Dynamic, 4> radialConfinementForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                             const bool find_boundary,
-                                             const T R, const T area_factor, 
-                                             const T meshsize, 
+                                             std::vector<int>& boundary_idx, 
+                                             const T R,
                                              const Ref<const Matrix<T, 2, 1> >& center,
                                              const T rest_radius_factor, 
                                              const T spring_const)
 {
+    //std::cout << "in radialConfinementForces()\n";
+
     // If desired, get the indices of the peripheral cells
-    const int n = cells.rows(); 
+    /*
     std::vector<int> idx;
-    T max_area; 
     if (find_boundary)
     {
-        auto result = getBoundary<T>(cells, R, area_factor, meshsize);
-        idx = result.first; 
-        max_area = result.second;
+        idx = getBoundary<T>(
+            cells, R, area_factor, outline_meshsize, mincells_for_center_boundary
+        );
     }
     else 
     {
         for (int j = 0; j < n; ++j)
             idx.push_back(j);
-        max_area = getMaxArea<T>(cells, R); 
     }
+    */
+
+    // Get the maximum area of the cells in the xy-plane  
+    const T max_area = getMaxArea<T>(cells, R);
 
     // Obtain a corresponding rest radius for the confining membrane 
     T rest_radius = rest_radius_factor * sqrt(max_area / boost::math::constants::pi<T>());
 
     // Maintain an array of generalized forces on each cell
-    Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(n, 4); 
+    Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(cells.rows(), 4); 
 
     // For each cell ... 
-    for (const int j : idx)
+    for (const int j : boundary_idx)
     {
         Matrix<T, 2, 1> rj = cells(j, Eigen::seq(0, 1)).transpose().matrix(); 
         Matrix<T, 2, 1> nj = cells(j, Eigen::seq(2, 3)).transpose().matrix();
