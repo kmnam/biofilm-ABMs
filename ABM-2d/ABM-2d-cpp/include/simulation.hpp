@@ -256,7 +256,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             params[ss.str()] = floatToString<T>(value); 
         }
     }
-    params["confine"] = confine;
+    params["confine"] = (confine ? "1" : "0");
     if (confine)
     {
         for (auto&& item : confine_params)
@@ -772,7 +772,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             params[ss.str()] = floatToString<T>(value); 
         }
     }
-    params["confine"] = confine;
+    params["confine"] = (confine ? "1" : "0");
     if (confine)
     {
         for (auto&& item : confine_params)
