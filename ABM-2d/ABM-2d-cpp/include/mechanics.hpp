@@ -57,6 +57,30 @@ enum AdhesionMode
 };
 
 /**
+ * Output an error message pertaining to the given cell and the generalized 
+ * forces exerted upon it.  
+ *
+ * @param r Cell center.
+ * @param n Cell orientation.
+ * @param half_l Cell half-length.
+ * @param dEdq Array of generalized forces. 
+ */
+template <typename T>
+void cellForcesSummary(const Ref<const Array<T, 2, 1> >& r,
+                       const Ref<const Array<T, 2, 1> >& n, const T half_l,
+                       const Ref<const Array<T, 4, 1> >& dEdq)
+{
+    std::cerr << "Cell center = (" << r(0) << ", " << r(1) << ")" << std::endl
+              << "Cell orientation = (" << n(0) << ", " << n(1) << ")" << std::endl
+              << "Cell half-length = " << half_l << std::endl
+              << "Generalized forces: " << std::endl
+              << " - w.r.t r(0) = " << dEdq(0) << std::endl
+              << " - w.r.t r(1) = " << dEdq(1) << std::endl 
+              << " - w.r.t n(0) = " << dEdq(2) << std::endl
+              << " - w.r.t n(1) = " << dEdq(3) << std::endl;
+}
+
+/**
  * Output an error message pertaining to the given cell-cell configuration
  * and the generalized forces between them. 
  *
@@ -72,12 +96,12 @@ enum AdhesionMode
  * @param dEdq Array of generalized forces. 
  */
 template <typename T>
-void forcesSummary(const Ref<const Array<T, 2, 1> >& r1,
-                   const Ref<const Array<T, 2, 1> >& n1, const T half_l1,
-                   const Ref<const Array<T, 2, 1> >& r2,
-                   const Ref<const Array<T, 2, 1> >& n2, const T half_l2,
-                   const Ref<const Array<T, 2, 1> >& d12, const T s, const T t,
-                   const Ref<const Array<T, 2, 4> >& dEdq)
+void pairForcesSummary(const Ref<const Array<T, 2, 1> >& r1,
+                       const Ref<const Array<T, 2, 1> >& n1, const T half_l1,
+                       const Ref<const Array<T, 2, 1> >& r2,
+                       const Ref<const Array<T, 2, 1> >& n2, const T half_l2,
+                       const Ref<const Array<T, 2, 1> >& d12, const T s, const T t,
+                       const Ref<const Array<T, 2, 4> >& dEdq)
 {
     std::cerr << "Cell 1 center = (" << r1(0) << ", " << r1(1) << ")" << std::endl
               << "Cell 1 orientation = (" << n1(0) << ", " << n1(1) << ")" << std::endl
@@ -352,7 +376,7 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
                 {
                     std::cerr << "Found nan in repulsive forces between cells " 
                               << i << " and " << j << std::endl;
-                    forcesSummary<T>(
+                    pairForcesSummary<T>(
                         cells(i, Eigen::seq(0, 1)), cells(i, Eigen::seq(2, 3)),
                         cells(i, 5),
                         cells(j, Eigen::seq(0, 1)), cells(j, Eigen::seq(2, 3)), 
@@ -464,7 +488,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                 {
                     std::cerr << "Found nan in adhesive forces between cells " 
                               << i << " and " << j << std::endl;
-                    forcesSummary<T>(
+                    pairForcesSummary<T>(
                         ri.array(), ni.array(), half_li, rj.array(), nj.array(), 
                         half_lj, dij.array(), si, sj, forces
                     );
@@ -576,6 +600,20 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
             cells, Array<T, 2, 1>::Zero(), confine_params["rest_radius_factor"],
             confine_params["spring_const"]
         );
+        #ifdef DEBUG_CHECK_CONFINEMENT_FORCES_NAN
+            for (int i = 0; i < n; ++i)
+            {
+                if (dEdq.row(i).isNaN().any())
+                {
+                    std::cerr << "Found nan in confinement forces for cell "
+                              << i << std::endl;
+                    cellForcesSummary<T>(
+                        cells(i, Eigen::seq(0, 1)), cells(i, Eigen::seq(2, 3)),
+                        cells(i, 5), dEdq.row(i).transpose()
+                    );
+                }
+            }
+        #endif
     }
 
     // Combine the three types of forces 
@@ -674,7 +712,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
                 int j = neighbors(k, 1); 
                 std::cerr << "Found near-zero distance between cells "
                           << i << " and " << j << std::endl;
-                configSummary<T>(
+                pairConfigSummary<T>(
                     cells(i, Eigen::seq(0, 1)).matrix(),
                     cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 5),
                     cells(j, Eigen::seq(0, 1)).matrix(),
