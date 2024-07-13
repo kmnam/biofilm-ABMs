@@ -10,6 +10,7 @@ Last updated:
 
 import sys
 import numpy as np
+from PIL import Image
 import pyvista as pv
 pv.start_xvfb()
 import seaborn as sns

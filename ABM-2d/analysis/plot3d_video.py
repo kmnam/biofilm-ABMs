@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    7/10/2024
+    7/11/2024
 """
 
 import sys
@@ -22,7 +22,9 @@ if __name__ == '__main__':
     outprefix = sys.argv[2]
     nframes_total = int(sys.argv[3])
     nframes_per_video = int(sys.argv[4])
-    uniform_color = (len(sys.argv) == 6 and sys.argv[5] == '--uniform-color')
+    extra_args = sys.argv[5:]
+    uniform_color = ('--uniform-color' in extra_args)
+    overwrite_frames = ('--overwrite-frames' in extra_args)
     filenames = parse_dir(inprefix)
     print('Parsing {} files ...'.format(len(filenames)))
 
@@ -63,7 +65,7 @@ if __name__ == '__main__':
         plot_simulation(
             filenames_nearest[start:end], outprefix + '_{}.avi'.format(i), R,
             rz, xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=20, fps=20,
-            uniform_color=uniform_color
+            uniform_color=uniform_color, overwrite_frames=overwrite_frames
         )
         print('Saving video: {}_{}.avi'.format(outprefix, i))
         start += nframes_per_video

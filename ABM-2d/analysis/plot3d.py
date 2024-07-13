@@ -5,10 +5,10 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    1/31/2024
+    7/11/2024
 """
 
-import sys
+import os
 import numpy as np
 from PIL import Image
 import cv2
@@ -121,7 +121,7 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
 #######################################################################
 def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
                     ymax, zmin, zmax, view='xy', res=50, fps=10,
-                    uniform_color=False):
+                    uniform_color=False, overwrite_frames=False):
     """
     Given an ordered list of files containing cells to be plotted, parse 
     and plot each population of cells and generate a video. 
@@ -149,102 +149,62 @@ def plot_simulation(filenames, outfilename, R, rz, xmin, xmax, ymin,
     fps : int
         Frames per second.
     uniform_color : bool
-        If True, color all cells with a single color (blue). 
+        If True, color all cells with a single color (blue).
+    overwrite_frames : bool
+        If False, then any existing .jpg file with the same name as that 
+        for a given frame is kept as is; if not, each frame is overwritten. 
     """
-    images = []
     palette = [    # Assume a maximum of five groups 
-        sns.color_palette('muted')[0],
-        sns.color_palette('muted')[3],
-        sns.color_palette('muted')[2],
-        sns.color_palette('muted')[1],
-        sns.color_palette('muted')[4]
+        sns.color_palette('hls', 8)[5],
+        sns.color_palette('hls', 8)[0],
+        sns.color_palette('hls', 8)[3],
+        sns.color_palette('hls', 8)[1],
+        sns.color_palette('hls', 8)[6]
     ]
-
+    
+    image_filenames = []
     for filename in filenames:
-        # Parse and plot the cells in the given file
-        cells, params = read_cells(filename)
-        if uniform_color:
-            colors = [palette[0] for i in range(cells.shape[0])]
-        else:
-            ngroups = int(max(cells[:, 10]))
-            palette_ = palette[:ngroups]
-            colors = [
-                palette_[int(cells[i, 10]) - 1] for i in range(cells.shape[0])
-            ]
-        title = 't = {:.10f}, n = {}'.format(params['t_curr'], cells.shape[0])
-        print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
-        pl = pv.Plotter(off_screen=True)
-        pl = plot_cells(
-            cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
-            title, view=view, res=res
-        )
+        # Determine the filename for the frame 
+        image_filename = '{}_frame.jpg'.format(filename[:-4])
+        image_filenames.append(image_filename)
+        
+        # If the image file does not exist or is to be overwritten ... 
+        if overwrite_frames or not os.path.exists(image_filename):
+            # Parse and plot the cells in the given input file
+            cells, params = read_cells(filename)
+            if uniform_color:
+                colors = [palette[0] for i in range(cells.shape[0])]
+            else:
+                ngroups = int(max(cells[:, 10]))
+                palette_ = palette[:ngroups]
+                colors = [
+                    palette_[int(cells[i, 10]) - 1] for i in range(cells.shape[0])
+                ]
+            title = 't = {:.10f}, n = {}'.format(params['t_curr'], cells.shape[0])
+            print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
+            pl = pv.Plotter(off_screen=True)
+            pl = plot_cells(
+                cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
+                title, view=view, res=res
+            )
 
-        # Get a screenshot of the plotted cells
-        image = pl.screenshot()
-
-        # Convert to PIL image and append
-        images.append(Image.fromarray(image))
-        pl.close()
+            # Get a screenshot of the plotted cells
+            image = Image.fromarray(pl.screenshot())
+            print('... saving to {}'.format(image_filename))
+            image_filenames.append(image_filename)
+            image.save(image_filename)
+            pl.close()
 
     # Stitch the images together and export as an .avi file
-    width, height = images[0].size
+    width = None
+    height = None
+    with Image.open(image_filenames[0]) as image:
+        width, height = image.size
     fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
     video = cv2.VideoWriter(
         outfilename, fourcc, fps, (width, height), isColor=True
     )
-    for image in images:
-        video.write(np.array(image)[:, :, ::-1])    # Switch from RGB to BGR
-
-#######################################################################
-if __name__ == '__main__':
-    inprefix = sys.argv[1]
-    outprefix = sys.argv[2]
-    nframes = int(sys.argv[3])
-    uniform_color = (len(sys.argv) == 5 and sys.argv[4] == '--uniform-color')
-    filenames = parse_dir(inprefix)
-
-    # Get cell radius, final dimensions, and final timepoint from final file
-    cells, params = read_cells(filenames[-1])
-    R = params['R']
-    L0 = params['L0']
-    E0 = params['E0']
-    sigma0 = params['sigma0']
-    rz = R - (1 / R) * ((R * R * sigma0) / (4 * E0)) ** (2 / 3)
-    xmin = np.floor(cells[:, 0].min() - 4 * L0)
-    xmax = np.ceil(cells[:, 0].max() + 4 * L0)
-    ymin = np.floor(cells[:, 1].min() - 4 * L0)
-    ymax = np.ceil(cells[:, 1].max() + 4 * L0)
-    zmin = rz - R
-    zmax = rz + R
-    t_final = params['t_curr']
-
-    # Generate array of timepoints
-    timepoints = np.linspace(0, t_final, nframes)
-    
-    # Run through the files and identify, for each timepoint, the file 
-    # whose timepoint is closest
-    file_timepoints = []
-    for filename in filenames:
-        _, params = read_cells(filename)
-        file_timepoints.append(params['t_curr'])
-    filenames_nearest = []
-    for t in timepoints:
-        nearest_idx = np.argmin(np.abs(file_timepoints - t))
-        filenames_nearest.append(filenames[nearest_idx])
-
-    # Plot the simulation in 200-frame increments
-    increment = 200
-    start = 0
-    end = increment
-    i = 0
-    while end <= nframes:
-        plot_simulation(
-            filenames_nearest[start:end], outprefix + '_{}.avi'.format(i), R,
-            rz, xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=20, fps=20,
-            uniform_color=uniform_color
-        )
-        print('Saving video: {}_{}.avi'.format(outprefix, i))
-        start += increment
-        end += increment
-        i += 1
+    for image_filename in image_filenames:
+        with Image.open(image_filename) as image:
+            video.write(np.array(image)[:, :, ::-1])    # Switch from RGB to BGR
 
