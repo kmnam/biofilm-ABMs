@@ -40,6 +40,7 @@
 #include <CGAL/Segment_3.h>
 #include "distances.hpp"
 #include "kiharaGBK.hpp"
+#include "confinement.hpp"
 
 using namespace Eigen;
 
@@ -594,22 +595,25 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
 
     // ... and the radial confinement forces (if confinement is present)
     Array<T, Dynamic, 4> dEdq_confine = Array<T, Dynamic, 4>::Zero(n, 4); 
-    if (confine_spring_const > 0)
+    if (confine_params["spring_const"] > 0)
     {
+        const T meshsize = 0.1; 
+        Matrix<T, 2, 1> center = Matrix<T, 2, 1>::Zero();
         dEdq_confine = radialConfinementForces<T>(
-            cells, Array<T, 2, 1>::Zero(), confine_params["rest_radius_factor"],
+            cells, confine_params["find_boundary"], R, confine_params["area_factor"],
+            meshsize, center, confine_params["rest_radius_factor"],
             confine_params["spring_const"]
         );
         #ifdef DEBUG_CHECK_CONFINEMENT_FORCES_NAN
             for (int i = 0; i < n; ++i)
             {
-                if (dEdq.row(i).isNaN().any())
+                if (dEdq_confine.row(i).isNaN().any())
                 {
                     std::cerr << "Found nan in confinement forces for cell "
                               << i << std::endl;
                     cellForcesSummary<T>(
                         cells(i, Eigen::seq(0, 1)), cells(i, Eigen::seq(2, 3)),
-                        cells(i, 5), dEdq.row(i).transpose()
+                        cells(i, 5), dEdq_confine.row(i).transpose()
                     );
                 }
             }
