@@ -267,7 +267,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             ss << "confine_" << key;
             if (key == "find_boundary")
                 params[ss.str()] = (value == 0 ? "0" : "1");
-            else if (key == "mincells_for_centerline_boundary")
+            else if (key == "mincells_for_boundary")
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else
                 params[ss.str()] = floatToString<T>(value);
@@ -276,19 +276,13 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
     // Get initial subset of peripheral cells 
     const bool find_boundary = (confine_params["find_boundary"] != 0);
-    const T area_factor = confine_params["area_factor"]; 
-    const T outline_meshsize = confine_params["outline_meshsize"];
-    const int mincells_for_centerline_boundary
-        = static_cast<int>(confine_params["mincells_for_centerline_boundary"]);
+    const int mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
     std::vector<int> boundary_idx;
     if (confine)
     {
         if (find_boundary)
         {
-            boundary_idx = getBoundary<T>(
-                cells, R, area_factor, outline_meshsize,
-                mincells_for_centerline_boundary
-            );
+            boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
         }
         else
         {
@@ -362,10 +356,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             {
                 if (find_boundary)
                 {
-                    boundary_idx = getBoundary<T>(
-                        cells, R, area_factor, outline_meshsize,
-                        mincells_for_centerline_boundary
-                    );
+                    boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
                 }
                 else
                 {
@@ -486,10 +477,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         {
             if (find_boundary)
             {
-                boundary_idx = getBoundary<T>(
-                    cells, R, area_factor, outline_meshsize,
-                    mincells_for_centerline_boundary
-                );
+                boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
             }
             else
             {
@@ -818,7 +806,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             ss << "confine_" << key; 
             if (key == "find_boundary")
                 params[ss.str()] = (value == 0 ? "0" : "1");
-            else if (key == "mincells_for_centerline_boundary")
+            else if (key == "mincells_for_boundary")
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else
                 params[ss.str()] = floatToString<T>(value);
@@ -829,17 +817,13 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     const bool find_boundary = (confine_params["find_boundary"] != 0);
     const T area_factor = confine_params["area_factor"]; 
     const T outline_meshsize = confine_params["outline_meshsize"];
-    const int mincells_for_centerline_boundary
-        = static_cast<int>(confine_params["mincells_for_centerline_boundary"]);
+    const int mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
     std::vector<int> boundary_idx;
     if (confine)
     {
         if (find_boundary)
         {
-            boundary_idx = getBoundary<T>(
-                cells, R, area_factor, outline_meshsize,
-                mincells_for_centerline_boundary
-            );
+            boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
         }
         else
         {
@@ -914,10 +898,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             {
                 if (find_boundary)
                 {
-                    boundary_idx = getBoundary<T>(
-                        cells, R, area_factor, outline_meshsize,
-                        mincells_for_centerline_boundary
-                    );
+                    boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
                 }
                 else
                 {
@@ -1037,10 +1018,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         {
             if (find_boundary)
             {
-                boundary_idx = getBoundary<T>(
-                    cells, R, area_factor, outline_meshsize,
-                    mincells_for_centerline_boundary
-                );
+                boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
             }
             else
             {
