@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/15/2024
+ *     7/16/2024
  */
 
 #ifndef BIOFILM_RADIAL_CONFINEMENT_HPP
@@ -42,9 +42,7 @@ template <typename T>
 T getMaxArea(const Ref<const Array<T, Dynamic, Dynamic> >& cells, const T R)
 {
     T caps_area = cells.rows() * boost::math::constants::pi<T>() * R * R;
-    T cylinders_area = 0; 
-    for (int i = 0; i < cells.rows(); ++i)
-        cylinders_area += 2 * R * cells(i, 4); 
+    T cylinders_area = 2 * R * cells.col(4).sum(); 
     return caps_area + cylinders_area; 
 }
 
@@ -304,6 +302,8 @@ Array<T, Dynamic, 4> radialConfinementForces(const Ref<const Array<T, Dynamic, D
         Matrix<T, 2, 1> rj = cells(j, Eigen::seq(0, 1)).transpose().matrix(); 
         Matrix<T, 2, 1> nj = cells(j, Eigen::seq(2, 3)).transpose().matrix();
         T half_lj = cells(j, 5);
+        
+        // Get the two endpoints of the centerline 
         Matrix<T, 2, 1> pj = rj - half_lj * nj;
         Matrix<T, 2, 1> qj = rj + half_lj * nj;
 
@@ -314,15 +314,18 @@ Array<T, Dynamic, 4> radialConfinementForces(const Ref<const Array<T, Dynamic, D
         Matrix<T, 2, 1> d2 = qj - center;
         T norm_d1 = d1.norm(); 
         T norm_d2 = d2.norm();
-        T theta1 = acos(d1.dot(nj) / norm_d1);
-        T theta2 = acos(d2.dot(-nj) / norm_d2);
+        T theta1 = acos((-d1).dot(nj) / norm_d1);
+        T theta2 = acos(d2.dot(nj) / norm_d2);
         T diff = abs(theta1 - theta2);
 
         // If the triangle is not isosceles, then set the contact point
-        // between the cell and the membrane to be one of the endpoints 
-        if (diff > 0.01 || norm_d1 > norm_d2)
+        // between the cell and the membrane to be one of the endpoints
+        //
+        // If the triangle is (close to) isosceles, then the contact point
+        // is at the cell center 
+        if (diff > 0.01 && norm_d1 > norm_d2)
             sj = -half_lj; 
-        else if (diff > 0.01)
+        else if (diff > 0.01)    // norm_d1 <= norm_d2
             sj = half_lj;
 
         // Get the radial displacement of the contact point from the center
