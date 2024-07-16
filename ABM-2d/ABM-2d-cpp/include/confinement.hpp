@@ -332,7 +332,7 @@ Array<T, Dynamic, 4> radialConfinementForces(const Ref<const Array<T, Dynamic, D
         Matrix<T, 2, 1> dist = rj + sj * nj - center;
         T magnitude = dist.norm();
         Matrix<T, 2, 1> direction = dist / magnitude;
-        T delta = magnitude - rest_radius;
+        T delta = magnitude + R - rest_radius;
         
         // If the radial displacement is greater than zero ...
         if (delta > 0)
