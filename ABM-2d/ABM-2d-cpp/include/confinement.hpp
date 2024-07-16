@@ -172,37 +172,27 @@ std::pair<AlphaShape2DProperties, std::vector<int> >
 /**
  * Get the peripheral subset of the given population of cells.
  *
- * This is done via a two-step process:
- * - First, a simply connected alpha-shape is built from the cell centerlines.
- * - If the area enclosed by the alpha-shape far exceeds the maximum area of
- *   the given set of cells in the xy-plane (i.e., exceeds a given factor > 1
- *   times the maximum area), then a second simply connected alpha-shape is
- *   built from the cell outlines in the xy-plane, and the cells that
- *   contribute to the new alpha-shape are chosen to lie in the periphery.
+ * This is done as follows:
+ * - If there are fewer than `mincells_for_boundary` cells, then return all 
+ *   the cells. 
+ * - Otherwise, build a simply connected alpha-shape from the cell centerlines
+ *   and identify the cells that contribute to the alpha-shape.
  *
- * @param cells       Input population of cells. 
- * @param R           Cell radius. 
- * @param area_factor Build the outline-based alpha-shape if the area enclosed
- *                    by the centerline-based alpha-shape exceeds this value
- *                    times the maximum area of the given cells. Should be
- *                    greater than 1.
- * @param outline_meshsize Approximate meshsize with which to obtain points 
- *                         from each cell outline, while building the outline-
- *                         based alpha-shape.
- * @param mincells_for_centerline_boundary Minimum number of cells required
- *                                         for computing a centerline-based
- *                                         alpha-shape.
+ * @param cells                 Input population of cells. 
+ * @param R                     Cell radius. 
+ * @param mincells_for_boundary Minimum number of cells required for computing
+ *                              an alpha-shape.
  * @returns Vector of peripheral cell indices, together with the maximum area 
  *          of the given cells.  
  */
 template <typename T>
 std::vector<int> getBoundary(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                             const T R, const T area_factor, const T outline_meshsize,
-                             const int mincells_for_centerline_boundary)
+                             const T R, const int mincells_for_boundary)
 {
-    // If there are fewer than 4 cells, then return all the cells 
+    // If there are fewer than the minimum number of cells, then return all
+    // the cells 
     const int n = cells.rows();
-    if (n < 4)
+    if (n < mincells_for_boundary)
     {
         std::vector<int> idx;
         for (int i = 0; i < n; ++i)
@@ -213,56 +203,21 @@ std::vector<int> getBoundary(const Ref<const Array<T, Dynamic, Dynamic> >& cells
     // Get the maximum area of the cells in the xy-plane  
     const T max_area = getMaxArea<T>(cells, R);
 
-    // If there are more than the minimum number of cells for calculating the
-    // centerline-based alpha-shape, calculate the centerline-based alpha-shape
-    bool success = false; 
-    AlphaShape2DProperties shape1, shape2;
-    std::vector<int> idx1, idx2;
-    if (n >= mincells_for_centerline_boundary)
-    {
-        // Get the centerline-based alpha-shape
-        auto result = getBoundaryFromCenterlines<T>(cells);
-        shape1 = result.first; 
-        idx1 = result.second; 
+    // Calculate the centerline-based alpha-shape
+    auto result = getBoundaryFromCenterlines<T>(cells);
+    AlphaShape2DProperties shape = result.first; 
+    std::vector<int> idx = result.second; 
 
-        // Does the area enclosed by the centerline-based alpha-shape far
-        // exceed the maximum area of the cells? 
-        success = (shape1.area < area_factor * max_area);
-    }
-    
-    // Compute the outline-based alpha-shape if necessary
-    if (!success)
-    {
-        // Get the outline-based alpha-shape 
-        auto result = getBoundaryFromOutlines<T>(cells, R, outline_meshsize);
-        shape2 = result.first; 
-        idx2 = result.second; 
+    // Get the cells corresponding to the points in the alpha-shape 
+    std::unordered_set<int> cell_idx; 
+    for (const int j : shape.vertices)
+        cell_idx.insert(idx[j]);
 
-        // Get the cells corresponding to the points in the alpha-shape 
-        std::unordered_set<int> cell_idx; 
-        for (const int j : shape2.vertices)
-            cell_idx.insert(idx2[j]);
-
-        #ifdef DEBUG_PRINT_BOUNDARY_STATUS
-            std::cout << "... Found peripheral cells using outline-based "
-                      << "alpha-shape" << std::endl;
-        #endif
-        return std::vector<int>(cell_idx.begin(), cell_idx.end()); 
-    }
-    // Otherwise, return the vertices of the centerline-based alpha-shape
-    else 
-    {
-        // Get the cells corresponding to the points in the alpha-shape 
-        std::unordered_set<int> cell_idx; 
-        for (const int j : shape1.vertices)
-            cell_idx.insert(idx1[j]);
-
-        #ifdef DEBUG_PRINT_BOUNDARY_STATUS
-            std::cout << "... Found peripheral cells using centerline-based "
-                      << "alpha-shape" << std::endl;
-        #endif
-        return std::vector<int>(cell_idx.begin(), cell_idx.end()); 
-    }
+    #ifdef DEBUG_PRINT_BOUNDARY_STATUS
+        std::cout << "... Found peripheral cells using centerline-based "
+                  << "alpha-shape" << std::endl;
+    #endif
+    return std::vector<int>(cell_idx.begin(), cell_idx.end()); 
 }
 
 /**
