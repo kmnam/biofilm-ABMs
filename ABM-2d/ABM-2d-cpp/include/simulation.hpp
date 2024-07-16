@@ -20,7 +20,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/12/2024
+ *     7/15/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -267,7 +267,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             ss << "confine_" << key;
             if (key == "find_boundary")
                 params[ss.str()] = (value == 0 ? "0" : "1");
-            else if (key == "mincells_for_center_boundary")
+            else if (key == "mincells_for_centerline_boundary")
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else
                 params[ss.str()] = floatToString<T>(value);
@@ -278,15 +278,16 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     const bool find_boundary = (confine_params["find_boundary"] != 0);
     const T area_factor = confine_params["area_factor"]; 
     const T outline_meshsize = confine_params["outline_meshsize"];
-    const int mincells_for_center_boundary
-        = static_cast<int>(confine_params["mincells_for_center_boundary"]);
+    const int mincells_for_centerline_boundary
+        = static_cast<int>(confine_params["mincells_for_centerline_boundary"]);
     std::vector<int> boundary_idx;
     if (confine)
     {
         if (find_boundary)
         {
             boundary_idx = getBoundary<T>(
-                cells, R, area_factor, outline_meshsize, mincells_for_center_boundary
+                cells, R, area_factor, outline_meshsize,
+                mincells_for_centerline_boundary
             );
         }
         else
@@ -303,7 +304,18 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         std::stringstream ss_init; 
         ss_init << outprefix << "_init.txt";
         std::string filename_init = ss_init.str(); 
-        writeCells<T>(cells, params, filename_init);
+        if (confine)    // If confinement is on, write indicators for peripheral cells
+        {
+            Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
+            cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+            for (const int i : boundary_idx)
+                cells_(i, cells.cols()) = 1;
+            writeCells<T>(cells_, params, filename_init);
+        }
+        else 
+        {
+            writeCells<T>(cells, params, filename_init);
+        }
     }
     
     // Define termination criterion, assuming that at least one of n_cells
@@ -352,7 +364,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 {
                     boundary_idx = getBoundary<T>(
                         cells, R, area_factor, outline_meshsize,
-                        mincells_for_center_boundary
+                        mincells_for_centerline_boundary
                     );
                 }
                 else
@@ -475,7 +487,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             if (find_boundary)
             {
                 boundary_idx = getBoundary<T>(
-                    cells, R, area_factor, outline_meshsize, mincells_for_center_boundary
+                    cells, R, area_factor, outline_meshsize,
+                    mincells_for_centerline_boundary
                 );
             }
             else
@@ -496,7 +509,18 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str(); 
-            writeCells<T>(cells, params, filename); 
+            if (confine)    // If confinement is on, write indicators for peripheral cells
+            {
+                Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
+                cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+                for (const int i : boundary_idx)
+                    cells_(i, cells.cols()) = 1;
+                writeCells<T>(cells_, params, filename);
+            }
+            else 
+            {
+                writeCells<T>(cells, params, filename);
+            }
         }
     }
 
@@ -507,7 +531,18 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         std::stringstream ss_final; 
         ss_final << outprefix << "_final.txt";
         std::string filename_final = ss_final.str(); 
-        writeCells<T>(cells, params, filename_final);
+        if (confine)    // If confinement is on, write indicators for peripheral cells
+        {
+            Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
+            cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+            for (const int i : boundary_idx)
+                cells_(i, cells.cols()) = 1;
+            writeCells<T>(cells_, params, filename_final);
+        }
+        else 
+        {
+            writeCells<T>(cells, params, filename_final);
+        }
     }
 
     return cells;
@@ -783,7 +818,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             ss << "confine_" << key; 
             if (key == "find_boundary")
                 params[ss.str()] = (value == 0 ? "0" : "1");
-            else if (key == "mincells_for_center_boundary")
+            else if (key == "mincells_for_centerline_boundary")
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else
                 params[ss.str()] = floatToString<T>(value);
@@ -794,15 +829,16 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     const bool find_boundary = (confine_params["find_boundary"] != 0);
     const T area_factor = confine_params["area_factor"]; 
     const T outline_meshsize = confine_params["outline_meshsize"];
-    const int mincells_for_center_boundary
-        = static_cast<int>(confine_params["mincells_for_center_boundary"]);
+    const int mincells_for_centerline_boundary
+        = static_cast<int>(confine_params["mincells_for_centerline_boundary"]);
     std::vector<int> boundary_idx;
     if (confine)
     {
         if (find_boundary)
         {
             boundary_idx = getBoundary<T>(
-                cells, R, area_factor, outline_meshsize, mincells_for_center_boundary
+                cells, R, area_factor, outline_meshsize,
+                mincells_for_centerline_boundary
             );
         }
         else
@@ -819,7 +855,18 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         std::stringstream ss_init; 
         ss_init << outprefix << "_init.txt";
         std::string filename_init = ss_init.str(); 
-        writeCells<T>(cells, params, filename_init);
+        if (confine)    // If confinement is on, write indicators for peripheral cells
+        {
+            Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
+            cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+            for (const int i : boundary_idx)
+                cells_(i, cells.cols()) = 1;
+            writeCells<T>(cells_, params, filename_init);
+        }
+        else 
+        {
+            writeCells<T>(cells, params, filename_init);
+        }
     }
     
     // Define termination criterion, assuming that at least one of n_cells
@@ -869,7 +916,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 {
                     boundary_idx = getBoundary<T>(
                         cells, R, area_factor, outline_meshsize,
-                        mincells_for_center_boundary
+                        mincells_for_centerline_boundary
                     );
                 }
                 else
@@ -991,7 +1038,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             if (find_boundary)
             {
                 boundary_idx = getBoundary<T>(
-                    cells, R, area_factor, outline_meshsize, mincells_for_center_boundary
+                    cells, R, area_factor, outline_meshsize,
+                    mincells_for_centerline_boundary
                 );
             }
             else
@@ -1024,8 +1072,19 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             params["t_curr"] = floatToString<T>(t);
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
-            std::string filename = ss.str(); 
-            writeCells<T>(cells, params, filename); 
+            std::string filename = ss.str();
+            if (confine)    // If confinement is on, write indicators for peripheral cells
+            {
+                Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1);
+                cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+                for (const int i : boundary_idx)
+                    cells_(i, cells.cols()) = 1;
+                writeCells<T>(cells_, params, filename);
+            }
+            else 
+            {
+                writeCells<T>(cells, params, filename);
+            }
         }
     }
 
@@ -1036,7 +1095,18 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         std::stringstream ss_final; 
         ss_final << outprefix << "_final.txt";
         std::string filename_final = ss_final.str(); 
-        writeCells<T>(cells, params, filename_final);
+        if (confine)    // If confinement is on, write indicators for peripheral cells
+        {
+            Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1);
+            cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+            for (const int i : boundary_idx)
+                cells_(i, cells.cols()) = 1;
+            writeCells<T>(cells_, params, filename_final);
+        }
+        else 
+        {
+            writeCells<T>(cells, params, filename_final);
+        }
     }
 
     return cells;
