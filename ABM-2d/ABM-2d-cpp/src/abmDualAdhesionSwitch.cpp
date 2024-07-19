@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/12/2024
+ *     7/19/2024
  */
 
 #include <Eigen/Dense>
@@ -71,7 +71,8 @@ int main(int argc, char** argv)
     const T max_stepsize = static_cast<T>(json_data["max_stepsize"].as_double()); 
     const int iter_write = json_data["iter_write"].as_int64(); 
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
-    const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64(); 
+    const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64();
+    const int iter_update_boundary = 0; 
     const T neighbor_threshold = 2 * (2 * R + L0);
     const int max_iter = json_data["max_iter"].as_int64(); 
     const int n_cells = json_data["n_cells"].as_int64();
@@ -93,6 +94,8 @@ int main(int argc, char** argv)
         adhesion_params["anisotropy_exp2"] = static_cast<T>(json_data["adhesion_anisotropy_exp2"].as_double());
         adhesion_params["well_depth_delta"] = static_cast<T>(json_data["adhesion_well_depth_delta"].as_double()); 
     }
+    const bool confine = false;    // No radial confinement forces
+    std::unordered_map<std::string, T> confine_params; 
 
     // Surface contact area density and powers of cell radius 
     const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
@@ -130,10 +133,6 @@ int main(int argc, char** argv)
     // Random seed
     const int rng_seed = std::stoi(argv[3]);
 
-    // No radial confinement forces
-    const bool confine = false;
-    std::unordered_map<std::string, T> confine_params; 
-
     // Initialize simulation ...
     //
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
@@ -145,8 +144,8 @@ int main(int argc, char** argv)
     runSimulation<T>(
         cells, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
         max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
-        iter_update_stepsize, max_error_allowed, min_error,
-        max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
+        iter_update_boundary, iter_update_stepsize, max_error_allowed,
+        min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
         adhesion_mode, adhesion_params, confine, confine_params
