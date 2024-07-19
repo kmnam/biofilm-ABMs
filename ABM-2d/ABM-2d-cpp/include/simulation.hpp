@@ -20,7 +20,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/15/2024
+ *     7/19/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -108,10 +108,14 @@ std::string floatToString(T x, const int precision = 10)
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
- * @param adhesion_mode
- * @param adhesion_params
- * @param confine
- * @param confine_params
+ * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
+ *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ * @param adhesion_params Parameters required to compute cell-cell adhesion
+ *                        forces.
+ * @param confine If true, introduce an additional radial confinement on the 
+ *                peripheral cells.
+ * @param confine_params Parameters required to compute radial confinement
+ *                       forces.
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -274,12 +278,14 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         }
     }
 
-    // Get initial subset of peripheral cells 
-    const bool find_boundary = (confine_params["find_boundary"] != 0);
-    const int mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
+    // Get initial subset of peripheral cells (only if confinement is present)
+    bool find_boundary = false; 
+    int mincells_for_boundary = 0;
     std::vector<int> boundary_idx;
     if (confine)
     {
+        find_boundary = (confine_params["find_boundary"] != 0);
+        mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
         if (find_boundary)
         {
             boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
@@ -298,7 +304,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         std::stringstream ss_init; 
         ss_init << outprefix << "_init.txt";
         std::string filename_init = ss_init.str(); 
-        if (confine)    // If confinement is on, write indicators for peripheral cells
+        if (confine)    // If confinement is present, write indicators for peripheral cells
         {
             Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
             cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
@@ -497,7 +503,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str(); 
-            if (confine)    // If confinement is on, write indicators for peripheral cells
+            if (confine)    // If confinement is present, write indicators for peripheral cells
             {
                 Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
                 cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
@@ -519,7 +525,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         std::stringstream ss_final; 
         ss_final << outprefix << "_final.txt";
         std::string filename_final = ss_final.str(); 
-        if (confine)    // If confinement is on, write indicators for peripheral cells
+        if (confine)    // If confinement is present, write indicators for peripheral cells
         {
             Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
             cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
@@ -582,10 +588,14 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
- * @param adhesion_mode
- * @param adhesion_params
- * @param confine
- * @param confine_params
+ * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
+ *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ * @param adhesion_params Parameters required to compute cell-cell adhesion
+ *                        forces.
+ * @param confine If true, introduce an additional radial confinement on the 
+ *                peripheral cells.
+ * @param confine_params Parameters required to compute radial confinement
+ *                       forces.
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -813,14 +823,14 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         }
     }
 
-    // Get initial subset of peripheral cells 
-    const bool find_boundary = (confine_params["find_boundary"] != 0);
-    const T area_factor = confine_params["area_factor"]; 
-    const T outline_meshsize = confine_params["outline_meshsize"];
-    const int mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
+    // Get initial subset of peripheral cells (only if confinement is present)
+    bool find_boundary = false; 
+    int mincells_for_boundary = 0;
     std::vector<int> boundary_idx;
     if (confine)
     {
+        find_boundary = (confine_params["find_boundary"] != 0);
+        mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
         if (find_boundary)
         {
             boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
