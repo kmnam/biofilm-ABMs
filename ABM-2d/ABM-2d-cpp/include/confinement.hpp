@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/16/2024
+ *     7/19/2024
  */
 
 #ifndef BIOFILM_RADIAL_CONFINEMENT_HPP
@@ -199,9 +199,6 @@ std::vector<int> getBoundary(const Ref<const Array<T, Dynamic, Dynamic> >& cells
             idx.push_back(i); 
         return idx;
     }
-
-    // Get the maximum area of the cells in the xy-plane  
-    const T max_area = getMaxArea<T>(cells, R);
 
     // Calculate the centerline-based alpha-shape
     auto result = getBoundaryFromCenterlines<T>(cells);
