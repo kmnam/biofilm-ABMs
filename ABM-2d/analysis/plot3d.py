@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    7/17/2024
+    7/21/2024
 """
 
 import os
@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image
 import cv2
 import pyvista as pv
-#pv.start_xvfb()
+pv.start_xvfb()
 import seaborn as sns
 from utils import read_cells, parse_dir
 
@@ -152,7 +152,7 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
         input data. 
     plot_membrane : bool
         If True, plot the elastic membrane with the given rest radius at 
-        the origin. There should be at least 12 columns in the input data.
+        the origin.
     """
     palette = [    # Assume a maximum of five groups 
         sns.color_palette('hls', 8)[5],
@@ -187,7 +187,7 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
     if zmin is None:
         zmin = rz - R
     if zmax is None:
-        zmax = rz + R
+        zmax = rz + 2 * R
 
     # Determine cell colors 
     if uniform_color:
@@ -208,6 +208,21 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
                 else:
                     colors.append(palette_[int(cells[i, 10]) - 1])
 
+    # Plot the circle (if desired)
+    if plot_membrane:
+        max_area = cells.shape[0] * np.pi * R * R + 2 * R * cells[:, 4].sum()
+        radius = params['confine_rest_radius_factor'] * np.sqrt(max_area / np.pi)
+        pl.add_mesh(
+            pv.Disc(
+                center=(0, 0, rz + 1.5 * R),
+                inner=0.98 * radius, outer=radius,
+                normal=(0, 0, 1),
+                r_res=2,
+                c_res=2 * np.pi * radius * 10
+            ),
+            color='white', show_edges=True, line_width=3
+        )
+
     # Plot the cells 
     title = 't = {:.10f}, n = {}'.format(params['t_curr'], cells.shape[0])
     print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
@@ -217,15 +232,6 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
         title, view=view, res=res
     )
 
-    # Plot the circle (if desired)
-    if plot_membrane:
-        max_area = cells.shape[0] * np.pi * R * R + 2 * R * cells[:, 4].sum()
-        radius = params['confine_rest_radius_factor'] * np.sqrt(max_area / np.pi)
-        pl.add_mesh(
-            pv.Circle(radius), color='white', show_edges=True, style='wireframe',
-            line_width=3
-        )
-
     # Get a screenshot of the plotted cells
     image = Image.fromarray(pl.screenshot())
     print('... saving to {}'.format(outfilename))
@@ -234,7 +240,7 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
 
 #######################################################################
 def plot_simulation(filenames, outfilename, xmin, xmax, ymin, ymax, zmin, zmax,
-                    res=50, fps=10, uniform_color=False, plot_boundary=False,
+                    res=50, fps=20, uniform_color=False, plot_boundary=False,
                     plot_membrane=False, overwrite_frames=False):
     """
     Given an ordered list of files containing cells to be plotted, parse 
