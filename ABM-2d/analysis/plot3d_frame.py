@@ -5,17 +5,11 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    7/17/2024
+    7/21/2024
 """
 
 import sys
-import numpy as np
-from PIL import Image
-import pyvista as pv
-#pv.start_xvfb()
-import seaborn as sns
-from utils import read_cells
-from plot3d import plot_cells 
+from plot3d import plot_frame
 
 #######################################################################
 if __name__ == '__main__':
