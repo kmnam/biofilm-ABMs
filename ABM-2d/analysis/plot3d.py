@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image
 import cv2
 import pyvista as pv
-pv.start_xvfb()
+#pv.start_xvfb()
 import seaborn as sns
 from utils import read_cells, parse_dir
 
@@ -208,6 +208,9 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
                 else:
                     colors.append(palette_[int(cells[i, 10]) - 1])
 
+    # Set up the plotter
+    pl = pv.Plotter(off_screen=True)
+
     # Plot the circle (if desired)
     if plot_membrane:
         max_area = cells.shape[0] * np.pi * R * R + 2 * R * cells[:, 4].sum()
@@ -215,18 +218,17 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
         pl.add_mesh(
             pv.Disc(
                 center=(0, 0, rz + 1.5 * R),
-                inner=0.98 * radius, outer=radius,
+                inner=0.99 * radius, outer=radius,
                 normal=(0, 0, 1),
                 r_res=2,
-                c_res=2 * np.pi * radius * 10
+                c_res=int(2 * np.pi * radius * 10)
             ),
-            color='white', show_edges=True, line_width=3
+            color='yellow', show_edges=False, line_width=1
         )
 
     # Plot the cells 
-    title = 't = {:.10f}, n = {}'.format(params['t_curr'], cells.shape[0])
     print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
-    pl = pv.Plotter(off_screen=True)
+    title = 't = {:.10f}, n = {}'.format(params['t_curr'], cells.shape[0])
     pl = plot_cells(
         cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
         title, view=view, res=res
