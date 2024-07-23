@@ -125,7 +125,7 @@ int main(int argc, char** argv)
     attribute_means << eta_surface, eta_surface;
     attribute_stds << 0.0, 0.0;
 
-    // Switching rates between groups 1 and 2 for the first stage 
+    // Switching rates between groups 1 and 2 for the two stages
     Array<T, Dynamic, Dynamic> switch_rates1(2, 2), switch_rates2(2, 2); 
     switch_rates1 << 0.0, 1.0 / lifetime_mean1_stage1,
                      1.0 / lifetime_mean2_stage1, 0.0;
@@ -146,9 +146,11 @@ int main(int argc, char** argv)
     cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface, 1;
     
     // Run the first stage of the simulation ... 
+    std::stringstream ss1, ss2; 
+    ss1 << outprefix << "_stage1"; 
     cells = runSimulation<T>(
         cells, max_iter, n_seed, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
-        max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
+        max_stepsize, true, ss1.str(), iter_write, iter_update_neighbors,
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
@@ -156,10 +158,11 @@ int main(int argc, char** argv)
         adhesion_mode, adhesion_params, confine, confine_params
     ); 
 
-    // ... then run the second stage of the simulation 
+    // ... then run the second stage of the simulation
+    ss2 << outprefix << "_stage2";
     runSimulation<T>(
         cells, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
-        max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
+        max_stepsize, true, ss2.str(), iter_write, iter_update_neighbors,
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
