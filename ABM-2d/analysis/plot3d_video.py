@@ -5,14 +5,12 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    7/17/2024
+    7/24/2024
 """
 
 import sys
+import re
 import numpy as np
-import pyvista as pv
-#pv.start_xvfb()
-import seaborn as sns
 from utils import read_cells, parse_dir
 from plot3d import plot_simulation
 
@@ -26,7 +24,9 @@ if __name__ == '__main__':
     uniform_color = ('--uniform' in args)
     plot_boundary = ('--bound' in args)
     plot_membrane = ('--membrane' in args)
-    filenames = parse_dir(inprefix)
+    overwrite_frames = ('--overwrite' in args)
+    multistage = ('--multistage' in args)
+    filenames = parse_dir(inprefix, multistage=multistage)
     print('Parsing {} files ...'.format(len(filenames)))
 
     # Get cell radius, final dimensions, and final timepoint from final file
@@ -46,17 +46,36 @@ if __name__ == '__main__':
 
     # Generate array of timepoints
     timepoints = np.linspace(0, t_final, nframes_total)
+
+    # Parse the initial files in each stage
+    init_timepoints = {}
+    if multistage:
+        for filename in filenames:
+            if filename.endswith('init.txt'):
+                _, params = read_cells(filename)
+                stage = int(re.search(r'_stage(\d+)_init\.txt$', filename).group(1))
+                init_timepoints[stage] = params['t_curr']
     
     # Run through the files and identify, for each timepoint, the file 
     # whose timepoint is closest
-    file_timepoints = []
+    file_timepoints = []    # Timepoints for all files 
+    plot_timepoints = []    # Timepoints for all files to be plotted
     for filename in filenames:
         _, params = read_cells(filename)
-        file_timepoints.append(params['t_curr'])
+        if not multistage:
+            file_timepoints.append(params['t_curr'])
+        # If processing a multi-stage simulation, we must update the timepoint
+        # in each file
+        else:
+            stage = int(
+                re.search(r'_stage(\d+)_(?:init|iter\d+|final)\.txt$', filename).group(1)
+            )
+            file_timepoints.append(params['t_curr'] + init_timepoints[stage])
     filenames_nearest = []
     for t in timepoints:
         nearest_idx = np.argmin(np.abs(file_timepoints - t))
         filenames_nearest.append(filenames[nearest_idx])
+        plot_timepoints.append(file_timepoints[nearest_idx])
 
     # Plot the simulation in fixed increments
     start = 0
@@ -65,7 +84,7 @@ if __name__ == '__main__':
     while end <= nframes_total:
         plot_simulation(
             filenames_nearest[start:end], outprefix + '_{}.avi'.format(i),
-            xmin, xmax, ymin, ymax, zmin, zmax, res=20, fps=20,
+            xmin, xmax, ymin, ymax, zmin, zmax, res=20, fps=20, times=plot_timepoints,
             uniform_color=uniform_color, plot_boundary=plot_boundary,
             plot_membrane=plot_membrane, overwrite_frames=overwrite_frames
         )

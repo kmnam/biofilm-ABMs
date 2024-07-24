@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    7/21/2024
+    7/24/2024
 """
 
 import os
@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image
 import cv2
 import pyvista as pv
-#pv.start_xvfb()
+pv.start_xvfb()
 import seaborn as sns
 from utils import read_cells, parse_dir
 
@@ -120,7 +120,7 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
 
 #######################################################################
 def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
-               ymax=None, zmin=None, zmax=None, view='xy', res=50,
+               ymax=None, zmin=None, zmax=None, view='xy', res=50, time=None,
                uniform_color=False, plot_boundary=False, plot_membrane=False):
     """
     Given an ordered list of files containing cells to be plotted, parse 
@@ -144,6 +144,8 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
         Set the view to the given pair of axes. 
     res : int
         Resolution for plotting each cylinder and hemisphere.
+    time : float
+        If not None, label the plot with the given time. 
     uniform_color : bool
         If True, color all cells with a single color (blue).
     plot_boundary : bool
@@ -188,6 +190,8 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
         zmin = rz - R
     if zmax is None:
         zmax = rz + 2 * R
+    if time is None:
+        time = params['t_curr']
 
     # Determine cell colors 
     if uniform_color:
@@ -218,17 +222,17 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
         pl.add_mesh(
             pv.Disc(
                 center=(0, 0, rz + 1.5 * R),
-                inner=0.99 * radius, outer=radius,
+                inner=(radius - 0.5 * R), outer=(radius + 0.5 * R),
                 normal=(0, 0, 1),
                 r_res=2,
                 c_res=int(2 * np.pi * radius * 10)
             ),
-            color='yellow', show_edges=False, line_width=1
+            color='gray', show_edges=False, line_width=1
         )
 
     # Plot the cells 
     print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
-    title = 't = {:.10f}, n = {}'.format(params['t_curr'], cells.shape[0])
+    title = 't = {:.10f}, n = {}'.format(time, cells.shape[0])
     pl = plot_cells(
         cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
         title, view=view, res=res
@@ -242,8 +246,9 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
 
 #######################################################################
 def plot_simulation(filenames, outfilename, xmin, xmax, ymin, ymax, zmin, zmax,
-                    res=50, fps=20, uniform_color=False, plot_boundary=False,
-                    plot_membrane=False, overwrite_frames=False):
+                    res=50, fps=20, times=None, uniform_color=False,
+                    plot_boundary=False, plot_membrane=False,
+                    overwrite_frames=False):
     """
     Given an ordered list of files containing cells to be plotted, parse 
     and plot each population of cells and generate a video. 
@@ -268,6 +273,9 @@ def plot_simulation(filenames, outfilename, xmin, xmax, ymin, ymax, zmin, zmax,
         Resolution for plotting each cylinder and hemisphere.
     fps : int
         Frames per second.
+    times : list
+        If not None, label each frame with the corresponding time in the 
+        given list. 
     uniform_color : bool
         If True, color all cells with a single color (blue).
     plot_boundary : bool
@@ -282,16 +290,22 @@ def plot_simulation(filenames, outfilename, xmin, xmax, ymin, ymax, zmin, zmax,
         for a given frame is kept as is; if not, each frame is overwritten. 
     """
     image_filenames = []
-    for filename in filenames:
+    for i, filename in enumerate(filenames):
         # Determine the filename for the frame 
         image_filename = '{}_frame.jpg'.format(filename[:-4])
         image_filenames.append(image_filename)
+
+        # Determine the timepoint for the frame 
+        if times is None:
+            time = None
+        else:
+            time = times[i]
         
         # If the image file does not exist or is to be overwritten ... 
         if overwrite_frames or not os.path.exists(image_filename):
             plot_frame(
                 filename, image_filename, xmin=xmin, xmax=xmax, ymin=ymin,
-                ymax=ymax, zmin=zmin, zmax=zmax, view='xy', res=res,
+                ymax=ymax, zmin=zmin, zmax=zmax, view='xy', res=res, time=time,
                 uniform_color=uniform_color, plot_boundary=plot_boundary,
                 plot_membrane=plot_membrane
             )
