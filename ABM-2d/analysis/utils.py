@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    2/7/2024
+    7/24/2024
 """
 import os
 import glob
@@ -48,7 +48,13 @@ def read_cells(path):
         for line in f:
             if line.startswith('#'):
                 m = re.match(r'# ([A-Za-z0-9_]+) = ([0-9eE+-\.]+)', line)
-                params[m.group(1)] = float(m.group(2))
+                try:
+                    params[m.group(1)] = float(m.group(2))
+                except AttributeError:
+                    print(
+                        '[WARN] Skipping comment with unexpected format:',
+                        line.strip()
+                    )
 
     # Then read the cells that are stored in the file 
     cells = np.loadtxt(path, comments='#', delimiter='\t', skiprows=0)
@@ -58,7 +64,7 @@ def read_cells(path):
     return cells, params
 
 #######################################################################
-def parse_dir(paths):
+def parse_dir(paths, multistage=False):
     """
     Get the files stored in the given directory and sort them by 
     iteration.
@@ -66,7 +72,9 @@ def parse_dir(paths):
     Parameters
     ----------
     path : str
-        Path to input directory. 
+        Path to input directory.
+    multistage : bool
+        If True, assume that the simulation involved multiple stages.
 
     Returns
     -------
@@ -77,26 +85,42 @@ def parse_dir(paths):
     ]
     filenames_sorted = []
 
-    # Find the initial file 
-    for filename in filenames:
-        if 'init' in filename:
-            filenames_sorted.append(filename)
-            break
+    # If multi-stage, then iterate over the files in each stage
+    stage_prefixes = [] 
+    if multistage:
+        i = 1
+        stage_prefixes = set([
+            re.search(r'_(stage\d+_)(?:init|iter\d+|final)\.txt$', filename).group(1)
+            for filename in filenames
+        ])
+        stage_prefixes = sorted(stage_prefixes)
+    else:
+        stage_prefixes = ['']
+ 
+    # For each stage ... 
+    for prefix in stage_prefixes:
+        # Find the initial file 
+        for filename in filenames:
+            if filename.endswith('{}init.txt'.format(prefix)):
+                filenames_sorted.append(filename)
+                break
 
-    # Run through all intermediate files and sort them in order of iteration
-    filenames_iter = [filename for filename in filenames if 'iter' in filename]
-    idx = []
-    for filename in filenames_iter:
-        m = re.search(r'iter([0-9]+)\.txt', filename)
-        idx.append(int(m.group(1)))
-    sorted_idx = np.argsort(idx)
-    filenames_sorted += [filenames_iter[i] for i in sorted_idx]
-    
-    # Find the final file (if one exists)
-    for filename in filenames:
-        if 'final' in filename:
-            filenames_sorted.append(filename)
-            break
+        # Run through all intermediate files and sort them in order of iteration
+        filenames_iter = []
+        idx = []
+        for filename in filenames:
+            m = re.search(r'{}iter(\d+)\.txt$'.format(prefix), filename)
+            if m is not None:
+                filenames_iter.append(filename)
+                idx.append(int(m.group(1)))
+        sorted_idx = np.argsort(idx)
+        filenames_sorted += [filenames_iter[i] for i in sorted_idx]
+        
+        # Find the final file (if one exists)
+        for filename in filenames:
+            if filename.endswith('{}final.txt'.format(prefix)):
+                filenames_sorted.append(filename)
+                break
 
     return filenames_sorted
 
