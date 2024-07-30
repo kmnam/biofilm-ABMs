@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/26/2024
+ *     7/30/2024
  */
 
 #include <Eigen/Dense>
@@ -57,7 +57,8 @@ int main(int argc, char** argv)
     const T max_stepsize = static_cast<T>(json_data["max_stepsize"].as_double()); 
     const int iter_write = json_data["iter_write"].as_int64(); 
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
-    const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64(); 
+    const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64();
+    const int iter_update_boundary = 0;
     const T neighbor_threshold = 2 * (2 * R + L0);
     const int max_iter = json_data["max_iter"].as_int64();
     const int n_cells = json_data["n_cells"].as_int64();
@@ -72,6 +73,12 @@ int main(int argc, char** argv)
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T daughter_angle_bound = static_cast<T>(json_data["daughter_angle_bound"].as_double());
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
+    const AdhesionMode adhesion_mode = AdhesionMode::NONE;    // No cell-cell adhesion
+    std::unordered_map<std::string, T> adhesion_params;
+    const bool confine = false;    // No radial confinement forces 
+    std::unordered_map<std::string, T> confine_params; 
+    const GrowthVoidMode growth_void_mode = GrowthVoidMode::NONE;    // No growth void 
+    std::unordered_map<std::string, T> growth_void_params; 
 
     // Vectors of growth rate means and standard deviations (identical for
     // both groups) 
@@ -109,10 +116,12 @@ int main(int argc, char** argv)
     runSimulation<T>(
         cells, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
         max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
-        iter_update_stepsize, max_error_allowed, min_error,
-        max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
+        iter_update_boundary, iter_update_stepsize, max_error_allowed,
+        min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
-        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound
+        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
+        adhesion_mode, adhesion_params, confine, confine_params, growth_void_mode,
+        growth_void_params
     ); 
     
     return 0; 
