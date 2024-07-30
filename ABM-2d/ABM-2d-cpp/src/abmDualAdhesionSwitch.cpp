@@ -21,7 +21,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/19/2024
+ *     7/30/2024
  */
 
 #include <Eigen/Dense>
@@ -52,7 +52,6 @@ int main(int argc, char** argv)
     b << 2./9., 1./3., 4./9., 0;
     Array<T, Dynamic, 1> bs(4); 
     bs << 7./24., 1./4., 1./3., 1./8.;
-    T error_order = 2; 
 
     // Parse input json file 
     std::string json_filename = argv[1];
@@ -88,17 +87,18 @@ int main(int argc, char** argv)
     adhesion_params["strength"] = static_cast<T>(json_data["adhesion_strength"].as_double());
     adhesion_params["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double()); 
     adhesion_params["mindist"] = static_cast<T>(json_data["adhesion_mindist"].as_double()); 
-    if (adhesion_mode == GBK) 
+    if (adhesion_mode == AdhesionMode::GBK) 
     {
         adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double()); 
         adhesion_params["anisotropy_exp2"] = static_cast<T>(json_data["adhesion_anisotropy_exp2"].as_double());
         adhesion_params["well_depth_delta"] = static_cast<T>(json_data["adhesion_well_depth_delta"].as_double()); 
     }
     const bool confine = false;    // No radial confinement forces
-    std::unordered_map<std::string, T> confine_params; 
+    std::unordered_map<std::string, T> confine_params;
+    const GrowthVoidMode growth_void_mode = GrowthVoidMode::NONE;   // No growth void 
+    std::unordered_map<std::string, T> growth_void_params; 
 
-    // Surface contact area density and powers of cell radius 
-    const T surface_contact_density = std::pow(sigma0 * R * R / (4 * E0), 1. / 3.);
+    // Pre-compute powers of cell radius 
     const T sqrtR = std::sqrt(R); 
     const T powRdiff = std::pow(R - Rcell, 1.5);
     Array<T, 4, 1> cell_cell_prefactors;
@@ -148,7 +148,8 @@ int main(int argc, char** argv)
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        adhesion_mode, adhesion_params, confine, confine_params
+        adhesion_mode, adhesion_params, confine, confine_params, growth_void_mode,
+        growth_void_params
     ); 
    
     return 0; 
