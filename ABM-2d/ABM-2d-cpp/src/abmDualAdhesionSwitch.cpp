@@ -1,6 +1,6 @@
 /**
- * An agent-based model that switches cells between two states that exhibit
- * different friction coefficients. 
+ * An agent-based model of 2-D biofilm growth that switches cells between two
+ * states that exhibit differential adhesion. 
  *
  * In what follows, a population of N cells is represented as a 2-D array of 
  * size (N, 11), where each row represents a cell and stores the following data:
@@ -85,15 +85,6 @@ int main(int argc, char** argv)
     std::unordered_map<std::string, T> confine_params;
     const GrowthVoidMode growth_void_mode = GrowthVoidMode::NONE;   // No growth void 
     std::unordered_map<std::string, T> growth_void_params; 
-
-    // Pre-compute powers of cell radius 
-    const T sqrtR = std::sqrt(R); 
-    const T powRdiff = std::pow(R - Rcell, 1.5);
-    Array<T, 4, 1> cell_cell_prefactors;
-    cell_cell_prefactors << 2.5 * sqrtR,
-                            2.5 * E0 * sqrtR,
-                            E0 * powRdiff,
-                            Ecell;
 
     // Vectors of growth rate means and standard deviations (identical for
     // both groups) 
