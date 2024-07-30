@@ -56,6 +56,16 @@ using std::cos;
 using boost::multiprecision::cos;
 
 /**
+ * An enum that enumerates the different growth void types. 
+ */
+enum GrowthVoidMode
+{
+    NONE,
+    FIXED,
+    RATIO
+};
+
+/**
  * Return a string containing a floating-point number, specified to the 
  * given precision. 
  *
@@ -70,7 +80,7 @@ std::string floatToString(T x, const int precision = 10)
     ss << std::setprecision(precision);
     ss << x;
     return ss.str();
-} 
+}
 
 /**
  * TODO Update
@@ -464,7 +474,6 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             Array<T, Dynamic, 4> scale = max_error_allowed * (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
             );
-            //T error = max((errors / scale).abs().maxCoeff(), min_error);
             T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
             if (error > 5)
             {
@@ -650,6 +659,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  *                peripheral cells.
  * @param confine_params Parameters required to compute radial confinement
  *                       forces.
+ * @param growth_void_mode Choice of growth void to be introduced within the
+ *                         biofilm. Can be NONE (0), FIXED (1), or RATIO (2).
+ * @param growth_void_params Parameters required to introduce growth void 
+ *                           within the biofilm. 
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -681,7 +694,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const AdhesionMode adhesion_mode, 
                                          std::unordered_map<std::string, T>& adhesion_params,
                                          const bool confine,
-                                         std::unordered_map<std::string, T>& confine_params)
+                                         std::unordered_map<std::string, T>& confine_params,
+                                         const GrowthVoidMode growth_void_mode,
+                                         std::unordered_map<std::string, T>& growth_void_params)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -1008,7 +1023,6 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             Array<T, Dynamic, 4> scale = max_error_allowed * (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
             );
-            //T error = max((errors / scale).abs().maxCoeff(), min_error);
             T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
 
             // Ensure that the updated stepsize is between 0.2 times and 10 times
@@ -1058,7 +1072,6 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             Array<T, Dynamic, 4> scale = max_error_allowed * (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
             );
-            //T error = max((errors / scale).abs().maxCoeff(), min_error);
             T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
             if (error > 5)
             {
