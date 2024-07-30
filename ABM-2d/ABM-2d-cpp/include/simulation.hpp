@@ -20,7 +20,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/19/2024
+ *     7/30/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -116,6 +116,10 @@ std::string floatToString(T x, const int precision = 10)
  *                peripheral cells.
  * @param confine_params Parameters required to compute radial confinement
  *                       forces.
+ * @param growth_void_mode Choice of growth void to be introduced within the
+ *                         biofilm. Can be NONE (0), FIXED (1), or RATIO (2).
+ * @param growth_void_params Parameters required to introduce growth void 
+ *                           within the biofilm. 
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -142,7 +146,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                                          const AdhesionMode adhesion_mode,
                                          std::unordered_map<std::string, T>& adhesion_params,
                                          const bool confine,
-                                         std::unordered_map<std::string, T>& confine_params)
+                                         std::unordered_map<std::string, T>& confine_params,
+                                         const GrowthVoidMode growth_void_mode,
+                                         std::unordered_map<std::string, T>& growth_void_params)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -269,11 +275,26 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::string key = item.first;
             T value = item.second;
             ss << "confine_" << key;
-            if (key == "find_boundary")
+            if (key == "find_boundary")                // find_boundary is a boolean value 
                 params[ss.str()] = (value == 0 ? "0" : "1");
-            else if (key == "mincells_for_boundary")
+            else if (key == "mincells_for_boundary")   // mincells_for_boundary is an integer value
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else
+                params[ss.str()] = floatToString<T>(value);
+        }
+    }
+    params["growth_void_mode"] = std::to_string(growth_void_mode);
+    if (growth_void_mode != NONE)
+    {
+        for (auto&& item : growth_void_params)
+        {
+            std::stringstream ss; 
+            std::string key = item.first; 
+            T value = item.second; 
+            ss << "growth_void_" << key;
+            if (key == "mincells")     // mincells is an integer value 
+                params[ss.str()] = std::to_string(static_cast<int>(value));
+            else 
                 params[ss.str()] = floatToString<T>(value);
         }
     }
@@ -296,6 +317,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
         }
     }
+
+    // Variable for keeping track of whether a growth void has been introduced
+    bool growth_void_introduced = false;
 
     // Write the initial population to file
     if (write)
@@ -390,7 +414,6 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             Array<T, Dynamic, 4> scale = max_error_allowed * (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
             );
-            //T error = max((errors / scale).abs().maxCoeff(), min_error);
             T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
 
             // Ensure that the updated stepsize is between 0.2 times and 10 times
@@ -489,6 +512,37 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             {
                 boundary_idx.resize(n); 
                 std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
+            }
+        }
+
+        // Introduce or update growth void
+        if ((growth_void_mode == FIXED && !growth_void_introduced) || growth_void_mode == RATIO)
+        {
+            // Have we reached the minimum number of cells? 
+            if (cells.rows() >= growth_void_params["mincells"])
+            {
+                // Find the center of mass of the population  
+                Array<T, 2, 1> center; 
+                center << cells.col(0).mean(), cells.col(1).mean();
+
+                // Find the radial distance of each cell to the center 
+                Array<T, Dynamic, 1> rdists = (cells(Eigen::all, Eigen::seq(0, 1)).rowwise() - center.transpose()).matrix().rowwise().norm().array();
+
+                // Normalize by the maximum radial distance 
+                T radius = rdists.maxCoeff();
+                rdists /= radius;
+
+                // Identify the innermost fraction of cells whose growth is to
+                // be arrested
+                T radius_ratio = growth_void_params["radius_ratio"];
+                for (int i = 0; i < cells.rows(); ++i)
+                {
+                    if (rdists(i) < radius_ratio)
+                        cells(i, 7) = 0.0;
+                }
+                
+                // We have now introduced the growth void
+                growth_void_introduced = true;
             }
         }
         
@@ -814,11 +868,26 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::string key = item.first;
             T value = item.second;
             ss << "confine_" << key; 
-            if (key == "find_boundary")
+            if (key == "find_boundary")                // find_boundary is a boolean value 
                 params[ss.str()] = (value == 0 ? "0" : "1");
-            else if (key == "mincells_for_boundary")
+            else if (key == "mincells_for_boundary")   // mincells_for_boundary is an integer value
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else
+                params[ss.str()] = floatToString<T>(value);
+        }
+    }
+    params["growth_void_mode"] = std::to_string(growth_void_mode);
+    if (growth_void_mode != NONE)
+    {
+        for (auto&& item : growth_void_params)
+        {
+            std::stringstream ss; 
+            std::string key = item.first; 
+            T value = item.second; 
+            ss << "growth_void_" << key;
+            if (key == "mincells")     // mincells is an integer value 
+                params[ss.str()] = std::to_string(static_cast<int>(value));
+            else 
                 params[ss.str()] = floatToString<T>(value);
         }
     }
@@ -841,6 +910,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
         }
     }
+
+    // Variable for keeping track of whether a growth void has been introduced
+    bool growth_void_introduced = false;
 
     // Write the initial population to file
     if (write)
@@ -1048,6 +1120,37 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             int nj = neighbors(k, 1); 
             T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
             to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+        }
+
+        // Introduce or update growth void
+        if ((growth_void_mode == FIXED && !growth_void_introduced) || growth_void_mode == RATIO)
+        {
+            // Have we reached the minimum number of cells? 
+            if (cells.rows() >= growth_void_params["mincells"])
+            {
+                // Find the center of mass of the population  
+                Array<T, 2, 1> center; 
+                center << cells.col(0).mean(), cells.col(1).mean();
+
+                // Find the radial distance of each cell to the center 
+                Array<T, Dynamic, 1> rdists = (cells(Eigen::all, Eigen::seq(0, 1)).rowwise() - center.transpose()).matrix().rowwise().norm().array();
+
+                // Normalize by the maximum radial distance 
+                T radius = rdists.maxCoeff();
+                rdists /= radius;
+
+                // Identify the innermost fraction of cells whose growth is to
+                // be arrested
+                T radius_ratio = growth_void_params["radius_ratio"];
+                for (int i = 0; i < cells.rows(); ++i)
+                {
+                    if (rdists(i) < radius_ratio)
+                        cells(i, 7) = 0.0;
+                }
+                
+                // We have now introduced the growth void
+                growth_void_introduced = true;
+            }
         }
         
         // Write the current population to file
