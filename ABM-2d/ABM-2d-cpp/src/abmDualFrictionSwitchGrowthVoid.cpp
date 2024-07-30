@@ -22,7 +22,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/5/2024
+ *     7/30/2024
  */
 
 #include <Eigen/Dense>
@@ -58,50 +58,52 @@ int main(int argc, char** argv)
     const T max_stepsize = static_cast<T>(json_data["max_stepsize"].as_double()); 
     const int iter_write = json_data["iter_write"].as_int64(); 
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
-    const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64(); 
+    const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64();
+    const int iter_update_boundary = 0;
     const T neighbor_threshold = 2 * (2 * R + L0);
-    const int n_cells_before = json_data["n_cells_before"].as_int64();
-    const int n_cells_after = json_data["n_cells_after"].as_int64();
-    const double void_fraction = json_data["void_fraction"].as_double();
-    const double growth_mean = json_data["growth_mean"].as_double();
-    const double growth_std = json_data["growth_std"].as_double();
-    const double eta_mean1 = json_data["eta_mean1"].as_double();
-    const double eta_std1 = json_data["eta_std1"].as_double(); 
-    const double eta_mean2 = json_data["eta_mean2"].as_double();
-    const double eta_std2 = json_data["eta_std2"].as_double();
+    const int max_iter = json_data["max_iter"].as_int64();
+    const int n_cells = json_data["n_cells"].as_int64();
+    const T growth_mean = static_cast<T>(json_data["growth_mean"].as_double());
+    const T growth_std = static_cast<T>(json_data["growth_std"].as_double());
+    const T eta_mean1 = static_cast<T>(json_data["eta_mean1"].as_double());
+    const T eta_std1 = static_cast<T>(json_data["eta_std1"].as_double()); 
+    const T eta_mean2 = static_cast<T>(json_data["eta_mean2"].as_double());
+    const T eta_std2 = static_cast<T>(json_data["eta_std2"].as_double());
     const T lifetime_mean1 = static_cast<T>(json_data["lifetime_mean1"].as_double()); 
     const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
-    const double daughter_length_std = json_data["daughter_length_std"].as_double();
-    const double daughter_angle_bound = json_data["daughter_angle_bound"].as_double();
+    const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
+    const T daughter_angle_bound = static_cast<T>(json_data["daughter_angle_bound"].as_double());
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
+    const AdhesionMode adhesion_mode = AdhesionMode::NONE;    // No cell-cell adhesion
+    std::unordered_map<std::string, T> adhesion_params;
+    const bool confine = false;    // No radial confinement forces 
+    std::unordered_map<std::string, T> confine_params;
+    const GrowthVoidMode growth_void_mode = static_cast<GrowthVoidMode>(json_data["growth_void_mode"].as_int64());
+    std::unordered_map<std::string, T> growth_void_params; 
+    growth_void_params["mincells"] = static_cast<T>(json_data["growth_void_mincells"].as_int64());
+    growth_void_params["radial_fraction"] = static_cast<T>(json_data["growth_void_radial_fraction"].as_double()); 
 
     // Vectors of growth rate means and standard deviations (identical for
-    // the two live groups, zero for the two dead groups)
-    std::vector<double> growth_means { growth_mean, growth_mean, 0.0, 0.0 };
-    std::vector<double> growth_stds  { growth_std, growth_std, 0.0, 0.0 };
+    // both groups)
+    Array<T, Dynamic, 1> growth_means(2); 
+    Array<T, Dynamic, 1> growth_stds(2);
+    growth_means << growth_mean, growth_mean; 
+    growth_stds << growth_std, growth_std; 
 
     // Vectors of friction coefficient means and standard deviations
-    const int switch_attribute = 9;
-    std::vector<double> attribute_means { eta_mean1, eta_mean2, eta_mean1, eta_mean2 };
-    std::vector<double> attribute_stds  { eta_std1, eta_std2, eta_std1, eta_std2 };
+    std::vector<int> switch_attributes { 9 }; 
+    Array<T, Dynamic, Dynamic> attribute_means(2, 1); 
+    Array<T, Dynamic, Dynamic> attribute_stds(2, 1);
+    attribute_means << eta_mean1, eta_mean2; 
+    attribute_stds << eta_std1, eta_std2; 
 
-    // Switching rates between groups 1 and 2 (no switching to and between 
-    // groups 3 and 4 is allowed)
-    Array<T, Dynamic, Dynamic> switch_rates(4, 4); 
-    switch_rates << 0.0, 1.0 / lifetime_mean1, 0.0, 0.0,
-                    1.0 / lifetime_mean2, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 0.0;
+    // Switching rates between groups 1 and 2
+    Array<T, Dynamic, Dynamic> switch_rates(2, 2); 
+    switch_rates << 0.0, 1.0 / lifetime_mean1,
+                    1.0 / lifetime_mean2, 0.0;
 
     // Output file prefix
     std::string outprefix = argv[2];
-    std::stringstream ss; 
-    ss << outprefix << "_before"; 
-    std::string outprefix_before = ss.str(); 
-    ss.str(std::string()); 
-    ss << outprefix << "_after";
-    std::string outprefix_after = ss.str();
-    ss.str(std::string());
 
     // Random seed
     const int rng_seed = std::stoi(argv[3]);
@@ -113,54 +115,17 @@ int main(int argc, char** argv)
     Array<T, Dynamic, Dynamic> cells(1, 11);
     cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1, 1;
 
-    // Run the simulation, initially without a growth void
+    // Run the simulation
     cells = runSimulation<T>(
-        cells, -1, n_cells_before, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
-        max_stepsize, true, outprefix_before, iter_write, iter_update_neighbors,
-        iter_update_stepsize, max_error_allowed, min_error,
-        max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
-        switch_attribute, growth_means, growth_stds, attribute_means, 
-        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound
+        cells, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
+        max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
+        iter_update_boundary, iter_update_stepsize, max_error_allowed,
+        min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
+        switch_attributes, growth_means, growth_stds, attribute_means, 
+        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
+        adhesion_mode, adhesion_params, confine, confine_params, growth_void_mode,
+        growth_void_params
     );
 
-    // Calculate the distance of each cell to the population center
-    Array<T, 2, 1> center; 
-    center << cells.col(0).sum() / cells.rows(),
-              cells.col(1).sum() / cells.rows();
-    Array<T, Dynamic, 1> dists(cells.rows()); 
-    for (int i = 0; i < cells.rows(); ++i)
-        dists(i) = (cells(i, Eigen::seq(0, 1)).transpose() - center).matrix().norm();
-
-    // Identify the specified fraction of furthest central cells 
-    std::vector<T> dists_vec;
-    for (int i = 0; i < cells.rows(); ++i)
-        dists_vec.push_back(dists(i));
-    std::sort(dists_vec.begin(), dists_vec.end());
-    T threshold = dists_vec[static_cast<int>(void_fraction * cells.rows()) - 1];
-
-    // Establish a growth void that eliminates the specified fraction of cells
-    for (int i = 0; i < cells.rows(); ++i)
-    {
-        if (dists(i) <= threshold)
-        {
-            cells(i, 7) = 0.0;
-            if (cells(i, 10) == 1)
-                cells(i, 10) = 3;
-            else    // cells(i, 10) == 2
-                cells(i, 10) = 4;
-        }
-    }
-    
-    // Run the simulation with the growth void
-    const int n_cells_total = n_cells_before + n_cells_after;
-    cells = runSimulation<T>(
-        cells, -1, n_cells_total, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
-        max_stepsize, true, outprefix_after, iter_write, iter_update_neighbors,
-        iter_update_stepsize, max_error_allowed, min_error,
-        max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
-        switch_attribute, growth_means, growth_stds, attribute_means, 
-        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound
-    );
-   
     return 0; 
 }
