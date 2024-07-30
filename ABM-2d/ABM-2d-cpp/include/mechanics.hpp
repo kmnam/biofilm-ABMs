@@ -23,7 +23,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/12/2024
+ *     7/30/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -52,9 +52,9 @@ typedef K::Segment_3 Segment_3;
  */
 enum class AdhesionMode
 {
-    NONE,
-    KIHARA,
-    GBK
+    NONE = 0,
+    KIHARA = 1,
+    GBK = 2
 };
 
 /**
