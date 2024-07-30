@@ -41,18 +41,6 @@ const T min_error = static_cast<T>(1e-30);
 
 int main(int argc, char** argv)
 {
-    // Define Butcher tableau for order 3(2) Runge-Kutta method by Bogacki
-    // and Shampine 
-    Array<T, Dynamic, Dynamic> A(4, 4); 
-    A << 0,     0,     0,     0,
-         1./2., 0,     0,     0,
-         0,     3./4., 0,     0,
-         2./9., 1./3., 4./9., 0;
-    Array<T, Dynamic, 1> b(4);
-    b << 2./9., 1./3., 4./9., 0;
-    Array<T, Dynamic, 1> bs(4); 
-    bs << 7./24., 1./4., 1./3., 1./8.;
-
     // Parse input json file 
     std::string json_filename = argv[1];
     boost::json::object json_data = parseConfigFile(json_filename).as_object();
