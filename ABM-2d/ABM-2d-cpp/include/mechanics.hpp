@@ -50,7 +50,7 @@ typedef K::Segment_3 Segment_3;
 /**
  * An enum that enumerates the different adhesion force types. 
  */
-enum AdhesionMode
+enum class AdhesionMode
 {
     NONE,
     KIHARA,
@@ -461,7 +461,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
 
             // Get the corresponding forces
             Array<T, 2, 4> forces; 
-            if (mode == KIHARA) 
+            if (mode == AdhesionMode::KIHARA) 
             {
                 const T strength = params["strength"];
                 const T expd = params["distance_exp"]; 
@@ -471,7 +471,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                     dmin
                 );
             }
-            else if (mode == GBK)
+            else if (mode == AdhesionMode::GBK)
             {
                 const T strength = params["strength"];
                 const T exp1 = params["anisotropy_exp1"];
@@ -588,7 +588,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
 
     // ... the adhesive forces (if adhesion is present) ... 
     Array<T, Dynamic, 4> dEdq_adhesion = Array<T, Dynamic, 4>::Zero(n, 4); 
-    if (adhesion_mode != NONE)
+    if (adhesion_mode != AdhesionMode::NONE)
     {
         dEdq_adhesion = cellCellAdhesiveForces<T>(
             cells, neighbors, to_adhere, R, Rcell, adhesion_mode, adhesion_params

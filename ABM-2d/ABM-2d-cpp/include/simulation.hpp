@@ -264,8 +264,13 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     params["growth_std"] = floatToString<T>(growth_std, precision);
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
-    params["adhesion_mode"] = std::to_string(adhesion_mode);
-    if (adhesion_mode != NONE)
+    if (adhesion_mode == AdhesionMode::NONE)
+        params["adhesion_mode"] = "0";
+    else if (adhesion_mode == AdhesionMode::KIHARA)
+        params["adhesion_mode"] = "1"; 
+    else    // adhesion_mode == AdhesionMode::GBK
+        params["adhesion_mode"] = "2";
+    if (adhesion_mode != AdhesionMode::NONE)
     {
         for (auto&& item : adhesion_params)
         {
@@ -293,8 +298,13 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 params[ss.str()] = floatToString<T>(value);
         }
     }
-    params["growth_void_mode"] = std::to_string(growth_void_mode);
-    if (growth_void_mode != NONE)
+    if (growth_void_mode == GrowthVoidMode::NONE)
+        params["growth_void_mode"] = "0"; 
+    else if (growth_void_mode == GrowthVoidMode::FIXED)
+        params["growth_void_mode"] = "1"; 
+    else    // growth_void_mode == GrowthVoidMode::RATIO
+        params["growth_void_mode"] = "2";
+    if (growth_void_mode != GrowthVoidMode::NONE)
     {
         for (auto&& item : growth_void_params)
         {
@@ -525,7 +535,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         }
 
         // Introduce or update growth void
-        if ((growth_void_mode == FIXED && !growth_void_introduced) || growth_void_mode == RATIO)
+        if ((growth_void_mode == GrowthVoidMode::FIXED && !growth_void_introduced) || growth_void_mode == GrowthVoidMode::RATIO)
         {
             // Have we reached the minimum number of cells? 
             if (cells.rows() >= growth_void_params["mincells"])
@@ -862,8 +872,13 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
-    params["adhesion_mode"] = std::to_string(adhesion_mode);
-    if (adhesion_mode != NONE)
+    if (adhesion_mode == AdhesionMode::NONE)
+        params["adhesion_mode"] = "0";
+    else if (adhesion_mode == AdhesionMode::KIHARA)
+        params["adhesion_mode"] = "1"; 
+    else    // adhesion_mode == AdhesionMode::GBK
+        params["adhesion_mode"] = "2";
+    if (adhesion_mode != AdhesionMode::NONE)
     {
         for (auto&& item : adhesion_params)
         {
@@ -891,8 +906,13 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 params[ss.str()] = floatToString<T>(value);
         }
     }
-    params["growth_void_mode"] = std::to_string(growth_void_mode);
-    if (growth_void_mode != NONE)
+    if (growth_void_mode == GrowthVoidMode::NONE)
+        params["growth_void_mode"] = "0"; 
+    else if (growth_void_mode == GrowthVoidMode::FIXED)
+        params["growth_void_mode"] = "1"; 
+    else    // growth_void_mode == GrowthVoidMode::RATIO
+        params["growth_void_mode"] = "2";
+    if (growth_void_mode != GrowthVoidMode::NONE)
     {
         for (auto&& item : growth_void_params)
         {
@@ -1136,7 +1156,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         }
 
         // Introduce or update growth void
-        if ((growth_void_mode == FIXED && !growth_void_introduced) || growth_void_mode == RATIO)
+        if ((growth_void_mode == GrowthVoidMode::FIXED && !growth_void_introduced) || growth_void_mode == GrowthVoidMode::RATIO)
         {
             // Have we reached the minimum number of cells? 
             if (cells.rows() >= growth_void_params["mincells"])
