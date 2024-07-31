@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    7/21/2024
+    7/30/2024
 """
 
 import sys
@@ -19,8 +19,10 @@ if __name__ == '__main__':
     uniform_color = ('--uniform' in args)
     plot_boundary = ('--bound' in args)
     plot_membrane = ('--membrane' in args)
+    plot_arrested = ('--arrested' in args)
     plot_frame(
         filename, outfilename, view='xy', res=20, uniform_color=uniform_color,
-        plot_boundary=plot_boundary, plot_membrane=plot_membrane
+        plot_boundary=plot_boundary, plot_membrane=plot_membrane,
+        plot_arrested=plot_arrested
     )
 
