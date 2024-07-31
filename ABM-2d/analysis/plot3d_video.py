@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    7/24/2024
+    7/30/2024
 """
 
 import sys
@@ -24,20 +24,20 @@ if __name__ == '__main__':
     uniform_color = ('--uniform' in args)
     plot_boundary = ('--bound' in args)
     plot_membrane = ('--membrane' in args)
+    plot_arrested = ('--arrested' in args)
     overwrite_frames = ('--overwrite' in args)
     multistage = ('--multistage' in args)
     filenames = parse_dir(inprefix, multistage=multistage)
     print('Parsing {} files ...'.format(len(filenames)))
 
     # Parse the initial files in each stage
-    init_timepoints = {}
+    init_timepoints = {1: 0.0}
     n_stages = 1
     if multistage:
         n_stages = max(
             int(re.search(r'_stage(\d+)_(?:init|iter\d+|final)\.txt$', filename).group(1))
             for filename in filenames
         )
-        init_timepoints[1] = 0.0
         for stage in range(2, n_stages + 1):
             filename_prev_final = next(
                 filename for filename in filenames
@@ -66,11 +66,9 @@ if __name__ == '__main__':
 
     # Generate array of timepoints
     timepoints = np.linspace(0, t_final, nframes_total)
-   
-    # Run through the files and identify, for each timepoint, the file 
-    # whose timepoint is closest
+  
+    # Run through the files and identify their corresponding timepoints 
     file_timepoints = []    # Timepoints for all files 
-    plot_timepoints = []    # Timepoints for all files to be plotted
     for filename in filenames:
         _, params = read_cells(filename)
         if not multistage:
@@ -82,7 +80,11 @@ if __name__ == '__main__':
                 re.search(r'_stage(\d+)_(?:init|iter\d+|final)\.txt$', filename).group(1)
             )
             file_timepoints.append(params['t_curr'] + init_timepoints[stage])
+
+    # Run through the files and identify, for each timepoint, the file 
+    # whose timepoint is closest
     filenames_nearest = []
+    plot_timepoints = []      # Timepoints for all files to be plotted
     for t in timepoints:
         nearest_idx = np.argmin(np.abs(file_timepoints - t))
         filenames_nearest.append(filenames[nearest_idx])
@@ -98,7 +100,7 @@ if __name__ == '__main__':
             xmin, xmax, ymin, ymax, zmin, zmax, res=20, fps=20,
             times=plot_timepoints[start:end], uniform_color=uniform_color,
             plot_boundary=plot_boundary, plot_membrane=plot_membrane,
-            overwrite_frames=overwrite_frames
+            plot_arrested=plot_arrested, overwrite_frames=overwrite_frames
         )
         print('Saving video: {}_{}.avi'.format(outprefix, i))
         start += nframes_per_video
