@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    7/24/2024
+    7/30/2024
 """
 
 import os
@@ -121,7 +121,8 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
 #######################################################################
 def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
                ymax=None, zmin=None, zmax=None, view='xy', res=50, time=None,
-               uniform_color=False, plot_boundary=False, plot_membrane=False):
+               uniform_color=False, plot_boundary=False, plot_membrane=False,
+               plot_arrested=False):
     """
     Given an ordered list of files containing cells to be plotted, parse 
     and plot each population of cells and generate a video.
@@ -155,6 +156,9 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
     plot_membrane : bool
         If True, plot the elastic membrane with the given rest radius at 
         the origin.
+    plot_arrested : bool
+        If True, look for non-growing cells and plot them with a different 
+        color.
     """
     palette = [    # Assume a maximum of five groups 
         sns.color_palette('hls', 8)[5],
@@ -200,17 +204,15 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
         ngroups = int(max(cells[:, 10]))
         palette_ = palette[:ngroups]
         pastel_ = pastel[:ngroups]
-        if not plot_boundary:
-            colors = [
-                palette_[int(cells[i, 10]) - 1] for i in range(cells.shape[0])
-            ]
-        else:
-            colors = []
-            for i in range(cells.shape[0]):
-                if cells[i, 11] != 0:
-                    colors.append(pastel_[int(cells[i, 10]) - 1])
-                else:
-                    colors.append(palette_[int(cells[i, 10]) - 1])
+        colors = []
+        for i in range(cells.shape[0]):
+            group_idx = int(cells[i, 10]) - 1
+            if plot_boundary and cells[i, 11] != 0:
+                colors.append(pastel_[group_idx])
+            elif plot_arrested and cells[i, 7] == 0:
+                colors.append(pastel_[group_idx])
+            else:
+                colors.append(palette_[group_idx])
 
     # Set up the plotter
     pl = pv.Plotter(off_screen=True)
@@ -247,7 +249,7 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
 #######################################################################
 def plot_simulation(filenames, outfilename, xmin, xmax, ymin, ymax, zmin, zmax,
                     res=50, fps=20, times=None, uniform_color=False,
-                    plot_boundary=False, plot_membrane=False,
+                    plot_boundary=False, plot_membrane=False, plot_arrested=False,
                     overwrite_frames=False):
     """
     Given an ordered list of files containing cells to be plotted, parse 
@@ -285,6 +287,9 @@ def plot_simulation(filenames, outfilename, xmin, xmax, ymin, ymax, zmin, zmax,
     plot_membrane : bool
         If True, plot the elastic membrane with the given rest radius at 
         the origin. There should be at least 12 columns in the input data.
+    plot_arrested : bool
+        If True, look for non-growing cells and plot them with a different 
+        color.
     overwrite_frames : bool
         If False, then any existing .jpg file with the same name as that 
         for a given frame is kept as is; if not, each frame is overwritten. 
@@ -307,7 +312,7 @@ def plot_simulation(filenames, outfilename, xmin, xmax, ymin, ymax, zmin, zmax,
                 filename, image_filename, xmin=xmin, xmax=xmax, ymin=ymin,
                 ymax=ymax, zmin=zmin, zmax=zmax, view='xy', res=res, time=time,
                 uniform_color=uniform_color, plot_boundary=plot_boundary,
-                plot_membrane=plot_membrane
+                plot_membrane=plot_membrane, plot_arrested=plot_arrested
             )
             image_filenames.append(image_filename)
 
