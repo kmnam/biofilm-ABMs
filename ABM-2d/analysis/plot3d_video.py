@@ -29,6 +29,23 @@ if __name__ == '__main__':
     filenames = parse_dir(inprefix, multistage=multistage)
     print('Parsing {} files ...'.format(len(filenames)))
 
+    # Parse the initial files in each stage
+    init_timepoints = {}
+    n_stages = 1
+    if multistage:
+        n_stages = max(
+            int(re.search(r'_stage(\d+)_(?:init|iter\d+|final)\.txt$', filename).group(1))
+            for filename in filenames
+        )
+        init_timepoints[1] = 0.0
+        for stage in range(2, n_stages + 1):
+            filename_prev_final = next(
+                filename for filename in filenames
+                if re.search(r'_stage{}_final\.txt$'.format(stage - 1), filename) is not None
+            )
+            _, params = read_cells(filename_prev_final)
+            init_timepoints[stage] = params['t_curr']
+
     # Get cell radius, final dimensions, and final timepoint from final file
     cells, params = read_cells(filenames[-1])
     R = params['R']
@@ -42,20 +59,14 @@ if __name__ == '__main__':
     ymax = np.ceil(cells[:, 1].max() + 4 * L0)
     zmin = rz - R
     zmax = rz + R
-    t_final = params['t_curr']
+    t_final = (
+        params['t_curr'] if not multistage else
+        init_timepoints[n_stages] + params['t_curr']
+    )
 
     # Generate array of timepoints
     timepoints = np.linspace(0, t_final, nframes_total)
-
-    # Parse the initial files in each stage
-    init_timepoints = {}
-    if multistage:
-        for filename in filenames:
-            if filename.endswith('init.txt'):
-                _, params = read_cells(filename)
-                stage = int(re.search(r'_stage(\d+)_init\.txt$', filename).group(1))
-                init_timepoints[stage] = params['t_curr']
-    
+   
     # Run through the files and identify, for each timepoint, the file 
     # whose timepoint is closest
     file_timepoints = []    # Timepoints for all files 
@@ -84,9 +95,10 @@ if __name__ == '__main__':
     while end <= nframes_total:
         plot_simulation(
             filenames_nearest[start:end], outprefix + '_{}.avi'.format(i),
-            xmin, xmax, ymin, ymax, zmin, zmax, res=20, fps=20, times=plot_timepoints,
-            uniform_color=uniform_color, plot_boundary=plot_boundary,
-            plot_membrane=plot_membrane, overwrite_frames=overwrite_frames
+            xmin, xmax, ymin, ymax, zmin, zmax, res=20, fps=20,
+            times=plot_timepoints[start:end], uniform_color=uniform_color,
+            plot_boundary=plot_boundary, plot_membrane=plot_membrane,
+            overwrite_frames=overwrite_frames
         )
         print('Saving video: {}_{}.avi'.format(outprefix, i))
         start += nframes_per_video
