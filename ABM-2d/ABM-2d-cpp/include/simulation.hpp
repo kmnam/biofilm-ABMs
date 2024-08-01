@@ -2,25 +2,26 @@
  * Functions for running simulations with flexible initial conditions. 
  *
  * In what follows, a population of N cells is represented as a 2-D array of 
- * size (N, 11+), where each row represents a cell and stores the following data:
- * 
- * 0) x-coordinate of cell center
- * 1) y-coordinate of cell center
- * 2) x-coordinate of cell orientation vector
- * 3) y-coordinate of cell orientation vector
- * 4) cell length (excluding caps)
- * 5) half of cell length (excluding caps)
- * 6) timepoint at which the cell was formed
- * 7) cell growth rate
- * 8) cell's ambient viscosity with respect to surrounding fluid
- * 9) cell-surface friction coefficient
- * 10) cell group identity 
+ * size (N, 12+), where each row represents a cell and stores the following data:
+ *
+ * 0) cell ID
+ * 1) x-coordinate of cell center
+ * 2) y-coordinate of cell center
+ * 3) x-coordinate of cell orientation vector
+ * 4) y-coordinate of cell orientation vector
+ * 5) cell length (excluding caps)
+ * 6) half of cell length (excluding caps)
+ * 7) timepoint at which the cell was formed
+ * 8) cell growth rate
+ * 9) cell's ambient viscosity with respect to surrounding fluid
+ * 10) cell-surface friction coefficient
+ * 11) cell group identity 
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/30/2024
+ *     8/1/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -56,7 +57,9 @@ using std::cos;
 using boost::multiprecision::cos;
 
 /**
- * An enum that enumerates the different growth void types. 
+ * An enum that enumerates the different growth void types.
+ *
+ * TODO Include an option for fixed annulus width
  */
 enum class GrowthVoidMode
 {
@@ -83,8 +86,6 @@ std::string floatToString(T x, const int precision = 10)
 }
 
 /**
- * TODO Update
- *
  * Run a simulation with the given initial population of cells.
  *
  * @param cells_init Initial population of cells. 
@@ -202,7 +203,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         int ni = neighbors(k, 0); 
         int nj = neighbors(k, 1);
         T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-        to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+        to_adhere(k) = (
+            cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+            dist > R + Rcell && dist < 2 * R
+        ); 
     }
 
     // Initialize velocities to zero
@@ -390,7 +394,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 int ni = neighbors(k, 0); 
                 int nj = neighbors(k, 1);
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+                to_adhere(k) = (
+                    cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+                    dist > R + Rcell && dist < 2 * R
+                ); 
             }
             if (confine)
             {
@@ -422,7 +429,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         {
             // Enforce a composite error of the form e * (1 + y)
             Array<T, Dynamic, 4> scale = max_error_allowed * (
-                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
+                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
             );
             T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
 
@@ -472,7 +479,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         // If desired, print a warning message if the error is big
         #ifdef DEBUG_WARN_LARGE_ERROR
             Array<T, Dynamic, 4> scale = max_error_allowed * (
-                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
+                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
             );
             T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
             if (error > 5)
@@ -506,7 +513,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 int ni = neighbors(k, 0); 
                 int nj = neighbors(k, 1);
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+                to_adhere(k) = (
+                    cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+                    dist > R + Rcell && dist < 2 * R
+                ); 
             }
         }
 
@@ -532,10 +542,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             {
                 // Find the center of mass of the population  
                 Array<T, 2, 1> center; 
-                center << cells.col(0).mean(), cells.col(1).mean();
+                center << cells.col(__colidx_rx).mean(), cells.col(__colidx_ry).mean();
 
                 // Find the radial distance of each cell to the center 
-                Array<T, Dynamic, 1> rdists = (cells(Eigen::all, Eigen::seq(0, 1)).rowwise() - center.transpose()).matrix().rowwise().norm().array();
+                Array<T, Dynamic, 1> rdists = (cells(Eigen::all, __colseq_r).rowwise() - center.transpose()).matrix().rowwise().norm().array();
 
                 // Normalize by the maximum radial distance 
                 T radius = rdists.maxCoeff();
@@ -546,7 +556,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 for (int i = 0; i < cells.rows(); ++i)
                 {
                     if (rdists(i) < growth_void_params["radial_fraction"])
-                        cells(i, 7) = 0.0;
+                        cells(i, __colidx_growth) = 0.0;
                 }
                 
                 // We have now introduced the growth void
@@ -605,8 +615,6 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 }
 
 /**
- * TODO Update
- *
  * Run a simulation with the given initial population of cells.
  *
  * This function runs simulations in which the cells switch between two 
@@ -743,7 +751,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         int ni = neighbors(k, 0); 
         int nj = neighbors(k, 1);
         T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-        to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+        to_adhere(k) = (
+            cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+            dist > R + Rcell && dist < 2 * R
+        ); 
     }
 
     // Initialize velocities to zero
@@ -991,7 +1002,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 int ni = neighbors(k, 0); 
                 int nj = neighbors(k, 1);
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+                to_adhere(k) = (
+                    cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+                    dist > R + Rcell && dist < 2 * R
+                ); 
             }
 
             if (confine)
@@ -1024,7 +1038,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         {
             // Enforce a composite error of the form e * (1 + y)
             Array<T, Dynamic, 4> scale = max_error_allowed * (
-                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
+                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
             );
             T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
 
@@ -1073,7 +1087,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         }
         #ifdef DEBUG_WARN_LARGE_ERROR
             Array<T, Dynamic, 4> scale = max_error_allowed * (
-                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
+                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
             );
             T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
             if (error > 5)
@@ -1107,7 +1121,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 int ni = neighbors(k, 0); 
                 int nj = neighbors(k, 1);
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+                to_adhere(k) = (
+                    cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+                    dist > R + Rcell && dist < 2 * R
+                ); 
             }
         }
 
@@ -1135,7 +1152,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             int ni = neighbors(k, 0); 
             int nj = neighbors(k, 1); 
             T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-            to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+            to_adhere(k) = (
+                cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+                dist > R + Rcell && dist < 2 * R
+            ); 
         }
 
         // Introduce or update growth void
@@ -1146,10 +1166,10 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             {
                 // Find the center of mass of the population  
                 Array<T, 2, 1> center; 
-                center << cells.col(0).mean(), cells.col(1).mean();
+                center << cells.col(__colidx_rx).mean(), cells.col(__colidx_ry).mean();
 
                 // Find the radial distance of each cell to the center 
-                Array<T, Dynamic, 1> rdists = (cells(Eigen::all, Eigen::seq(0, 1)).rowwise() - center.transpose()).matrix().rowwise().norm().array();
+                Array<T, Dynamic, 1> rdists = (cells(Eigen::all, __colseq_r).rowwise() - center.transpose()).matrix().rowwise().norm().array();
 
                 // Normalize by the maximum radial distance 
                 T radius = rdists.maxCoeff();
@@ -1160,7 +1180,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                 for (int i = 0; i < cells.rows(); ++i)
                 {
                     if (rdists(i) < growth_void_params["radial_fraction"])
-                        cells(i, 7) = 0.0;
+                        cells(i, __colidx_growth) = 0.0;
                 }
                 
                 // We have now introduced the growth void
@@ -1219,8 +1239,6 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 }
 
 /**
- * TODO Update
- *
  * Run a simulation with the given initial population of cells.
  *
  * This function runs simulations in which the cells switch between two 
@@ -1376,7 +1394,10 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
         int ni = neighbors(k, 0); 
         int nj = neighbors(k, 1);
         T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-        to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+        to_adhere(k) = (
+            cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+            dist > R + Rcell && dist < 2 * R
+        ); 
     }
 
     // Initialize velocities to zero
@@ -1617,14 +1638,14 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
         // Switch groups for all cells that have lost the plasmid 
         for (int i = 0; i < n; ++i)
         {
-            if (cells(i, 11) == 0)
+            if (cells(i, __colidx_plasmid) == 0)
             {
                 // Sample the cell's new growth rate and attribute values 
                 int group = (group_default == 1 ? 2 : 1);
                 int j = group - 1; 
-                cells(i, 10) = group;
+                cells(i, __colidx_group) = group;
                 T growth_rate = growth_dists[j](rng);
-                cells(i, 7) = growth_rate; 
+                cells(i, __colidx_growth) = growth_rate; 
                 for (int k = 0; k < n_attributes; ++k)
                 {
                     auto pair = std::make_pair(j, k); 
@@ -1644,7 +1665,10 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
                 int ni = neighbors(k, 0); 
                 int nj = neighbors(k, 1);
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+                to_adhere(k) = (
+                    cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+                    dist > R + Rcell && dist < 2 * R
+                ); 
             }
 
             if (confine)
@@ -1677,7 +1701,7 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
         {
             // Enforce a composite error of the form e * (1 + y)
             Array<T, Dynamic, 4> scale = max_error_allowed * (
-                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
+                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
             );
             T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
 
@@ -1726,7 +1750,7 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
         }
         #ifdef DEBUG_WARN_LARGE_ERROR
             Array<T, Dynamic, 4> scale = max_error_allowed * (
-                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, Eigen::seq(0, 3)).abs()
+                Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
             );
             T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
             if (error > 5)
@@ -1760,7 +1784,10 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
                 int ni = neighbors(k, 0); 
                 int nj = neighbors(k, 1);
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-                to_adhere(k) = (cells(ni, 10) == 1 && cells(nj, 10) == 1 && dist > R + Rcell && dist < 2 * R); 
+                to_adhere(k) = (
+                    cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+                    dist > R + Rcell && dist < 2 * R
+                ); 
             }
         }
 
@@ -1786,10 +1813,10 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
             {
                 // Find the center of mass of the population  
                 Array<T, 2, 1> center; 
-                center << cells.col(0).mean(), cells.col(1).mean();
+                center << cells.col(__colidx_rx).mean(), cells.col(__colidx_ry).mean();
 
                 // Find the radial distance of each cell to the center 
-                Array<T, Dynamic, 1> rdists = (cells(Eigen::all, Eigen::seq(0, 1)).rowwise() - center.transpose()).matrix().rowwise().norm().array();
+                Array<T, Dynamic, 1> rdists = (cells(Eigen::all, __colseq_r).rowwise() - center.transpose()).matrix().rowwise().norm().array();
 
                 // Normalize by the maximum radial distance 
                 T radius = rdists.maxCoeff();
@@ -1800,7 +1827,7 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
                 for (int i = 0; i < cells.rows(); ++i)
                 {
                     if (rdists(i) < growth_void_params["radial_fraction"])
-                        cells(i, 7) = 0.0;
+                        cells(i, __colidx_growth) = 0.0;
                 }
                 
                 // We have now introduced the growth void
