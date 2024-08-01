@@ -35,10 +35,11 @@
 #include <Eigen/Dense>
 #include <boost/random.hpp>
 #include <boost/multiprecision/mpfr.hpp>
-#include "../include/growth.hpp"
-#include "../include/mechanics.hpp"
-#include "../include/utils.hpp"
-#include "../include/switch.hpp"
+#include "indices.hpp"
+#include "growth.hpp"
+#include "mechanics.hpp"
+#include "utils.hpp"
+#include "switch.hpp"
 
 using namespace Eigen;
 

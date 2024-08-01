@@ -39,6 +39,7 @@
 #include <boost/multiprecision/mpfr.hpp>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Segment_3.h>
+#include "indices.hpp"
 #include "distances.hpp"
 #include "kiharaGBK.hpp"
 #include "confinement.hpp"
@@ -47,21 +48,6 @@ using namespace Eigen;
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Segment_3 Segment_3;
-
-const int __colidx_id = 0; 
-const int __colidx_rx = 1; 
-const int __colidx_ry = 2;
-const ArithmeticSequence<Index, Index, Index> __colseq_r = Eigen::seq(1, 2); 
-const int __colidx_nx = 3;  
-const int __colidx_ny = 4; 
-const ArithmeticSequence<Index, Index, Index> __colseq_n = Eigen::seq(3, 4);
-const ArithmeticSequence<Index, Index, Index> __colseq_coords = Eigen::seq(1, 4);
-const int __colidx_l = 5; 
-const int __colidx_half_l = 6; 
-const int __colidx_t0 = 7; 
-const int __colidx_growth = 8; 
-const int __colidx_eta0 = 9; 
-const int __colidx_eta1 = 10; 
 
 /**
  * An enum that enumerates the different adhesion force types. 

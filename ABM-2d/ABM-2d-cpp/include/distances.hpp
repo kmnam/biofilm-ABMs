@@ -24,18 +24,13 @@
 #include <CGAL/Point_3.h>
 #include <CGAL/Segment_3.h>
 #include <CGAL/squared_distance_3.h>
+#include "indices.hpp"
 
 using namespace Eigen; 
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Point_3 Point_3;
 typedef K::Segment_3 Segment_3;
-
-const int __colidx_rx = 1; 
-const int __colidx_ry = 2;
-const int __colidx_nx = 3;  
-const int __colidx_ny = 4; 
-const int __colidx_half_l = 6; 
 
 /**
  * Generate a Segment_3 instance for the given cell. 
