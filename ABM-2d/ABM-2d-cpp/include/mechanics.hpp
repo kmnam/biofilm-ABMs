@@ -5,16 +5,17 @@
  * size (N, 10+), where each row represents a cell and stores the following 
  * data: 
  *
- * 0) x-coordinate of cell center
- * 1) y-coordinate of cell center
- * 2) x-coordinate of cell orientation vector
- * 3) y-coordinate of cell orientation vector
- * 4) cell length (excluding caps)
- * 5) half of cell length (excluding caps)
- * 6) timepoint at which cell was formed
- * 7) cell growth rate
- * 8) cell's ambient viscosity with respect to surrounding fluid
- * 9) cell-surface friction coefficient
+ * 0) cell ID
+ * 1) x-coordinate of cell center
+ * 2) y-coordinate of cell center
+ * 3) x-coordinate of cell orientation vector
+ * 4) y-coordinate of cell orientation vector
+ * 5) cell length (excluding caps)
+ * 6) half of cell length (excluding caps)
+ * 7) timepoint at which cell was formed
+ * 8) cell growth rate
+ * 9) cell's ambient viscosity with respect to surrounding fluid
+ * 10) cell-surface friction coefficient
  *
  * Additional features may be included in the array but these are not
  * relevant for the computations implemented here. 
@@ -23,7 +24,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/30/2024
+ *     8/1/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -46,6 +47,21 @@ using namespace Eigen;
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Segment_3 Segment_3;
+
+const int __colidx_id = 0; 
+const int __colidx_rx = 1; 
+const int __colidx_ry = 2;
+const ArithmeticSequence<Index, Index, Index> __colseq_r = Eigen::seq(1, 2); 
+const int __colidx_nx = 3;  
+const int __colidx_ny = 4; 
+const ArithmeticSequence<Index, Index, Index> __colseq_n = Eigen::seq(3, 4);
+const ArithmeticSequence<Index, Index, Index> __colseq_coords = Eigen::seq(1, 4);
+const int __colidx_l = 5; 
+const int __colidx_half_l = 6; 
+const int __colidx_t0 = 7; 
+const int __colidx_growth = 8; 
+const int __colidx_eta0 = 9; 
+const int __colidx_eta1 = 10; 
 
 /**
  * An enum that enumerates the different adhesion force types. 
@@ -154,9 +170,13 @@ Array<T, Dynamic, 2> compositeViscosityForcePrefactors(const Ref<const Array<T, 
                                                        const T surface_contact_density)
 {
     Array<T, Dynamic, 2> KL(cells.rows(), 2);
-    Array<T, Dynamic, 1> composite_drag = cells.col(8) + cells.col(9) * surface_contact_density / R; 
-    KL.col(0) = cells.col(4) * composite_drag; 
-    KL.col(1) = cells.col(4) * cells.col(4) * cells.col(4) * composite_drag / 12;
+    Array<T, Dynamic, 1> composite_drag = (
+        cells.col(__colidx_eta0) + cells.col(__colidx_eta1) * surface_contact_density / R
+    ); 
+    KL.col(0) = cells.col(__colidx_l) * composite_drag; 
+    KL.col(1) = (
+        cells.col(__colidx_l) * cells.col(__colidx_l) * cells.col(__colidx_l) * composite_drag / 12
+    );
 
     return KL; 
 }
@@ -210,16 +230,19 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
         {
             // For two cells to be within neighbor_threshold of each other,
             // their centers must be within neighbor_threshold + Ldiv + 2 * R
-            T dist_rij = (cells(i, Eigen::seq(0, 1)) - cells(j, Eigen::seq(0, 1))).matrix().norm();  
+            T dist_rij = (cells(i, __colseq_r) - cells(j, __colseq_r)).matrix().norm();  
             if (dist_rij < neighbor_threshold + Ldiv + 2 * R)
             {
                 // In this case, compute their actual distance and check that 
                 // they lie within neighbor_threshold of each other 
                 auto result = distBetweenCells<T>(
-                    segments[i], segments[j], cells(i, Eigen::seq(0, 1)).matrix(),
-                    cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 5),
-                    cells(j, Eigen::seq(0, 1)).matrix(),
-                    cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 5), kernel
+                    segments[i], segments[j],
+                    cells(i, __colseq_r).matrix(), 
+                    cells(i, __colseq_n).matrix(),
+                    cells(i, __colidx_half_l),
+                    cells(j, __colseq_r).matrix(),
+                    cells(j, __colseq_n).matrix(),
+                    cells(j, __colidx_half_l), kernel
                 );
                 Matrix<T, 2, 1> dist_ij = std::get<0>(result); 
                 T si = std::get<1>(result);
@@ -275,10 +298,11 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
         int i = static_cast<int>(neighbors(k, 0)); 
         int j = static_cast<int>(neighbors(k, 1)); 
         auto result = distBetweenCells<T>(
-            segments[i], segments[j], cells(i, Eigen::seq(0, 1)).matrix(),
-            cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 5),
-            cells(j, Eigen::seq(0, 1)).matrix(),
-            cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 5), kernel
+            segments[i], segments[j],
+            cells(i, __colseq_r).matrix(),
+            cells(i, __colseq_n).matrix(), cells(i, __colidx_half_l),
+            cells(j, __colseq_r).matrix(),
+            cells(j, __colseq_n).matrix(), cells(j, __colidx_half_l), kernel
         ); 
         Matrix<T, 2, 1> dist_ij = std::get<0>(result); 
         T si = std::get<1>(result);
@@ -378,10 +402,11 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
                     std::cerr << "Found nan in repulsive forces between cells " 
                               << i << " and " << j << std::endl;
                     pairForcesSummary<T>(
-                        cells(i, Eigen::seq(0, 1)), cells(i, Eigen::seq(2, 3)),
-                        cells(i, 5),
-                        cells(j, Eigen::seq(0, 1)), cells(j, Eigen::seq(2, 3)), 
-                        cells(j, 5), neighbors(k, Eigen::seq(2, 3)), si, sj, 
+                        cells(i, __colseq_r), cells(i, __colseq_n),
+                        cells(i, __colidx_half_l),
+                        cells(j, __colseq_r), cells(j, __colseq_n), 
+                        cells(j, __colidx_half_l),
+                        neighbors(k, Eigen::seq(2, 3)), si, sj, 
                         forces
                     );
                     throw std::runtime_error("Found nan in repulsive forces"); 
@@ -449,12 +474,12 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
         if (to_adhere(k) && overlaps(k) > 0)
         {
             // Extract the cell position and orientation vectors 
-            Matrix<T, 2, 1> ri = cells(i, Eigen::seq(0, 1)).matrix();
-            Matrix<T, 2, 1> ni = cells(i, Eigen::seq(2, 3)).matrix();
-            Matrix<T, 2, 1> rj = cells(j, Eigen::seq(0, 1)).matrix();
-            Matrix<T, 2, 1> nj = cells(j, Eigen::seq(2, 3)).matrix();
-            T half_li = cells(i, 5);
-            T half_lj = cells(j, 5);
+            Matrix<T, 2, 1> ri = cells(i, __colseq_r).matrix();
+            Matrix<T, 2, 1> ni = cells(i, __colseq_n).matrix();
+            Matrix<T, 2, 1> rj = cells(j, __colseq_r).matrix();
+            Matrix<T, 2, 1> nj = cells(j, __colseq_n).matrix();
+            T half_li = cells(i, __colidx_half_l);
+            T half_lj = cells(j, __colidx_half_l);
             Matrix<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3)).matrix();
             T si = neighbors(k, 4); 
             T sj = neighbors(k, 5); 
@@ -613,8 +638,9 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                     std::cerr << "Found nan in confinement forces for cell "
                               << i << std::endl;
                     cellForcesSummary<T>(
-                        cells(i, Eigen::seq(0, 1)), cells(i, Eigen::seq(2, 3)),
-                        cells(i, 5), dEdq_confine.row(i).transpose()
+                        cells(i, __colseq_r), cells(i, __colseq_n),
+                        cells(i, __colidx_half_l),
+                        dEdq_confine.row(i).transpose()
                     );
                 }
             }
@@ -625,12 +651,14 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     Array<T, Dynamic, 4> dEdq = dEdq_repulsion + dEdq_adhesion + dEdq_confine; 
 
     // Set mult = 2 * lambda
-    Array<T, Dynamic, 1> mult = cells.col(2) * dEdq.col(2) + cells.col(3) * dEdq.col(3);
+    Array<T, Dynamic, 1> mult = (
+        cells.col(__colidx_nx) * dEdq.col(2) + cells.col(__colidx_ny) * dEdq.col(3)
+    );
 
     // Solve the Lagrangian equations of motion
     Array<T, Dynamic, 2> dEdn_constrained = (
         dEdq(Eigen::all, Eigen::seq(2, 3)) -
-        cells(Eigen::all, Eigen::seq(2, 3)).colwise() * mult
+        cells(Eigen::all, __colseq_n).colwise() * mult
     );
     velocities.col(0) = -dEdq.col(0) / K;
     velocities.col(1) = -dEdq.col(1) / K; 
@@ -650,10 +678,10 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
 template <typename T>
 void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
 {
-    Array<T, Dynamic, 1> norms = cells(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array();
+    Array<T, Dynamic, 1> norms = cells(Eigen::all, __colseq_n).matrix().rowwise().norm().array();
     assert((norms > 0).all() && "Zero norms encountered during orientation normalization");
-    cells.col(2) /= norms; 
-    cells.col(3) /= norms;
+    cells.col(__colidx_nx) /= norms; 
+    cells.col(__colidx_ny) /= norms;
 }
 
 /**
@@ -719,10 +747,10 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
                 std::cerr << "Found near-zero distance between cells "
                           << i << " and " << j << std::endl;
                 pairConfigSummary<T>(
-                    cells(i, Eigen::seq(0, 1)).matrix(),
-                    cells(i, Eigen::seq(2, 3)).matrix(), cells(i, 5),
-                    cells(j, Eigen::seq(0, 1)).matrix(),
-                    cells(j, Eigen::seq(2, 3)).matrix(), cells(j, 5)
+                    cells(i, __colseq_r).matrix(),
+                    cells(i, __colseq_n).matrix(), cells(i, __colidx_half_l),
+                    cells(j, __colseq_r).matrix(),
+                    cells(j, __colseq_n).matrix(), cells(j, __colidx_half_l)
                 );
                 throw std::runtime_error("Found near-zero distance");
             }
@@ -746,7 +774,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
         for (int j = 0; j < i; ++j)
             multipliers += velocities[j] * A(i, j);
         Array<T, Dynamic, Dynamic> cells_i(cells); 
-        cells_i(Eigen::all, Eigen::seq(0, 3)) += multipliers * dt;
+        cells_i(Eigen::all, __colseq_coords) += multipliers * dt;
         normalizeOrientations<T>(cells_i);    // Renormalize orientations after each modification
         velocities.push_back(
             getVelocities<T>(
@@ -768,7 +796,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
     }
     Array<T, Dynamic, 4> delta1 = velocities_final1 * dt; 
     Array<T, Dynamic, 4> delta2 = velocities_final2 * dt; 
-    cells_new(Eigen::all, Eigen::seq(0, 3)) += delta1;
+    cells_new(Eigen::all, __colseq_coords) += delta1; 
     Array<T, Dynamic, 4> errors = delta1 - delta2; 
     
     // Renormalize orientations 

@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/12/2024
+ *     8/1/2024
  */
 
 #ifndef DISTANCES_2D_HPP
@@ -30,6 +30,12 @@ using namespace Eigen;
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Point_3 Point_3;
 typedef K::Segment_3 Segment_3;
+
+const int __colidx_rx = 1; 
+const int __colidx_ry = 2;
+const int __colidx_nx = 3;  
+const int __colidx_ny = 4; 
+const int __colidx_half_l = 6; 
 
 /**
  * Generate a Segment_3 instance for the given cell. 
@@ -66,13 +72,13 @@ std::vector<Segment_3> generateSegments(const Ref<const Array<T, Dynamic, Dynami
     {
         // Define the Segment_3 instance from the cell's two endpoints 
         Point_3 p(
-            cells(i, 0) - cells(i, 5) * cells(i, 2),
-            cells(i, 1) - cells(i, 5) * cells(i, 3),
+            cells(i, __colidx_rx) - cells(i, __colidx_half_l) * cells(i, __colidx_nx),
+            cells(i, __colidx_ry) - cells(i, __colidx_half_l) * cells(i, __colidx_ny),
             0.0
         );
         Point_3 q(
-            cells(i, 0) + cells(i, 5) * cells(i, 2),
-            cells(i, 1) + cells(i, 5) * cells(i, 3),
+            cells(i, __colidx_rx) + cells(i, __colidx_half_l) * cells(i, __colidx_nx),
+            cells(i, __colidx_ry) + cells(i, __colidx_half_l) * cells(i, __colidx_ny),
             0.0
         );
         segments.push_back(Segment_3(p, q));

@@ -24,7 +24,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/30/2024
+ *     8/1/2024
  */
 
 #ifndef BIOFILM_CELL_GROWTH_HPP
@@ -50,6 +50,23 @@ using boost::multiprecision::round;
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Segment_3 Segment_3;
 
+const int __colidx_id = 0; 
+const int __colidx_rx = 1; 
+const int __colidx_ry = 2;
+const ArithmeticSequence<Index, Index, Index> __colseq_r = Eigen::seq(1, 2); 
+const int __colidx_nx = 3;  
+const int __colidx_ny = 4; 
+const ArithmeticSequence<Index, Index, Index> __colseq_n = Eigen::seq(3, 4);
+const ArithmeticSequence<Index, Index, Index> __colseq_coords = Eigen::seq(1, 4);
+const int __colidx_l = 5; 
+const int __colidx_half_l = 6; 
+const int __colidx_t0 = 7; 
+const int __colidx_growth = 8; 
+const int __colidx_eta0 = 9; 
+const int __colidx_eta1 = 10;
+const int __colidx_group = 11; 
+const int __colidx_plasmid = 12;
+
 /**
  * Grow the cells in the given population according to the exponential 
  * volume growth law.
@@ -64,8 +81,8 @@ template <typename T>
 void growCells(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt, const T R)
 {
     // Each cell grows in length according to an exponential growth law 
-    cells.col(4) += (cells.col(7) * (4 * R / 3 + cells.col(4)) * dt).eval();
-    cells.col(5) = cells.col(4) / 2; 
+    cells.col(__colidx_l) += (cells.col(__colidx_growth) * (4 * R / 3 + cells.col(__colidx_l)) * dt).eval();
+    cells.col(__colidx_half_l) = cells.col(__colidx_l) / 2; 
 }
 
 /**
@@ -79,7 +96,7 @@ template <typename T>
 Array<int, Dynamic, 1> divideMaxLength(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                        const T Ldiv)
 {
-    return (cells.col(4) > Ldiv).template cast<int>(); 
+    return (cells.col(__colidx_l) > Ldiv).template cast<int>(); 
 }
 
 /**
@@ -108,12 +125,12 @@ T minDistToCell(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
         {
             auto result = distBetweenCells<T>(
                 segments[i], segments[j],
-                cells(i, Eigen::seq(0, 1)).matrix(), 
-                cells(i, Eigen::seq(2, 3)).matrix(),
-                cells(i, 5),
-                cells(j, Eigen::seq(0, 1)).matrix(),
-                cells(j, Eigen::seq(2, 3)).matrix(),
-                cells(j, 5),
+                cells(i, __colseq_r).matrix(), 
+                cells(i, __colseq_n).matrix(),
+                cells(i, __colidx_half_l),
+                cells(j, __colseq_r).matrix(),
+                cells(j, __colseq_n).matrix(),
+                cells(j, __colidx_half_l),
                 kernel
             );
             Matrix<T, 2, 1> dij = std::get<0>(result);
@@ -246,7 +263,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             Array<T, Dynamic, Dynamic> new_cells(cells(idx_divide, Eigen::all)); 
 
             // Update cell orientations ...
-            Array<T, Dynamic, 2> dividing_orientations(new_cells(Eigen::all, Eigen::seq(2, 3))); 
+            Array<T, Dynamic, 2> dividing_orientations(new_cells(Eigen::all, __colseq_n)); 
             Array<T, Dynamic, 1> theta1 = Array<T, Dynamic, 1>::Zero(n_divide);
             Array<T, Dynamic, 1> theta2 = Array<T, Dynamic, 1>::Zero(n_divide); 
             for (int i = 0; i < n_divide; ++i)
@@ -266,9 +283,9 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             {
                 Array<T, 2, 1> u = dividing_orientations.row(i).transpose();
                 Array<T, 2, 1> v1 = rotate<T>(u, theta1(i));
-                cells_total(idx_divide[i], Eigen::seq(2, 3)) = v1;
+                cells_total(idx_divide[i], __colseq_n) = v1;
                 Array<T, 2, 1> v2 = rotate<T>(u, theta2(i));
-                new_cells(i, Eigen::seq(2, 3)) = v2;
+                new_cells(i, __colseq_n) = v2;
             }
 
             // Update cell lengths and positions ... 
@@ -294,38 +311,46 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             for (int i = 0; i < n_divide; ++i)
                 M(i) = daughter_length_dist(rng);
             // Locate point of division along dividing cell centerline
-            Array<T, Dynamic, 1> Ld = cells_total(idx_divide, 4) - 2 * R; 
+            Array<T, Dynamic, 1> Ld = cells_total(idx_divide, __colidx_l) - 2 * R; 
             Array<T, Dynamic, 1> L1 = M * Ld;
             Array<T, Dynamic, 1> L2 = (1 - M) * Ld; 
-            Array<T, Dynamic, 1> div = -cells_total(idx_divide, 5) + L1 + R;
+            Array<T, Dynamic, 1> div = -cells_total(idx_divide, __colidx_half_l) + L1 + R;
             // Get perturbations from point of division along cell centerline
             // for the daughter cell centers
             Array<T, Dynamic, 1> delta1 = L1 / 2 + R; 
             Array<T, Dynamic, 1> delta2 = L2 / 2 + R;
             // Define daughter cell lengths
-            cells_total(idx_divide, 4) = L1; 
-            cells_total(idx_divide, 5) = L1 / 2;
-            new_cells.col(4) = L2;
-            new_cells.col(5) = L2 / 2;
+            cells_total(idx_divide, __colidx_l) = L1; 
+            cells_total(idx_divide, __colidx_half_l) = L1 / 2;
+            new_cells.col(__colidx_l) = L2;
+            new_cells.col(__colidx_half_l) = L2 / 2;
             // Locate daughter cell centers
-            cells_total(idx_divide, 0) = (
-                cells_total(idx_divide, 0) + (div - delta1) * cells_total(idx_divide, 2)
+            cells_total(idx_divide, __colidx_rx) = (
+                cells_total(idx_divide, __colidx_rx) + (div - delta1) * cells_total(idx_divide, __colidx_nx)
             );
-            new_cells.col(0) = new_cells.col(0) + (div + delta2) * new_cells.col(2);
-            cells_total(idx_divide, 1) = (
-                cells_total(idx_divide, 1) + (div - delta1) * cells_total(idx_divide, 3)
+            new_cells.col(__colidx_rx) = (
+                new_cells.col(__colidx_rx) + (div + delta2) * new_cells.col(__colidx_nx)
             );
-            new_cells.col(1) = new_cells.col(1) + (div + delta2) * new_cells.col(3);
+            cells_total(idx_divide, __colidx_ry) = (
+                cells_total(idx_divide, __colidx_ry) + (div - delta1) * cells_total(idx_divide, __colidx_ny)
+            );
+            new_cells.col(__colidx_ry) = (
+                new_cells.col(__colidx_ry) + (div + delta2) * new_cells.col(__colidx_ny)
+            );
+
+            // TODO Update cell IDs
+            
+            // TODO Update lineages 
 
             // Update cell birth times
-            cells_total(idx_divide, 6) = t;
-            new_cells.col(6) = t;
+            cells_total(idx_divide, __colidx_t0) = t;
+            new_cells.col(__colidx_t0) = t;
 
             // Update cell growth rates (sample from specified distribution)
             for (auto it = idx_divide.begin(); it != idx_divide.end(); ++it)
-                cells_total(*it, 7) = growth_dist(rng); 
+                cells_total(*it, __colidx_growth) = growth_dist(rng); 
             for (int i = 0; i < n_divide; ++i)
-                new_cells(i, 7) = growth_dist(rng);
+                new_cells(i, __colidx_growth) = growth_dist(rng);
 
             // Copy over daughter cell data
             //
@@ -492,7 +517,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             Array<T, Dynamic, Dynamic> new_cells(cells(idx_divide, Eigen::all)); 
 
             // Update cell orientations ...
-            Array<T, Dynamic, 2> dividing_orientations(new_cells(Eigen::all, Eigen::seq(2, 3))); 
+            Array<T, Dynamic, 2> dividing_orientations(new_cells(Eigen::all, __colseq_n));
             Array<T, Dynamic, 1> theta1 = Array<T, Dynamic, 1>::Zero(n_divide);
             Array<T, Dynamic, 1> theta2 = Array<T, Dynamic, 1>::Zero(n_divide); 
             for (int i = 0; i < n_divide; ++i)
@@ -512,9 +537,9 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             {
                 Array<T, 2, 1> u = dividing_orientations.row(i).transpose();
                 Array<T, 2, 1> v1 = rotate<T>(u, theta1(i));
-                cells_total(idx_divide[i], Eigen::seq(2, 3)) = v1;
+                cells_total(idx_divide[i], __colseq_n) = v1;
                 Array<T, 2, 1> v2 = rotate<T>(u, theta2(i));
-                new_cells(i, Eigen::seq(2, 3)) = v2;
+                new_cells(i, __colseq_n) = v2;
             }
 
             // Update cell lengths and positions ... 
@@ -540,43 +565,47 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             for (int i = 0; i < n_divide; ++i)
                 M(i) = daughter_length_dist(rng);
             // Locate point of division along dividing cell centerline
-            Array<T, Dynamic, 1> Ld = cells_total(idx_divide, 4) - 2 * R; 
+            Array<T, Dynamic, 1> Ld = cells_total(idx_divide, __colidx_l) - 2 * R; 
             Array<T, Dynamic, 1> L1 = M * Ld;
             Array<T, Dynamic, 1> L2 = (1 - M) * Ld; 
-            Array<T, Dynamic, 1> div = -cells_total(idx_divide, 5) + L1 + R;
+            Array<T, Dynamic, 1> div = -cells_total(idx_divide, __colidx_half_l) + L1 + R;
             // Get perturbations from point of division along cell centerline
             // for the daughter cell centers
             Array<T, Dynamic, 1> delta1 = L1 / 2 + R; 
             Array<T, Dynamic, 1> delta2 = L2 / 2 + R;
             // Define daughter cell lengths 
-            cells_total(idx_divide, 4) = L1; 
-            cells_total(idx_divide, 5) = L1 / 2;
-            new_cells.col(4) = L2;
-            new_cells.col(5) = L2 / 2;
+            cells_total(idx_divide, __colidx_l) = L1; 
+            cells_total(idx_divide, __colidx_half_l) = L1 / 2;
+            new_cells.col(__colidx_l) = L2;
+            new_cells.col(__colidx_half_l) = L2 / 2;
             // Locate daughter cell centers
-            cells_total(idx_divide, 0) = (
-                cells_total(idx_divide, 0) + (div - delta1) * cells_total(idx_divide, 2)
+            cells_total(idx_divide, __colidx_rx) = (
+                cells_total(idx_divide, __colidx_rx) + (div - delta1) * cells_total(idx_divide, __colidx_nx)
             );
-            new_cells.col(0) = new_cells.col(0) + (div + delta2) * new_cells.col(2);
-            cells_total(idx_divide, 1) = (
-                cells_total(idx_divide, 1) + (div - delta1) * cells_total(idx_divide, 3)
+            new_cells.col(__colidx_rx) = (
+                new_cells.col(__colidx_rx) + (div + delta2) * new_cells.col(__colidx_nx)
             );
-            new_cells.col(1) = new_cells.col(1) + (div + delta2) * new_cells.col(3);
+            cells_total(idx_divide, __colidx_ry) = (
+                cells_total(idx_divide, __colidx_ry) + (div - delta1) * cells_total(idx_divide, __colidx_ny)
+            );
+            new_cells.col(__colidx_ry) = (
+                new_cells.col(__colidx_ry) + (div + delta2) * new_cells.col(__colidx_ny)
+            );
 
             // Update cell birth times
-            cells_total(idx_divide, 6) = t;
-            new_cells.col(6) = t;
+            cells_total(idx_divide, __colidx_t0) = t;
+            new_cells.col(__colidx_t0) = t;
 
             // Update cell growth rates (sample from specified distributions)
             for (auto it = idx_divide.begin(); it != idx_divide.end(); ++it)
             {
-                int group = static_cast<int>(cells_total(*it, 10)); 
-                cells_total(*it, 7) = growth_dists[group - 1](rng);
+                int group = static_cast<int>(cells_total(*it, __colidx_group)); 
+                cells_total(*it, __colidx_growth) = growth_dists[group - 1](rng);
             } 
             for (int i = 0; i < n_divide; ++i)
             {
-                int group = static_cast<int>(new_cells(i, 10));
-                new_cells(i, 7) = growth_dists[group - 1](rng);
+                int group = static_cast<int>(new_cells(i, __colidx_group));
+                new_cells(i, __colidx_growth) = growth_dists[group - 1](rng);
             }
 
             // Copy over daughter cell data
@@ -750,7 +779,7 @@ Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynam
             Array<T, Dynamic, Dynamic> new_cells(cells(idx_divide, Eigen::all)); 
 
             // Update cell orientations ...
-            Array<T, Dynamic, 2> dividing_orientations(new_cells(Eigen::all, Eigen::seq(2, 3))); 
+            Array<T, Dynamic, 2> dividing_orientations(new_cells(Eigen::all, __colseq_n)); 
             Array<T, Dynamic, 1> theta1 = Array<T, Dynamic, 1>::Zero(n_divide);
             Array<T, Dynamic, 1> theta2 = Array<T, Dynamic, 1>::Zero(n_divide); 
             for (int i = 0; i < n_divide; ++i)
@@ -770,9 +799,9 @@ Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynam
             {
                 Array<T, 2, 1> u = dividing_orientations.row(i).transpose();
                 Array<T, 2, 1> v1 = rotate<T>(u, theta1(i));
-                cells_total(idx_divide[i], Eigen::seq(2, 3)) = v1;
+                cells_total(idx_divide[i], __colseq_n) = v1;
                 Array<T, 2, 1> v2 = rotate<T>(u, theta2(i));
-                new_cells(i, Eigen::seq(2, 3)) = v2;
+                new_cells(i, __colseq_n) = v2;
             }
 
             // Update cell lengths and positions ... 
@@ -798,43 +827,47 @@ Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynam
             for (int i = 0; i < n_divide; ++i)
                 M(i) = daughter_length_dist(rng);
             // Locate point of division along dividing cell centerline
-            Array<T, Dynamic, 1> Ld = cells_total(idx_divide, 4) - 2 * R; 
+            Array<T, Dynamic, 1> Ld = cells_total(idx_divide, __colidx_l) - 2 * R; 
             Array<T, Dynamic, 1> L1 = M * Ld;
             Array<T, Dynamic, 1> L2 = (1 - M) * Ld; 
-            Array<T, Dynamic, 1> div = -cells_total(idx_divide, 5) + L1 + R;
+            Array<T, Dynamic, 1> div = -cells_total(idx_divide, __colidx_half_l) + L1 + R;
             // Get perturbations from point of division along cell centerline
             // for the daughter cell centers
             Array<T, Dynamic, 1> delta1 = L1 / 2 + R; 
             Array<T, Dynamic, 1> delta2 = L2 / 2 + R;
             // Define daughter cell lengths 
-            cells_total(idx_divide, 4) = L1; 
-            cells_total(idx_divide, 5) = L1 / 2;
-            new_cells.col(4) = L2;
-            new_cells.col(5) = L2 / 2;
+            cells_total(idx_divide, __colidx_l) = L1; 
+            cells_total(idx_divide, __colidx_half_l) = L1 / 2;
+            new_cells.col(__colidx_l) = L2;
+            new_cells.col(__colidx_half_l) = L2 / 2;
             // Locate daughter cell centers
-            cells_total(idx_divide, 0) = (
-                cells_total(idx_divide, 0) + (div - delta1) * cells_total(idx_divide, 2)
+            cells_total(idx_divide, __colidx_rx) = (
+                cells_total(idx_divide, __colidx_rx) + (div - delta1) * cells_total(idx_divide, __colidx_nx)
             );
-            new_cells.col(0) = new_cells.col(0) + (div + delta2) * new_cells.col(2);
-            cells_total(idx_divide, 1) = (
-                cells_total(idx_divide, 1) + (div - delta1) * cells_total(idx_divide, 3)
+            new_cells.col(__colidx_rx) = (
+                new_cells.col(__colidx_rx) + (div + delta2) * new_cells.col(__colidx_nx)
             );
-            new_cells.col(1) = new_cells.col(1) + (div + delta2) * new_cells.col(3);
+            cells_total(idx_divide, __colidx_ry) = (
+                cells_total(idx_divide, __colidx_ry) + (div - delta1) * cells_total(idx_divide, __colidx_ny)
+            );
+            new_cells.col(__colidx_ry) = (
+                new_cells.col(__colidx_ry) + (div + delta2) * new_cells.col(__colidx_ny)
+            );
 
             // Update cell birth times
-            cells_total(idx_divide, 6) = t;
-            new_cells.col(6) = t;
+            cells_total(idx_divide, __colidx_t0) = t;
+            new_cells.col(__colidx_t0) = t;
 
             // Update cell growth rates (sample from specified distributions)
             for (auto it = idx_divide.begin(); it != idx_divide.end(); ++it)
             {
-                int group = static_cast<int>(cells_total(*it, 10)); 
-                cells_total(*it, 7) = growth_dists[group - 1](rng);
+                int group = static_cast<int>(cells_total(*it, __colidx_group)); 
+                cells_total(*it, __colidx_growth) = growth_dists[group - 1](rng);
             } 
             for (int i = 0; i < n_divide; ++i)
             {
-                int group = static_cast<int>(new_cells(i, 10));
-                new_cells(i, 7) = growth_dists[group - 1](rng);
+                int group = static_cast<int>(new_cells(i, __colidx_group));
+                new_cells(i, __colidx_growth) = growth_dists[group - 1](rng);
             }
 
             // Update plasmid copy-numbers
@@ -847,15 +880,15 @@ Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynam
 
                 // The total number of plasmids in the dividing cell should
                 // be double the given value to account for DNA replication
-                int num_total = 2 * cells_total(j, 11);
+                int num_total = 2 * cells_total(j, __colidx_plasmid);
 
                 // Get the ratio of plasmid copy-numbers in the daughter
                 // cells, then partition accordingly 
                 T ratio = pow(10.0, partition_logratio_dist(rng));
                 T num_i = round((ratio * num_total) / (1.0 + ratio));
                 T num_j = round(num_total - num_i);
-                cells_total(j, 11) = num_j; 
-                new_cells(i, 11) = num_i;
+                cells_total(j, __colidx_plasmid) = num_j; 
+                new_cells(i, __colidx_plasmid) = num_i;
                 std::cout << "... Partitioning " << num_total << " plasmids into "
                           << num_i << " and " << num_j << " (ratio = " << ratio
                           << ")" << std::endl;  
