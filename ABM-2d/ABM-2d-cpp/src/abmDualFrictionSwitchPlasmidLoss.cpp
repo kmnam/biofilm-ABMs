@@ -1,33 +1,36 @@
 /**
- * TODO Update
- *
  * An agent-based model of 2-D biofilm growth that switches cells between two
- * states that exhibit different friction coefficients. 
+ * states that exhibit different friction coefficients.
+ *
+ * In this simulation, the cell state depends on the copy-number of a plasmid,
+ * and a cell switches states once the plasmid has been lost. 
  *
  * In what follows, a population of N cells is represented as a 2-D array of 
- * size (N, 11), where each row represents a cell and stores the following data:
+ * size (N, 13), where each row represents a cell and stores the following data:
  * 
- * 0) x-coordinate of cell center
- * 1) y-coordinate of cell center
- * 2) x-coordinate of cell orientation vector
- * 3) y-coordinate of cell orientation vector
- * 4) cell length (excluding caps)
- * 5) half of cell length (excluding caps) 
- * 6) timepoint at which the cell was formed
- * 7) cell growth rate
- * 8) cell's ambient viscosity with respect to surrounding fluid
- * 9) cell-surface friction coefficient
- * 10) cell group identifier (1 for high friction, 2 for low friction)
- * 11) plasmid copy-number
+ * 0) cell ID
+ * 1) x-coordinate of cell center
+ * 2) y-coordinate of cell center
+ * 3) x-coordinate of cell orientation vector
+ * 4) y-coordinate of cell orientation vector
+ * 5) cell length (excluding caps)
+ * 6) half of cell length (excluding caps)
+ * 7) timepoint at which the cell was formed
+ * 8) cell growth rate
+ * 9) cell's ambient viscosity with respect to surrounding fluid
+ * 10) cell-surface friction coefficient
+ * 11) cell group identity (1 for high friction, 2 for low friction)
+ * 12) plasmid copy-number
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/30/2024
+ *     8/1/2024
  */
 
 #include <Eigen/Dense>
+#include "../include/indices.hpp"
 #include "../include/simulation.hpp"
 #include "../include/utils.hpp"
 
@@ -91,7 +94,7 @@ int main(int argc, char** argv)
     growth_stds << growth_std, growth_std; 
 
     // Vectors of friction coefficient means and standard deviations
-    std::vector<int> switch_attributes { 9 };
+    std::vector<int> switch_attributes { __colidx_eta1 };
     Array<T, 2, Dynamic> attribute_means(2, 1);
     Array<T, 2, Dynamic> attribute_stds(2, 1);
     attribute_means << eta_mean1, eta_mean2;
@@ -107,8 +110,8 @@ int main(int argc, char** argv)
     //
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
     // with mean growth rate and default viscosity and friction coefficients
-    Array<T, Dynamic, Dynamic> cells(1, 12);
-    cells << 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1,
+    Array<T, Dynamic, Dynamic> cells(1, 13);
+    cells << 0, 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1,
              static_cast<T>(group_default), 1;
     
     // Run the simulation
