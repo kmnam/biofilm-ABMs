@@ -4,18 +4,19 @@
  * In what follows, a population of N cells is represented as a 2-D array of 
  * size (N, 11+), where each row represents a cell and stores the following data:
  * 
- * 0) x-coordinate of cell center
- * 1) y-coordinate of cell center
- * 2) x-coordinate of cell orientation vector
- * 3) y-coordinate of cell orientation vector
- * 4) cell length (excluding caps)
- * 5) half of cell length (excluding caps) 
- * 6) timepoint at which the cell was formed
- * 7) cell growth rate
- * 8) cell's ambient viscosity with respect to surrounding fluid
- * 9) cell-surface friction coefficient
- * 10) cell group identifier (integer, optional)
- * 11) plasmid copy-number (integer, optional)
+ * 0) cell ID
+ * 1) x-coordinate of cell center
+ * 2) y-coordinate of cell center
+ * 3) x-coordinate of cell orientation vector
+ * 4) y-coordinate of cell orientation vector
+ * 5) cell length (excluding caps)
+ * 6) half of cell length (excluding caps)
+ * 7) timepoint at which cell was formed
+ * 8) cell growth rate
+ * 9) cell's ambient viscosity with respect to surrounding fluid
+ * 10) cell-surface friction coefficient
+ * 11) cell group identifier (integer, optional)
+ * 12) plasmid copy-number (integer, optional)
  *
  * Additional features may be included in the array but these are not
  * relevant for the computations implemented here.
@@ -152,6 +153,8 @@ T minDistToCell(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
  * daughter_angle_dist(). 
  *
  * @param cells Existing population of cells.
+ * @param parents Vector of parent cell IDs for each cell generated throughout
+ *                the simulation. 
  * @param t Current time.
  * @param R Cell radius (including the EPS).
  * @param Rcell Cell radius (excluding the EPS). 
@@ -168,6 +171,7 @@ T minDistToCell(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
  */
 template <typename T>
 Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                       std::vector<int>& parents, 
                                        const T t, const T R, const T Rcell,
                                        const Ref<const Array<int, Dynamic, 1> >& to_divide,
                                        std::function<T(boost::random::mt19937&)>& growth_dist,
@@ -322,9 +326,18 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 new_cells.col(__colidx_ry) + (div + delta2) * new_cells.col(__colidx_ny)
             );
 
-            // TODO Update cell IDs
-            
-            // TODO Update lineages 
+            // Update cell ID and lineages
+            int max_id = parents.size() - 1; 
+            for (int i = 0; i < n_divide; ++i)
+            {
+                int daughter_id1 = max_id + (2 * i + 1); 
+                int daughter_id2 = max_id + (2 * i + 2);
+                int parent_id = cells_total(idx_divide[i], __colidx_id); 
+                cells_total(idx_divide[i], __colidx_id) = daughter_id1; 
+                new_cells(i, __colidx_id) = daughter_id2; 
+                parents.push_back(parent_id); 
+                parents.push_back(parent_id); 
+            }
 
             // Update cell birth times
             cells_total(idx_divide, __colidx_t0) = t;
@@ -405,6 +418,8 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
  * growth rates. The groups are assumed to be numbered 1, 2, 3, ...
  *
  * @param cells Existing population of cells.
+ * @param parents Vector of parent cell IDs for each cell generated throughout
+ *                the simulation. 
  * @param t Current time.
  * @param R Cell radius (including the EPS).
  * @param Rcell Cell radius (excluding the EPS). 
@@ -421,6 +436,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
  */
 template <typename T>
 Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                       std::vector<int>& parents, 
                                        const T t, const T R, const T Rcell,
                                        const Ref<const Array<int, Dynamic, 1> >& to_divide,
                                        std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
@@ -576,6 +592,19 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
                 new_cells.col(__colidx_ry) + (div + delta2) * new_cells.col(__colidx_ny)
             );
 
+            // Update cell ID and lineages
+            int max_id = parents.size() - 1; 
+            for (int i = 0; i < n_divide; ++i)
+            {
+                int daughter_id1 = max_id + (2 * i + 1); 
+                int daughter_id2 = max_id + (2 * i + 2);
+                int parent_id = cells_total(idx_divide[i], __colidx_id); 
+                cells_total(idx_divide[i], __colidx_id) = daughter_id1; 
+                new_cells(i, __colidx_id) = daughter_id2; 
+                parents.push_back(parent_id); 
+                parents.push_back(parent_id); 
+            }
+
             // Update cell birth times
             cells_total(idx_divide, __colidx_t0) = t;
             new_cells.col(__colidx_t0) = t;
@@ -663,6 +692,8 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
  * the plasmid copy-numbers are stored in an additional (12th) column. 
  *
  * @param cells Existing population of cells.
+ * @param parents Vector of parent cell IDs for each cell generated throughout
+ *                the simulation. 
  * @param t Current time.
  * @param R Cell radius (including the EPS).
  * @param Rcell Cell radius (excluding the EPS). 
@@ -682,6 +713,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
  */
 template <typename T>
 Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                                  std::vector<int>& parents, 
                                                   const T t, const T R, const T Rcell,
                                                   const Ref<const Array<int, Dynamic, 1> >& to_divide,
                                                   std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
@@ -838,6 +870,19 @@ Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynam
                 new_cells.col(__colidx_ry) + (div + delta2) * new_cells.col(__colidx_ny)
             );
 
+            // Update cell ID and lineages
+            int max_id = parents.size() - 1; 
+            for (int i = 0; i < n_divide; ++i)
+            {
+                int daughter_id1 = max_id + (2 * i + 1); 
+                int daughter_id2 = max_id + (2 * i + 2);
+                int parent_id = cells_total(idx_divide[i], __colidx_id); 
+                cells_total(idx_divide[i], __colidx_id) = daughter_id1; 
+                new_cells(i, __colidx_id) = daughter_id2; 
+                parents.push_back(parent_id); 
+                parents.push_back(parent_id); 
+            }
+
             // Update cell birth times
             cells_total(idx_divide, __colidx_t0) = t;
             new_cells.col(__colidx_t0) = t;
@@ -939,7 +984,5 @@ Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynam
         return cells; 
     }
 }
-
-
 
 #endif
