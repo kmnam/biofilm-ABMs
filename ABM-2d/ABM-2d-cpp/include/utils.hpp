@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/16/2024
+ *     8/1/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -133,6 +133,31 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
         outfile << std::endl;
     }
 
+    // Close output file 
+    outfile.close();  
+}
+
+/**
+ * Write a lineage of cells to the given path. 
+ *
+ * @param parents Vector of parent IDs for each cell generated throughout the
+ *                simulation.
+ * @param filename Output file. 
+ */
+template <typename T>
+void writeLineage(const std::vector<int>& parents, const std::string filename)
+{
+    // Open output file 
+    std::ofstream outfile(filename);
+    
+    // Run through the parent IDs and write them one by one
+    int i = 0; 
+    for (auto&& parent : parents)
+    {
+        outfile << i << "\t" << parent << std::endl;
+        i++;
+    }
+    
     // Close output file 
     outfile.close();  
 }
