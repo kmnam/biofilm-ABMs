@@ -59,14 +59,12 @@ using boost::multiprecision::cos;
 
 /**
  * An enum that enumerates the different growth void types.
- *
- * TODO Include an option for fixed annulus width
  */
 enum class GrowthVoidMode
 {
     NONE = 0,
-    FIXED = 1,
-    RATIO = 2
+    FIXED_CORE = 1,
+    FIXED_ANNULUS = 2
 };
 
 /**
@@ -89,7 +87,9 @@ std::string floatToString(T x, const int precision = 10)
 /**
  * Run a simulation with the given initial population of cells.
  *
- * @param cells_init Initial population of cells. 
+ * @param cells_init Initial population of cells.
+ * @param parents_init Initial vector of parent cell IDs for each cell generated
+ *                     throughout the simulation. 
  * @param max_iter Maximum number of iterations. 
  * @param n_cells Maximum number of cells. 
  * @param R Cell radius (including the EPS). 
@@ -129,38 +129,32 @@ std::string floatToString(T x, const int precision = 10)
  * @param confine_params Parameters required to compute radial confinement
  *                       forces.
  * @param growth_void_mode Choice of growth void to be introduced within the
- *                         biofilm. Can be NONE (0), FIXED (1), or RATIO (2).
+ *                         biofilm. Can be NONE (0), FIXED_CORE (1), or
+ *                         FIXED_ANNULUS (2).
  * @param growth_void_params Parameters required to introduce growth void 
  *                           within the biofilm. 
  * @returns Final population of cells.  
  */
 template <typename T>
-Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
-                                         const int max_iter, const int n_cells,
-                                         const T R, const T Rcell, const T L0,
-                                         const T Ldiv, const T E0, const T Ecell,
-                                         const T sigma0, const T max_stepsize,
-                                         const bool write,
-                                         const std::string outprefix, 
-                                         const int iter_write,
-                                         const int iter_update_neighbors,
-                                         const int iter_update_boundary,
-                                         const int iter_update_stepsize,
-                                         const T max_error_allowed,
-                                         const T min_error,
-                                         const int max_tries_update_stepsize,
-                                         const T neighbor_threshold,
-                                         const int rng_seed,
-                                         const T growth_mean,
-                                         const T growth_std,
-                                         const T daughter_length_std,
-                                         const T daughter_angle_bound,
-                                         const AdhesionMode adhesion_mode,
-                                         std::unordered_map<std::string, T>& adhesion_params,
-                                         const bool confine,
-                                         std::unordered_map<std::string, T>& confine_params,
-                                         const GrowthVoidMode growth_void_mode,
-                                         std::unordered_map<std::string, T>& growth_void_params)
+std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
+    runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
+                  std::vector<int>& parents_init, const int max_iter,
+                  const int n_cells, const T R, const T Rcell, const T L0,
+                  const T Ldiv, const T E0, const T Ecell, const T sigma0,
+                  const T max_stepsize, const bool write,
+                  const std::string outprefix, const int iter_write,
+                  const int iter_update_neighbors, const int iter_update_boundary,
+                  const int iter_update_stepsize, const T max_error_allowed,
+                  const T min_error, const int max_tries_update_stepsize,
+                  const T neighbor_threshold, const int rng_seed,
+                  const T growth_mean, const T growth_std,
+                  const T daughter_length_std, const T daughter_angle_bound,
+                  const AdhesionMode adhesion_mode,
+                  std::unordered_map<std::string, T>& adhesion_params,
+                  const bool confine,
+                  std::unordered_map<std::string, T>& confine_params,
+                  const GrowthVoidMode growth_void_mode,
+                  std::unordered_map<std::string, T>& growth_void_params)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -212,6 +206,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
     // Initialize velocities to zero
     Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4);
+
+    // Initialize parent IDs (TODO check that they have been correctly specified)
+    std::vector<int> parents(parents_init); 
 
     // Growth rate distribution function: normal distribution with given mean
     // and standard deviation
@@ -333,8 +330,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         }
     }
 
-    // Variable for keeping track of whether a growth void has been introduced
-    bool growth_void_introduced = false;
+    // Keep track of cells within the growth void 
+    bool void_introduced = false;
+    Array<int, Dynamic, 1> in_void = Array<int, Dynamic, 1>::Zero(n);
 
     // Write the initial population to file
     if (write)
@@ -380,14 +378,16 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::cout << "... Dividing " << to_divide.sum() << " cells "
                       << "(iteration " << iter << ")" << std::endl;
         cells = divideCells<T>(
-            cells, t, R, Rcell, to_divide, growth_dist, rng,
+            cells, parents, t, R, Rcell, to_divide, growth_dist, rng,
             daughter_length_dist, daughter_angle_dist
         );
         n = cells.rows(); 
 
-        // Update neighboring cells and peripheral cells if division has occurred
+        // Update neighboring cells, peripheral cells, and cells within growth
+        // void if division has occurred
         if (to_divide.sum() > 0)
         {
+            // Update neighboring cells 
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             to_adhere.resize(neighbors.rows()); 
             for (int k = 0; k < neighbors.rows(); ++k)
@@ -400,6 +400,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                     dist > R + Rcell && dist < 2 * R
                 ); 
             }
+            // Update peripheral cells 
             if (confine)
             {
                 if (find_boundary)
@@ -412,6 +413,11 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                     std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
                 }
             }
+            // Keep track of new daughter cells (which are not in the void, 
+            // because they are the progeny of obviously growing cells)
+            in_void.conservativeResize(n);
+            for (int i = n - to_divide.sum(); i < n; ++i)
+                in_void(i) = 0;
         }
 
         // Update cell positions and orientations 
@@ -536,10 +542,12 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         }
 
         // Introduce or update growth void
-        if ((growth_void_mode == GrowthVoidMode::FIXED && !growth_void_introduced) || growth_void_mode == GrowthVoidMode::RATIO)
+        if ((growth_void_mode == GrowthVoidMode::FIXED_CORE && !void_introduced) ||
+            growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
+        )
         {
             // Have we reached the minimum number of cells? 
-            if (cells.rows() >= growth_void_params["mincells"])
+            if (n >= growth_void_params["mincells"])
             {
                 // Find the center of mass of the population  
                 Array<T, 2, 1> center; 
@@ -554,14 +562,22 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
                 // Identify the innermost fraction of cells whose growth is to
                 // be arrested
-                for (int i = 0; i < cells.rows(); ++i)
+                T rinner = 0; 
+                if (growth_void_mode == GrowthVoidMode::FIXED_CORE)
+                    rinner = growth_void_params["core_fraction"]; 
+                else    // growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
+                    rinner = 1.0 - growth_void_params["peripheral_fraction"];
+                for (int i = 0; i < n; ++i)
                 {
-                    if (rdists(i) < growth_void_params["radial_fraction"])
+                    if (rdists(i) < rinner)
+                    {
                         cells(i, __colidx_growth) = 0.0;
+                        in_void(i) = 1;
+                    }
                 }
                 
                 // We have now introduced the growth void
-                growth_void_introduced = true;
+                void_introduced = true;
             }
         }
         
@@ -612,7 +628,15 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         }
     }
 
-    return cells;
+    // Write complete lineage to file 
+    if (write)
+    {
+        std::stringstream ss_lineage; 
+        ss_lineage << outprefix << "_lineage.txt"; 
+        writeLineage<T>(parents, ss_lineage.str());
+    }
+
+    return std::make_pair(cells, parents);
 }
 
 /**
@@ -623,7 +647,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  * attributes. The growth rate and chosen attributes are taken to be normally
  * distributed variables that exhibit a specified mean and standard deviation.
  *
- * @param cells_init Initial population of cells. 
+ * @param cells_init Initial population of cells.
+ * @param parents_init Initial vector of parent cell IDs for each cell generated
+ *                     throughout the simulation. 
  * @param max_iter Maximum number of iterations. 
  * @param n_cells Maximum number of cells. 
  * @param R Cell radius (including the EPS). 
@@ -672,43 +698,37 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  * @param confine_params Parameters required to compute radial confinement
  *                       forces.
  * @param growth_void_mode Choice of growth void to be introduced within the
- *                         biofilm. Can be NONE (0), FIXED (1), or RATIO (2).
+ *                         biofilm. Can be NONE (0), FIXED_CORE (1), or
+ *                         FIXED_ANNULUS (2).
  * @param growth_void_params Parameters required to introduce growth void 
  *                           within the biofilm. 
  * @returns Final population of cells.  
  */
 template <typename T>
-Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
-                                         const int max_iter, const int n_cells,
-                                         const T R, const T Rcell, const T L0,
-                                         const T Ldiv, const T E0, const T Ecell,
-                                         const T sigma0, const T max_stepsize,
-                                         const bool write,
-                                         const std::string outprefix, 
-                                         const int iter_write,
-                                         const int iter_update_neighbors,
-                                         const int iter_update_boundary,
-                                         const int iter_update_stepsize,
-                                         const T max_error_allowed,
-                                         const T min_error,
-                                         const int max_tries_update_stepsize,
-                                         const T neighbor_threshold,
-                                         const int rng_seed,
-                                         const int n_groups,
-                                         std::vector<int>& switch_attributes,
-                                         const Ref<const Array<T, Dynamic, 1> >& growth_means,
-                                         const Ref<const Array<T, Dynamic, 1> >& growth_stds,
-                                         const Ref<const Array<T, Dynamic, Dynamic> >& attribute_means,
-                                         const Ref<const Array<T, Dynamic, Dynamic> >& attribute_stds,
-                                         const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
-                                         const T daughter_length_std,
-                                         const T daughter_angle_bound, 
-                                         const AdhesionMode adhesion_mode, 
-                                         std::unordered_map<std::string, T>& adhesion_params,
-                                         const bool confine,
-                                         std::unordered_map<std::string, T>& confine_params,
-                                         const GrowthVoidMode growth_void_mode,
-                                         std::unordered_map<std::string, T>& growth_void_params)
+std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
+    runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
+                  std::vector<int>& parents_init, const int max_iter,
+                  const int n_cells, const T R, const T Rcell, const T L0,
+                  const T Ldiv, const T E0, const T Ecell, const T sigma0,
+                  const T max_stepsize, const bool write,
+                  const std::string outprefix, const int iter_write,
+                  const int iter_update_neighbors, const int iter_update_boundary,
+                  const int iter_update_stepsize, const T max_error_allowed,
+                  const T min_error, const int max_tries_update_stepsize,
+                  const T neighbor_threshold, const int rng_seed,
+                  const int n_groups, std::vector<int>& switch_attributes,
+                  const Ref<const Array<T, Dynamic, 1> >& growth_means,
+                  const Ref<const Array<T, Dynamic, 1> >& growth_stds,
+                  const Ref<const Array<T, Dynamic, Dynamic> >& attribute_means,
+                  const Ref<const Array<T, Dynamic, Dynamic> >& attribute_stds,
+                  const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
+                  const T daughter_length_std, const T daughter_angle_bound, 
+                  const AdhesionMode adhesion_mode, 
+                  std::unordered_map<std::string, T>& adhesion_params,
+                  const bool confine,
+                  std::unordered_map<std::string, T>& confine_params,
+                  const GrowthVoidMode growth_void_mode,
+                  std::unordered_map<std::string, T>& growth_void_params)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -760,6 +780,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
     // Initialize velocities to zero
     Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4);
+
+    // Initialize parent IDs (TODO check that they have been correctly specified)
+    std::vector<int> parents(parents_init); 
 
     // Growth rate distribution functions: normal distributions with given means
     // and standard deviations
@@ -941,8 +964,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         }
     }
 
-    // Variable for keeping track of whether a growth void has been introduced
-    bool growth_void_introduced = false;
+    // Keep track of cells within the growth void 
+    bool void_introduced = false;
+    Array<int, Dynamic, 1> in_void = Array<int, Dynamic, 1>::Zero(n);
 
     // Write the initial population to file
     if (write)
@@ -988,14 +1012,16 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             std::cout << "... Dividing " << to_divide.sum() << " cells "
                       << "(iteration " << iter << ")" << std::endl;
         cells = divideCells<T>(
-            cells, t, R, Rcell, to_divide, growth_dists, rng,
+            cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
             daughter_length_dist, daughter_angle_dist
         );
         n = cells.rows();
 
-        // Update neighboring cells and peripheral cells if division has occurred
+        // Update neighboring cells, peripheral cells, and cells within growth
+        // void if division has occurred
         if (to_divide.sum() > 0)
         {
+            // Update neighboring cells 
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             to_adhere.resize(neighbors.rows());
             for (int k = 0; k < neighbors.rows(); ++k)
@@ -1008,7 +1034,7 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                     dist > R + Rcell && dist < 2 * R
                 ); 
             }
-
+            // Update peripheral cells 
             if (confine)
             {
                 if (find_boundary)
@@ -1021,6 +1047,11 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
                     std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
                 }
             }
+            // Keep track of new daughter cells (which are not in the void, 
+            // because they are the progeny of obviously growing cells)
+            in_void.conservativeResize(n);
+            for (int i = n - to_divide.sum(); i < n; ++i)
+                in_void(i) = 0;
         }
 
         // Update cell positions and orientations
@@ -1148,6 +1179,8 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             cells, switch_attributes, n_groups, dt, switch_rates, growth_dists,
             attribute_dists, rng, uniform_dist
         );
+
+        // Ensure that only cells in group 1 can adhere to each other 
         for (int k = 0; k < neighbors.rows(); ++k)
         {
             int ni = neighbors(k, 0); 
@@ -1159,11 +1192,21 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
             ); 
         }
 
+        // Correct growth rates for cells within the growth void that have 
+        // just switched 
+        for (int i = 0; i < n; ++i)
+        {
+            if (in_void(i) && cells(i, __colidx_growth) > 0)
+                cells(i, __colidx_growth) = 0.0;
+        }
+
         // Introduce or update growth void
-        if ((growth_void_mode == GrowthVoidMode::FIXED && !growth_void_introduced) || growth_void_mode == GrowthVoidMode::RATIO)
+        if ((growth_void_mode == GrowthVoidMode::FIXED_CORE && !void_introduced) ||
+            growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
+        )
         {
             // Have we reached the minimum number of cells? 
-            if (cells.rows() >= growth_void_params["mincells"])
+            if (n >= growth_void_params["mincells"])
             {
                 // Find the center of mass of the population  
                 Array<T, 2, 1> center; 
@@ -1178,14 +1221,22 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
 
                 // Identify the innermost fraction of cells whose growth is to
                 // be arrested
-                for (int i = 0; i < cells.rows(); ++i)
+                T rinner = 0; 
+                if (growth_void_mode == GrowthVoidMode::FIXED_CORE)
+                    rinner = growth_void_params["core_fraction"]; 
+                else    // growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
+                    rinner = 1.0 - growth_void_params["peripheral_fraction"];
+                for (int i = 0; i < n; ++i)
                 {
-                    if (rdists(i) < growth_void_params["radial_fraction"])
+                    if (rdists(i) < rinner)
+                    {
                         cells(i, __colidx_growth) = 0.0;
+                        in_void(i) = 1;
+                    }
                 }
                 
                 // We have now introduced the growth void
-                growth_void_introduced = true;
+                void_introduced = true;
             }
         }
         
@@ -1236,7 +1287,15 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
         }
     }
 
-    return cells;
+    // Write complete lineage to file 
+    if (write)
+    {
+        std::stringstream ss_lineage; 
+        ss_lineage << outprefix << "_lineage.txt"; 
+        writeLineage<T>(parents, ss_lineage.str());
+    }
+
+    return std::make_pair(cells, parents);
 }
 
 /**
@@ -1256,7 +1315,9 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  * division event is taken from a normal distribution centered at 0 with a
  * given standard deviation. 
  *
- * @param cells_init Initial population of cells. 
+ * @param cells_init Initial population of cells.
+ * @param parents_init Initial vector of parent cell IDs for each cell generated
+ *                     throughout the simulation. 
  * @param max_iter Maximum number of iterations. 
  * @param n_cells Maximum number of cells. 
  * @param R Cell radius (including the EPS). 
@@ -1309,49 +1370,41 @@ Array<T, Dynamic, Dynamic> runSimulation(const Ref<const Array<T, Dynamic, Dynam
  * @param confine_params Parameters required to compute radial confinement
  *                       forces.
  * @param growth_void_mode Choice of growth void to be introduced within the
- *                         biofilm. Can be NONE (0), FIXED (1), or RATIO (2).
+ *                         biofilm. Can be NONE (0), FIXED_CORE (1), or
+ *                         FIXED_ANNULUS (2).
  * @param growth_void_params Parameters required to introduce growth void 
  *                           within the biofilm. 
  * @returns Final population of cells.  
  */
 template <typename T>
-Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
-                                                    const int max_iter,
-                                                    const int n_cells,
-                                                    const T R,
-                                                    const T Rcell,
-                                                    const T L0,
-                                                    const T Ldiv,
-                                                    const T E0,
-                                                    const T Ecell,
-                                                    const T sigma0,
-                                                    const T max_stepsize,
-                                                    const bool write,
-                                                    const std::string outprefix, 
-                                                    const int iter_write,
-                                                    const int iter_update_neighbors,
-                                                    const int iter_update_boundary,
-                                                    const int iter_update_stepsize,
-                                                    const T max_error_allowed,
-                                                    const T min_error,
-                                                    const int max_tries_update_stepsize,
-                                                    const T neighbor_threshold,
-                                                    const int rng_seed,
-                                                    const int group_default,
-                                                    std::vector<int>& switch_attributes,
-                                                    const Ref<const Array<T, 2, 1> >& growth_means,
-                                                    const Ref<const Array<T, 2, 1> >& growth_stds,
-                                                    const Ref<const Array<T, 2, Dynamic> >& attribute_means,
-                                                    const Ref<const Array<T, 2, Dynamic> >& attribute_stds,
-                                                    const T partition_logratio_std,
-                                                    const T daughter_length_std,
-                                                    const T daughter_angle_bound, 
-                                                    const AdhesionMode adhesion_mode, 
-                                                    std::unordered_map<std::string, T>& adhesion_params,
-                                                    const bool confine,
-                                                    std::unordered_map<std::string, T>& confine_params,
-                                                    const GrowthVoidMode growth_void_mode,
-                                                    std::unordered_map<std::string, T>& growth_void_params)
+std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
+    runSimulationWithPlasmid(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
+                             std::vector<int>& parents_init, const int max_iter,
+                             const int n_cells, const T R, const T Rcell,
+                             const T L0, const T Ldiv, const T E0, const T Ecell,
+                             const T sigma0, const T max_stepsize, const bool write,
+                             const std::string outprefix, const int iter_write,
+                             const int iter_update_neighbors,
+                             const int iter_update_boundary,
+                             const int iter_update_stepsize,
+                             const T max_error_allowed, const T min_error,
+                             const int max_tries_update_stepsize,
+                             const T neighbor_threshold, const int rng_seed,
+                             const int group_default,
+                             std::vector<int>& switch_attributes,
+                             const Ref<const Array<T, 2, 1> >& growth_means,
+                             const Ref<const Array<T, 2, 1> >& growth_stds,
+                             const Ref<const Array<T, 2, Dynamic> >& attribute_means,
+                             const Ref<const Array<T, 2, Dynamic> >& attribute_stds,
+                             const T partition_logratio_std,
+                             const T daughter_length_std,
+                             const T daughter_angle_bound,
+                             const AdhesionMode adhesion_mode, 
+                             std::unordered_map<std::string, T>& adhesion_params,
+                             const bool confine,
+                             std::unordered_map<std::string, T>& confine_params,
+                             const GrowthVoidMode growth_void_mode,
+                             std::unordered_map<std::string, T>& growth_void_params)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -1403,6 +1456,9 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
 
     // Initialize velocities to zero
     Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4);
+
+    // Initialize parent IDs (TODO check that they have been correctly specified)
+    std::vector<int> parents(parents_init); 
 
     // Growth rate distribution functions: normal distributions with given means
     // and standard deviations
@@ -1584,8 +1640,9 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
         }
     }
 
-    // Variable for keeping track of whether a growth void has been introduced
-    bool growth_void_introduced = false;
+    // Keep track of cells within the growth void 
+    bool void_introduced = false;
+    Array<int, Dynamic, 1> in_void = Array<int, Dynamic, 1>::Zero(n);
 
     // Write the initial population to file
     if (write)
@@ -1631,7 +1688,7 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
             std::cout << "... Dividing " << to_divide.sum() << " cells "
                       << "(iteration " << iter << ")" << std::endl;
         cells = divideCellsWithPlasmid<T>(
-            cells, t, R, Rcell, to_divide, growth_dists, rng,
+            cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
             daughter_length_dist, daughter_angle_dist, partition_logratio_dist
         );
         n = cells.rows(); 
@@ -1656,9 +1713,11 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
             }
         }
 
-        // Update neighboring cells and peripheral cells if division has occurred
+        // Update neighboring cells, peripheral cells, and cells within growth
+        // void if division has occurred
         if (to_divide.sum() > 0)
         {
+            // Update neighboring cells 
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             to_adhere.resize(neighbors.rows());
             for (int k = 0; k < neighbors.rows(); ++k)
@@ -1671,7 +1730,7 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
                     dist > R + Rcell && dist < 2 * R
                 ); 
             }
-
+            // Update peripheral cells 
             if (confine)
             {
                 if (find_boundary)
@@ -1684,6 +1743,11 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
                     std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
                 }
             }
+            // Keep track of new daughter cells (which are not in the void, 
+            // because they are the progeny of obviously growing cells)
+            in_void.conservativeResize(n);
+            for (int i = n - to_divide.sum(); i < n; ++i)
+                in_void(i) = 0;
         }
 
         // Update cell positions and orientations
@@ -1807,10 +1871,12 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
         }
 
         // Introduce or update growth void
-        if ((growth_void_mode == GrowthVoidMode::FIXED && !growth_void_introduced) || growth_void_mode == GrowthVoidMode::RATIO)
+        if ((growth_void_mode == GrowthVoidMode::FIXED_CORE && !void_introduced) ||
+            growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
+        )
         {
             // Have we reached the minimum number of cells? 
-            if (cells.rows() >= growth_void_params["mincells"])
+            if (n >= growth_void_params["mincells"])
             {
                 // Find the center of mass of the population  
                 Array<T, 2, 1> center; 
@@ -1825,14 +1891,22 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
 
                 // Identify the innermost fraction of cells whose growth is to
                 // be arrested
-                for (int i = 0; i < cells.rows(); ++i)
+                T rinner = 0; 
+                if (growth_void_mode == GrowthVoidMode::FIXED_CORE)
+                    rinner = growth_void_params["core_fraction"]; 
+                else    // growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
+                    rinner = 1.0 - growth_void_params["peripheral_fraction"];
+                for (int i = 0; i < n; ++i)
                 {
-                    if (rdists(i) < growth_void_params["radial_fraction"])
+                    if (rdists(i) < rinner)
+                    {
                         cells(i, __colidx_growth) = 0.0;
+                        in_void(i) = 1;
+                    }
                 }
                 
                 // We have now introduced the growth void
-                growth_void_introduced = true;
+                void_introduced = true;
             }
         }
         
@@ -1883,7 +1957,15 @@ Array<T, Dynamic, Dynamic> runSimulationWithPlasmid(const Ref<const Array<T, Dyn
         }
     }
 
-    return cells;
+    // Write complete lineage to file 
+    if (write)
+    {
+        std::stringstream ss_lineage; 
+        ss_lineage << outprefix << "_lineage.txt"; 
+        writeLineage<T>(parents, ss_lineage.str());
+    }
+
+    return std::make_pair(cells, parents);
 }
 
 #endif
