@@ -2,7 +2,7 @@
  * Implementations of cell-cell and cell-surface interaction forces.
  *
  * In what follows, a population of N cells is represented as a 2-D array of
- * size (N, 10+), where each row represents a cell and stores the following 
+ * size (N, 11+), where each row represents a cell and stores the following 
  * data: 
  *
  * 0) cell ID
@@ -24,7 +24,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/1/2024
+ *     8/7/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -477,7 +477,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                 const T strength = params["strength"];
                 const T expd = params["distance_exp"]; 
                 const T dmin = params["mindist"];
-                forces = strength * forcesKihara2D<T, 2>(
+                forces = strength * forcesKihara<T, 2>(
                     ri, ni, half_li, rj, nj, half_lj, R, dij, si, sj, expd,
                     dmin
                 );
@@ -490,7 +490,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                 const T expd = params["distance_exp"]; 
                 const T kappa0 = params["well_depth_delta"];
                 const T dmin = params["mindist"];
-                forces = strength * forcesGBK2D<T, 2>(
+                forces = strength * forcesGBK<T, 2>(
                     ri, ni, half_li, rj, nj, half_lj, R, Rcell, dij, si, sj,
                     expd, exp1, exp2, kappa0, dmin
                 ); 
