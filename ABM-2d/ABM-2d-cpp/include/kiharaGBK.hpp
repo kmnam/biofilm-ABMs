@@ -67,20 +67,14 @@ T potentialKihara(const T dist, const T R, const T exp, const T dmin)
     // If the distance is less than dmin, then return the corresponding
     // shift term 
     if (dist <= dmin)
-    {
         return -1.0 / pow(dmin, exp) + 1.0 / pow(2 * R, exp); 
-    }
     // If the distance is greater than dmin and less than 2 * R, then
     // evaluate the potential (plus the corresponding shift term)
     else if (dist > dmin && dist <= 2 * R)
-    {
         return -1.0 / pow(dist, exp) + 1.0 / pow(2 * R, exp); 
-    }
     // If the distance is greater than 2 * R, return zero 
     else 
-    {
         return 0.0;
-    }
 }
 
 /**
@@ -199,29 +193,23 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
                const T R, const T Rcell, const T dist, const T expd,
                const T exp1, const T exp2, const T kappa0, const T dmin)
 {
-    // Get the anisotropy parameters 
+    // If the distance is greater than 2 * R, return zero 
+    if (dist > 2 * R) 
+        return 0.0;
+
+    // Otherwise, get the anisotropy parameters 
     T eps1 = anisotropyParamGBK1<T, Dim>(n1, half_l1, n2, half_l2, Rcell, exp1);
     T eps2 = anisotropyParamGBK2<T, Dim>(
         r1, n1, half_l1, r2, n2, half_l2, Rcell, exp2, kappa0
     );
-    
     // If the distance is less than dmin, then return the corresponding
     // shift term 
     if (dist <= dmin)
-    {
         return eps1 * eps2 * (-1.0 / pow(dmin, expd) + 1.0 / pow(2 * R, expd)); 
-    }
     // If the distance is greater than dmin and less than 2 * R, then
     // evaluate the potential (plus the corresponding shift term)
-    else if (dist > dmin && dist <= 2 * R)
-    {
+    else    // dist > dmin && dist <= 2 * R
         return eps1 * eps2 * (-1.0 / pow(dist, expd) + 1.0 / pow(2 * R, exp)); 
-    }
-    // If the distance is greater than 2 * R, return zero 
-    else 
-    {
-        return 0.0;
-    }
 }
 
 /* --------------------------------------------------------------------- //
