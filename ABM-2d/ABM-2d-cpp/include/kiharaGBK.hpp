@@ -97,7 +97,7 @@ T anisotropyParamGBK1(const Ref<const Matrix<T, Dim, 1> >& n1, const T half_l1,
 {
     // Is the exponent zero? 
     if (exp == 0)
-        return std::make_pair(1.0, Matrix<T, 2, 2 * Dim>::Zero()); 
+        return 1.0;
 
     // Compute the anisotropy parameter
     T chi2 = squaredAspectRatioParam<T>(half_l1, half_l2, Rcell);
@@ -133,7 +133,7 @@ T anisotropyParamGBK2(const Ref<const Matrix<T, Dim, 1> >& r1,
 {
     // Is the exponent zero? 
     if (exp == 0)
-        return std::make_pair(1.0, Matrix<T, 2, 2 * Dim>::Zero()); 
+        return 1.0;
 
     // Compute the anisotropy parameter ... 
     //
