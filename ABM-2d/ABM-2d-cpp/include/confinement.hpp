@@ -1,9 +1,28 @@
 /**
+ * In what follows, a population of N cells is represented as a 2-D array of
+ * size (N, 11+), where each row represents a cell and stores the following 
+ * data: 
+ *
+ * 0) cell ID
+ * 1) x-coordinate of cell center
+ * 2) y-coordinate of cell center
+ * 3) x-coordinate of cell orientation vector
+ * 4) y-coordinate of cell orientation vector
+ * 5) cell length (excluding caps)
+ * 6) half of cell length (excluding caps)
+ * 7) timepoint at which cell was formed
+ * 8) cell growth rate
+ * 9) cell's ambient viscosity with respect to surrounding fluid
+ * 10) cell-surface friction coefficient
+ *
+ * Additional features may be included in the array but these are not
+ * relevant for the computations implemented here. 
+ * 
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/19/2024
+ *     8/1/2024
  */
 
 #ifndef BIOFILM_RADIAL_CONFINEMENT_HPP
@@ -15,6 +34,7 @@
 #include <Eigen/Dense>
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
+#include "indices.hpp"
 #include "boundaries.hpp"
 #include "distances.hpp"
 
@@ -42,7 +62,7 @@ template <typename T>
 T getMaxArea(const Ref<const Array<T, Dynamic, Dynamic> >& cells, const T R)
 {
     T caps_area = cells.rows() * boost::math::constants::pi<T>() * R * R;
-    T cylinders_area = 2 * R * cells.col(4).sum(); 
+    T cylinders_area = 2 * R * cells.col(__colidx_l).sum(); 
     return caps_area + cylinders_area; 
 }
 
@@ -64,18 +84,18 @@ std::pair<AlphaShape2DProperties, std::vector<int> >
     std::vector<int> idx; 
     for (int i = 0; i < cells.rows(); ++i)
     {
-        T half_l = cells(i, 5);
+        T half_l = cells(i, __colidx_half_l);
         T quarter_l = half_l / 2; 
-        x.push_back(static_cast<double>(cells(i, 0) - half_l * cells(i, 2)));
-        y.push_back(static_cast<double>(cells(i, 1) - half_l * cells(i, 3)));
-        x.push_back(static_cast<double>(cells(i, 0) - quarter_l * cells(i, 2)));
-        y.push_back(static_cast<double>(cells(i, 1) - quarter_l * cells(i, 3)));
-        x.push_back(static_cast<double>(cells(i, 0))); 
-        y.push_back(static_cast<double>(cells(i, 1)));
-        x.push_back(static_cast<double>(cells(i, 0) + quarter_l * cells(i, 2)));
-        y.push_back(static_cast<double>(cells(i, 1) + quarter_l * cells(i, 3)));
-        x.push_back(static_cast<double>(cells(i, 0) + half_l * cells(i, 2))); 
-        y.push_back(static_cast<double>(cells(i, 1) + half_l * cells(i, 3)));
+        x.push_back(static_cast<double>(cells(i, __colidx_rx) - half_l * cells(i, __colidx_nx)));
+        y.push_back(static_cast<double>(cells(i, __colidx_ry) - half_l * cells(i, __colidx_ny)));
+        x.push_back(static_cast<double>(cells(i, __colidx_rx) - quarter_l * cells(i, __colidx_nx)));
+        y.push_back(static_cast<double>(cells(i, __colidx_ry) - quarter_l * cells(i, __colidx_ny)));
+        x.push_back(static_cast<double>(cells(i, __colidx_rx))); 
+        y.push_back(static_cast<double>(cells(i, __colidx_ry)));
+        x.push_back(static_cast<double>(cells(i, __colidx_rx) + quarter_l * cells(i, __colidx_nx)));
+        y.push_back(static_cast<double>(cells(i, __colidx_ry) + quarter_l * cells(i, __colidx_ny)));
+        x.push_back(static_cast<double>(cells(i, __colidx_rx) + half_l * cells(i, __colidx_nx))); 
+        y.push_back(static_cast<double>(cells(i, __colidx_ry) + half_l * cells(i, __colidx_ny)));
         for (int j = 0; j < 5; ++j)
             idx.push_back(i); 
     }
@@ -107,10 +127,10 @@ std::pair<AlphaShape2DProperties, std::vector<int> >
     // For each cell ... 
     for (int i = 0; i < cells.rows(); ++i)
     {
-        Array<T, 2, 1> ri = cells(i, Eigen::seq(0, 1)).transpose();
-        Array<T, 2, 1> ni = cells(i, Eigen::seq(2, 3)).transpose(); 
-        T li = cells(i, 4);
-        T half_li = cells(i, 5);
+        Array<T, 2, 1> ri = cells(i, __colseq_r).transpose(); 
+        Array<T, 2, 1> ni = cells(i, __colseq_n).transpose(); 
+        T li = cells(i, __colidx_l);
+        T half_li = cells(i, __colidx_half_l);
         Array<T, 2, 1> ni_rot; 
         ni_rot << R * (-ni(1)), R * ni(0); 
 
@@ -251,9 +271,9 @@ Array<T, Dynamic, 4> radialConfinementForces(const Ref<const Array<T, Dynamic, D
     // For each cell ... 
     for (const int j : boundary_idx)
     {
-        Matrix<T, 2, 1> rj = cells(j, Eigen::seq(0, 1)).transpose().matrix(); 
-        Matrix<T, 2, 1> nj = cells(j, Eigen::seq(2, 3)).transpose().matrix();
-        T half_lj = cells(j, 5);
+        Matrix<T, 2, 1> rj = cells(j, __colseq_r).transpose().matrix(); 
+        Matrix<T, 2, 1> nj = cells(j, __colseq_n).transpose().matrix();
+        T half_lj = cells(j, __colidx_half_l);
         
         // Get the two endpoints of the centerline 
         Matrix<T, 2, 1> pj = rj - half_lj * nj;
