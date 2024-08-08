@@ -83,7 +83,10 @@ int main(int argc, char** argv)
     const GrowthVoidMode growth_void_mode = static_cast<GrowthVoidMode>(json_data["growth_void_mode"].as_int64());
     std::unordered_map<std::string, T> growth_void_params; 
     growth_void_params["mincells"] = static_cast<T>(json_data["growth_void_mincells"].as_int64());
-    growth_void_params["radial_fraction"] = static_cast<T>(json_data["growth_void_radial_fraction"].as_double()); 
+    if (growth_void_mode == GrowthVoidMode::FIXED_CORE)
+        growth_void_params["core_fraction"] = static_cast<T>(json_data["growth_void_core_fraction"].as_double());
+    else if (growth_void_mode == GrowthVoidMode::FIXED_ANNULUS)
+        growth_void_params["peripheral_fraction"] = static_cast<T>(json_data["growth_void_peripheral_fraction"].as_double());
 
     // Vectors of growth rate means and standard deviations (identical for
     // both groups)
@@ -117,9 +120,13 @@ int main(int argc, char** argv)
     Array<T, Dynamic, Dynamic> cells(1, 12);
     cells << 0, 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1, 1;
 
+    // Initialize parent IDs 
+    std::vector<int> parents; 
+    parents.push_back(-1); 
+
     // Run the simulation
-    cells = runSimulation<T>(
-        cells, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
+    runSimulation<T>(
+        cells, parents, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
         max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
