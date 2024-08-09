@@ -67,14 +67,22 @@ T potentialKihara(const T dist, const T R, const T exp, const T dmin)
     // If the distance is less than dmin, then return the corresponding
     // shift term 
     if (dist <= dmin)
-        return -1.0 / pow(dmin, exp) + 1.0 / pow(2 * R, exp); 
+    {
+        // The shift term to be added here is U(dmin) - U(2 * R)
+        return -1.0 / pow(dmin, exp) + 1.0 / pow(2 * R, exp);
+    }
     // If the distance is greater than dmin and less than 2 * R, then
     // evaluate the potential (plus the corresponding shift term)
     else if (dist > dmin && dist <= 2 * R)
-        return -1.0 / pow(dist, exp) + 1.0 / pow(2 * R, exp); 
+    {
+        // The shift term to be subtracted here is U(2 * R)
+        return -1.0 / pow(dist, exp) + 1.0 / pow(2 * R, exp);
+    }
     // If the distance is greater than 2 * R, return zero 
-    else 
+    else
+    {
         return 0.0;
+    }
 }
 
 /**
@@ -205,11 +213,17 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
     // If the distance is less than dmin, then return the corresponding
     // shift term 
     if (dist <= dmin)
-        return eps1 * eps2 * (-1.0 / pow(dmin, expd) + 1.0 / pow(2 * R, expd)); 
+    {
+        // The shift term to be added here is U(dmin) - U(2 * R)
+        return eps1 * eps2 * (-1.0 / pow(dmin, expd) + 1.0 / pow(2 * R, expd));
+    }
     // If the distance is greater than dmin and less than 2 * R, then
     // evaluate the potential (plus the corresponding shift term)
-    else    // dist > dmin && dist <= 2 * R
-        return eps1 * eps2 * (-1.0 / pow(dist, expd) + 1.0 / pow(2 * R, exp)); 
+    else
+    {
+        // The shift term to be subtracted here is U(2 * R)
+        return eps1 * eps2 * (-1.0 / pow(dist, expd) + 1.0 / pow(2 * R, expd));
+    }
 }
 
 /* --------------------------------------------------------------------- //
