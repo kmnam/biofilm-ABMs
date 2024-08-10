@@ -113,10 +113,14 @@ int main(int argc, char** argv)
     Array<T, Dynamic, Dynamic> cells(1, 13);
     cells << 0, 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1,
              static_cast<T>(group_default), 1;
+
+    // Initialize parent IDs 
+    std::vector<int> parents; 
+    parents.push_back(-1); 
     
     // Run the simulation
     runSimulationWithPlasmid<T>(
-        cells, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
+        cells, parents, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
         max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed,
