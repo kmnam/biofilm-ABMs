@@ -2,27 +2,14 @@
  * An agent-based model of 2-D biofilm growth that switches cells between two
  * states that exhibit differential adhesion, within a confined environment. 
  *
- * In what follows, a population of N cells is represented as a 2-D array of 
- * size (N, 12), where each row represents a cell and stores the following data:
- * 
- * 0) cell ID
- * 1) x-coordinate of cell center
- * 2) y-coordinate of cell center
- * 3) x-coordinate of cell orientation vector
- * 4) y-coordinate of cell orientation vector
- * 5) cell length (excluding caps)
- * 6) half of cell length (excluding caps)
- * 7) timepoint at which the cell was formed
- * 8) cell growth rate
- * 9) cell's ambient viscosity with respect to surrounding fluid
- * 10) cell-surface friction coefficient
- * 11) cell group identity (1 for self-adhering, 2 for non-adhering)
+ * In what follows, a population of N cells is represented as a 2-D array of
+ * size (N, 16+), whose columns are as specified in `include/indices.hpp`.
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/1/2024
+ *     8/11/2024
  */
 
 #include <Eigen/Dense>
@@ -121,9 +108,11 @@ int main(int argc, char** argv)
     // Initialize simulation ...
     //
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
-    // with mean growth rate and default viscosity and friction coefficients
-    Array<T, Dynamic, Dynamic> cells(1, 12);
-    cells << 0, 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface, 1;
+    // with zero velocity, mean growth rate, and default viscosity and friction
+    // coefficients
+    Array<T, Dynamic, Dynamic> cells(1, 16);
+    cells << 0, 0, 0, 1, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient,
+             eta_surface, 1;
 
     // Initialize parent IDs 
     std::vector<int> parents; 
