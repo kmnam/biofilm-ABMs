@@ -2,29 +2,16 @@
  * Implementations of cell-cell and cell-surface interaction forces.
  *
  * In what follows, a population of N cells is represented as a 2-D array of
- * size (N, 11+), where each row represents a cell and stores the following 
- * data: 
+ * size (N, 15+), whose columns are as specified in `indices.hpp`.
  *
- * 0) cell ID
- * 1) x-coordinate of cell center
- * 2) y-coordinate of cell center
- * 3) x-coordinate of cell orientation vector
- * 4) y-coordinate of cell orientation vector
- * 5) cell length (excluding caps)
- * 6) half of cell length (excluding caps)
- * 7) timepoint at which cell was formed
- * 8) cell growth rate
- * 9) cell's ambient viscosity with respect to surrounding fluid
- * 10) cell-surface friction coefficient
- *
- * Additional features may be included in the array but these are not
- * relevant for the computations implemented here. 
+ * Additional features may be included in the array but these are not relevant
+ * for the computations implemented here. 
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/7/2024
+ *     8/11/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -708,7 +695,7 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  *          the cell positions and orientations.  
  */
 template <typename T>
-std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4> >
+std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
     stepRungeKuttaAdaptive(const Ref<const Array<T, Dynamic, Dynamic> >& A,
                            const Ref<const Array<T, Dynamic, 1> >& b,
                            const Ref<const Array<T, Dynamic, 1> >& bs, 
@@ -783,12 +770,15 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4>, Array<T, Dynamic, 4
     Array<T, Dynamic, 4> delta1 = velocities_final1 * dt; 
     Array<T, Dynamic, 4> delta2 = velocities_final2 * dt; 
     cells_new(Eigen::all, __colseq_coords) += delta1; 
-    Array<T, Dynamic, 4> errors = delta1 - delta2; 
+    Array<T, Dynamic, 4> errors = delta1 - delta2;
+
+    // Store computed velocities 
+    cells_new(Eigen::all, __colseq_velocities) = velocities_final1; 
     
     // Renormalize orientations 
     normalizeOrientations<T>(cells_new);
 
-    return std::make_tuple(cells_new, errors, velocities_final1); 
+    return std::make_pair(cells_new, errors);
 }
 
 #endif
