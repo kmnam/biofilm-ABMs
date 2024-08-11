@@ -121,7 +121,7 @@ int main(int argc, char** argv)
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
     // with mean growth rate and default viscosity and friction coefficients
     Array<T, Dynamic, Dynamic> cells(1, 12);
-    cells << 0, 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_surface, 1;
+    cells << 0, 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1, 1;
 
     // Initialize parent IDs 
     std::vector<int> parents; 
