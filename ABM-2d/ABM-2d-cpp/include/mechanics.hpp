@@ -2,7 +2,7 @@
  * Implementations of cell-cell and cell-surface interaction forces.
  *
  * In what follows, a population of N cells is represented as a 2-D array of
- * size (N, 15+), whose columns are as specified in `indices.hpp`.
+ * size (N, 16+), whose columns are as specified in `indices.hpp`.
  *
  * Additional features may be included in the array but these are not relevant
  * for the computations implemented here. 

@@ -2,7 +2,7 @@
  * Functions for running simulations with flexible initial conditions. 
  *
  * In what follows, a population of N cells is represented as a 2-D array of
- * size (N, 15+), whose columns are as specified in `indices.hpp`.
+ * size (N, 16+), whose columns are as specified in `indices.hpp`.
  *
  * Authors:
  *     Kee-Myoung Nam
@@ -346,7 +346,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (confine)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
-            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
+            cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
@@ -592,7 +592,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             if (confine)
             {
                 cells_.conservativeResize(n, cells_.cols() + 1);
-                cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
+                cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
                 for (const int i : boundary_idx)
                     cells_(i, cells_.cols() - 1) = 1;
             }
@@ -613,7 +613,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (confine)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
-            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
+            cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
@@ -985,7 +985,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (confine)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
-            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
+            cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
@@ -1256,11 +1256,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             if (confine)
             {
                 cells_.conservativeResize(n, cells_.cols() + 1);
-                cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
+                cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
                 for (const int i : boundary_idx)
                     cells_(i, cells_.cols() - 1) = 1;
             }
-            writeCells<T>(cells_, params, filename_init);
+            writeCells<T>(cells_, params, filename);
         }
     }
 
@@ -1277,11 +1277,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (confine)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
-            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
+            cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
-        writeCells<T>(cells_, params, filename_init);
+        writeCells<T>(cells_, params, filename_final);
     }
 
     // Write complete lineage to file 
@@ -1662,7 +1662,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (confine)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
-            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
+            cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
@@ -1927,11 +1927,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             if (confine)
             {
                 cells_.conservativeResize(n, cells_.cols() + 1);
-                cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
+                cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
                 for (const int i : boundary_idx)
                     cells_(i, cells_.cols() - 1) = 1;
             }
-            writeCells<T>(cells_, params, filename_init);
+            writeCells<T>(cells_, params, filename);
         }
     }
 
@@ -1948,11 +1948,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (confine)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
-            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
+            cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
-        writeCells<T>(cells_, params, filename_init);
+        writeCells<T>(cells_, params, filename_final);
     }
 
     // Write complete lineage to file 
