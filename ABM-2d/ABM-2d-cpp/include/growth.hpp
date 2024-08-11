@@ -1,22 +1,8 @@
 /**
  * Functions for modeling cell growth and division. 
  * 
- * In what follows, a population of N cells is represented as a 2-D array of 
- * size (N, 11+), where each row represents a cell and stores the following data:
- * 
- * 0) cell ID
- * 1) x-coordinate of cell center
- * 2) y-coordinate of cell center
- * 3) x-coordinate of cell orientation vector
- * 4) y-coordinate of cell orientation vector
- * 5) cell length (excluding caps)
- * 6) half of cell length (excluding caps)
- * 7) timepoint at which cell was formed
- * 8) cell growth rate
- * 9) cell's ambient viscosity with respect to surrounding fluid
- * 10) cell-surface friction coefficient
- * 11) cell group identifier (integer, optional)
- * 12) plasmid copy-number (integer, optional)
+ * In what follows, a population of N cells is represented as a 2-D array of
+ * size (N, 15+), whose columns are as specified in `indices.hpp`.
  *
  * Additional features may be included in the array but these are not
  * relevant for the computations implemented here.
@@ -25,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/1/2024
+ *     8/11/2024
  */
 
 #ifndef BIOFILM_CELL_GROWTH_HPP
