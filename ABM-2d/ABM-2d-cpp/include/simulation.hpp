@@ -1,27 +1,14 @@
 /**
  * Functions for running simulations with flexible initial conditions. 
  *
- * In what follows, a population of N cells is represented as a 2-D array of 
- * size (N, 12+), where each row represents a cell and stores the following data:
- *
- * 0) cell ID
- * 1) x-coordinate of cell center
- * 2) y-coordinate of cell center
- * 3) x-coordinate of cell orientation vector
- * 4) y-coordinate of cell orientation vector
- * 5) cell length (excluding caps)
- * 6) half of cell length (excluding caps)
- * 7) timepoint at which the cell was formed
- * 8) cell growth rate
- * 9) cell's ambient viscosity with respect to surrounding fluid
- * 10) cell-surface friction coefficient
- * 11) cell group identity 
+ * In what follows, a population of N cells is represented as a 2-D array of
+ * size (N, 15+), whose columns are as specified in `indices.hpp`.
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/1/2024
+ *     8/11/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -100,7 +87,7 @@ std::string floatToString(T x, const int precision = 10)
  * @param Ecell Elastic modulus of cell.
  * @param sigma0 Cell-surface adhesion energy density.
  * @param max_stepsize Maximum stepsize per iteration. 
- * @param write If true, write simulation output to file(s). 
+ * @param write If true, write simulation output to file(s).
  * @param outprefix Output filename prefix. 
  * @param iter_write Write cells to file every this many iterations. 
  * @param iter_update_neighbors Update neighboring cells every this many 
@@ -138,17 +125,32 @@ std::string floatToString(T x, const int precision = 10)
 template <typename T>
 std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
-                  std::vector<int>& parents_init, const int max_iter,
-                  const int n_cells, const T R, const T Rcell, const T L0,
-                  const T Ldiv, const T E0, const T Ecell, const T sigma0,
-                  const T max_stepsize, const bool write,
-                  const std::string outprefix, const int iter_write,
-                  const int iter_update_neighbors, const int iter_update_boundary,
-                  const int iter_update_stepsize, const T max_error_allowed,
-                  const T min_error, const int max_tries_update_stepsize,
-                  const T neighbor_threshold, const int rng_seed,
-                  const T growth_mean, const T growth_std,
-                  const T daughter_length_std, const T daughter_angle_bound,
+                  std::vector<int>& parents_init,
+                  const int max_iter,
+                  const int n_cells,
+                  const T R,
+                  const T Rcell,
+                  const T L0,
+                  const T Ldiv,
+                  const T E0,
+                  const T Ecell,
+                  const T sigma0,
+                  const T max_stepsize,
+                  const bool write,
+                  const std::string outprefix,
+                  const int iter_write,
+                  const int iter_update_neighbors,
+                  const int iter_update_boundary,
+                  const int iter_update_stepsize,
+                  const T max_error_allowed,
+                  const T min_error,
+                  const int max_tries_update_stepsize,
+                  const T neighbor_threshold,
+                  const int rng_seed,
+                  const T growth_mean,
+                  const T growth_std,
+                  const T daughter_length_std,
+                  const T daughter_angle_bound,
                   const AdhesionMode adhesion_mode,
                   std::unordered_map<std::string, T>& adhesion_params,
                   const bool confine,
@@ -203,9 +205,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dist > R + Rcell && dist < 2 * R
         ); 
     }
-
-    // Initialize velocities to zero
-    Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4);
 
     // Initialize parent IDs (TODO check that they have been correctly specified)
     std::vector<int> parents(parents_init); 
@@ -340,19 +339,18 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         params["t_curr"] = floatToString<T>(t);
         std::stringstream ss_init; 
         ss_init << outprefix << "_init.txt";
-        std::string filename_init = ss_init.str(); 
-        if (confine)    // If confinement is present, write indicators for peripheral cells
+        std::string filename_init = ss_init.str();
+        // If confinement is present, write additional indicators for
+        // peripheral cells
+        Array<T, Dynamic, Dynamic> cells_(cells);
+        if (confine)
         {
-            Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
-            cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+            cells_.conservativeResize(n, cells_.cols() + 1);
+            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
-                cells_(i, cells.cols()) = 1;
-            writeCells<T>(cells_, params, filename_init);
+                cells_(i, cells_.cols() - 1) = 1;
         }
-        else 
-        {
-            writeCells<T>(cells, params, filename_init);
-        }
+        writeCells<T>(cells_, params, filename_init);
     }
     
     // Define termination criterion, assuming that at least one of n_cells
@@ -426,9 +424,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             cell_cell_prefactors, surface_contact_density, adhesion_mode, 
             adhesion_params, confine, boundary_idx, confine_params
         ); 
-        Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
-        Array<T, Dynamic, 4> errors = std::get<1>(result);
-        Array<T, Dynamic, 4> velocities_new = std::get<2>(result);
+        Array<T, Dynamic, Dynamic> cells_new = result.first;
+        Array<T, Dynamic, 4> errors = result.second;
 
         // If the error is big, retry the step with a smaller stepsize (up to
         // a given maximum number of attempts)
@@ -456,9 +453,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     cell_cell_prefactors, surface_contact_density, adhesion_mode,
                     adhesion_params, confine, boundary_idx, confine_params
                 ); 
-                cells_new = std::get<0>(result);
-                errors = std::get<1>(result);
-                velocities_new = std::get<2>(result);
+                cells_new = result.first;
+                errors = result.second;
                 error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error);
                 factor *= 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
                 if (factor >= 10)
@@ -479,9 +475,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 cell_cell_prefactors, surface_contact_density, adhesion_mode,
                 adhesion_params, boundary_idx, confine, confine_params
             ); 
-            cells_new = std::get<0>(result);
-            errors = std::get<1>(result);
-            velocities_new = std::get<2>(result);
+            cells_new = result.first;
+            errors = result.second;
         }
         // If desired, print a warning message if the error is big
         #ifdef DEBUG_WARN_LARGE_ERROR
@@ -498,7 +493,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         #endif
         cells = cells_new;
-        velocities = velocities_new;
 
         // Grow the cells
         growCells<T>(cells, dt, R);
@@ -592,18 +586,17 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str(); 
-            if (confine)    // If confinement is present, write indicators for peripheral cells
+            // If confinement is present, write additional indicators for
+            // peripheral cells
+            Array<T, Dynamic, Dynamic> cells_(cells);
+            if (confine)
             {
-                Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
-                cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+                cells_.conservativeResize(n, cells_.cols() + 1);
+                cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
                 for (const int i : boundary_idx)
-                    cells_(i, cells.cols()) = 1;
-                writeCells<T>(cells_, params, filename);
+                    cells_(i, cells_.cols() - 1) = 1;
             }
-            else 
-            {
-                writeCells<T>(cells, params, filename);
-            }
+            writeCells<T>(cells_, params, filename);
         }
     }
 
@@ -614,18 +607,17 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_final; 
         ss_final << outprefix << "_final.txt";
         std::string filename_final = ss_final.str(); 
-        if (confine)    // If confinement is present, write indicators for peripheral cells
+        // If confinement is present, write additional indicators for
+        // peripheral cells
+        Array<T, Dynamic, Dynamic> cells_(cells);
+        if (confine)
         {
-            Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
-            cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+            cells_.conservativeResize(n, cells_.cols() + 1);
+            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
-                cells_(i, cells.cols()) = 1;
-            writeCells<T>(cells_, params, filename_final);
+                cells_(i, cells_.cols() - 1) = 1;
         }
-        else 
-        {
-            writeCells<T>(cells, params, filename_final);
-        }
+        writeCells<T>(cells_, params, filename_final);
     }
 
     // Write complete lineage to file 
@@ -707,22 +699,37 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 template <typename T>
 std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
-                  std::vector<int>& parents_init, const int max_iter,
-                  const int n_cells, const T R, const T Rcell, const T L0,
-                  const T Ldiv, const T E0, const T Ecell, const T sigma0,
-                  const T max_stepsize, const bool write,
-                  const std::string outprefix, const int iter_write,
-                  const int iter_update_neighbors, const int iter_update_boundary,
-                  const int iter_update_stepsize, const T max_error_allowed,
-                  const T min_error, const int max_tries_update_stepsize,
-                  const T neighbor_threshold, const int rng_seed,
-                  const int n_groups, std::vector<int>& switch_attributes,
+                  std::vector<int>& parents_init,
+                  const int max_iter,
+                  const int n_cells,
+                  const T R,
+                  const T Rcell,
+                  const T L0,
+                  const T Ldiv,
+                  const T E0,
+                  const T Ecell,
+                  const T sigma0,
+                  const T max_stepsize,
+                  const bool write,
+                  const std::string outprefix,
+                  const int iter_write,
+                  const int iter_update_neighbors,
+                  const int iter_update_boundary,
+                  const int iter_update_stepsize,
+                  const T max_error_allowed,
+                  const T min_error,
+                  const int max_tries_update_stepsize,
+                  const T neighbor_threshold,
+                  const int rng_seed,
+                  const int n_groups,
+                  std::vector<int>& switch_attributes,
                   const Ref<const Array<T, Dynamic, 1> >& growth_means,
                   const Ref<const Array<T, Dynamic, 1> >& growth_stds,
                   const Ref<const Array<T, Dynamic, Dynamic> >& attribute_means,
                   const Ref<const Array<T, Dynamic, Dynamic> >& attribute_stds,
                   const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
-                  const T daughter_length_std, const T daughter_angle_bound, 
+                  const T daughter_length_std,
+                  const T daughter_angle_bound, 
                   const AdhesionMode adhesion_mode, 
                   std::unordered_map<std::string, T>& adhesion_params,
                   const bool confine,
@@ -777,9 +784,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dist > R + Rcell && dist < 2 * R
         ); 
     }
-
-    // Initialize velocities to zero
-    Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4);
 
     // Initialize parent IDs (TODO check that they have been correctly specified)
     std::vector<int> parents(parents_init); 
@@ -975,18 +979,17 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_init; 
         ss_init << outprefix << "_init.txt";
         std::string filename_init = ss_init.str(); 
-        if (confine)    // If confinement is on, write indicators for peripheral cells
+        // If confinement is present, write additional indicators for
+        // peripheral cells
+        Array<T, Dynamic, Dynamic> cells_(cells);
+        if (confine)
         {
-            Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
-            cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+            cells_.conservativeResize(n, cells_.cols() + 1);
+            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
-                cells_(i, cells.cols()) = 1;
-            writeCells<T>(cells_, params, filename_init);
+                cells_(i, cells_.cols() - 1) = 1;
         }
-        else 
-        {
-            writeCells<T>(cells, params, filename_init);
-        }
+        writeCells<T>(cells_, params, filename_init);
     }
     
     // Define termination criterion, assuming that at least one of n_cells
@@ -1060,9 +1063,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             cell_cell_prefactors, surface_contact_density, adhesion_mode,
             adhesion_params, confine, boundary_idx, confine_params
         ); 
-        Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
-        Array<T, Dynamic, 4> errors = std::get<1>(result);
-        Array<T, Dynamic, 4> velocities_new = std::get<2>(result);
+        Array<T, Dynamic, Dynamic> cells_new = result.first;
+        Array<T, Dynamic, 4> errors = result.second;
 
         // If the error is big, retry the step with a smaller stepsize (up to
         // a given maximum number of attempts)
@@ -1090,9 +1092,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     cell_cell_prefactors, surface_contact_density, adhesion_mode,
                     adhesion_params, confine, boundary_idx, confine_params
                 ); 
-                cells_new = std::get<0>(result);
-                errors = std::get<1>(result);
-                velocities_new = std::get<2>(result);
+                cells_new = result.first;
+                errors = result.second;
                 error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error);
                 factor *= 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
                 if (factor >= 10)
@@ -1113,9 +1114,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 cell_cell_prefactors, surface_contact_density, adhesion_mode,
                 adhesion_params, confine, boundary_idx, confine_params
             ); 
-            cells_new = std::get<0>(result);
-            errors = std::get<1>(result);
-            velocities_new = std::get<2>(result);
+            cells_new = result.first;
+            errors = result.second;
         }
         #ifdef DEBUG_WARN_LARGE_ERROR
             Array<T, Dynamic, 4> scale = max_error_allowed * (
@@ -1131,7 +1131,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         #endif
         cells = cells_new;
-        velocities = velocities_new;
 
         // Grow the cells
         growCells<T>(cells, dt, R);
@@ -1251,18 +1250,17 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str();
-            if (confine)    // If confinement is on, write indicators for peripheral cells
+            // If confinement is present, write additional indicators for
+            // peripheral cells
+            Array<T, Dynamic, Dynamic> cells_(cells);
+            if (confine)
             {
-                Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1);
-                cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+                cells_.conservativeResize(n, cells_.cols() + 1);
+                cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
                 for (const int i : boundary_idx)
-                    cells_(i, cells.cols()) = 1;
-                writeCells<T>(cells_, params, filename);
+                    cells_(i, cells_.cols() - 1) = 1;
             }
-            else 
-            {
-                writeCells<T>(cells, params, filename);
-            }
+            writeCells<T>(cells_, params, filename_init);
         }
     }
 
@@ -1273,18 +1271,17 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_final; 
         ss_final << outprefix << "_final.txt";
         std::string filename_final = ss_final.str(); 
-        if (confine)    // If confinement is on, write indicators for peripheral cells
+        // If confinement is present, write additional indicators for
+        // peripheral cells
+        Array<T, Dynamic, Dynamic> cells_(cells);
+        if (confine)
         {
-            Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1);
-            cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+            cells_.conservativeResize(n, cells_.cols() + 1);
+            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
-                cells_(i, cells.cols()) = 1;
-            writeCells<T>(cells_, params, filename_final);
+                cells_(i, cells_.cols() - 1) = 1;
         }
-        else 
-        {
-            writeCells<T>(cells, params, filename_final);
-        }
+        writeCells<T>(cells_, params, filename_init);
     }
 
     // Write complete lineage to file 
@@ -1379,17 +1376,28 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 template <typename T>
 std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     runSimulationWithPlasmid(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
-                             std::vector<int>& parents_init, const int max_iter,
-                             const int n_cells, const T R, const T Rcell,
-                             const T L0, const T Ldiv, const T E0, const T Ecell,
-                             const T sigma0, const T max_stepsize, const bool write,
-                             const std::string outprefix, const int iter_write,
+                             std::vector<int>& parents_init,
+                             const int max_iter,
+                             const int n_cells,
+                             const T R,
+                             const T Rcell,
+                             const T L0,
+                             const T Ldiv,
+                             const T E0,
+                             const T Ecell,
+                             const T sigma0,
+                             const T max_stepsize,
+                             const bool write,
+                             const std::string outprefix,
+                             const int iter_write,
                              const int iter_update_neighbors,
                              const int iter_update_boundary,
                              const int iter_update_stepsize,
-                             const T max_error_allowed, const T min_error,
+                             const T max_error_allowed,
+                             const T min_error,
                              const int max_tries_update_stepsize,
-                             const T neighbor_threshold, const int rng_seed,
+                             const T neighbor_threshold,
+                             const int rng_seed,
                              const int group_default,
                              std::vector<int>& switch_attributes,
                              const Ref<const Array<T, 2, 1> >& growth_means,
@@ -1453,9 +1461,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dist > R + Rcell && dist < 2 * R
         ); 
     }
-
-    // Initialize velocities to zero
-    Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4);
 
     // Initialize parent IDs (TODO check that they have been correctly specified)
     std::vector<int> parents(parents_init); 
@@ -1651,18 +1656,17 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_init; 
         ss_init << outprefix << "_init.txt";
         std::string filename_init = ss_init.str(); 
-        if (confine)    // If confinement is on, write indicators for peripheral cells
+        // If confinement is present, write additional indicators for
+        // peripheral cells
+        Array<T, Dynamic, Dynamic> cells_(cells);
+        if (confine)
         {
-            Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1); 
-            cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+            cells_.conservativeResize(n, cells_.cols() + 1);
+            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
-                cells_(i, cells.cols()) = 1;
-            writeCells<T>(cells_, params, filename_init);
+                cells_(i, cells_.cols() - 1) = 1;
         }
-        else 
-        {
-            writeCells<T>(cells, params, filename_init);
-        }
+        writeCells<T>(cells_, params, filename_init);
     }
     
     // Define termination criterion, assuming that at least one of n_cells
@@ -1756,9 +1760,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             cell_cell_prefactors, surface_contact_density, adhesion_mode,
             adhesion_params, confine, boundary_idx, confine_params
         ); 
-        Array<T, Dynamic, Dynamic> cells_new = std::get<0>(result);
-        Array<T, Dynamic, 4> errors = std::get<1>(result);
-        Array<T, Dynamic, 4> velocities_new = std::get<2>(result);
+        Array<T, Dynamic, Dynamic> cells_new = result.first;
+        Array<T, Dynamic, 4> errors = result.second;
 
         // If the error is big, retry the step with a smaller stepsize (up to
         // a given maximum number of attempts)
@@ -1786,9 +1789,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     cell_cell_prefactors, surface_contact_density, adhesion_mode,
                     adhesion_params, confine, boundary_idx, confine_params
                 ); 
-                cells_new = std::get<0>(result);
-                errors = std::get<1>(result);
-                velocities_new = std::get<2>(result);
+                cells_new = result.first;
+                errors = result.second;
                 error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error);
                 factor *= 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
                 if (factor >= 10)
@@ -1809,9 +1811,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 cell_cell_prefactors, surface_contact_density, adhesion_mode,
                 adhesion_params, confine, boundary_idx, confine_params
             ); 
-            cells_new = std::get<0>(result);
-            errors = std::get<1>(result);
-            velocities_new = std::get<2>(result);
+            cells_new = result.first;
+            errors = result.second;
         }
         #ifdef DEBUG_WARN_LARGE_ERROR
             Array<T, Dynamic, 4> scale = max_error_allowed * (
@@ -1827,7 +1828,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         #endif
         cells = cells_new;
-        velocities = velocities_new;
 
         // Grow the cells
         growCells<T>(cells, dt, R);
@@ -1921,18 +1921,17 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str();
-            if (confine)    // If confinement is on, write indicators for peripheral cells
+            // If confinement is present, write additional indicators for
+            // peripheral cells
+            Array<T, Dynamic, Dynamic> cells_(cells);
+            if (confine)
             {
-                Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1);
-                cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+                cells_.conservativeResize(n, cells_.cols() + 1);
+                cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
                 for (const int i : boundary_idx)
-                    cells_(i, cells.cols()) = 1;
-                writeCells<T>(cells_, params, filename);
+                    cells_(i, cells_.cols() - 1) = 1;
             }
-            else 
-            {
-                writeCells<T>(cells, params, filename);
-            }
+            writeCells<T>(cells_, params, filename_init);
         }
     }
 
@@ -1943,18 +1942,17 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_final; 
         ss_final << outprefix << "_final.txt";
         std::string filename_final = ss_final.str(); 
-        if (confine)    // If confinement is on, write indicators for peripheral cells
+        // If confinement is present, write additional indicators for
+        // peripheral cells
+        Array<T, Dynamic, Dynamic> cells_(cells);
+        if (confine)
         {
-            Array<T, Dynamic, Dynamic> cells_ = Array<T, Dynamic, Dynamic>::Zero(n, cells.cols() + 1);
-            cells_(Eigen::all, Eigen::seq(0, cells.cols() - 1)) = cells;
+            cells_.conservativeResize(n, cells_.cols() + 1);
+            cells_(Eigen::all, Eigen::seq(cells_.cols() - 1)) = Array<T, Dynamic, 1>::Zero(n); 
             for (const int i : boundary_idx)
-                cells_(i, cells.cols()) = 1;
-            writeCells<T>(cells_, params, filename_final);
+                cells_(i, cells_.cols() - 1) = 1;
         }
-        else 
-        {
-            writeCells<T>(cells, params, filename_final);
-        }
+        writeCells<T>(cells_, params, filename_init);
     }
 
     // Write complete lineage to file 
