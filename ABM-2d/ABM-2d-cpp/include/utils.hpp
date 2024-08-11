@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/1/2024
+ *     8/11/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -20,6 +20,7 @@
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
 #include <boost/random.hpp>
+#include "indices.hpp"
 
 using std::sin;
 using boost::multiprecision::sin;
@@ -82,9 +83,11 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
     {
         for (int j = 0; j < cells.cols(); ++j)
         {
-            if (j == 13)         // If the entry is a group identifier
+            // If the entry is a group or cell identifier or plasmid copy-number,
+            // write as an integer
+            if (j == __colidx_id || j == __colidx_group || j == __colidx_plasmid)
                 outfile << static_cast<int>(cells(i, j)) << '\t'; 
-            else                 // Otherwise 
+            else      // Otherwise, write as a double
                 outfile << cells(i, j) << '\t'; 
         }
         outfile.seekp(-1, std::ios_base::cur);
@@ -124,9 +127,11 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
     {
         for (int j = 0; j < cells.cols(); ++j)
         {
-            if (j == 10)         // If the entry is a group identifier
+            // If the entry is a group or cell identifier or plasmid copy-number,
+            // write as an integer
+            if (j == __colidx_id || j == __colidx_group || j == __colidx_plasmid)
                 outfile << static_cast<int>(cells(i, j)) << '\t'; 
-            else                 // Otherwise 
+            else      // Otherwise, write as a double
                 outfile << cells(i, j) << '\t'; 
         }
         outfile.seekp(-1, std::ios_base::cur);
@@ -286,38 +291,6 @@ Array<T, 2, 1> rotate(const Ref<const Array<T, 2, 1> >& n, const T theta)
     rot << std::cos(theta), -std::sin(theta),
            std::sin(theta), std::cos(theta); 
     return (rot * n.matrix()).array();
-}
-
-/**
- * Check that all cell-cell distances in the given array of neighboring 
- * cells are greater than some threshold.
- *
- * @param neighbors Array of neighboring pairs of cells.
- * @param threshold Distance threshold.
- * @returns True if the cell-cell distances exceed the given threshold, 
- *          false otherwise. 
- */
-template <typename T>
-bool distancesExceedThreshold(const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                              const T threshold)
-{
-    return (neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array() < threshold).any();
-}
-
-/**
- * Check that the given cell coordinates contain a NaN or infinity. 
- *
- * @param cells Existing population of cells.
- * @returns True if the cell coordinates contain a NaN or infinity, false
- *          otherwise.
- */
-template <typename T>
-bool isNaNOrInf(const Ref<const Array<T, Dynamic, Dynamic> >& cells)
-{
-    return (
-        cells(Eigen::all, Eigen::seq(0, 3)).isNaN().any() ||
-        cells(Eigen::all, Eigen::seq(0, 3)).isInf().any()
-    );
 }
 
 #endif
