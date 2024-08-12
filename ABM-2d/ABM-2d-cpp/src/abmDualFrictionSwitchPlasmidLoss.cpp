@@ -2,31 +2,17 @@
  * An agent-based model of 2-D biofilm growth that switches cells between two
  * states that exhibit different friction coefficients.
  *
- * In this simulation, the cell state depends on the copy-number of a plasmid,
- * and a cell switches states once the plasmid has been lost. 
+ * In this simulation, the cell state switches only once from its initial 
+ * state. 
  *
- * In what follows, a population of N cells is represented as a 2-D array of 
- * size (N, 13), where each row represents a cell and stores the following data:
- * 
- * 0) cell ID
- * 1) x-coordinate of cell center
- * 2) y-coordinate of cell center
- * 3) x-coordinate of cell orientation vector
- * 4) y-coordinate of cell orientation vector
- * 5) cell length (excluding caps)
- * 6) half of cell length (excluding caps)
- * 7) timepoint at which the cell was formed
- * 8) cell growth rate
- * 9) cell's ambient viscosity with respect to surrounding fluid
- * 10) cell-surface friction coefficient
- * 11) cell group identity (1 for high friction, 2 for low friction)
- * 12) plasmid copy-number
+ * In what follows, a population of N cells is represented as a 2-D array of
+ * size (N, 16+), whose columns are as specified in `include/indices.hpp`.
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/1/2024
+ *     8/11/2024
  */
 
 #include <Eigen/Dense>
@@ -74,8 +60,8 @@ int main(int argc, char** argv)
     const T eta_std1 = static_cast<T>(json_data["eta_std1"].as_double()); 
     const T eta_mean2 = static_cast<T>(json_data["eta_mean2"].as_double());
     const T eta_std2 = static_cast<T>(json_data["eta_std2"].as_double());
-    const int group_default = json_data["state_default"].as_int64(); 
-    const T partition_logratio_std = static_cast<T>(json_data["partition_logratio_std"].as_double());
+    const int group_default = json_data["state_default"].as_int64();
+    const T lifetime_default = static_cast<T>(json_data["lifetime_default"].as_double()); 
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T daughter_angle_bound = static_cast<T>(json_data["daughter_angle_bound"].as_double());
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
@@ -100,6 +86,15 @@ int main(int argc, char** argv)
     attribute_means << eta_mean1, eta_mean2;
     attribute_stds << eta_std1, eta_std2;
 
+    // Switching rates between groups 1 and 2 (only one is set to be nonzero)
+    Array<T, Dynamic, Dynamic> switch_rates(2, 2);
+    if (group_default == 1)
+        switch_rates << 0.0, 1.0 / lifetime_default,
+                        0.0, 0.0;
+    else    // group_default should be 2
+        switch_rates << 0.0, 0.0,
+                        1.0 / lifetime_default, 0.0; 
+
     // Output file prefix
     std::string outprefix = argv[2];
 
@@ -109,25 +104,25 @@ int main(int argc, char** argv)
     // Initialize simulation ...
     //
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
-    // with mean growth rate and default viscosity and friction coefficients
-    Array<T, Dynamic, Dynamic> cells(1, 13);
-    cells << 0, 0, 0, 1, 0, L0, L0 / 2, 0, growth_mean, eta_ambient, eta_mean1,
-             static_cast<T>(group_default), 1;
+    // with zero velocity, mean growth rate, and default viscosity and friction
+    // coefficients
+    Array<T, Dynamic, Dynamic> cells(1, 16);
+    cells << 0, 0, 0, 1, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient,
+             eta_mean1, static_cast<T>(group_default);
 
     // Initialize parent IDs 
     std::vector<int> parents; 
     parents.push_back(-1); 
     
     // Run the simulation
-    runSimulationWithPlasmid<T>(
+    runSimulation<T>(
         cells, parents, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
         max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
-        min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed,
-        group_default, switch_attributes, growth_means, growth_stds,
-        attribute_means, attribute_stds, partition_logratio_std,
-        daughter_length_std, daughter_angle_bound, adhesion_mode,
-        adhesion_params, confine, confine_params, growth_void_mode,
+        min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
+        switch_attributes, growth_means, growth_stds, attribute_means,
+        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
+        adhesion_mode, adhesion_params, confine, confine_params, growth_void_mode,
         growth_void_params
     ); 
     
