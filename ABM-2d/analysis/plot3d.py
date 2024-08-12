@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    7/30/2024
+    8/12/2024
 """
 
 import os
@@ -13,9 +13,29 @@ import numpy as np
 from PIL import Image
 import cv2
 import pyvista as pv
-pv.start_xvfb()
+#pv.start_xvfb()
 import seaborn as sns
 from utils import read_cells, parse_dir
+
+__colidx_id = 0
+__colidx_rx = 1
+__colidx_ry = 2
+__colseq_r = [1, 2]
+__colidx_nx = 3
+__colidx_ny = 4
+__colseq_n = [3, 4]
+__colidx_drx = 5
+__colidx_dry = 6
+__colidx_dnx = 7
+__colidx_dny = 8
+__colidx_l = 9
+__colidx_half_l = 10
+__colidx_t0 = 11
+__colidx_growth = 12
+__colidx_eta0 = 13
+__colidx_eta1 = 14
+__colidx_group = 15
+__colidx_bound = -1
 
 #######################################################################
 def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
@@ -50,8 +70,8 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
         Resolution for plotting each cylinder and hemisphere.
     """
     # Define arrays for cell centers and orientations with z-coordinate
-    positions = np.hstack((cells[:, :2], rz * np.ones((cells.shape[0], 1))))
-    orientations = np.hstack((cells[:, 2:4], np.zeros((cells.shape[0], 1))))
+    positions = np.hstack((cells[:, __colseq_r], rz * np.ones((cells.shape[0], 1))))
+    orientations = np.hstack((cells[:, __colseq_n], np.zeros((cells.shape[0], 1))))
 
     # Plot each spherocylinder ... 
     for i in range(cells.shape[0]):
@@ -61,12 +81,12 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
             center=positions[i, :],
             direction=orientations[i, :],
             radius=R,
-            height=cells[i, 4],
+            height=cells[i, __colidx_l],
             resolution=res,
             capping=False
         )
-        cap1_center = positions[i, :] - cells[i, 5] * orientations[i, :]
-        cap2_center = positions[i, :] + cells[i, 5] * orientations[i, :]
+        cap1_center = positions[i, :] - cells[i, __colidx_half_l] * orientations[i, :]
+        cap2_center = positions[i, :] + cells[i, __colidx_half_l] * orientations[i, :]
         cap1 = pv.Sphere(
             center=cap1_center,
             direction=orientations[i, :],
@@ -183,13 +203,13 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
     sigma0 = params['sigma0']
     rz = R - (1 / R) * ((R * R * sigma0) / (4 * E0)) ** (2 / 3)
     if xmin is None:
-        xmin = np.floor(cells[:, 0].min() - 4 * L0)
+        xmin = np.floor(cells[:, __colidx_rx].min() - 4 * L0)
     if xmax is None:
-        xmax = np.ceil(cells[:, 0].max() + 4 * L0)
+        xmax = np.ceil(cells[:, __colidx_rx].max() + 4 * L0)
     if ymin is None:
-        ymin = np.floor(cells[:, 1].min() - 4 * L0)
+        ymin = np.floor(cells[:, __colidx_ry].min() - 4 * L0)
     if ymax is None:
-        ymax = np.ceil(cells[:, 1].max() + 4 * L0)
+        ymax = np.ceil(cells[:, __colidx_ry].max() + 4 * L0)
     if zmin is None:
         zmin = rz - R
     if zmax is None:
@@ -201,15 +221,15 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
     if uniform_color:
         colors = [palette[0] for i in range(cells.shape[0])]
     else:
-        ngroups = int(max(cells[:, 10]))
+        ngroups = int(max(cells[:, __colidx_group]))
         palette_ = palette[:ngroups]
         pastel_ = pastel[:ngroups]
         colors = []
         for i in range(cells.shape[0]):
-            group_idx = int(cells[i, 10]) - 1
-            if plot_boundary and cells[i, 11] != 0:
+            group_idx = int(cells[i, __colidx_group]) - 1
+            if plot_boundary and cells[i, __colidx_bound] != 0:
                 colors.append(pastel_[group_idx])
-            elif plot_arrested and cells[i, 7] == 0:
+            elif plot_arrested and cells[i, __colidx_growth] == 0:
                 colors.append(pastel_[group_idx])
             else:
                 colors.append(palette_[group_idx])
@@ -219,7 +239,7 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
 
     # Plot the circle (if desired)
     if plot_membrane:
-        max_area = cells.shape[0] * np.pi * R * R + 2 * R * cells[:, 4].sum()
+        max_area = cells.shape[0] * np.pi * R * R + 2 * R * cells[:, __colidx_l].sum()
         radius = params['confine_rest_radius_factor'] * np.sqrt(max_area / np.pi)
         pl.add_mesh(
             pv.Disc(
