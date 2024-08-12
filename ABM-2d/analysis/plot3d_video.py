@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    7/30/2024
+    8/12/2024
 """
 
 import sys
@@ -13,6 +13,26 @@ import re
 import numpy as np
 from utils import read_cells, parse_dir
 from plot3d import plot_simulation
+
+__colidx_id = 0
+__colidx_rx = 1
+__colidx_ry = 2
+__colseq_r = [1, 2]
+__colidx_nx = 3
+__colidx_ny = 4
+__colseq_n = [3, 4]
+__colidx_drx = 5
+__colidx_dry = 6
+__colidx_dnx = 7
+__colidx_dny = 8
+__colidx_l = 9
+__colidx_half_l = 10
+__colidx_t0 = 11
+__colidx_growth = 12
+__colidx_eta0 = 13
+__colidx_eta1 = 14
+__colidx_group = 15
+__colidx_bound = -1
 
 #######################################################################
 if __name__ == '__main__':
@@ -53,10 +73,10 @@ if __name__ == '__main__':
     E0 = params['E0']
     sigma0 = params['sigma0']
     rz = R - (1 / R) * ((R * R * sigma0) / (4 * E0)) ** (2 / 3)
-    xmin = np.floor(cells[:, 0].min() - 4 * L0)
-    xmax = np.ceil(cells[:, 0].max() + 4 * L0)
-    ymin = np.floor(cells[:, 1].min() - 4 * L0)
-    ymax = np.ceil(cells[:, 1].max() + 4 * L0)
+    xmin = np.floor(cells[:, __colidx_rx].min() - 4 * L0)
+    xmax = np.ceil(cells[:, __colidx_rx].max() + 4 * L0)
+    ymin = np.floor(cells[:, __colidx_ry].min() - 4 * L0)
+    ymax = np.ceil(cells[:, __colidx_ry].max() + 4 * L0)
     zmin = rz - R
     zmax = rz + R
     t_final = (
