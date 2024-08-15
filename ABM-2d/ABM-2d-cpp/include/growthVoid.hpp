@@ -54,7 +54,7 @@ Array<int, Dynamic, 1> inGrowthVoid(const Ref<const Array<T, Dynamic, Dynamic> >
     // Find the radial distance of each cell to the center 
     Array<T, Dynamic, 2> radial = cells(Eigen::all, __colseq_r).rowwise() - center.transpose(); 
     Array<T, Dynamic, 1> rdists = radial.matrix().rowwise().norm().array();
-    Array<T, Dynamic, 2> rdirs = radial.rowwise() / rdists;
+    Array<T, Dynamic, 2> rdirs = radial.colwise() / rdists;
 
     // For each cell ... 
     const T cos_eps = cos(5.0 * boost::math::constants::pi<T>() / 180.0);
@@ -113,7 +113,19 @@ Array<int, Dynamic, 1> inGrowthVoid(const Ref<const Array<T, Dynamic, Dynamic> >
             // distance of cell i by the radial distance of the peripheral cell
             //
             // Ensure also that this normalized distance is <= 1
-            rnorm(i) = min(1, rdists(i) / rdists(j));
+            #ifdef DEBUG_CHECK_IF_PERIPHERAL_CELL_IN_RADIAL_DIRECTION_WAS_FOUND
+                if (bound_i == -1)
+                {
+                    std::cerr << "Failed to find peripheral cell in radial "
+                              << "direction from cell " << i << std::endl; 
+                    std::cerr << "Cell center = (" << r(0) << ", " << r(1)
+                              << ")" << std::endl;
+                    throw std::runtime_error(
+                        "Failed to find peripheral cell in radial direction"
+                    ); 
+                }
+            #endif
+            rnorm(i) = min(1.0, rdists(i) / rdists(bound_i));
         } 
     }
 
