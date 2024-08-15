@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/11/2024
+ *     8/15/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -27,6 +27,8 @@
 #include "mechanics.hpp"
 #include "utils.hpp"
 #include "switch.hpp"
+#include "confinement.hpp"
+#include "growthVoid.hpp"
 
 using namespace Eigen;
 
@@ -51,7 +53,7 @@ enum class GrowthVoidMode
 {
     NONE = 0,
     FIXED_CORE = 1,
-    FIXED_ANNULUS = 2
+    FRACTIONAL_ANNULUS = 2
 };
 
 /**
@@ -117,7 +119,7 @@ std::string floatToString(T x, const int precision = 10)
  *                       forces.
  * @param growth_void_mode Choice of growth void to be introduced within the
  *                         biofilm. Can be NONE (0), FIXED_CORE (1), or
- *                         FIXED_ANNULUS (2).
+ *                         FRACTIONAL_ANNULUS (2).
  * @param growth_void_params Parameters required to introduce growth void 
  *                           within the biofilm. 
  * @returns Final population of cells.  
@@ -286,9 +288,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::string key = item.first;
             T value = item.second;
             ss << "confine_" << key;
-            if (key == "find_boundary")                // find_boundary is a boolean value 
-                params[ss.str()] = (value == 0 ? "0" : "1");
-            else if (key == "mincells_for_boundary")   // mincells_for_boundary is an integer value
+            if (key == "mincells_for_boundary")   // mincells_for_boundary is an integer value
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else
                 params[ss.str()] = floatToString<T>(value);
@@ -303,35 +303,73 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::string key = item.first; 
             T value = item.second; 
             ss << "growth_void_" << key;
-            if (key == "mincells")     // mincells is an integer value 
+            if (key == "mincells")                // mincells is an integer value 
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else 
                 params[ss.str()] = floatToString<T>(value);
         }
     }
 
-    // Get initial subset of peripheral cells (only if confinement is present)
-    bool find_boundary = false; 
-    int mincells_for_boundary = 0;
-    std::vector<int> boundary_idx;
-    if (confine)
-    {
-        find_boundary = (confine_params["find_boundary"] != 0);
+    // Peripheral cells are required when either imposing confinement or
+    // imposing a growth void 
+    //
+    // If both are present, then the minimum number of cells for the boundary
+    // calculation is set to the *minimum* of confine_params["mincells_for_boundary"]
+    // and growth_void_params["mincells"]
+    const bool find_boundary = (confine || growth_void_mode != GrowthVoidMode::NONE);
+    const int mincells_for_boundary = 0; 
+    if (confine && growth_void_mode != GrowthVoidMode::NONE) 
+        mincells_for_boundary = min(
+            static_cast<int>(confine_params["mincells_for_boundary"]),
+            static_cast<int>(growth_void_params["mincells"])
+        ); 
+    else if (confine)
         mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
-        if (find_boundary)
-        {
-            boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
-        }
-        else
-        {
-            boundary_idx.resize(n); 
-            std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
-        }
-    }
+    else 
+        mincells_for_boundary = static_cast<int>(growth_void_params["mincells"]);
 
-    // Keep track of cells within the growth void 
+    // Get initial subset of peripheral cells (only if confinement or a growth
+    // void is present)
+    std::vector<int> boundary_idx;
+    if (find_boundary)
+        boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
+
+    // Determine an initial growth void
+    //
+    // First define the growth void function, which determines whether a cell
+    // is in the growth void from its normalized radial distance 
     bool void_introduced = false;
     Array<int, Dynamic, 1> in_void = Array<int, Dynamic, 1>::Zero(n);
+    std::function<bool(T)> in_void_func;
+    if (growth_void_mode == GrowthVoidMode::NONE)
+    {
+        in_void_func = [](T x){ return false; };
+    } 
+    else if (growth_void_mode == GrowthVoidMode::FIXED_CORE)
+    {
+        in_void_func = [&growth_void_params](T x)
+        {
+            return x < growth_void_params["core_fraction"];
+        };
+    }
+    else    // growth_void_mode == GrowthVoidMode::FRACTIONAL_ANNULUS)
+    {
+        in_void_func = [&growth_void_params](T x)
+        {
+            return x < 1 - growth_void_params["peripheral_fraction"];
+        };
+    }
+
+    // If a growth void is to be imposed ... 
+    if (growth_void_mode != GrowthVoidMode::NONE)
+    {
+        // Have we reached the minimum number of cells?
+        if (n >= growth_void_params["mincells"])
+        {
+            in_void = inGrowthVoid<T>(cells, boundary_idx, in_void_func);
+            void_introduced = (in_void.sum() > 0); 
+        }
+    } 
 
     // Write the initial population to file
     if (write)
@@ -400,17 +438,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
             // Update peripheral cells 
             if (confine)
-            {
-                if (find_boundary)
-                {
-                    boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
-                }
-                else
-                {
-                    boundary_idx.resize(n); 
-                    std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
-                }
-            }
+                boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
+            // Update growth void 
+            //
             // Keep track of new daughter cells (which are not in the void, 
             // because they are the progeny of obviously growing cells)
             in_void.conservativeResize(n);
@@ -523,55 +553,18 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Update peripheral cells
         if (confine && iter % iter_update_boundary == 0)
-        {
-            if (find_boundary)
-            {
-                boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
-            }
-            else
-            {
-                boundary_idx.resize(n); 
-                std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
-            }
-        }
+            boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
 
         // Introduce or update growth void
         if ((growth_void_mode == GrowthVoidMode::FIXED_CORE && !void_introduced) ||
-            growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
+            growth_void_mode == GrowthVoidMode::FRACTIONAL_ANNULUS
         )
         {
             // Have we reached the minimum number of cells? 
             if (n >= growth_void_params["mincells"])
             {
-                // Find the center of mass of the population  
-                Array<T, 2, 1> center; 
-                center << cells.col(__colidx_rx).mean(), cells.col(__colidx_ry).mean();
-
-                // Find the radial distance of each cell to the center 
-                Array<T, Dynamic, 1> rdists = (cells(Eigen::all, __colseq_r).rowwise() - center.transpose()).matrix().rowwise().norm().array();
-
-                // Normalize by the maximum radial distance 
-                T radius = rdists.maxCoeff();
-                rdists /= radius;
-
-                // Identify the innermost fraction of cells whose growth is to
-                // be arrested
-                T rinner = 0; 
-                if (growth_void_mode == GrowthVoidMode::FIXED_CORE)
-                    rinner = growth_void_params["core_fraction"]; 
-                else    // growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
-                    rinner = 1.0 - growth_void_params["peripheral_fraction"];
-                for (int i = 0; i < n; ++i)
-                {
-                    if (rdists(i) < rinner)
-                    {
-                        cells(i, __colidx_growth) = 0.0;
-                        in_void(i) = 1;
-                    }
-                }
-                
-                // We have now introduced the growth void
-                void_introduced = true;
+                in_void = inGrowthVoid<T>(cells, boundary_idx, in_void_func);
+                void_introduced = (in_void.sum() > 0); 
             }
         }
         
@@ -691,7 +684,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  *                       forces.
  * @param growth_void_mode Choice of growth void to be introduced within the
  *                         biofilm. Can be NONE (0), FIXED_CORE (1), or
- *                         FIXED_ANNULUS (2).
+ *                         FRACTIONAL_ANNULUS (2).
  * @param growth_void_params Parameters required to introduce growth void 
  *                           within the biofilm. 
  * @returns Final population of cells.  
@@ -925,9 +918,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::string key = item.first;
             T value = item.second;
             ss << "confine_" << key; 
-            if (key == "find_boundary")                // find_boundary is a boolean value 
-                params[ss.str()] = (value == 0 ? "0" : "1");
-            else if (key == "mincells_for_boundary")   // mincells_for_boundary is an integer value
+            if (key == "mincells_for_boundary")   // mincells_for_boundary is an integer value
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else
                 params[ss.str()] = floatToString<T>(value);
@@ -942,35 +933,73 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::string key = item.first; 
             T value = item.second; 
             ss << "growth_void_" << key;
-            if (key == "mincells")     // mincells is an integer value 
+            if (key == "mincells")                // mincells is an integer value 
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else 
                 params[ss.str()] = floatToString<T>(value);
         }
     }
 
-    // Get initial subset of peripheral cells (only if confinement is present)
-    bool find_boundary = false; 
-    int mincells_for_boundary = 0;
-    std::vector<int> boundary_idx;
-    if (confine)
-    {
-        find_boundary = (confine_params["find_boundary"] != 0);
+    // Peripheral cells are required when either imposing confinement or
+    // imposing a growth void 
+    //
+    // If both are present, then the minimum number of cells for the boundary
+    // calculation is set to the *minimum* of confine_params["mincells_for_boundary"]
+    // and growth_void_params["mincells"]
+    const bool find_boundary = (confine || growth_void_mode != GrowthVoidMode::NONE);
+    const int mincells_for_boundary = 0; 
+    if (confine && growth_void_mode != GrowthVoidMode::NONE) 
+        mincells_for_boundary = min(
+            static_cast<int>(confine_params["mincells_for_boundary"]),
+            static_cast<int>(growth_void_params["mincells"])
+        ); 
+    else if (confine)
         mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
-        if (find_boundary)
-        {
-            boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
-        }
-        else
-        {
-            boundary_idx.resize(n); 
-            std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
-        }
-    }
+    else 
+        mincells_for_boundary = static_cast<int>(growth_void_params["mincells"]);
 
-    // Keep track of cells within the growth void 
+    // Get initial subset of peripheral cells (only if confinement or a growth
+    // void is present)
+    std::vector<int> boundary_idx;
+    if (find_boundary)
+        boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
+
+    // Determine an initial growth void
+    //
+    // First define the growth void function, which determines whether a cell
+    // is in the growth void from its normalized radial distance 
     bool void_introduced = false;
     Array<int, Dynamic, 1> in_void = Array<int, Dynamic, 1>::Zero(n);
+    std::function<bool(T)> in_void_func;
+    if (growth_void_mode == GrowthVoidMode::NONE)
+    {
+        in_void_func = [](T x){ return false; };
+    } 
+    else if (growth_void_mode == GrowthVoidMode::FIXED_CORE)
+    {
+        in_void_func = [&growth_void_params](T x)
+        {
+            return x < growth_void_params["core_fraction"];
+        };
+    }
+    else    // growth_void_mode == GrowthVoidMode::FRACTIONAL_ANNULUS)
+    {
+        in_void_func = [&growth_void_params](T x)
+        {
+            return x < 1 - growth_void_params["peripheral_fraction"];
+        };
+    }
+
+    // If a growth void is to be imposed ... 
+    if (growth_void_mode != GrowthVoidMode::NONE)
+    {
+        // Have we reached the minimum number of cells?
+        if (n >= growth_void_params["mincells"])
+        {
+            in_void = inGrowthVoid<T>(cells, boundary_idx, in_void_func);
+            void_introduced = (in_void.sum() > 0); 
+        }
+    } 
 
     // Write the initial population to file
     if (write)
@@ -1039,17 +1068,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
             // Update peripheral cells 
             if (confine)
-            {
-                if (find_boundary)
-                {
-                    boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
-                }
-                else
-                {
-                    boundary_idx.resize(n); 
-                    std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
-                }
-            }
+                boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
+            // Update growth void 
+            //
             // Keep track of new daughter cells (which are not in the void, 
             // because they are the progeny of obviously growing cells)
             in_void.conservativeResize(n);
@@ -1161,17 +1182,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Update peripheral cells
         if (confine && iter % iter_update_boundary == 0)
-        {
-            if (find_boundary)
-            {
-                boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
-            }
-            else
-            {
-                boundary_idx.resize(n); 
-                std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
-            }
-        }
+            boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
 
         // Switch cells between groups
         switchGroups<T>(
@@ -1201,41 +1212,14 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Introduce or update growth void
         if ((growth_void_mode == GrowthVoidMode::FIXED_CORE && !void_introduced) ||
-            growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
+            growth_void_mode == GrowthVoidMode::FRACTIONAL_ANNULUS
         )
         {
             // Have we reached the minimum number of cells? 
             if (n >= growth_void_params["mincells"])
             {
-                // Find the center of mass of the population  
-                Array<T, 2, 1> center; 
-                center << cells.col(__colidx_rx).mean(), cells.col(__colidx_ry).mean();
-
-                // Find the radial distance of each cell to the center 
-                Array<T, Dynamic, 1> rdists = (cells(Eigen::all, __colseq_r).rowwise() - center.transpose()).matrix().rowwise().norm().array();
-
-                // Normalize by the maximum radial distance 
-                T radius = rdists.maxCoeff();
-                rdists /= radius;
-
-                // Identify the innermost fraction of cells whose growth is to
-                // be arrested
-                T rinner = 0; 
-                if (growth_void_mode == GrowthVoidMode::FIXED_CORE)
-                    rinner = growth_void_params["core_fraction"]; 
-                else    // growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
-                    rinner = 1.0 - growth_void_params["peripheral_fraction"];
-                for (int i = 0; i < n; ++i)
-                {
-                    if (rdists(i) < rinner)
-                    {
-                        cells(i, __colidx_growth) = 0.0;
-                        in_void(i) = 1;
-                    }
-                }
-                
-                // We have now introduced the growth void
-                void_introduced = true;
+                in_void = inGrowthVoid<T>(cells, boundary_idx, in_void_func);
+                void_introduced = (in_void.sum() > 0); 
             }
         }
         
@@ -1368,7 +1352,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  *                       forces.
  * @param growth_void_mode Choice of growth void to be introduced within the
  *                         biofilm. Can be NONE (0), FIXED_CORE (1), or
- *                         FIXED_ANNULUS (2).
+ *                         FRACTIONAL_ANNULUS (2).
  * @param growth_void_params Parameters required to introduce growth void 
  *                           within the biofilm. 
  * @returns Final population of cells.  
@@ -1602,9 +1586,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::string key = item.first;
             T value = item.second;
             ss << "confine_" << key; 
-            if (key == "find_boundary")                // find_boundary is a boolean value 
-                params[ss.str()] = (value == 0 ? "0" : "1");
-            else if (key == "mincells_for_boundary")   // mincells_for_boundary is an integer value
+            if (key == "mincells_for_boundary")   // mincells_for_boundary is an integer value
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else
                 params[ss.str()] = floatToString<T>(value);
@@ -1619,35 +1601,73 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::string key = item.first; 
             T value = item.second; 
             ss << "growth_void_" << key;
-            if (key == "mincells")     // mincells is an integer value 
+            if (key == "mincells")                // mincells is an integer value 
                 params[ss.str()] = std::to_string(static_cast<int>(value));
             else 
                 params[ss.str()] = floatToString<T>(value);
         }
     }
 
-    // Get initial subset of peripheral cells (only if confinement is present)
-    bool find_boundary = false; 
-    int mincells_for_boundary = 0;
-    std::vector<int> boundary_idx;
-    if (confine)
-    {
-        find_boundary = (confine_params["find_boundary"] != 0);
+    // Peripheral cells are required when either imposing confinement or
+    // imposing a growth void 
+    //
+    // If both are present, then the minimum number of cells for the boundary
+    // calculation is set to the *minimum* of confine_params["mincells_for_boundary"]
+    // and growth_void_params["mincells"]
+    const bool find_boundary = (confine || growth_void_mode != GrowthVoidMode::NONE);
+    const int mincells_for_boundary = 0; 
+    if (confine && growth_void_mode != GrowthVoidMode::NONE) 
+        mincells_for_boundary = min(
+            static_cast<int>(confine_params["mincells_for_boundary"]),
+            static_cast<int>(growth_void_params["mincells"])
+        ); 
+    else if (confine)
         mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
-        if (find_boundary)
-        {
-            boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
-        }
-        else
-        {
-            boundary_idx.resize(n); 
-            std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
-        }
-    }
+    else 
+        mincells_for_boundary = static_cast<int>(growth_void_params["mincells"]);
 
-    // Keep track of cells within the growth void 
+    // Get initial subset of peripheral cells (only if confinement or a growth
+    // void is present)
+    std::vector<int> boundary_idx;
+    if (find_boundary)
+        boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
+
+    // Determine an initial growth void
+    //
+    // First define the growth void function, which determines whether a cell
+    // is in the growth void from its normalized radial distance 
     bool void_introduced = false;
     Array<int, Dynamic, 1> in_void = Array<int, Dynamic, 1>::Zero(n);
+    std::function<bool(T)> in_void_func;
+    if (growth_void_mode == GrowthVoidMode::NONE)
+    {
+        in_void_func = [](T x){ return false; };
+    } 
+    else if (growth_void_mode == GrowthVoidMode::FIXED_CORE)
+    {
+        in_void_func = [&growth_void_params](T x)
+        {
+            return x < growth_void_params["core_fraction"];
+        };
+    }
+    else    // growth_void_mode == GrowthVoidMode::FRACTIONAL_ANNULUS)
+    {
+        in_void_func = [&growth_void_params](T x)
+        {
+            return x < 1 - growth_void_params["peripheral_fraction"];
+        };
+    }
+
+    // If a growth void is to be imposed ... 
+    if (growth_void_mode != GrowthVoidMode::NONE)
+    {
+        // Have we reached the minimum number of cells?
+        if (n >= growth_void_params["mincells"])
+        {
+            in_void = inGrowthVoid<T>(cells, boundary_idx, in_void_func);
+            void_introduced = (in_void.sum() > 0); 
+        }
+    } 
 
     // Write the initial population to file
     if (write)
@@ -1736,17 +1756,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
             // Update peripheral cells 
             if (confine)
-            {
-                if (find_boundary)
-                {
-                    boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
-                }
-                else
-                {
-                    boundary_idx.resize(n); 
-                    std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
-                }
-            }
+                boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
+            // Update growth void 
+            //
             // Keep track of new daughter cells (which are not in the void, 
             // because they are the progeny of obviously growing cells)
             in_void.conservativeResize(n);
@@ -1858,55 +1870,18 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Update peripheral cells
         if (confine && iter % iter_update_boundary == 0)
-        {
-            if (find_boundary)
-            {
-                boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
-            }
-            else
-            {
-                boundary_idx.resize(n); 
-                std::iota(boundary_idx.begin(), boundary_idx.end(), 0);
-            }
-        }
+            boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
 
         // Introduce or update growth void
         if ((growth_void_mode == GrowthVoidMode::FIXED_CORE && !void_introduced) ||
-            growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
+            growth_void_mode == GrowthVoidMode::FRACTIONAL_ANNULUS
         )
         {
             // Have we reached the minimum number of cells? 
             if (n >= growth_void_params["mincells"])
             {
-                // Find the center of mass of the population  
-                Array<T, 2, 1> center; 
-                center << cells.col(__colidx_rx).mean(), cells.col(__colidx_ry).mean();
-
-                // Find the radial distance of each cell to the center 
-                Array<T, Dynamic, 1> rdists = (cells(Eigen::all, __colseq_r).rowwise() - center.transpose()).matrix().rowwise().norm().array();
-
-                // Normalize by the maximum radial distance 
-                T radius = rdists.maxCoeff();
-                rdists /= radius;
-
-                // Identify the innermost fraction of cells whose growth is to
-                // be arrested
-                T rinner = 0; 
-                if (growth_void_mode == GrowthVoidMode::FIXED_CORE)
-                    rinner = growth_void_params["core_fraction"]; 
-                else    // growth_void_mode == GrowthVoidMode::FIXED_ANNULUS
-                    rinner = 1.0 - growth_void_params["peripheral_fraction"];
-                for (int i = 0; i < n; ++i)
-                {
-                    if (rdists(i) < rinner)
-                    {
-                        cells(i, __colidx_growth) = 0.0;
-                        in_void(i) = 1;
-                    }
-                }
-                
-                // We have now introduced the growth void
-                void_introduced = true;
+                in_void = inGrowthVoid<T>(cells, boundary_idx, in_void_func);
+                void_introduced = (in_void.sum() > 0); 
             }
         }
         
