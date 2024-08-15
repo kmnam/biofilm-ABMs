@@ -317,7 +317,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     // calculation is set to the *minimum* of confine_params["mincells_for_boundary"]
     // and growth_void_params["mincells"]
     const bool find_boundary = (confine || growth_void_mode != GrowthVoidMode::NONE);
-    const int mincells_for_boundary = 0; 
+    int mincells_for_boundary = 0; 
     if (confine && growth_void_mode != GrowthVoidMode::NONE) 
         mincells_for_boundary = min(
             static_cast<int>(confine_params["mincells_for_boundary"]),
@@ -947,7 +947,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     // calculation is set to the *minimum* of confine_params["mincells_for_boundary"]
     // and growth_void_params["mincells"]
     const bool find_boundary = (confine || growth_void_mode != GrowthVoidMode::NONE);
-    const int mincells_for_boundary = 0; 
+    int mincells_for_boundary = 0; 
     if (confine && growth_void_mode != GrowthVoidMode::NONE) 
         mincells_for_boundary = min(
             static_cast<int>(confine_params["mincells_for_boundary"]),
@@ -1615,7 +1615,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     // calculation is set to the *minimum* of confine_params["mincells_for_boundary"]
     // and growth_void_params["mincells"]
     const bool find_boundary = (confine || growth_void_mode != GrowthVoidMode::NONE);
-    const int mincells_for_boundary = 0; 
+    int mincells_for_boundary = 0; 
     if (confine && growth_void_mode != GrowthVoidMode::NONE) 
         mincells_for_boundary = min(
             static_cast<int>(confine_params["mincells_for_boundary"]),
