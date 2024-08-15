@@ -118,8 +118,9 @@ Array<int, Dynamic, 1> inGrowthVoid(const Ref<const Array<T, Dynamic, Dynamic> >
                 {
                     std::cerr << "Failed to find peripheral cell in radial "
                               << "direction from cell " << i << std::endl; 
-                    std::cerr << "Cell center = (" << r(0) << ", " << r(1)
-                              << ")" << std::endl;
+                    std::cerr << "Cell center = (" << cells(i, __colidx_rx)
+                              << ", " << cells(i, __colidx_ry) << ")"
+                              << std::endl;
                     throw std::runtime_error(
                         "Failed to find peripheral cell in radial direction"
                     ); 
