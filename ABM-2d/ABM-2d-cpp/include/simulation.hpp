@@ -378,10 +378,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_init; 
         ss_init << outprefix << "_init.txt";
         std::string filename_init = ss_init.str();
-        // If confinement is present, write additional indicators for
-        // peripheral cells
+        // If desired, write additional indicators for peripheral cells 
         Array<T, Dynamic, Dynamic> cells_(cells);
-        if (confine)
+        if (find_boundary)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
             cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
@@ -437,7 +436,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 ); 
             }
             // Update peripheral cells 
-            if (confine)
+            if (find_boundary)
                 boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
             // Update growth void 
             //
@@ -552,7 +551,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         }
 
         // Update peripheral cells
-        if (confine && iter % iter_update_boundary == 0)
+        if (find_boundary && iter % iter_update_boundary == 0)
             boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
 
         // Introduce or update growth void
@@ -579,10 +578,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str(); 
-            // If confinement is present, write additional indicators for
-            // peripheral cells
+            // If desired, write additional indicators for peripheral cells 
             Array<T, Dynamic, Dynamic> cells_(cells);
-            if (confine)
+            if (find_boundary)
             {
                 cells_.conservativeResize(n, cells_.cols() + 1);
                 cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
@@ -600,10 +598,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_final; 
         ss_final << outprefix << "_final.txt";
         std::string filename_final = ss_final.str(); 
-        // If confinement is present, write additional indicators for
-        // peripheral cells
+        // If desired, write additional indicators for peripheral cells 
         Array<T, Dynamic, Dynamic> cells_(cells);
-        if (confine)
+        if (find_boundary)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
             cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
@@ -1008,10 +1005,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_init; 
         ss_init << outprefix << "_init.txt";
         std::string filename_init = ss_init.str(); 
-        // If confinement is present, write additional indicators for
-        // peripheral cells
+        // If desired, write additional indicators for peripheral cells 
         Array<T, Dynamic, Dynamic> cells_(cells);
-        if (confine)
+        if (find_boundary)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
             cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
@@ -1067,7 +1063,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 ); 
             }
             // Update peripheral cells 
-            if (confine)
+            if (find_boundary)
                 boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
             // Update growth void 
             //
@@ -1181,7 +1177,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         }
 
         // Update peripheral cells
-        if (confine && iter % iter_update_boundary == 0)
+        if (find_boundary && iter % iter_update_boundary == 0)
             boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
 
         // Switch cells between groups
@@ -1234,10 +1230,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str();
-            // If confinement is present, write additional indicators for
-            // peripheral cells
+            // If desired, write additional indicators for peripheral cells 
             Array<T, Dynamic, Dynamic> cells_(cells);
-            if (confine)
+            if (find_boundary)
             {
                 cells_.conservativeResize(n, cells_.cols() + 1);
                 cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
@@ -1255,10 +1250,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_final; 
         ss_final << outprefix << "_final.txt";
         std::string filename_final = ss_final.str(); 
-        // If confinement is present, write additional indicators for
-        // peripheral cells
+        // If desired, write additional indicators for peripheral cells 
         Array<T, Dynamic, Dynamic> cells_(cells);
-        if (confine)
+        if (find_boundary)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
             cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
@@ -1676,10 +1670,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_init; 
         ss_init << outprefix << "_init.txt";
         std::string filename_init = ss_init.str(); 
-        // If confinement is present, write additional indicators for
-        // peripheral cells
+        // If desired, write additional indicators for peripheral cells 
         Array<T, Dynamic, Dynamic> cells_(cells);
-        if (confine)
+        if (find_boundary)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
             cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
@@ -1755,7 +1748,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 ); 
             }
             // Update peripheral cells 
-            if (confine)
+            if (find_boundary)
                 boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
             // Update growth void 
             //
@@ -1869,7 +1862,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         }
 
         // Update peripheral cells
-        if (confine && iter % iter_update_boundary == 0)
+        if (find_boundary && iter % iter_update_boundary == 0)
             boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
 
         // Introduce or update growth void
@@ -1896,10 +1889,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str();
-            // If confinement is present, write additional indicators for
-            // peripheral cells
+            // If desired, write additional indicators for peripheral cells 
             Array<T, Dynamic, Dynamic> cells_(cells);
-            if (confine)
+            if (find_boundary)
             {
                 cells_.conservativeResize(n, cells_.cols() + 1);
                 cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
@@ -1917,10 +1909,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_final; 
         ss_final << outprefix << "_final.txt";
         std::string filename_final = ss_final.str(); 
-        // If confinement is present, write additional indicators for
-        // peripheral cells
+        // If desired, write additional indicators for peripheral cells 
         Array<T, Dynamic, Dynamic> cells_(cells);
-        if (confine)
+        if (find_boundary)
         {
             cells_.conservativeResize(n, cells_.cols() + 1);
             cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
