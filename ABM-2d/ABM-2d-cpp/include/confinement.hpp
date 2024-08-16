@@ -203,7 +203,7 @@ std::vector<int> getBoundary(const Ref<const Array<T, Dynamic, Dynamic> >& cells
     {
         std::vector<int> idx;
         for (int i = 0; i < n; ++i)
-            idx.push_back(i); 
+            idx.push_back(i);
         return idx;
     }
 
