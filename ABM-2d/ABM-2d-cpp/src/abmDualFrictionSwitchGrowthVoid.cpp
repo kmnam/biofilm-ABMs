@@ -48,7 +48,7 @@ int main(int argc, char** argv)
     const int iter_write = json_data["iter_write"].as_int64(); 
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
     const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64();
-    const int iter_update_boundary = 0;
+    const int iter_update_boundary = json_data["iter_update_boundary"].as_int64();
     const T neighbor_threshold = 2 * (2 * R + L0);
     const int max_iter = json_data["max_iter"].as_int64();
     const int n_cells = json_data["n_cells"].as_int64();
