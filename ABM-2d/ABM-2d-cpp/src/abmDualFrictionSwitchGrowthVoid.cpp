@@ -10,7 +10,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/11/2024
+ *     8/15/2024
  */
 
 #include <Eigen/Dense>
@@ -72,7 +72,7 @@ int main(int argc, char** argv)
     growth_void_params["mincells"] = static_cast<T>(json_data["growth_void_mincells"].as_int64());
     if (growth_void_mode == GrowthVoidMode::FIXED_CORE)
         growth_void_params["core_fraction"] = static_cast<T>(json_data["growth_void_core_fraction"].as_double());
-    else if (growth_void_mode == GrowthVoidMode::FIXED_ANNULUS)
+    else if (growth_void_mode == GrowthVoidMode::FRACTIONAL_ANNULUS)
         growth_void_params["peripheral_fraction"] = static_cast<T>(json_data["growth_void_peripheral_fraction"].as_double());
 
     // Vectors of growth rate means and standard deviations (identical for
