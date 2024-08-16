@@ -325,7 +325,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         ); 
     else if (confine)
         mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
-    else 
+    else if (growth_void_mode != GrowthVoidMode::NONE)
         mincells_for_boundary = static_cast<int>(growth_void_params["mincells"]);
 
     // Get initial subset of peripheral cells (only if confinement or a growth
@@ -369,7 +369,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             in_void = inGrowthVoid<T>(cells, boundary_idx, in_void_func);
             void_introduced = (in_void.sum() > 0); 
         }
-    } 
+    }
 
     // Write the initial population to file
     if (write)
@@ -952,7 +952,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         ); 
     else if (confine)
         mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
-    else 
+    else if (growth_void_mode != GrowthVoidMode::NONE) 
         mincells_for_boundary = static_cast<int>(growth_void_params["mincells"]);
 
     // Get initial subset of peripheral cells (only if confinement or a growth
@@ -996,7 +996,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             in_void = inGrowthVoid<T>(cells, boundary_idx, in_void_func);
             void_introduced = (in_void.sum() > 0); 
         }
-    } 
+    }
 
     // Write the initial population to file
     if (write)
@@ -1617,7 +1617,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         ); 
     else if (confine)
         mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
-    else 
+    else if (growth_void_mode != GrowthVoidMode::NONE) 
         mincells_for_boundary = static_cast<int>(growth_void_params["mincells"]);
 
     // Get initial subset of peripheral cells (only if confinement or a growth
