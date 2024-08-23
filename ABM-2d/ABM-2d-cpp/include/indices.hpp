@@ -38,8 +38,8 @@ const int __colidx_group = 15;
 const int __colidx_plasmid = 16;
 
 // Additional columns for pole birth times 
-const int __colidx_pospole_t0 = 16; 
-const int __colidx_negpole_t0 = 17;
+const int __colidx_negpole_t0 = 16; 
+const int __colidx_pospole_t0 = 17;
 const ArithmeticSequence<> __colseq_poles_t0 = Eigen::seq(16, 17);
 
 #endif 

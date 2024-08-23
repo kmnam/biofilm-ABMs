@@ -1161,13 +1161,13 @@ Array<T, Dynamic, Dynamic> divideCellsWithPoles(const Ref<const Array<T, Dynamic
                 new_cells.col(__colidx_ry) + (div + delta2) * new_cells.col(__colidx_ny)
             );
 
-            // The first daughter cell (of length L1) inherits the pole at 
-            // cell body coordinate s = -L / 2 in the mother cell, and gets
-            // a new pole at cell body coordinate s = +L1 / 2
+            // The first daughter cell (of length L1) inherits the *negative*
+            // pole (cell body coordinate s = -L / 2) in the mother cell, and
+            // gets a new *positive* pole at cell body coordinate s = L1 / 2
             //
-            // The second daughter cell of length L2 inherits the pole at 
-            // cell body coordinate s = L / 2 in the mother cell, and gets 
-            // a new pole at cell body coordinate s = -L2 / 2
+            // The second daughter cell of length L2 inherits the *positive*
+            // pole (cell body coordinate s = L / 2) in the mother cell, and
+            // gets a new *negative* pole at cell body coordinate s = -L2 / 2
             Array<T, Dynamic, 2> poles_t0(cells_total(idx_divide, __colseq_poles_t0));
             for (int i = 0; i < n_divide; ++i)
             {
