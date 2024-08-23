@@ -9,6 +9,7 @@
 #ifndef CELL_ARRAY_INDEX_DECLARATIONS_HPP
 #define CELL_ARRAY_INDEX_DECLARATIONS_HPP
 
+#include <vector>
 #include <Eigen/Dense>
 
 using namespace Eigen;
@@ -33,13 +34,8 @@ const int __colidx_growth = 12;
 const int __colidx_eta0 = 13; 
 const int __colidx_eta1 = 14;
 const int __colidx_group = 15;
-
-// Additional column for plasmid copy-number 
-const int __colidx_plasmid = 16;
-
-// Additional columns for pole birth times 
-const int __colidx_negpole_t0 = 16; 
-const int __colidx_pospole_t0 = 17;
-const ArithmeticSequence<> __colseq_poles_t0 = Eigen::seq(16, 17);
+const std::vector<int> __colvec_required {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+}; 
 
 #endif 
