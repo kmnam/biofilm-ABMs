@@ -1173,13 +1173,13 @@ Array<T, Dynamic, Dynamic> divideCellsWithPoles(const Ref<const Array<T, Dynamic
             {
                 // First daughter cell inherits negative pole and gets new
                 // positive pole 
-                cells_total(idx_divide[i], __colidx_negpole_t0) = poles_t0(idx_divide[i], 0);
+                cells_total(idx_divide[i], __colidx_negpole_t0) = poles_t0(i, 0);
                 cells_total(idx_divide[i], __colidx_pospole_t0) = t;
 
                 // Second daughter cell inherits positive pole and gets new
                 // negative pole 
                 new_cells(i, __colidx_negpole_t0) = t; 
-                new_cells(i, __colidx_pospole_t0) = poles_t0(idx_divide[i], 1);
+                new_cells(i, __colidx_pospole_t0) = poles_t0(i, 1);
             }
 
             // Update cell ID and lineages
