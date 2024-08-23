@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/15/2024
+ *     8/23/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -683,7 +683,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  *                         biofilm. Can be NONE (0), FIXED_CORE (1), or
  *                         FRACTIONAL_ANNULUS (2).
  * @param growth_void_params Parameters required to introduce growth void 
- *                           within the biofilm. 
+ *                           within the biofilm.
+ * @param track_poles If true, keep track of pole birth times. 
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -725,7 +726,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const bool confine,
                   std::unordered_map<std::string, T>& confine_params,
                   const GrowthVoidMode growth_void_mode,
-                  std::unordered_map<std::string, T>& growth_void_params)
+                  std::unordered_map<std::string, T>& growth_void_params,
+                  const bool track_poles = false)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -1039,10 +1041,20 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (to_divide.sum() > 0)
             std::cout << "... Dividing " << to_divide.sum() << " cells "
                       << "(iteration " << iter << ")" << std::endl;
-        cells = divideCells<T>(
-            cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
-            daughter_length_dist, daughter_angle_dist
-        );
+        if (track_poles)
+        {
+            cells = divideCellsWithPoles<T>(
+                cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
+                daughter_length_dist, daughter_angle_dist
+            );
+        }
+        else 
+        {
+            cells = divideCells<T>(
+                cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
+                daughter_length_dist, daughter_angle_dist
+            );
+        }
         n = cells.rows();
 
         // Update neighboring cells, peripheral cells, and cells within growth
