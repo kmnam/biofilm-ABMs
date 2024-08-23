@@ -116,7 +116,7 @@ int main(int argc, char** argv)
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
         adhesion_mode, adhesion_params, confine, confine_params, growth_void_mode,
-        growth_void_params, true
+        growth_void_params, true, 16, 17
     ); 
     
     return 0; 
