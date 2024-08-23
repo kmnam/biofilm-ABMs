@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/11/2024
+ *     8/23/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -63,12 +63,15 @@ boost::json::value parseConfigFile(const std::string filename)
  * @param cells Existing population of cells.
  * @param params `std::map<std::string, std::string>` instance containing the
  *               simulation parameters.
- * @param filename Output file. 
+ * @param filename Output file.
+ * @param write_other_cols A map of extra column indices and their corresponding
+ *                         types. 
  */
 template <typename T>
 void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
                 std::map<std::string, std::string>& params, 
-                const std::string filename)
+                const std::string filename,
+                std::unordered_map<int, int> write_other_cols = {})
 {
     // Open output file 
     std::ofstream outfile(filename);
@@ -83,14 +86,27 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
     {
         for (int j = 0; j < cells.cols(); ++j)
         {
-            // If the entry is a group or cell identifier or plasmid copy-number,
-            // write as an integer
-            if (j == __colidx_id || j == __colidx_group || j == __colidx_plasmid)
-                outfile << static_cast<int>(cells(i, j)) << '\t'; 
-            else      // Otherwise, write as a double
+            // If the entry is a group or cell identifier, write as an integer
+            if (j == __colidx_id || j == __colidx_group)
+            {
+                outfile << static_cast<int>(cells(i, j)) << '\t';
+            }
+            // If the entry is another required entry, write as a double 
+            else if (j > __colidx_id && j < __colidx_group)
+            {
                 outfile << cells(i, j) << '\t'; 
+            }
+            // If the entry is an extra column, write as desired type 
+            else if (write_other_cols.count(j))
+            {
+                int type = write_other_cols[j]; 
+                if (type == 0)
+                    outfile << static_cast<int>(cells(i, j)) << '\t';
+                else 
+                    outfile << cells(i, j) << '\t'; 
+            }
         }
-        outfile.seekp(-1, std::ios_base::cur);
+        outfile.seekp(-1, std::ios_base::cur);   // Remove last tab
         outfile << std::endl;
     }
 
@@ -104,11 +120,14 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
  *
  * @param cells Existing population of cells.
  * @param params `boost::json::object` instance containing the JSON data. 
- * @param filename Output file. 
+ * @param filename Output file.
+ * @param write_other_cols A map of extra column indices and their corresponding
+ *                         types. 
  */
 template <typename T>
 void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
-                boost::json::object& params, const std::string filename)
+                boost::json::object& params, const std::string filename,
+                std::unordered_map<int, int> write_other_cols = {})
 {
     // Open output file 
     std::ofstream outfile(filename);
@@ -127,14 +146,27 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
     {
         for (int j = 0; j < cells.cols(); ++j)
         {
-            // If the entry is a group or cell identifier or plasmid copy-number,
-            // write as an integer
-            if (j == __colidx_id || j == __colidx_group || j == __colidx_plasmid)
-                outfile << static_cast<int>(cells(i, j)) << '\t'; 
-            else      // Otherwise, write as a double
+            // If the entry is a group or cell identifier, write as an integer
+            if (j == __colidx_id || j == __colidx_group)
+            {
+                outfile << static_cast<int>(cells(i, j)) << '\t';
+            }
+            // If the entry is another required entry, write as a double 
+            else if (j > __colidx_id && j < __colidx_group)
+            {
                 outfile << cells(i, j) << '\t'; 
+            }
+            // If the entry is an extra column, write as desired type 
+            else if (write_other_cols.count(j))
+            {
+                int type = write_other_cols[j]; 
+                if (type == 0)
+                    outfile << static_cast<int>(cells(i, j)) << '\t';
+                else 
+                    outfile << cells(i, j) << '\t'; 
+            }
         }
-        outfile.seekp(-1, std::ios_base::cur);
+        outfile.seekp(-1, std::ios_base::cur);   // Remove last tab
         outfile << std::endl;
     }
 
