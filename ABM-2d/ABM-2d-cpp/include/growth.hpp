@@ -695,6 +695,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
  *                             cell length ratio distribution. 
  * @param daughter_angle_dist Function instance specifying the daughter 
  *                            cell orientation distribution.
+ * @param colidx_plasmid Column index for plasmid copy-number. 
  * @param partition_logratio_dist Function instance specifying the log-ratio
  *                                of plasmid copy-numbers to be partitioned 
  *                                among each pair of daughter cells.
@@ -709,8 +710,15 @@ Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynam
                                                   boost::random::mt19937& rng,
                                                   std::function<T(boost::random::mt19937&)>& daughter_length_dist,
                                                   std::function<T(boost::random::mt19937&)>& daughter_angle_dist,
+                                                  const int colidx_plasmid, 
                                                   std::function<T(boost::random::mt19937&)>& partition_logratio_dist)
 {
+    // Check that the plasmid copy-number column index is valid 
+    #ifdef DEBUG_CHECK_COLUMN_INDICES
+        if (colidx_plasmid >= cells.cols() || colidx_plasmid <= __colidx_group)
+            throw std::runtime_error("Invalid column index for plasmid copy-number");
+    #endif
+
     // If there are cells to be divided ...
     const int n_divide = to_divide.sum();
 
@@ -898,15 +906,15 @@ Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynam
 
                 // The total number of plasmids in the dividing cell should
                 // be double the given value to account for DNA replication
-                int num_total = 2 * cells_total(j, __colidx_plasmid);
+                int num_total = 2 * cells_total(j, colidx_plasmid);
 
                 // Get the ratio of plasmid copy-numbers in the daughter
                 // cells, then partition accordingly 
                 T ratio = pow(10.0, partition_logratio_dist(rng));
                 T num_i = round((ratio * num_total) / (1.0 + ratio));
                 T num_j = round(num_total - num_i);
-                cells_total(j, __colidx_plasmid) = num_j; 
-                new_cells(i, __colidx_plasmid) = num_i;
+                cells_total(j, colidx_plasmid) = num_j; 
+                new_cells(i, colidx_plasmid) = num_i;
                 std::cout << "... Partitioning " << num_total << " plasmids into "
                           << num_i << " and " << num_j << " (ratio = " << ratio
                           << ")" << std::endl;  
@@ -1001,6 +1009,8 @@ Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynam
  *                             cell length ratio distribution. 
  * @param daughter_angle_dist Function instance specifying the daughter 
  *                            cell orientation distribution.
+ * @param colidx_negpole_t0 Column index for negative pole birth time. 
+ * @param colidx_pospole_t0 Column index for positive pole birth time.
  * @returns Updated population of cells. 
  */
 template <typename T>
@@ -1011,8 +1021,17 @@ Array<T, Dynamic, Dynamic> divideCellsWithPoles(const Ref<const Array<T, Dynamic
                                                 std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
                                                 boost::random::mt19937& rng,
                                                 std::function<T(boost::random::mt19937&)>& daughter_length_dist,
-                                                std::function<T(boost::random::mt19937&)>& daughter_angle_dist)
+                                                std::function<T(boost::random::mt19937&)>& daughter_angle_dist,
+                                                const int colidx_negpole_t0,
+                                                const int colidx_pospole_t0)
 {
+    // Check that the pole birth time column indices are valid
+    #ifdef DEBUG_CHECK_COLUMN_INDICES
+        if (colidx_negpole_t0 >= cells.cols() || colidx_negpole_t0 <= __colidx_group ||
+            colidx_pospole_t0 >= cells.cols() || colidx_pospole_t0 <= __colidx_group)
+            throw std::runtime_error("Invalid column indices for pole birth times");
+    #endif
+
     // If there are cells to be divided ...
     const int n_divide = to_divide.sum();
 
@@ -1168,18 +1187,19 @@ Array<T, Dynamic, Dynamic> divideCellsWithPoles(const Ref<const Array<T, Dynamic
             // The second daughter cell of length L2 inherits the *positive*
             // pole (cell body coordinate s = L / 2) in the mother cell, and
             // gets a new *negative* pole at cell body coordinate s = -L2 / 2
-            Array<T, Dynamic, 2> poles_t0(cells_total(idx_divide, __colseq_poles_t0));
+            std::vector<int> colseq_poles_t0 { colidx_negpole_t0, colidx_pospole_t0 }; 
+            Array<T, Dynamic, 2> poles_t0(cells_total(idx_divide, colseq_poles_t0));
             for (int i = 0; i < n_divide; ++i)
             {
                 // First daughter cell inherits negative pole and gets new
                 // positive pole 
-                cells_total(idx_divide[i], __colidx_negpole_t0) = poles_t0(i, 0);
-                cells_total(idx_divide[i], __colidx_pospole_t0) = t;
+                cells_total(idx_divide[i], colidx_negpole_t0) = poles_t0(i, 0);
+                cells_total(idx_divide[i], colidx_pospole_t0) = t;
 
                 // Second daughter cell inherits positive pole and gets new
                 // negative pole 
-                new_cells(i, __colidx_negpole_t0) = t; 
-                new_cells(i, __colidx_pospole_t0) = poles_t0(i, 1);
+                new_cells(i, colidx_negpole_t0) = t; 
+                new_cells(i, colidx_pospole_t0) = poles_t0(i, 1);
             }
 
             // Update cell ID and lineages
