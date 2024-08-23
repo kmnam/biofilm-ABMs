@@ -684,7 +684,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  *                         FRACTIONAL_ANNULUS (2).
  * @param growth_void_params Parameters required to introduce growth void 
  *                           within the biofilm.
- * @param track_poles If true, keep track of pole birth times. 
+ * @param track_poles If true, keep track of pole birth times.
+ * @param colidx_negpole_t0 Column index for negative pole birth time. 
+ * @param colidx_pospole_t0 Column index for positive pole birth time. 
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -727,7 +729,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   std::unordered_map<std::string, T>& confine_params,
                   const GrowthVoidMode growth_void_mode,
                   std::unordered_map<std::string, T>& growth_void_params,
-                  const bool track_poles = false)
+                  const bool track_poles = false,
+                  const int colidx_negpole_t0 = __colidx_group + 1,
+                  const int colidx_pospole_t0 = __colidx_group + 2)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -1001,6 +1005,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     }
 
     // Write the initial population to file
+    std::unordered_map<int, int> write_other_cols;
+    if (track_poles)
+        write_other_cols[colidx_negpole_t0] = 1; 
+        write_other_cols[colidx_pospole_t0] = 1; 
     if (write)
     {
         params["t_curr"] = floatToString<T>(t);
@@ -1016,7 +1024,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
-        writeCells<T>(cells_, params, filename_init);
+        writeCells<T>(cells_, params, filename_init, write_other_cols);
     }
     
     // Define termination criterion, assuming that at least one of n_cells
@@ -1045,7 +1053,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         {
             cells = divideCellsWithPoles<T>(
                 cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
-                daughter_length_dist, daughter_angle_dist
+                daughter_length_dist, daughter_angle_dist, colidx_negpole_t0,
+                colidx_pospole_t0
             );
         }
         else 
@@ -1251,7 +1260,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 for (const int i : boundary_idx)
                     cells_(i, cells_.cols() - 1) = 1;
             }
-            writeCells<T>(cells_, params, filename);
+            writeCells<T>(cells_, params, filename, write_other_cols);
         }
     }
 
@@ -1271,7 +1280,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
-        writeCells<T>(cells_, params, filename_final);
+        writeCells<T>(cells_, params, filename_final, write_other_cols);
     }
 
     // Write complete lineage to file 
@@ -1341,6 +1350,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  *                        group.
  * @param attribute_stds Array of standard deviations of attributes for cells
  *                       in each group.
+ * @param colidx_plasmid Column index for plasmid copy-number. 
  * @param partition_logratio_std Standard deviation for the normal distribution
  *                               that determines the log-ratio of plasmid 
  *                               copy-numbers in the daughter cells after
@@ -1394,6 +1404,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                              const Ref<const Array<T, 2, 1> >& growth_stds,
                              const Ref<const Array<T, 2, Dynamic> >& attribute_means,
                              const Ref<const Array<T, 2, Dynamic> >& attribute_stds,
+                             const int colidx_plasmid, 
                              const T partition_logratio_std,
                              const T daughter_length_std,
                              const T daughter_angle_bound,
@@ -1676,6 +1687,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     } 
 
     // Write the initial population to file
+    std::unordered_map<int, int> write_other_cols { {colidx_plasmid, 0} }; 
     if (write)
     {
         params["t_curr"] = floatToString<T>(t);
@@ -1691,7 +1703,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
-        writeCells<T>(cells_, params, filename_init);
+        writeCells<T>(cells_, params, filename_init, write_other_cols);
     }
     
     // Define termination criterion, assuming that at least one of n_cells
@@ -1708,6 +1720,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             return true;
     };
 
+    // Check that the plasmid copy-number column index is valid 
+    #ifdef DEBUG_CHECK_COLUMN_INDICES
+        if (colidx_plasmid >= cells.cols() || colidx_plasmid <= __colidx_group)
+            throw std::runtime_error("Invalid column index for plasmid copy-number");
+    #endif
+
     // Run the simulation ...
     while (!terminate(n, iter))
     {
@@ -1718,14 +1736,15 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                       << "(iteration " << iter << ")" << std::endl;
         cells = divideCellsWithPlasmid<T>(
             cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
-            daughter_length_dist, daughter_angle_dist, partition_logratio_dist
+            daughter_length_dist, daughter_angle_dist, colidx_plasmid, 
+            partition_logratio_dist
         );
         n = cells.rows(); 
         
         // Switch groups for all cells that have lost the plasmid 
         for (int i = 0; i < n; ++i)
         {
-            if (cells(i, __colidx_plasmid) == 0)
+            if (cells(i, colidx_plasmid) == 0)
             {
                 // Sample the cell's new growth rate and attribute values 
                 int group = (group_default == 1 ? 2 : 1);
@@ -1910,7 +1929,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 for (const int i : boundary_idx)
                     cells_(i, cells_.cols() - 1) = 1;
             }
-            writeCells<T>(cells_, params, filename);
+            writeCells<T>(cells_, params, filename, write_other_cols);
         }
     }
 
@@ -1930,7 +1949,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
-        writeCells<T>(cells_, params, filename_final);
+        writeCells<T>(cells_, params, filename_final, write_other_cols);
     }
 
     // Write complete lineage to file 
