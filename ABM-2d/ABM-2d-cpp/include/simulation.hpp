@@ -1007,8 +1007,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     // Write the initial population to file
     std::unordered_map<int, int> write_other_cols;
     if (track_poles)
+    {
         write_other_cols[colidx_negpole_t0] = 1; 
-        write_other_cols[colidx_pospole_t0] = 1; 
+        write_other_cols[colidx_pospole_t0] = 1;
+    }
     if (write)
     {
         params["t_curr"] = floatToString<T>(t);
