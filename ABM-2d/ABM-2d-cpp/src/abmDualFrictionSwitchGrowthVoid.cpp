@@ -10,7 +10,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/15/2024
+ *     9/13/2024
  */
 
 #include <Eigen/Dense>
@@ -45,7 +45,7 @@ int main(int argc, char** argv)
     const T sigma0 = static_cast<T>(json_data["sigma0"].as_double()); 
     const T eta_ambient = static_cast<T>(json_data["eta_ambient"].as_double());
     const T max_stepsize = static_cast<T>(json_data["max_stepsize"].as_double()); 
-    const int iter_write = json_data["iter_write"].as_int64(); 
+    const T dt_write = static_cast<T>(json_data["dt_write"].as_double()); 
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
     const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64();
     const int iter_update_boundary = json_data["iter_update_boundary"].as_int64();
@@ -116,7 +116,7 @@ int main(int argc, char** argv)
     // Run the simulation
     runSimulation<T>(
         cells, parents, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
-        max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
+        max_stepsize, true, outprefix, dt_write, iter_update_neighbors,
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
