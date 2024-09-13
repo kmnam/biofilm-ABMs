@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/23/2024
+ *     9/13/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -45,6 +45,8 @@ using std::abs;
 using boost::multiprecision::abs;
 using std::cos; 
 using boost::multiprecision::cos;
+using std::log10; 
+using boost::multiprecision::log10; 
 
 /**
  * An enum that enumerates the different growth void types.
@@ -97,7 +99,8 @@ std::string floatToString(T x, const int precision = 10)
  * @param iter_update_boundary Update peripheral cells every this many 
  *                             iterations (only if `confine` is true).
  * @param iter_update_stepsize Update stepsize every this many iterations. 
- * @param max_error_allowed Maximum Runge-Kutta error allowed per iteration. 
+ * @param max_error_allowed Upper bound on maximum Runge-Kutta error allowed
+ *                          per iteration.
  * @param min_error Minimum Runge-Kutta error. 
  * @param max_tries_update_stepsize Maximum number of tries to update stepsize
  *                                  due to Runge-Kutta error. 
@@ -460,22 +463,30 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // a given maximum number of attempts)
         if (iter % iter_update_stepsize == 0)
         {
-            // Enforce a composite error of the form e * (1 + y)
-            Array<T, Dynamic, 4> scale = max_error_allowed * (
+            // Enforce a composite error of the form tol * (1 + y), for the
+            // maximum error
+            //
+            // Here, y (which determines the scale of the error) is taken to 
+            // be the old cell positions and orientations 
+            Array<T, Dynamic, 4> z = (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
-            );
-            T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
+            ); 
+            Array<T, Dynamic, 4> max_scale = max_error_allowed * z;
+            T max_error = max((errors / max_scale).maxCoeff(), min_error); 
+            bool error_exceeded = (max_error > 1.0);  
 
             // Ensure that the updated stepsize is between 0.2 times and 10 times
-            // the previous stepsize 
-            T factor = 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
+            // the previous stepsize
+            T factor = 0.9 * pow(1.0 / max_error, 1.0 / (error_order + 1)); 
             if (factor >= 10)
                 factor = 10;
             else if (factor < 0.2)
                 factor = 0.2;
             int j = 0;
-            while (error > 1 && j < max_tries_update_stepsize && factor > 0.2 && factor < 10)
+            while (error_exceeded && j < max_tries_update_stepsize)
             {
+                // Try updating the stepsize by the given factor and re-run 
+                // the integration 
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
@@ -484,12 +495,25 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 ); 
                 cells_new = result.first;
                 errors = result.second;
-                error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error);
-                factor *= 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
+
+                // Compute the new error
+                max_error = max((errors / max_scale).maxCoeff(), min_error); 
+                error_exceeded = (max_error > 1.0);  
+
+                // Multiply by the new factor (note that this factor is being 
+                // multiplied to the *original* dt to determine the new stepsize,
+                // so the factors across all loop iterations must be accumulated)
+                factor *= 0.9 * pow(1.0 / max_error, 1.0 / (error_order + 1)); 
                 if (factor >= 10)
+                {
                     factor = 10;
+                    break;
+                }
                 else if (factor < 0.2)
+                {
                     factor = 0.2;
+                    break;
+                }
                 j++;  
             }
             
@@ -509,13 +533,14 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         }
         // If desired, print a warning message if the error is big
         #ifdef DEBUG_WARN_LARGE_ERROR
-            Array<T, Dynamic, 4> scale = max_error_allowed * (
+            Array<T, Dynamic, 4> z = (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
             );
-            T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
-            if (error > 5)
+            Array<T, Dynamic, 4> max_scale = max_error_allowed * z;
+            T max_error = max((errors / max_scale).maxCoeff(), min_error);
+            if (max_error > 5)
             {
-                std::cout << "[WARN] Average error is > 5 times the desired error "
+                std::cout << "[WARN] Maximum error is > 5 times the desired error "
                           << "(absolute tol = relative tol = " << max_error_allowed
                           << ", iteration " << iter << ", time = " << t
                           << ", dt = " << dt << ")" << std::endl;
@@ -650,7 +675,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param iter_update_boundary Update peripheral cells every this many 
  *                             iterations (only if `confine` is true).
  * @param iter_update_stepsize Update stepsize every this many iterations. 
- * @param max_error_allowed Maximum Runge-Kutta error allowed per iteration. 
+ * @param max_error_allowed Upper bound on maximum Runge-Kutta error allowed
+ *                          per iteration.
  * @param min_error Minimum Runge-Kutta error. 
  * @param max_tries_update_stepsize Maximum number of tries to update stepsize
  *                                  due to Runge-Kutta error. 
@@ -1110,22 +1136,30 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // a given maximum number of attempts)
         if (iter % iter_update_stepsize == 0)
         {
-            // Enforce a composite error of the form e * (1 + y)
-            Array<T, Dynamic, 4> scale = max_error_allowed * (
+            // Enforce a composite error of the form tol * (1 + y), for the
+            // maximum error
+            //
+            // Here, y (which determines the scale of the error) is taken to 
+            // be the old cell positions and orientations 
+            Array<T, Dynamic, 4> z = (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
-            );
-            T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
+            ); 
+            Array<T, Dynamic, 4> max_scale = max_error_allowed * z;
+            T max_error = max((errors / max_scale).maxCoeff(), min_error); 
+            bool error_exceeded = (max_error > 1.0); 
 
             // Ensure that the updated stepsize is between 0.2 times and 10 times
-            // the previous stepsize 
-            T factor = 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
+            // the previous stepsize
+            T factor = 0.9 * pow(1.0 / max_error, 1.0 / (error_order + 1)); 
             if (factor >= 10)
                 factor = 10;
             else if (factor < 0.2)
                 factor = 0.2;
             int j = 0;
-            while (error > 1 && j < max_tries_update_stepsize && factor > 0.2 && factor < 10)
+            while (error_exceeded && j < max_tries_update_stepsize)
             {
+                // Try updating the stepsize by the given factor and re-run 
+                // the integration 
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
@@ -1134,12 +1168,25 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 ); 
                 cells_new = result.first;
                 errors = result.second;
-                error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error);
-                factor *= 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
+
+                // Compute the new error
+                max_error = max((errors / max_scale).maxCoeff(), min_error); 
+                error_exceeded = (max_error > 1.0);  
+
+                // Multiply by the new factor (note that this factor is being 
+                // multiplied to the *original* dt to determine the new stepsize,
+                // so the factors across all loop iterations must be accumulated)
+                factor *= 0.9 * pow(1.0 / max_error, 1.0 / (error_order + 1)); 
                 if (factor >= 10)
+                {
                     factor = 10;
+                    break;
+                }
                 else if (factor < 0.2)
+                {
                     factor = 0.2;
+                    break;
+                }
                 j++;  
             }
             
@@ -1158,13 +1205,14 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             errors = result.second;
         }
         #ifdef DEBUG_WARN_LARGE_ERROR
-            Array<T, Dynamic, 4> scale = max_error_allowed * (
+            Array<T, Dynamic, 4> z = (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
             );
-            T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
-            if (error > 5)
+            Array<T, Dynamic, 4> max_scale = max_error_allowed * z;
+            T max_error = max((errors / max_scale).maxCoeff(), min_error);
+            if (max_error > 5)
             {
-                std::cout << "[WARN] Average error is > 5 times the desired error "
+                std::cout << "[WARN] Maximum error is > 5 times the desired error "
                           << "(absolute tol = relative tol = " << max_error_allowed
                           << ", iteration " << iter << ", time = " << t
                           << ", dt = " << dt << ")" << std::endl;
@@ -1805,22 +1853,30 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // a given maximum number of attempts)
         if (iter % iter_update_stepsize == 0)
         {
-            // Enforce a composite error of the form e * (1 + y)
-            Array<T, Dynamic, 4> scale = max_error_allowed * (
+            // Enforce a composite error of the form tol * (1 + y), for the
+            // maximum error
+            //
+            // Here, y (which determines the scale of the error) is taken to 
+            // be the old cell positions and orientations 
+            Array<T, Dynamic, 4> z = (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
-            );
-            T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
+            ); 
+            Array<T, Dynamic, 4> max_scale = max_error_allowed * z;
+            T max_error = max((errors / max_scale).maxCoeff(), min_error); 
+            bool error_exceeded = (max_error > 1.0); 
 
             // Ensure that the updated stepsize is between 0.2 times and 10 times
-            // the previous stepsize 
-            T factor = 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
+            // the previous stepsize
+            T factor = 0.9 * pow(1.0 / max_error, 1.0 / (error_order + 1)); 
             if (factor >= 10)
                 factor = 10;
             else if (factor < 0.2)
                 factor = 0.2;
             int j = 0;
-            while (error > 1 && j < max_tries_update_stepsize && factor > 0.2 && factor < 10)
+            while (error_exceeded && j < max_tries_update_stepsize)
             {
+                // Try updating the stepsize by the given factor and re-run 
+                // the integration 
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
@@ -1829,12 +1885,25 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 ); 
                 cells_new = result.first;
                 errors = result.second;
-                error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error);
-                factor *= 0.9 * pow(1.0 / error, 1.0 / (error_order + 1));
+
+                // Compute the new error
+                max_error = max((errors / max_scale).maxCoeff(), min_error); 
+                error_exceeded = (max_error > 1.0);  
+
+                // Multiply by the new factor (note that this factor is being 
+                // multiplied to the *original* dt to determine the new stepsize,
+                // so the factors across all loop iterations must be accumulated)
+                factor *= 0.9 * pow(1.0 / max_error, 1.0 / (error_order + 1)); 
                 if (factor >= 10)
+                {
                     factor = 10;
+                    break;
+                }
                 else if (factor < 0.2)
+                {
                     factor = 0.2;
+                    break;
+                }
                 j++;  
             }
             
@@ -1853,11 +1922,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             errors = result.second;
         }
         #ifdef DEBUG_WARN_LARGE_ERROR
-            Array<T, Dynamic, 4> scale = max_error_allowed * (
+            Array<T, Dynamic, 4> z = (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
             );
-            T error = max(sqrt((errors / scale).pow(2).sum() / (4 * n)), min_error); 
-            if (error > 5)
+            Array<T, Dynamic, 4> max_scale = max_error_allowed * z;
+            T max_error = max((errors / max_scale).maxCoeff(), min_error);
+            if (max_error > 5)
             {
                 std::cout << "[WARN] Average error is > 5 times the desired error "
                           << "(absolute tol = relative tol = " << max_error_allowed
