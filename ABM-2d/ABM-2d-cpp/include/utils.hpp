@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/23/2024
+ *     9/13/2024
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -71,7 +71,7 @@ template <typename T>
 void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
                 std::map<std::string, std::string>& params, 
                 const std::string filename,
-                std::unordered_map<int, int>& write_other_cols = {})
+                std::unordered_map<int, int>& write_other_cols)
 {
     // Open output file 
     std::ofstream outfile(filename);
@@ -127,7 +127,7 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
 template <typename T>
 void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
                 boost::json::object& params, const std::string filename,
-                std::unordered_map<int, int>& write_other_cols = {})
+                std::unordered_map<int, int>& write_other_cols)
 {
     // Open output file 
     std::ofstream outfile(filename);
