@@ -376,6 +376,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     }
 
     // Write the initial population to file
+    std::unordered_map<int, int> write_other_cols; 
     if (write)
     {
         params["t_curr"] = floatToString<T>(t);
@@ -391,7 +392,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
-        writeCells<T>(cells_, params, filename_init);
+        writeCells<T>(cells_, params, filename_init, write_other_cols);
     }
     
     // Define termination criterion, assuming that at least one of n_cells
@@ -616,7 +617,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 for (const int i : boundary_idx)
                     cells_(i, cells_.cols() - 1) = 1;
             }
-            writeCells<T>(cells_, params, filename);
+            writeCells<T>(cells_, params, filename, write_other_cols);
         }
     }
 
@@ -636,7 +637,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             for (const int i : boundary_idx)
                 cells_(i, cells_.cols() - 1) = 1;
         }
-        writeCells<T>(cells_, params, filename_final);
+        writeCells<T>(cells_, params, filename_final, write_other_cols);
     }
 
     // Write complete lineage to file 
