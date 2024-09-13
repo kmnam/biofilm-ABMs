@@ -93,7 +93,8 @@ std::string floatToString(T x, const int precision = 10)
  * @param max_stepsize Maximum stepsize per iteration. 
  * @param write If true, write simulation output to file(s).
  * @param outprefix Output filename prefix. 
- * @param iter_write Write cells to file every this many iterations. 
+ * @param dt_write Write cells to file during each iteration in which the time
+ *                 has passed a multiple of this value. 
  * @param iter_update_neighbors Update neighboring cells every this many 
  *                              iterations. 
  * @param iter_update_boundary Update peripheral cells every this many 
@@ -143,7 +144,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T max_stepsize,
                   const bool write,
                   const std::string outprefix,
-                  const int iter_write,
+                  const T dt_write,
                   const int iter_update_neighbors,
                   const int iter_update_boundary,
                   const int iter_update_stepsize,
@@ -258,7 +259,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["Ecell"] = floatToString<T>(Ecell, precision);
     params["sigma0"] = floatToString<T>(sigma0, precision);
     params["max_stepsize"] = floatToString<T>(max_stepsize, precision);
-    params["iter_write"] = std::to_string(iter_write);
+    params["dt_write"] = floatToString<T>(dt_write, precision); 
     params["iter_update_neighbors"] = std::to_string(iter_update_neighbors);
     params["iter_update_boundary"] = std::to_string(iter_update_boundary);
     params["iter_update_stepsize"] = std::to_string(iter_update_stepsize);
@@ -592,8 +593,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         }
         
-        // Write the current population to file
-        if (write && (iter % iter_write == 0))
+        // Write the current population to file if the simulation time has 
+        // just passed a multiple of dt_write 
+        int t_old_factor = static_cast<int>(std::floor((t - dt) / dt_write)); 
+        int t_new_factor = static_cast<int>(std::floor(t / dt_write)); 
+        if (write && t_new_factor > t_old_factor)
         {
             std::cout << "Iteration " << iter << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
@@ -668,8 +672,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param sigma0 Cell-surface adhesion energy density.
  * @param max_stepsize Maximum stepsize per iteration. 
  * @param write If true, write simulation output to file(s). 
- * @param outprefix Output filename prefix. 
- * @param iter_write Write cells to file every this many iterations. 
+ * @param outprefix Output filename prefix.
+ * @param dt_write Write cells to file during each iteration in which the time
+ *                 has passed a multiple of this value. 
  * @param iter_update_neighbors Update neighboring cells every this many 
  *                              iterations.
  * @param iter_update_boundary Update peripheral cells every this many 
@@ -731,7 +736,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T max_stepsize,
                   const bool write,
                   const std::string outprefix,
-                  const int iter_write,
+                  const T dt_write,
                   const int iter_update_neighbors,
                   const int iter_update_boundary,
                   const int iter_update_stepsize,
@@ -881,7 +886,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["Ecell"] = floatToString<T>(Ecell, precision);
     params["sigma0"] = floatToString<T>(sigma0, precision);
     params["max_stepsize"] = floatToString<T>(max_stepsize, precision);
-    params["iter_write"] = std::to_string(iter_write);
+    params["dt_write"] = floatToString<T>(dt_write, precision); 
     params["iter_update_neighbors"] = std::to_string(iter_update_neighbors);
     params["iter_update_boundary"] = std::to_string(iter_update_boundary);
     params["iter_update_stepsize"] = std::to_string(iter_update_stepsize);
@@ -1290,8 +1295,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         }
         
-        // Write the current population to file
-        if (write && (iter % iter_write == 0))
+        // Write the current population to file if the simulation time has 
+        // just passed a multiple of dt_write 
+        int t_old_factor = static_cast<int>(std::floor((t - dt) / dt_write)); 
+        int t_new_factor = static_cast<int>(std::floor(t / dt_write)); 
+        if (write && t_new_factor > t_old_factor)
         {
             std::cout << "Iteration " << iter << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
@@ -1376,7 +1384,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param max_stepsize Maximum stepsize per iteration. 
  * @param write If true, write simulation output to file(s). 
  * @param outprefix Output filename prefix. 
- * @param iter_write Write cells to file every this many iterations. 
+ * @param dt_write Write cells to file during each iteration in which the time
+ *                 has passed a multiple of this value. 
  * @param iter_update_neighbors Update neighboring cells every this many 
  *                              iterations.
  * @param iter_update_boundary Update peripheral cells every this many 
@@ -1439,7 +1448,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                              const T max_stepsize,
                              const bool write,
                              const std::string outprefix,
-                             const int iter_write,
+                             const T dt_write,
                              const int iter_update_neighbors,
                              const int iter_update_boundary,
                              const int iter_update_stepsize,
@@ -1595,7 +1604,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["Ecell"] = floatToString<T>(Ecell, precision);
     params["sigma0"] = floatToString<T>(sigma0, precision);
     params["max_stepsize"] = floatToString<T>(max_stepsize, precision);
-    params["iter_write"] = std::to_string(iter_write);
+    params["dt_write"] = floatToString<T>(dt_write, precision); 
     params["iter_update_neighbors"] = std::to_string(iter_update_neighbors);
     params["iter_update_boundary"] = std::to_string(iter_update_boundary);
     params["iter_update_stepsize"] = std::to_string(iter_update_stepsize);
@@ -1981,8 +1990,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         }
         
-        // Write the current population to file
-        if (write && (iter % iter_write == 0))
+        // Write the current population to file if the simulation time has 
+        // just passed a multiple of dt_write 
+        int t_old_factor = static_cast<int>(std::floor((t - dt) / dt_write)); 
+        int t_new_factor = static_cast<int>(std::floor(t / dt_write)); 
+        if (write && t_new_factor > t_old_factor)
         {
             std::cout << "Iteration " << iter << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
