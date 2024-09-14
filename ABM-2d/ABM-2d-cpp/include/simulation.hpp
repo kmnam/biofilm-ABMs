@@ -274,6 +274,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["growth_std"] = floatToString<T>(growth_std, precision);
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["max_noise"] = floatToString<T>(max_noise, precision); 
     params["adhesion_mode"] = std::to_string(static_cast<int>(adhesion_mode)); 
     if (adhesion_mode != AdhesionMode::NONE)
     {
@@ -941,6 +942,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["max_noise"] = floatToString<T>(max_noise, precision); 
     params["adhesion_mode"] = std::to_string(static_cast<int>(adhesion_mode)); 
     if (adhesion_mode != AdhesionMode::NONE)
     {
@@ -1657,6 +1659,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["partition_logratio_std"] = floatToString<T>(partition_logratio_std, precision); 
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["max_noise"] = floatToString<T>(max_noise, precision); 
     params["adhesion_mode"] = std::to_string(static_cast<int>(adhesion_mode)); 
     if (adhesion_mode != AdhesionMode::NONE)
     {
