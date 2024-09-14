@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/13/2024
+ *     9/14/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -113,6 +113,8 @@ std::string floatToString(T x, const int precision = 10)
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param max_noise Maximum noise to be added to each generalized force used 
+ *                  to compute the velocities.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
@@ -157,6 +159,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T growth_std,
                   const T daughter_length_std,
                   const T daughter_angle_bound,
+                  const T max_noise,
                   const AdhesionMode adhesion_mode,
                   std::unordered_map<std::string, T>& adhesion_params,
                   const bool confine,
@@ -455,8 +458,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, adhesion_mode, 
-            adhesion_params, confine, boundary_idx, confine_params
+            cell_cell_prefactors, surface_contact_density, max_noise, rng, 
+            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
+            confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -492,8 +496,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
-                    cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                    adhesion_params, confine, boundary_idx, confine_params
+                    cell_cell_prefactors, surface_contact_density, max_noise,
+                    rng, uniform_dist, adhesion_mode, adhesion_params, confine,
+                    boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -527,8 +532,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-                cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                adhesion_params, boundary_idx, confine, confine_params
+                cell_cell_prefactors, surface_contact_density, max_noise, rng,
+                uniform_dist, adhesion_mode, adhesion_params, confine, 
+                boundary_idx, confine_params
             ); 
             cells_new = result.first;
             errors = result.second;
@@ -703,6 +709,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param max_noise Maximum noise to be added to each generalized force used 
+ *                  to compute the velocities.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
@@ -754,7 +762,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const Ref<const Array<T, Dynamic, Dynamic> >& attribute_stds,
                   const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
                   const T daughter_length_std,
-                  const T daughter_angle_bound, 
+                  const T daughter_angle_bound,
+                  const T max_noise,
                   const AdhesionMode adhesion_mode, 
                   std::unordered_map<std::string, T>& adhesion_params,
                   const bool confine,
@@ -1132,8 +1141,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Update cell positions and orientations
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, adhesion_mode,
-            adhesion_params, confine, boundary_idx, confine_params
+            cell_cell_prefactors, surface_contact_density, max_noise, rng,
+            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
+            confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -1169,8 +1179,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
-                    cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                    adhesion_params, confine, boundary_idx, confine_params
+                    cell_cell_prefactors, surface_contact_density, max_noise,
+                    rng, uniform_dist, adhesion_mode, adhesion_params, confine,
+                    boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -1204,8 +1215,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-                cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                adhesion_params, confine, boundary_idx, confine_params
+                cell_cell_prefactors, surface_contact_density, max_noise, rng,
+                uniform_dist, adhesion_mode, adhesion_params, confine,
+                boundary_idx, confine_params
             ); 
             cells_new = result.first;
             errors = result.second;
@@ -1418,6 +1430,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param max_noise Maximum noise to be added to each generalized force used 
+ *                  to compute the velocities.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
@@ -1468,6 +1482,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                              const T partition_logratio_std,
                              const T daughter_length_std,
                              const T daughter_angle_bound,
+                             const T max_noise,
                              const AdhesionMode adhesion_mode, 
                              std::unordered_map<std::string, T>& adhesion_params,
                              const bool confine,
@@ -1853,8 +1868,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Update cell positions and orientations
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, adhesion_mode,
-            adhesion_params, confine, boundary_idx, confine_params
+            cell_cell_prefactors, surface_contact_density, max_noise, rng, 
+            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
+            confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -1890,8 +1906,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
-                    cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                    adhesion_params, confine, boundary_idx, confine_params
+                    cell_cell_prefactors, surface_contact_density, max_noise,
+                    rng, uniform_dist, adhesion_mode, adhesion_params, confine,
+                    boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -1925,8 +1942,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-                cell_cell_prefactors, surface_contact_density, adhesion_mode,
-                adhesion_params, confine, boundary_idx, confine_params
+                cell_cell_prefactors, surface_contact_density, max_noise, rng,
+                uniform_dist, adhesion_mode, adhesion_params, confine,
+                boundary_idx, confine_params
             ); 
             cells_new = result.first;
             errors = result.second;

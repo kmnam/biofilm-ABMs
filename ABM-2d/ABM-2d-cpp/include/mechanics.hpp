@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/11/2024
+ *     9/13/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -520,6 +520,8 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
+ * @param noise Noise to be added to each generalized force used to compute
+ *              the velocities. 
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
@@ -538,6 +540,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const T R, const T Rcell,
                                    const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                    const T surface_contact_density,
+                                   const Ref<const Array<T, Dynamic, 4> >& noise,
                                    const AdhesionMode adhesion_mode,
                                    std::unordered_map<std::string, T>& adhesion_params,
                                    const bool confine,
@@ -620,8 +623,8 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
         #endif
     }
 
-    // Combine the three types of forces 
-    Array<T, Dynamic, 4> dEdq = dEdq_repulsion + dEdq_adhesion + dEdq_confine; 
+    // Combine the three types of forces (with the noise) 
+    Array<T, Dynamic, 4> dEdq = dEdq_repulsion + dEdq_adhesion + dEdq_confine + noise;
 
     // Set mult = 2 * lambda
     Array<T, Dynamic, 1> mult = (
@@ -682,6 +685,10 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
+ * @param max_noise Maximum noise to be added to each generalized force used 
+ *                  to compute the velocities.
+ * @param rng Random number generator.
+ * @param uniform_dist Pre-defined instance of standard uniform distribution. 
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
@@ -704,7 +711,9 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                            const Ref<const Array<int, Dynamic, 1> >& to_adhere,
                            const T dt, const T R, const T Rcell,
                            const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                           const T surface_contact_density,
+                           const T surface_contact_density, const T max_noise, 
+                           boost::random::mt19937& rng,
+                           boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode, 
                            std::unordered_map<std::string, T>& adhesion_params,
                            const bool confine, std::vector<int>& boundary_idx, 
@@ -730,15 +739,30 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
         }
     #endif
 
-    // Compute velocities at given partial timesteps 
+    // Compute velocities at given partial timesteps
+    //
+    // Sample noise components prior to velocity calculations, so that they 
+    // are the same in each calculation 
     int n = cells.rows(); 
+    Array<T, Dynamic, 4> noise = Array<T, Dynamic, 4>::Zero(n, 4);  
+    if (max_noise > 0)
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            for (int j = 0; j < 4; ++j)
+            {
+                T r = uniform_dist(rng); 
+                noise(i, j) = -max_noise + 2 * max_noise * r; 
+            }
+        }
+    }
     int s = b.size(); 
     std::vector<Array<T, Dynamic, 4> > velocities; 
     velocities.push_back(
         getVelocities<T>(
             cells, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
-            surface_contact_density, adhesion_mode, adhesion_params, confine,
-            boundary_idx, confine_params
+            surface_contact_density, noise, adhesion_mode, adhesion_params,
+            confine, boundary_idx, confine_params
         )
     );
     for (int i = 1; i < s; ++i)
@@ -752,7 +776,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
         velocities.push_back(
             getVelocities<T>(
                 cells_i, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
-                surface_contact_density, adhesion_mode, adhesion_params,
+                surface_contact_density, noise, adhesion_mode, adhesion_params,
                 confine, boundary_idx, confine_params
             )
         );
