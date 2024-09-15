@@ -603,7 +603,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         
         // Write the current population to file if the simulation time has 
         // just passed a multiple of dt_write 
-        int t_old_factor = static_cast<int>(std::floor((t - dt + 1e-20) / dt_write)); 
+        int t_old_factor = static_cast<int>(std::floor((t - dt - 1e-20) / dt_write)); 
         int t_new_factor = static_cast<int>(std::floor((t + 1e-20) / dt_write)); 
         if (write && t_new_factor > t_old_factor)
         {
@@ -1312,7 +1312,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         
         // Write the current population to file if the simulation time has 
         // just passed a multiple of dt_write 
-        int t_old_factor = static_cast<int>(std::floor((t - dt + 1e-20) / dt_write)); 
+        int t_old_factor = static_cast<int>(std::floor((t - dt - 1e-20) / dt_write)); 
         int t_new_factor = static_cast<int>(std::floor((t + 1e-20) / dt_write)); 
         if (write && t_new_factor > t_old_factor)
         {
@@ -2014,7 +2014,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         
         // Write the current population to file if the simulation time has 
         // just passed a multiple of dt_write 
-        int t_old_factor = static_cast<int>(std::floor((t - dt + 1e-20) / dt_write)); 
+        int t_old_factor = static_cast<int>(std::floor((t - dt - 1e-20) / dt_write)); 
         int t_new_factor = static_cast<int>(std::floor((t + 1e-20) / dt_write)); 
         if (write && t_new_factor > t_old_factor)
         {
