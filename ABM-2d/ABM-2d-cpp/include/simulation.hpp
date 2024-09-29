@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/14/2024
+ *     9/28/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -603,10 +603,13 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         
         // Write the current population to file if the simulation time has 
         // just passed a multiple of dt_write 
-        int t_old_factor = static_cast<int>(std::floor((t - dt - 1e-20) / dt_write)); 
-        int t_new_factor = static_cast<int>(std::floor((t + 1e-20) / dt_write)); 
-        if (write && t_new_factor > t_old_factor)
+        double t_old_factor = std::fmod(t - dt + 1e-12, dt_write);
+        double t_new_factor = std::fmod(t + 1e-12, dt_write);  
+        if (write && t_old_factor > t_new_factor)
         {
+            std::cout << iter << ": " << std::max(t - dt - 1e-12, 0.0) << " " << dt_write
+                      << " " << t_old_factor << " " << t + dt + 1e-12 << " " << dt_write
+                      << " " << t_new_factor << std::endl;
             std::cout << "Iteration " << iter << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
                       << ", avg error = " << errors.abs().sum() / (4 * n)
@@ -1312,9 +1315,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         
         // Write the current population to file if the simulation time has 
         // just passed a multiple of dt_write 
-        int t_old_factor = static_cast<int>(std::floor((t - dt - 1e-20) / dt_write)); 
-        int t_new_factor = static_cast<int>(std::floor((t + 1e-20) / dt_write)); 
-        if (write && t_new_factor > t_old_factor)
+        double t_old_factor = std::fmod(t - dt + 1e-12, dt_write);
+        double t_new_factor = std::fmod(t + 1e-12, dt_write);  
+        if (write && t_old_factor > t_new_factor) 
         {
             std::cout << "Iteration " << iter << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
@@ -2014,10 +2017,13 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         
         // Write the current population to file if the simulation time has 
         // just passed a multiple of dt_write 
-        int t_old_factor = static_cast<int>(std::floor((t - dt - 1e-20) / dt_write)); 
-        int t_new_factor = static_cast<int>(std::floor((t + 1e-20) / dt_write)); 
-        if (write && t_new_factor > t_old_factor)
+        double t_old_factor = std::fmod(t - dt + 1e-12, dt_write);
+        double t_new_factor = std::fmod(t + 1e-12, dt_write);  
+        if (write && t_old_factor > t_new_factor)
         {
+            std::cout << iter << ": " << std::max(t - dt - 1e-12, 0.0) << " " << dt_write
+                      << " " << t_old_factor << " " << t + dt + 1e-12 << " " << dt_write
+                      << " " << t_new_factor << std::endl;
             std::cout << "Iteration " << iter << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
                       << ", avg error = " << errors.abs().sum() / (4 * n)
