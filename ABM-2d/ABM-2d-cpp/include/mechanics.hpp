@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/13/2024
+ *     10/11/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -517,9 +517,13 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  *                  neighboring cells, the adhesive force is nonzero. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
+ * @param E0 Elastic modulus of EPS. 
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
+ * @param surface_coulomb_coeff Friction coefficient that relates the
+ *                              cell-surface tangential velocity to the 
+ *                              normal force due to cell-surface repulsion. 
  * @param noise Noise to be added to each generalized force used to compute
  *              the velocities. 
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
@@ -537,9 +541,10 @@ template <typename T>
 Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                    const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                    const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                                   const T R, const T Rcell,
+                                   const T R, const T Rcell, const T E0,
                                    const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                    const T surface_contact_density,
+                                   const T surface_coulomb_coeff,
                                    const Ref<const Array<T, Dynamic, 4> >& noise,
                                    const AdhesionMode adhesion_mode,
                                    std::unordered_map<std::string, T>& adhesion_params,
@@ -581,6 +586,11 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     );
     Array<T, Dynamic, 1> K = prefactors.col(0);
     Array<T, Dynamic, 1> L = prefactors.col(1);
+
+    // Compute the cell-surface repulsive force magnitude for each cell (note
+    // that this force is purely in the z-direction)
+    const T surface_delta = surface_contact_density * surface_contact_density / R;
+    Array<T, Dynamic, 1> surface_normals = 2 * E0 * surface_delta * cells.col(__colidx_l); 
 
     // Compute the repulsive forces ... 
     Array<T, Dynamic, 4> dEdq_repulsion = cellCellRepulsiveForces<T>(
@@ -641,6 +651,25 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     velocities.col(2) = -dEdn_constrained.col(0) / L;
     velocities.col(3) = -dEdn_constrained.col(1) / L;
 
+    // Truncate each velocity according to Coulomb's law of friction
+    Array<T, Dynamic, 1> coulomb_bounds = surface_coulomb_coeff * surface_normals; 
+    Array<T, Dynamic, 1> speeds = velocities(Eigen::all, Eigen::seq(0, 1)).matrix().rowwise().norm().array();
+    for (int i = 0; i < n; ++i)
+    {
+        // Compute the cell-surface friction force magnitude
+        T coeff = cells(i, __colidx_eta1) * surface_contact_density * cells(i, __colidx_l) / R; 
+        T surface_friction_force = coeff * speeds(i); 
+
+        // Does the friction force exceed the bound? 
+        if (surface_friction_force > coulomb_bounds(i))
+        {
+            // If so, truncate the velocity so that the friction force obeys 
+            // the bound 
+            velocities(i, Eigen::seq(0, 1)) /= speeds(i); 
+            velocities(i, Eigen::seq(0, 1)) *= (coulomb_bounds(i) / coeff); 
+        }
+    }
+
     return velocities;  
 }
 
@@ -682,9 +711,13 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param dt Timestep. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
+ * @param E0 Elastic modulus of EPS. 
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
+ * @param surface_coulomb_coeff Friction coefficient that relates the
+ *                              cell-surface tangential velocity to the 
+ *                              normal force due to cell-surface repulsion. 
  * @param max_noise Maximum noise to be added to each generalized force used 
  *                  to compute the velocities.
  * @param rng Random number generator.
@@ -709,9 +742,10 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                            const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
                            const Ref<const Array<T, Dynamic, 6> >& neighbors,
                            const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                           const T dt, const T R, const T Rcell,
+                           const T dt, const T R, const T Rcell, const T E0, 
                            const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                           const T surface_contact_density, const T max_noise, 
+                           const T surface_contact_density,
+                           const T surface_coulomb_coeff, const T max_noise, 
                            boost::random::mt19937& rng,
                            boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode, 
@@ -760,9 +794,9 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
     std::vector<Array<T, Dynamic, 4> > velocities; 
     velocities.push_back(
         getVelocities<T>(
-            cells, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
-            surface_contact_density, noise, adhesion_mode, adhesion_params,
-            confine, boundary_idx, confine_params
+            cells, neighbors, to_adhere, R, Rcell, E0, cell_cell_prefactors,
+            surface_contact_density, surface_coulomb_coeff, noise, adhesion_mode,
+            adhesion_params, confine, boundary_idx, confine_params
         )
     );
     for (int i = 1; i < s; ++i)
@@ -775,9 +809,9 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
         normalizeOrientations<T>(cells_i);    // Renormalize orientations after each modification
         velocities.push_back(
             getVelocities<T>(
-                cells_i, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
-                surface_contact_density, noise, adhesion_mode, adhesion_params,
-                confine, boundary_idx, confine_params
+                cells_i, neighbors, to_adhere, R, Rcell, E0, cell_cell_prefactors,
+                surface_contact_density, surface_coulomb_coeff, noise, adhesion_mode,
+                adhesion_params, confine, boundary_idx, confine_params
             )
         );
     }
