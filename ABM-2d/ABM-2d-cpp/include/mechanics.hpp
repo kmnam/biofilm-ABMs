@@ -33,6 +33,9 @@
 
 using namespace Eigen;
 
+using std::min; 
+using boost::multiprecision::min; 
+
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Segment_3 Segment_3;
 
