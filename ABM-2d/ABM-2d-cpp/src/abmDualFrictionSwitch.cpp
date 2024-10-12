@@ -2,14 +2,14 @@
  * An agent-based model of 2-D biofilm growth that switches cells between two
  * states that exhibit different friction coefficients. 
  *
- * In what follows, a population of N cells is represented as a 2-D array of
- * size (N, 16+), whose columns are as specified in `include/indices.hpp`.
+ * In what follows, a population of N cells is represented as a 2-D array 
+ * with N rows, whose columns are as specified in `include/indices.hpp`.
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/14/2024
+ *     10/12/2024
  */
 
 #include <Eigen/Dense>
@@ -61,6 +61,7 @@ int main(int argc, char** argv)
     const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T daughter_angle_bound = static_cast<T>(json_data["daughter_angle_bound"].as_double());
+    const T surface_coulomb_coeff = static_cast<T>(json_data["surface_coulomb_coeff"].as_double()); 
     const T max_noise = static_cast<T>(json_data["max_noise"].as_double()); 
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
     const AdhesionMode adhesion_mode = AdhesionMode::NONE;    // No cell-cell adhesion
@@ -100,9 +101,9 @@ int main(int argc, char** argv)
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
     // with zero velocity, mean growth rate, and default viscosity and friction
     // coefficients
-    Array<T, Dynamic, Dynamic> cells(1, 16);
+    Array<T, Dynamic, Dynamic> cells(1, __ncols_required);
     cells << 0, 0, 0, 1, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient,
-             eta_mean1, 1;
+             eta_mean1, eta1_mean1, 1;
 
     // Initialize parent IDs 
     std::vector<int> parents; 
@@ -116,8 +117,8 @@ int main(int argc, char** argv)
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        max_noise, adhesion_mode, adhesion_params, confine, confine_params,
-        growth_void_mode, growth_void_params
+        surface_coulomb_coeff, max_noise, adhesion_mode, adhesion_params, confine,
+        confine_params, growth_void_mode, growth_void_params
     ); 
     
     return 0; 
