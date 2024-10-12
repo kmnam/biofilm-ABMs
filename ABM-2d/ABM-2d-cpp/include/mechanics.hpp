@@ -728,13 +728,9 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param dt Timestep. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
- * @param E0 Elastic modulus of EPS. 
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
- * @param surface_coulomb_coeff Friction coefficient that relates the velocity
- *                              of each cell to the normal force due to cell-
- *                              surface repulsion. 
  * @param max_noise Maximum noise to be added to each generalized force used 
  *                  to compute the velocities.
  * @param rng Random number generator.
@@ -759,10 +755,9 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                            const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
                            const Ref<const Array<T, Dynamic, 6> >& neighbors,
                            const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                           const T dt, const T R, const T Rcell, const T E0, 
+                           const T dt, const T R, const T Rcell,
                            const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                           const T surface_contact_density,
-                           const T surface_coulomb_coeff, const T max_noise, 
+                           const T surface_contact_density, const T max_noise, 
                            boost::random::mt19937& rng,
                            boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode, 
