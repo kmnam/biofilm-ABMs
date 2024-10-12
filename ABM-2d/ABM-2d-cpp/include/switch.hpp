@@ -1,17 +1,17 @@
 /**
  * Functions for cell state switching. 
  * 
- * In what follows, a population of N cells is represented as a 2-D array of
- * size (N, 16+), whose columns are as specified in `indices.hpp`.
+ * In what follows, a population of N cells is represented as a 2-D array
+ * with N rows, whose columns are as specified in `indices.hpp`.
  *
- * Additional features may be included in the array but these are not relevant
+ * Additional columns may be included in the array but these are not relevant
  * for the computations implemented here.
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/11/2024
+ *     10/12/2024
  */
 
 #ifndef BIOFILM_SWITCH_HPP
