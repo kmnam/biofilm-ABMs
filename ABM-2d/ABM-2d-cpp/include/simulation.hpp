@@ -1,14 +1,14 @@
 /**
  * Functions for running simulations with flexible initial conditions. 
  *
- * In what follows, a population of N cells is represented as a 2-D array of
- * size (N, 16+), whose columns are as specified in `indices.hpp`.
+ * In what follows, a population of N cells is represented as a 2-D array 
+ * with N rows, whose columns are as specified in `indices.hpp`.
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/28/2024
+ *     10/12/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -113,6 +113,9 @@ std::string floatToString(T x, const int precision = 10)
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param surface_coulomb_coeff Friction coefficient that relates the velocity
+ *                              of each cell to the normal force due to cell-
+ *                              surface repulsion. 
  * @param max_noise Maximum noise to be added to each generalized force used 
  *                  to compute the velocities.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
@@ -159,6 +162,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T growth_std,
                   const T daughter_length_std,
                   const T daughter_angle_bound,
+                  const T surface_coulomb_coeff,
                   const T max_noise,
                   const AdhesionMode adhesion_mode,
                   std::unordered_map<std::string, T>& adhesion_params,
@@ -274,6 +278,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["growth_std"] = floatToString<T>(growth_std, precision);
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_noise"] = floatToString<T>(max_noise, precision); 
     params["adhesion_mode"] = std::to_string(static_cast<int>(adhesion_mode)); 
     if (adhesion_mode != AdhesionMode::NONE)
@@ -458,10 +463,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptive<T>(
-            A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, max_noise, rng, 
-            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
-            confine_params
+            A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell, cell_cell_prefactors,
+            surface_contact_density, max_noise, rng, uniform_dist, adhesion_mode,
+            adhesion_params, confine, boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -534,7 +538,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                uniform_dist, adhesion_mode, adhesion_params, confine, 
+                uniform_dist, adhesion_mode, adhesion_params, confine,
                 boundary_idx, confine_params
             ); 
             cells_new = result.first;
@@ -556,6 +560,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         #endif
         cells = cells_new;
+
+        // Truncate cell-surface friction coefficients according to Coulomb's law
+        truncateSurfaceFrictionCoeffsCoulomb<T>(
+            cells, R, E0, surface_contact_density, surface_coulomb_coeff
+        ); 
 
         // Grow the cells
         growCells<T>(cells, dt, R);
@@ -713,6 +722,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param surface_coulomb_coeff Friction coefficient that relates the velocity
+ *                              of each cell to the normal force due to cell-
+ *                              surface repulsion. 
  * @param max_noise Maximum noise to be added to each generalized force used 
  *                  to compute the velocities.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
@@ -767,6 +779,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
                   const T daughter_length_std,
                   const T daughter_angle_bound,
+                  const T surface_coulomb_coeff,
                   const T max_noise,
                   const AdhesionMode adhesion_mode, 
                   std::unordered_map<std::string, T>& adhesion_params,
@@ -945,6 +958,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_noise"] = floatToString<T>(max_noise, precision); 
     params["adhesion_mode"] = std::to_string(static_cast<int>(adhesion_mode)); 
     if (adhesion_mode != AdhesionMode::NONE)
@@ -1145,10 +1159,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Update cell positions and orientations
         auto result = stepRungeKuttaAdaptive<T>(
-            A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, max_noise, rng,
-            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
-            confine_params
+            A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell, cell_cell_prefactors,
+            surface_contact_density, max_noise, rng, uniform_dist, adhesion_mode,
+            adhesion_params, confine, boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -1227,6 +1240,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             cells_new = result.first;
             errors = result.second;
         }
+        // If desired, print a warning message if the error is big
         #ifdef DEBUG_WARN_LARGE_ERROR
             Array<T, Dynamic, 4> z = (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
@@ -1242,6 +1256,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         #endif
         cells = cells_new;
+
+        // Truncate cell-surface friction coefficients according to Coulomb's law
+        truncateSurfaceFrictionCoeffsCoulomb<T>(
+            cells, R, E0, surface_contact_density, surface_coulomb_coeff
+        ); 
 
         // Grow the cells
         growCells<T>(cells, dt, R);
@@ -1435,6 +1454,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param surface_coulomb_coeff Friction coefficient that relates the velocity
+ *                              of each cell to the normal force due to cell-
+ *                              surface repulsion. 
  * @param max_noise Maximum noise to be added to each generalized force used 
  *                  to compute the velocities.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
@@ -1487,6 +1509,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                              const T partition_logratio_std,
                              const T daughter_length_std,
                              const T daughter_angle_bound,
+                             const T surface_coulomb_coeff,
                              const T max_noise,
                              const AdhesionMode adhesion_mode, 
                              std::unordered_map<std::string, T>& adhesion_params,
@@ -1662,6 +1685,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["partition_logratio_std"] = floatToString<T>(partition_logratio_std, precision); 
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_noise"] = floatToString<T>(max_noise, precision); 
     params["adhesion_mode"] = std::to_string(static_cast<int>(adhesion_mode)); 
     if (adhesion_mode != AdhesionMode::NONE)
@@ -1873,10 +1897,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Update cell positions and orientations
         auto result = stepRungeKuttaAdaptive<T>(
-            A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, max_noise, rng, 
-            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
-            confine_params
+            A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell, cell_cell_prefactors,
+            surface_contact_density, max_noise, rng, uniform_dist, adhesion_mode,
+            adhesion_params, confine, boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -1955,6 +1978,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             cells_new = result.first;
             errors = result.second;
         }
+        // If desired, print a warning message if the error is big
         #ifdef DEBUG_WARN_LARGE_ERROR
             Array<T, Dynamic, 4> z = (
                 Array<T, Dynamic, 4>::Ones(n, 4) + cells(Eigen::all, __colseq_coords).abs()
@@ -1963,13 +1987,18 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             T max_error = max((errors / max_scale).maxCoeff(), min_error);
             if (max_error > 5)
             {
-                std::cout << "[WARN] Average error is > 5 times the desired error "
+                std::cout << "[WARN] Maximum error is > 5 times the desired error "
                           << "(absolute tol = relative tol = " << max_error_allowed
                           << ", iteration " << iter << ", time = " << t
                           << ", dt = " << dt << ")" << std::endl;
             }
         #endif
         cells = cells_new;
+
+        // Truncate cell-surface friction coefficients according to Coulomb's law
+        truncateSurfaceFrictionCoeffsCoulomb<T>(
+            cells, R, E0, surface_contact_density, surface_coulomb_coeff
+        ); 
 
         // Grow the cells
         growCells<T>(cells, dt, R);
