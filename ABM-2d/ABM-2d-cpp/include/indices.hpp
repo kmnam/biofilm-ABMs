@@ -39,6 +39,7 @@ const int __colidx_maxeta1 = 15;
 const int __colidx_group = 16;
 const std::vector<int> __colvec_required {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
-}; 
+};
+const int __ncols_required = 17;
 
 #endif 
