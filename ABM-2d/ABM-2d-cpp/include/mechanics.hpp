@@ -655,8 +655,6 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * The given array of cell data is updated in place. 
  *
  * @param cells Current population of cells.
- * @param velocities Array of translational and orientational velocities for 
- *                   the current timestep. 
  * @param R Cell radius, including the EPS.
  * @param E0 Elastic modulus of EPS. 
  * @param surface_contact_density Cell-surface contact area density.
@@ -666,7 +664,6 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  */
 template <typename T>
 void truncateSurfaceFrictionCoeffsCoulomb(Ref<Array<T, Dynamic, Dynamic> > cells,
-                                          const Ref<const Array<T, Dynamic, 4> >& velocities,
                                           const T R, const T E0,
                                           const T surface_contact_density,
                                           const T surface_coulomb_coeff)
@@ -676,7 +673,7 @@ void truncateSurfaceFrictionCoeffsCoulomb(Ref<Array<T, Dynamic, Dynamic> > cells
     // Compute the cell-surface friction coefficient bound for each cell
     // (which is velocity-dependent)
     const T surface_delta = surface_contact_density * surface_contact_density / R;
-    Array<T, Dynamic, 1> speeds = velocities(Eigen::all, Eigen::seq(0, 1)).matrix().rowwise().norm().array();
+    Array<T, Dynamic, 1> speeds = cells(Eigen::all, __colseq_dr).matrix().rowwise().norm().array();
     Array<T, Dynamic, 1> eta1_bounds = (
         2 * E0 * surface_delta * surface_coulomb_coeff * R / (surface_contact_density * speeds)
     );
