@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/11/2024
+ *     10/12/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -645,54 +645,47 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
 }
 
 /**
- * Truncate the given cell velocities according to Coulomb's law of friction.
+ * Truncate the cell-surface friction coefficients so that the cell velocities
+ * in the next timestep (which should be similar to the given array of cell
+ * velocities for the current timestep) obey Coulomb's law of friction.
  *
- * The given array of velocities is updated in place. 
+ * The given array of cell data is updated in place. 
  *
  * @param cells Current population of cells.
- * @param velocities Array of translational and orientational velocities.   
+ * @param velocities Array of translational and orientational velocities for 
+ *                   the current timestep. 
  * @param R Cell radius, including the EPS.
  * @param E0 Elastic modulus of EPS. 
  * @param surface_contact_density Cell-surface contact area density.
- * @param surface_coulomb_coeff Friction coefficient that relates the
- *                              cell-surface tangential velocity to the 
- *                              normal force due to cell-surface repulsion. 
+ * @param surface_coulomb_coeff Friction coefficient that relates the velocity
+ *                              of each cell to the normal force due to cell-
+ *                              surface repulsion. 
  */
 template <typename T>
-void truncateVelocitiesCoulomb(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                               Ref<Array<T, Dynamic, 4> > velocities, const T R,
-                               const T E0, const T surface_contact_density,
-                               const T surface_coulomb_coeff)
+void truncateSurfaceFrictionCoeffsCoulomb(Ref<Array<T, Dynamic, Dynamic> > cells,
+                                          const Ref<const Array<T, Dynamic, 4> >& velocities,
+                                          const T R, const T E0,
+                                          const T surface_contact_density,
+                                          const T surface_coulomb_coeff)
 {
     int n = cells.rows(); 
 
-    // Compute the cell-surface repulsive force magnitude for each cell (note
-    // that this force is purely in the z-direction)
+    // Compute the cell-surface friction coefficient bound for each cell
+    // (which is velocity-dependent)
     const T surface_delta = surface_contact_density * surface_contact_density / R;
-    Array<T, Dynamic, 1> surface_normals = 2 * E0 * surface_delta * cells.col(__colidx_l); 
-
-    // Truncate each velocity according to Coulomb's law, applied to cell-surface
-    // friction 
-    Array<T, Dynamic, 1> surface_coulomb_bounds = surface_coulomb_coeff * surface_normals; 
     Array<T, Dynamic, 1> speeds = velocities(Eigen::all, Eigen::seq(0, 1)).matrix().rowwise().norm().array();
+    Array<T, Dynamic, 1> eta1_bounds = (
+        2 * E0 * surface_delta * surface_coulomb_coeff * R / (surface_contact_density * speeds)
+    );
+
+    // Truncate each cell-surface friction coefficient
     for (int i = 0; i < n; ++i)
-    {
-        // Compute the cell-surface friction force magnitude
-        T coeff = cells(i, __colidx_eta1) * surface_contact_density * cells(i, __colidx_l) / R; 
-        T surface_friction_force = coeff * speeds(i); 
-
-        // Does the friction force exceed the bound? 
-        if (surface_friction_force > surface_coulomb_bounds(i))
-        {
-            // If so, truncate the velocity so that the friction force obeys 
-            // the bound 
-            velocities(i, Eigen::seq(0, 1)) /= speeds(i); 
-            velocities(i, Eigen::seq(0, 1)) *= (coulomb_bounds(i) / coeff); 
-        }
-    }
-
-    // TODO Add truncation of tangential velocities
+        cells(i, __colidx_eta1) = min(eta1_bounds(i), cells(i, __colidx_maxeta1)); 
 }
+
+// TODO Introduce cell-cell tangential forces 
+//
+// TODO Introduce cell-cell tangential force truncation 
 
 /**
  * Normalize the orientation vectors of all cells in the given population.
@@ -736,9 +729,9 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
- * @param surface_coulomb_coeff Friction coefficient that relates the
- *                              cell-surface tangential velocity to the 
- *                              normal force due to cell-surface repulsion. 
+ * @param surface_coulomb_coeff Friction coefficient that relates the velocity
+ *                              of each cell to the normal force due to cell-
+ *                              surface repulsion. 
  * @param max_noise Maximum noise to be added to each generalized force used 
  *                  to compute the velocities.
  * @param rng Random number generator.
@@ -818,9 +811,6 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
         surface_contact_density, noise, adhesion_mode, adhesion_params,
         confine, boundary_idx, confine_params
     );
-    truncateVelocitiesCoulomb<T>(
-        cells, v0, R, E0, surface_contact_density, surface_coulomb_coeff
-    ); 
     velocities.push_back(v0);
     for (int i = 1; i < s; ++i)
     {
@@ -834,9 +824,6 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
             cells_i, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
             surface_contact_density, noise, adhesion_mode, adhesion_params,
             confine, boundary_idx, confine_params
-        );
-        truncateVelocitiesCoulomb<T>(
-            cells, vi, R, E0, surface_contact_density, surface_coulomb_coeff
         );
         velocities.push_back(vi);
     }
