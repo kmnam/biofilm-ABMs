@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/12/2024
+ *     10/13/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -113,6 +113,9 @@ std::string floatToString(T x, const int precision = 10)
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param truncate_surface_friction If true, truncate cell-surface friction
+ *                                  coefficients according to Coulomb's law
+ *                                  of friction.
  * @param surface_coulomb_coeff Friction coefficient that relates the velocity
  *                              of each cell to the normal force due to cell-
  *                              surface repulsion. 
@@ -162,6 +165,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T growth_std,
                   const T daughter_length_std,
                   const T daughter_angle_bound,
+                  const bool truncate_surface_friction,
                   const T surface_coulomb_coeff,
                   const T max_noise,
                   const AdhesionMode adhesion_mode,
@@ -278,6 +282,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["growth_std"] = floatToString<T>(growth_std, precision);
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["truncate_surface_friction"] = (truncate_surface_friction ? "1"  : "0"); 
     params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_noise"] = floatToString<T>(max_noise, precision); 
     params["adhesion_mode"] = std::to_string(static_cast<int>(adhesion_mode)); 
@@ -563,9 +568,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         cells = cells_new;
 
         // Truncate cell-surface friction coefficients according to Coulomb's law
-        truncateSurfaceFrictionCoeffsCoulomb<T>(
-            cells, R, E0, surface_contact_density, surface_coulomb_coeff
-        ); 
+        if (truncate_surface_friction)
+        {
+            truncateSurfaceFrictionCoeffsCoulomb<T>(
+                cells, R, E0, surface_contact_density, surface_coulomb_coeff
+            );
+        }
 
         // Grow the cells
         growCells<T>(cells, dt, R);
@@ -723,6 +731,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param truncate_surface_friction If true, truncate cell-surface friction
+ *                                  coefficients according to Coulomb's law
+ *                                  of friction.
  * @param surface_coulomb_coeff Friction coefficient that relates the velocity
  *                              of each cell to the normal force due to cell-
  *                              surface repulsion. 
@@ -780,6 +791,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
                   const T daughter_length_std,
                   const T daughter_angle_bound,
+                  const bool truncate_surface_friction,
                   const T surface_coulomb_coeff,
                   const T max_noise,
                   const AdhesionMode adhesion_mode, 
@@ -959,6 +971,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["truncate_surface_friction"] = (truncate_surface_friction ? "1" : "0"); 
     params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_noise"] = floatToString<T>(max_noise, precision); 
     params["adhesion_mode"] = std::to_string(static_cast<int>(adhesion_mode)); 
@@ -1260,9 +1273,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         cells = cells_new;
 
         // Truncate cell-surface friction coefficients according to Coulomb's law
-        truncateSurfaceFrictionCoeffsCoulomb<T>(
-            cells, R, E0, surface_contact_density, surface_coulomb_coeff
-        ); 
+        if (truncate_surface_friction)
+        {
+            truncateSurfaceFrictionCoeffsCoulomb<T>(
+                cells, R, E0, surface_contact_density, surface_coulomb_coeff
+            );
+        }
 
         // Grow the cells
         growCells<T>(cells, dt, R);
@@ -1456,6 +1472,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param truncate_surface_friction If true, truncate cell-surface friction
+ *                                  coefficients according to Coulomb's law
+ *                                  of friction.
  * @param surface_coulomb_coeff Friction coefficient that relates the velocity
  *                              of each cell to the normal force due to cell-
  *                              surface repulsion. 
@@ -1511,6 +1530,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                              const T partition_logratio_std,
                              const T daughter_length_std,
                              const T daughter_angle_bound,
+                             const bool truncate_surface_friction,
                              const T surface_coulomb_coeff,
                              const T max_noise,
                              const AdhesionMode adhesion_mode, 
@@ -1687,6 +1707,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["partition_logratio_std"] = floatToString<T>(partition_logratio_std, precision); 
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["truncate_surface_friction"] = (truncate_surface_friction ? "1" : "0"); 
     params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_noise"] = floatToString<T>(max_noise, precision); 
     params["adhesion_mode"] = std::to_string(static_cast<int>(adhesion_mode)); 
@@ -1999,9 +2020,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         cells = cells_new;
 
         // Truncate cell-surface friction coefficients according to Coulomb's law
-        truncateSurfaceFrictionCoeffsCoulomb<T>(
-            cells, R, E0, surface_contact_density, surface_coulomb_coeff
-        ); 
+        if (truncate_surface_friction)
+        {
+            truncateSurfaceFrictionCoeffsCoulomb<T>(
+                cells, R, E0, surface_contact_density, surface_coulomb_coeff
+            );
+        }
 
         // Grow the cells
         growCells<T>(cells, dt, R);
