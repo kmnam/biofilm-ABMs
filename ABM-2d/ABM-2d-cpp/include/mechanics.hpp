@@ -300,6 +300,7 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  * @param cells Current population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
+ * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS. 
  * @param Rcell Cell radius, excluding the EPS.
  * @param E0 Elastic modulus of EPS. 
@@ -311,7 +312,7 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
 template <typename T>
 Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                              const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                             const T R, const T Rcell,
+                                             const int iter, const T R, const T Rcell,
                                              const Ref<const Array<T, 4, 1> >& prefactors)
 {
     int n = cells.rows();   // Number of cells
@@ -375,7 +376,8 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
             #ifdef DEBUG_CHECK_REPULSIVE_FORCES_NAN
                 if (forces.isNaN().any())
                 {
-                    std::cerr << "Found nan in repulsive forces between cells " 
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in repulsive forces between cells " 
                               << i << " and " << j << std::endl;
                     pairForcesSummary<T>(
                         cells(i, __colseq_r), cells(i, __colseq_n),
@@ -408,7 +410,8 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
  * @param to_adhere Boolean array specifying whether, for each pair of 
- *                  neighboring cells, the adhesive force is nonzero. 
+ *                  neighboring cells, the adhesive force is nonzero.
+ * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param mode Choice of potential used to model cell-cell adhesion. Can be
@@ -421,7 +424,7 @@ template <typename T>
 Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                             const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                             const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                                            const T R, const T Rcell, 
+                                            const int iter, const T R, const T Rcell, 
                                             const AdhesionMode mode, 
                                             std::unordered_map<std::string, T>& params)
 {
@@ -488,7 +491,8 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
             #ifdef DEBUG_CHECK_ADHESIVE_FORCES_NAN
                 if (forces.isNaN().any())
                 {
-                    std::cerr << "Found nan in adhesive forces between cells " 
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in adhesive forces between cells " 
                               << i << " and " << j << std::endl;
                     pairForcesSummary<T>(
                         ri.array(), ni.array(), half_li, rj.array(), nj.array(), 
@@ -517,7 +521,8 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
  * @param to_adhere Boolean array specifying whether, for each pair of 
- *                  neighboring cells, the adhesive force is nonzero. 
+ *                  neighboring cells, the adhesive force is nonzero.
+ * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
@@ -540,7 +545,7 @@ template <typename T>
 Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                    const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                    const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                                   const T R, const T Rcell,
+                                   const int iter, const T R, const T Rcell,
                                    const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                    const T surface_contact_density,
                                    const Ref<const Array<T, Dynamic, 4> >& noise,
@@ -587,7 +592,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
 
     // Compute the repulsive forces ... 
     Array<T, Dynamic, 4> dEdq_repulsion = cellCellRepulsiveForces<T>(
-        cells, neighbors, R, Rcell, cell_cell_prefactors
+        cells, neighbors, iter, R, Rcell, cell_cell_prefactors
     );
 
     // ... the adhesive forces (if adhesion is present) ... 
@@ -595,7 +600,8 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     if (adhesion_mode != AdhesionMode::NONE)
     {
         dEdq_adhesion = cellCellAdhesiveForces<T>(
-            cells, neighbors, to_adhere, R, Rcell, adhesion_mode, adhesion_params
+            cells, neighbors, to_adhere, iter, R, Rcell, adhesion_mode,
+            adhesion_params
         );
     }
 
@@ -614,7 +620,8 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
             {
                 if (dEdq_confine.row(i).isNaN().any())
                 {
-                    std::cerr << "Found nan in confinement forces for cell "
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in confinement forces for cell "
                               << i << std::endl;
                     cellForcesSummary<T>(
                         cells(i, __colseq_r), cells(i, __colseq_n),
@@ -722,7 +729,8 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  *                  population.
  * @param to_adhere Boolean array specifying whether, for each pair of 
  *                  neighboring cells, the adhesive force is nonzero. 
- * @param dt Timestep. 
+ * @param dt Timestep.
+ * @param iter Iteration number. Only used for debugging output.  
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
@@ -752,7 +760,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                            const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
                            const Ref<const Array<T, Dynamic, 6> >& neighbors,
                            const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                           const T dt, const T R, const T Rcell,
+                           const T dt, const int iter, const T R, const T Rcell,
                            const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                            const T surface_contact_density, const T max_noise, 
                            boost::random::mt19937& rng,
@@ -769,7 +777,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
             {
                 int i = neighbors(k, 0); 
                 int j = neighbors(k, 1); 
-                std::cerr << "Found near-zero distance between cells "
+                std::cerr << "Iteration " << iter
+                          << ": Found near-zero distance between cells "
                           << i << " and " << j << std::endl;
                 pairConfigSummary<T>(
                     cells(i, __colseq_r).matrix(),
@@ -802,7 +811,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
     int s = b.size(); 
     std::vector<Array<T, Dynamic, 4> > velocities;
     Array<T, Dynamic, 4> v0 = getVelocities<T>(
-        cells, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
+        cells, neighbors, to_adhere, iter, R, Rcell, cell_cell_prefactors,
         surface_contact_density, noise, adhesion_mode, adhesion_params,
         confine, boundary_idx, confine_params
     );
@@ -816,7 +825,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
         cells_i(Eigen::all, __colseq_coords) += multipliers * dt;
         normalizeOrientations<T>(cells_i);    // Renormalize orientations after each modification
         Array<T, Dynamic, 4> vi = getVelocities<T>(
-            cells_i, neighbors, to_adhere, R, Rcell, cell_cell_prefactors,
+            cells_i, neighbors, to_adhere, iter, R, Rcell, cell_cell_prefactors,
             surface_contact_density, noise, adhesion_mode, adhesion_params,
             confine, boundary_idx, confine_params
         );

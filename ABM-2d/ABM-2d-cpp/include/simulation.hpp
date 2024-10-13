@@ -463,9 +463,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptive<T>(
-            A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell, cell_cell_prefactors,
-            surface_contact_density, max_noise, rng, uniform_dist, adhesion_mode,
-            adhesion_params, confine, boundary_idx, confine_params
+            A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
+            cell_cell_prefactors, surface_contact_density, max_noise, rng,
+            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
+            confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -500,7 +501,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 // the integration 
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
-                    A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
+                    A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, max_noise,
                     rng, uniform_dist, adhesion_mode, adhesion_params, confine,
                     boundary_idx, confine_params
@@ -536,7 +537,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             // Re-do the integration with the new stepsize
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
-                A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
+                A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, max_noise, rng,
                 uniform_dist, adhesion_mode, adhesion_params, confine,
                 boundary_idx, confine_params
@@ -1159,9 +1160,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Update cell positions and orientations
         auto result = stepRungeKuttaAdaptive<T>(
-            A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell, cell_cell_prefactors,
-            surface_contact_density, max_noise, rng, uniform_dist, adhesion_mode,
-            adhesion_params, confine, boundary_idx, confine_params
+            A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
+            cell_cell_prefactors, surface_contact_density, max_noise, rng,
+            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
+            confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -1196,7 +1198,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 // the integration 
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
-                    A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
+                    A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, max_noise,
                     rng, uniform_dist, adhesion_mode, adhesion_params, confine,
                     boundary_idx, confine_params
@@ -1232,7 +1234,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             // Re-do the integration with the new stepsize
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
-                A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
+                A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, max_noise, rng,
                 uniform_dist, adhesion_mode, adhesion_params, confine,
                 boundary_idx, confine_params
@@ -1897,9 +1899,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Update cell positions and orientations
         auto result = stepRungeKuttaAdaptive<T>(
-            A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell, cell_cell_prefactors,
-            surface_contact_density, max_noise, rng, uniform_dist, adhesion_mode,
-            adhesion_params, confine, boundary_idx, confine_params
+            A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
+            cell_cell_prefactors, surface_contact_density, max_noise, rng,
+            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
+            confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -1934,7 +1937,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 // the integration 
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
-                    A, b, bs, cells, neighbors, to_adhere, dt_new, R, Rcell,
+                    A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, max_noise,
                     rng, uniform_dist, adhesion_mode, adhesion_params, confine,
                     boundary_idx, confine_params
@@ -1970,7 +1973,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             // Re-do the integration with the new stepsize
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
-                A, b, bs, cells, neighbors, to_adhere, dt, R, Rcell,
+                A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, max_noise, rng,
                 uniform_dist, adhesion_mode, adhesion_params, confine,
                 boundary_idx, confine_params
