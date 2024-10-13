@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/12/2024
+ *     10/13/2024
  */
 
 #ifndef BIOFILM_CELL_GROWTH_HPP
@@ -96,12 +96,16 @@ T minDistToCell(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
         {
             auto result = distBetweenCells<T>(
                 segments[i], segments[j],
+                static_cast<int>(cells(i, __colidx_id)),
                 cells(i, __colseq_r).matrix(), 
                 cells(i, __colseq_n).matrix(),
                 cells(i, __colidx_half_l),
+                cells(i, __colseq_dr).matrix(),
+                static_cast<int>(cells(j, __colidx_id)), 
                 cells(j, __colseq_r).matrix(),
                 cells(j, __colseq_n).matrix(),
                 cells(j, __colidx_half_l),
+                cells(j, __colseq_dr).matrix(),
                 kernel
             );
             Matrix<T, 2, 1> dij = std::get<0>(result);
