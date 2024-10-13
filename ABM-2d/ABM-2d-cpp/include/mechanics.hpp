@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/12/2024
+ *     10/13/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -213,12 +213,17 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
                 // they lie within neighbor_threshold of each other 
                 auto result = distBetweenCells<T>(
                     segments[i], segments[j],
+                    static_cast<int>(cells(i, __colidx_id)),
                     cells(i, __colseq_r).matrix(), 
                     cells(i, __colseq_n).matrix(),
                     cells(i, __colidx_half_l),
+                    cells(i, __colseq_dr).matrix(), 
+                    static_cast<int>(cells(j, __colidx_id)),
                     cells(j, __colseq_r).matrix(),
                     cells(j, __colseq_n).matrix(),
-                    cells(j, __colidx_half_l), kernel
+                    cells(j, __colidx_half_l),
+                    cells(j, __colseq_dr).matrix(), 
+                    kernel
                 );
                 Matrix<T, 2, 1> dist_ij = std::get<0>(result); 
                 T si = std::get<1>(result);
@@ -275,10 +280,17 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
         int j = static_cast<int>(neighbors(k, 1)); 
         auto result = distBetweenCells<T>(
             segments[i], segments[j],
+            static_cast<int>(cells(i, __colidx_id)), 
             cells(i, __colseq_r).matrix(),
-            cells(i, __colseq_n).matrix(), cells(i, __colidx_half_l),
+            cells(i, __colseq_n).matrix(),
+            cells(i, __colidx_half_l),
+            cells(i, __colseq_dr).matrix(),
+            static_cast<int>(cells(j, __colidx_id)), 
             cells(j, __colseq_r).matrix(),
-            cells(j, __colseq_n).matrix(), cells(j, __colidx_half_l), kernel
+            cells(j, __colseq_n).matrix(),
+            cells(j, __colidx_half_l),
+            cells(j, __colseq_dr).matrix(),
+            kernel
         ); 
         Matrix<T, 2, 1> dist_ij = std::get<0>(result); 
         T si = std::get<1>(result);
@@ -781,10 +793,14 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                           << ": Found near-zero distance between cells "
                           << i << " and " << j << std::endl;
                 pairConfigSummary<T>(
+                    static_cast<int>(cells(i, __colidx_id)),
                     cells(i, __colseq_r).matrix(),
                     cells(i, __colseq_n).matrix(), cells(i, __colidx_half_l),
+                    cells(i, __colseq_dr).matrix(),
+                    static_cast<int>(cells(j, __colidx_id)),
                     cells(j, __colseq_r).matrix(),
-                    cells(j, __colseq_n).matrix(), cells(j, __colidx_half_l)
+                    cells(j, __colseq_n).matrix(), cells(j, __colidx_half_l),
+                    cells(j, __colseq_dr).matrix()
                 );
                 throw std::runtime_error("Found near-zero distance");
             }
