@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/11/2024
+ *     10/14/2024
  */
 
 #include <Eigen/Dense>
@@ -45,7 +45,7 @@ int main(int argc, char** argv)
     const T eta_ambient = static_cast<T>(json_data["eta_ambient"].as_double());
     const T eta_surface = static_cast<T>(json_data["eta_surface"].as_double());
     const T max_stepsize = static_cast<T>(json_data["max_stepsize"].as_double()); 
-    const int iter_write = json_data["iter_write"].as_int64(); 
+    const T dt_write = static_cast<T>(json_data["dt_write"].as_double()); 
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
     const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64();
     const int iter_update_boundary = 0; 
@@ -58,7 +58,12 @@ int main(int argc, char** argv)
     const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T daughter_angle_bound = static_cast<T>(json_data["daughter_angle_bound"].as_double());
+    const T max_noise = static_cast<T>(json_data["max_noise"].as_double()); 
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
+    const bool truncate_surface_friction = json_data["truncate_surface_friction"].as_int64();
+    const T surface_coulomb_coeff = (
+        truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double() : 0.0
+    );
     const AdhesionMode adhesion_mode = static_cast<AdhesionMode>(json_data["adhesion_mode"].as_int64()); 
     std::unordered_map<std::string, T> adhesion_params;
     adhesion_params["strength"] = static_cast<T>(json_data["adhesion_strength"].as_double());
@@ -80,7 +85,7 @@ int main(int argc, char** argv)
 
     // Vectors of friction coefficient means and standard deviations (identical
     // for both groups)
-    std::vector<int> switch_attributes { __colidx_eta1 };
+    std::vector<int> switch_attributes { __colidx_maxeta1 };
     Array<T, Dynamic, Dynamic> attribute_means(2, 1);
     Array<T, Dynamic, Dynamic> attribute_stds(2, 1);
     attribute_means << eta_surface, eta_surface;
@@ -102,9 +107,9 @@ int main(int argc, char** argv)
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
     // with zero velocity, mean growth rate, and default viscosity and friction
     // coefficients
-    Array<T, Dynamic, Dynamic> cells(1, 16);
+    Array<T, Dynamic, Dynamic> cells(1, __ncols_required);
     cells << 0, 0, 0, 1, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient,
-             eta_surface, 1;
+             eta_surface, eta_surface, 1;
 
     // Initialize parent IDs 
     std::vector<int> parents; 
@@ -113,13 +118,13 @@ int main(int argc, char** argv)
     // Run the simulation
     runSimulation<T>(
         cells, parents, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
-        max_stepsize, true, outprefix, iter_write, iter_update_neighbors,
+        max_stepsize, true, outprefix, dt_write, iter_update_neighbors,
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        adhesion_mode, adhesion_params, confine, confine_params, growth_void_mode,
-        growth_void_params
+        truncate_surface_friction, surface_coulomb_coeff, max_noise, adhesion_mode,
+        adhesion_params, confine, confine_params, growth_void_mode, growth_void_params
     ); 
    
     return 0; 
