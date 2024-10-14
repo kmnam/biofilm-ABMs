@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/13/2024
+ *     10/14/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -482,10 +482,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                 const T strength = params["strength"];
                 const T expd = params["distance_exp"]; 
                 const T dmin = params["mindist"];
-                forces = strength * forcesKihara<T, 2>(
-                    ri, ni, half_li, rj, nj, half_lj, R, dij, si, sj, expd,
-                    dmin
-                );
+                forces = strength * forcesKihara<T, 2>(dij, R, si, sj, expd, dmin);
             }
             else if (mode == AdhesionMode::GBK)
             {
