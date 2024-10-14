@@ -297,14 +297,8 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
  * @returns Matrix of generalized forces arising from the Kihara potential. 
  */
 template <typename T, int Dim>
-Array<T, 2, 2 * Dim> forcesKihara(const Ref<const Matrix<T, Dim, 1> >& r1, 
-                                  const Ref<const Matrix<T, Dim, 1> >& n1,
-                                  const T half_l1,
-                                  const Ref<const Matrix<T, Dim, 1> >& r2,
-                                  const Ref<const Matrix<T, Dim, 1> >& n2,
-                                  const T half_l2, const T R, 
-                                  const Ref<const Matrix<T, Dim, 1> >& d12,
-                                  const T s, const T t, const T exp,
+Array<T, 2, 2 * Dim> forcesKihara(const Ref<const Matrix<T, Dim, 1> >& d12,
+                                  const T R, const T s, const T t, const T exp,
                                   const T dmin)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
@@ -325,7 +319,7 @@ Array<T, 2, 2 * Dim> forcesKihara(const Ref<const Matrix<T, Dim, 1> >& r1,
         dEdq(0, Eigen::seq(0, Dim - 1)) = v; 
 
         // Partial derivatives w.r.t cell 2 center 
-        dEdq(1, Eigen::seq(0, Dim - 1)) = -dEdq(0, Eigen::seq(0, Dim - 1));
+        dEdq(1, Eigen::seq(0, Dim - 1)) = -v;
 
         // Partial derivatives w.r.t cell 1 orientation 
         dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = s * v; 
