@@ -62,7 +62,7 @@ int main(int argc, char** argv)
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
     const bool truncate_surface_friction = json_data["truncate_surface_friction"].as_int64();
     const T surface_coulomb_coeff = (
-        truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double() : 0.0
+        truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double()) : 0.0
     );
     const AdhesionMode adhesion_mode = static_cast<AdhesionMode>(json_data["adhesion_mode"].as_int64()); 
     std::unordered_map<std::string, T> adhesion_params;
