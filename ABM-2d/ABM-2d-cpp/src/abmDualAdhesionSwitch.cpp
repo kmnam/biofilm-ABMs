@@ -65,11 +65,7 @@ int main(int argc, char** argv)
     adhesion_params["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double()); 
     adhesion_params["mindist"] = static_cast<T>(json_data["adhesion_mindist"].as_double()); 
     if (adhesion_mode == AdhesionMode::GBK) 
-    {
         adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double()); 
-        adhesion_params["anisotropy_exp2"] = static_cast<T>(json_data["adhesion_anisotropy_exp2"].as_double());
-        adhesion_params["well_depth_delta"] = static_cast<T>(json_data["adhesion_well_depth_delta"].as_double()); 
-    }
     const bool confine = false;    // No radial confinement forces
     std::unordered_map<std::string, T> confine_params;
     const GrowthVoidMode growth_void_mode = GrowthVoidMode::NONE;   // No growth void 
