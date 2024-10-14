@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/12/2024
+ *     10/14/2024
  */
 
 #include <Eigen/Dense>
@@ -61,9 +61,12 @@ int main(int argc, char** argv)
     const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T daughter_angle_bound = static_cast<T>(json_data["daughter_angle_bound"].as_double());
-    const T surface_coulomb_coeff = static_cast<T>(json_data["surface_coulomb_coeff"].as_double()); 
     const T max_noise = static_cast<T>(json_data["max_noise"].as_double()); 
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
+    const bool truncate_surface_friction = json_data["truncate_surface_friction"].as_int64();
+    const T surface_coulomb_coeff = (
+        truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double() : 0.0
+    );
     const AdhesionMode adhesion_mode = AdhesionMode::NONE;    // No cell-cell adhesion
     std::unordered_map<std::string, T> adhesion_params;
     const bool confine = false;    // No radial confinement forces 
@@ -79,7 +82,7 @@ int main(int argc, char** argv)
     growth_stds << growth_std, growth_std; 
 
     // Vectors of friction coefficient means and standard deviations
-    std::vector<int> switch_attributes { __colidx_eta1 };
+    std::vector<int> switch_attributes { __colidx_maxeta1 };
     Array<T, Dynamic, Dynamic> attribute_means(2, 1);
     Array<T, Dynamic, Dynamic> attribute_stds(2, 1);
     attribute_means << eta_mean1, eta_mean2;
@@ -103,7 +106,7 @@ int main(int argc, char** argv)
     // coefficients
     Array<T, Dynamic, Dynamic> cells(1, __ncols_required);
     cells << 0, 0, 0, 1, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient,
-             eta_mean1, eta1_mean1, 1;
+             eta_mean1, eta_mean1, 1;
 
     // Initialize parent IDs 
     std::vector<int> parents; 
@@ -117,8 +120,8 @@ int main(int argc, char** argv)
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        surface_coulomb_coeff, max_noise, adhesion_mode, adhesion_params, confine,
-        confine_params, growth_void_mode, growth_void_params
+        truncate_surface_friction, surface_coulomb_coeff, max_noise, adhesion_mode,
+        adhesion_params, confine, confine_params, growth_void_mode, growth_void_params
     ); 
     
     return 0; 
