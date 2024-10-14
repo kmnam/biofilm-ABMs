@@ -491,13 +491,11 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
             {
                 const T strength = params["strength"];
                 const T exp1 = params["anisotropy_exp1"];
-                const T exp2 = params["anisotropy_exp2"];
                 const T expd = params["distance_exp"]; 
-                const T kappa0 = params["well_depth_delta"];
                 const T dmin = params["mindist"];
                 forces = strength * forcesGBK<T, 2>(
                     ri, ni, half_li, rj, nj, half_lj, R, Rcell, dij, si, sj,
-                    expd, exp1, exp2, kappa0, dmin
+                    expd, exp1, dmin
                 ); 
             }
             #ifdef DEBUG_CHECK_ADHESIVE_FORCES_NAN
