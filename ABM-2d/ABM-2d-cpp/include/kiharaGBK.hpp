@@ -501,6 +501,8 @@ std::pair<T, Matrix<T, 2, 2 * Dim> > anisotropyParamWithDerivsGBK2(const Ref<con
  * from the shifted Gay-Berne-Kihara potential in arbitrary dimensions (2
  * or 3).
  *
+ * The second anisotropy parameter exponent is assumed to be zero. 
+ *
  * @param r1 Center of cell 1.
  * @param n1 Orientation of cell 1.
  * @param half_l1 Half of length of cell 1.
@@ -517,10 +519,6 @@ std::pair<T, Matrix<T, 2, 2 * Dim> > anisotropyParamWithDerivsGBK2(const Ref<con
  * @param expd Exponent determining the distance dependence in the
  *             Gay-Berne-Kihara potential.
  * @param exp1 Exponent of first anisotropy parameter.
- * @param exp2 Exponent of second anisotropy parameter. 
- * @param kappa0 Constant multiplier for the fold-difference in well-depths
- *               between the side-by-side and head-to-head parallel cell-cell
- *               configurations.
  * @param dmin Minimum distance at which the Kihara potential is nonzero.
  * @returns Matrix of generalized forces arising from the Kihara potential. 
  */
@@ -533,44 +531,61 @@ Array<T, 2, 2 * Dim> forcesGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
                                const T half_l2, const T R, const T Rcell,
                                const Ref<const Matrix<T, Dim, 1> >& d12, 
                                const T s, const T t, const T expd, const T exp1,
-                               const T exp2, const T kappa0, const T dmin)
+                               const T dmin)
 {
-    // Get the anisotropy parameters and their partial derivatives 
+    // If the distance is greater than 2 * R, return zero 
+    if (dist > 2 * R)
+        return Matrix<T, 2, 2 * Dim>::Zero(); 
+
+    // Get the first anisotropy parameter and its partial derivatives (second
+    // anisotropy parameter is fixed to 1)
     auto result1 = anisotropyParamWithDerivsGBK1<T, Dim>(
         n1, half_l1, n2, half_l2, Rcell, exp1
     );
     T eps1 = result1.first; 
     Matrix<T, 2, 2 * Dim> deps1 = result1.second; 
-    auto result2 = anisotropyParamWithDerivsGBK2<T, Dim>(
-        r1, n1, half_l1, r2, n2, half_l2, Rcell, exp2, kappa0
-    );
-    T eps2 = result2.first; 
-    Matrix<T, 2, 2 * Dim> deps2 = result2.second; 
-
-    // Use the product rule to get the partial derivatives of the combined
-    // anisotropy parameter
-    Matrix<T, 2, 2 * Dim> deps_combined = eps1 * deps2 + eps2 * deps1;
 
     // Compute the forces ...
-    Matrix<T, 2, 2 * Dim> dEdq;
+    Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
+
+    // Normalize the distance vector 
     T dist = d12.norm(); 
-    if (dist > 0 && dist <= dmin)
+    Matrix<T, Dim, 1> d12n = d12 / dist;
+
+    // If the distance is less than dmin ... 
+    if (dist <= dmin)
     {
-        dEdq = deps_combined * (-pow(dmin, -expd) + pow(2 * R, -expd));
+        T denom1 = pow(dmin, expd); 
+        T denom2 = pow(2 * R, expd);
+        T denom3 = denom1 * dmin; 
+        T denom4 = denom2 * 2 * R; 
+        T term1 = eps1 * expd * ((1.0 / denom3) - (1.0 / denom4));
+        T term2 = expd * dist * ((1.0 / denom3) - (1.0 / denom4));
+        T term3 = (expd + 1) * ((1.0 / denom2) - (1.0 / denom1));
+        Matrix<T, 2, 1> v = term1 * d12n;
+        Matrix<T, 2, 1> w1 = -(term2 + term3) * deps1(0, Eigen::seq(Dim, 2 * Dim - 1));
+        Matrix<T, 2, 1> w2 = -(term2 + term3) * deps1(1, Eigen::seq(Dim, 2 * Dim - 1)); 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = v; 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = -v; 
+        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = w1 + s * v;
+        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = w2 - t * v; 
     }
-    else if (dist > dmin && dist <= 2 * R)
+    // Otherwise ... 
+    else
     {
-        Matrix<T, Dim, 1> d12n = d12 / dist;
-        dEdq(0, Eigen::seq(0, Dim - 1)) = -d12n;
-        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -s * d12n; 
-        dEdq(1, Eigen::seq(0, Dim - 1)) = d12n;
-        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * d12n;
-        dEdq *= (eps1 * eps2 * expd / pow(dist, expd + 1)); 
-        dEdq += deps_combined * (-pow(dist, -expd) + pow(2 * R, -expd)); 
-    }
-    else 
-    {
-        dEdq = Matrix<T, 2, 2 * Dim>::Zero(); 
+        T denom1 = pow(dist, expd); 
+        T denom2 = pow(2 * R, expd);
+        T denom3 = denom1 * dist; 
+        T denom4 = denom2 * 2 * R;
+        T term1 = eps1 * expd * ((1.0 / denom3) - (1.0 / denom4));
+        T term2 = -(1.0 / denom1) - (expd * dist / denom4) + ((expd + 1) / denom2);
+        Matrix<T, 2, 1> v = term1 * d12n; 
+        Matrix<T, 2, 1> w1 = -term2 * deps1(0, Eigen::seq(Dim, 2 * Dim - 1)); 
+        Matrix<T, 2, 1> w2 = -term2 * deps1(1, Eigen::seq(Dim, 2 * Dim - 1)); 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = v; 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = -v; 
+        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = w1 + s * v; 
+        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = w2 - t * v; 
     }
 
     return dEdq.array(); 
