@@ -280,6 +280,9 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
  * Compute the generalized forces between two neighboring cells that arise
  * from the shifted Kihara potential in arbitrary dimensions (2 or 3).
  *
+ * Note that this function technically calculates the *negatives* of the
+ * generalized forces.
+ *
  * @param r1 Center of cell 1.
  * @param n1 Orientation of cell 1.
  * @param half_l1 Half of length of cell 1.
@@ -316,16 +319,16 @@ Array<T, 2, 2 * Dim> forcesKihara(const Ref<const Matrix<T, Dim, 1> >& d12,
         Matrix<T, Dim, 1> v = exp * (term1 - term2) * d12n; 
         
         // Partial derivatives w.r.t cell 1 center 
-        dEdq(0, Eigen::seq(0, Dim - 1)) = v; 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
 
         // Partial derivatives w.r.t cell 2 center 
-        dEdq(1, Eigen::seq(0, Dim - 1)) = -v;
+        dEdq(1, Eigen::seq(0, Dim - 1)) = v;
 
         // Partial derivatives w.r.t cell 1 orientation 
-        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = s * v; 
+        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -s * v; 
 
         // Partial derivatives w.r.t cell 2 orientation 
-        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -t * v;
+        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * v;
     }
     
     return dEdq.array(); 
@@ -495,7 +498,10 @@ std::pair<T, Matrix<T, 2, 2 * Dim> > anisotropyParamWithDerivsGBK2(const Ref<con
  * from the shifted Gay-Berne-Kihara potential in arbitrary dimensions (2
  * or 3).
  *
- * The second anisotropy parameter exponent is assumed to be zero. 
+ * The second anisotropy parameter exponent is assumed to be zero.
+ *
+ * Note that this function technically calculates the *negatives* of the
+ * generalized forces.
  *
  * @param r1 Center of cell 1.
  * @param n1 Orientation of cell 1.
@@ -559,10 +565,10 @@ Array<T, 2, 2 * Dim> forcesGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
         Matrix<T, 2, 1> v = term1 * d12n;
         Matrix<T, 2, 1> w1 = -(term2 + term3) * deps1(0, Eigen::seq(Dim, 2 * Dim - 1));
         Matrix<T, 2, 1> w2 = -(term2 + term3) * deps1(1, Eigen::seq(Dim, 2 * Dim - 1)); 
-        dEdq(0, Eigen::seq(0, Dim - 1)) = v; 
-        dEdq(1, Eigen::seq(0, Dim - 1)) = -v; 
-        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = w1 + s * v;
-        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = w2 - t * v; 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = v; 
+        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -(w1 + s * v);
+        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -(w2 - t * v); 
     }
     // Otherwise ... 
     else
@@ -576,10 +582,10 @@ Array<T, 2, 2 * Dim> forcesGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
         Matrix<T, 2, 1> v = term1 * d12n; 
         Matrix<T, 2, 1> w1 = -term2 * deps1(0, Eigen::seq(Dim, 2 * Dim - 1)); 
         Matrix<T, 2, 1> w2 = -term2 * deps1(1, Eigen::seq(Dim, 2 * Dim - 1)); 
-        dEdq(0, Eigen::seq(0, Dim - 1)) = v; 
-        dEdq(1, Eigen::seq(0, Dim - 1)) = -v; 
-        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = w1 + s * v; 
-        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = w2 - t * v; 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = v; 
+        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -(w1 + s * v); 
+        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -(w2 - t * v); 
     }
 
     return dEdq.array(); 
