@@ -1,9 +1,12 @@
 /**
+ * Updated Kihara- and Gay-Berne-Kihara-based attractive potentials for 
+ * modeling cell-cell adhesion. 
+ *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/7/2024
+ *     10/14/2024
  */
 
 #ifndef KIHARA_GBK_POTENTIAL_FORCES_HPP
@@ -16,6 +19,8 @@ using namespace Eigen;
 
 using std::pow; 
 using boost::multiprecision::pow;
+using std::sqrt;
+using boost::multiprecision::sqrt;
 using std::min;
 using boost::multiprecision::min;
 
@@ -52,11 +57,45 @@ T squaredAspectRatioParam(const T half_l1, const T half_l2, const T Rcell)
  *                              POTENTIALS                               //
  * --------------------------------------------------------------------- */
 /**
- * Compute the shifted Kihara potential between two neighboring cells in
- * arbitrary dimensions (2 or 3).
+ * Compute the Hertzian contact potential between two neighboring cells
+ * in arbitrary dimensions (2 or 3).
  *
  * @param dist Shortest distance from cell 1 to cell 2.
- * @param R Cell radius, including the EPS. 
+ * @param R Cell radius, including the EPS.
+ * @param Rcell Cell radius, excluding the EPS. 
+ * @param E0 Elastic modulus of EPS. 
+ * @param Ecell Elastic modulus of cell.  
+ * @returns Hertzian contact potential at the given cell-cell distance. 
+ */
+template <typename T>
+T potentialHertz(const T dist, const T R, const T Rcell, const T E0, const T Ecell)
+{
+    // If the distance is less than R + Rcell ...
+    if (dist <= R + Rcell)
+    {
+        T d0 = (7 * R + 3 * Rcell) / 5.0; 
+        T term1 = 2.5 * E0 * pow(R - Rcell, 1.5) * (d0 - dist);
+        T term2 = Ecell * pow(R + Rcell - dist, 2.5);
+        return sqrt(R) * (term1 + term2); 
+    }
+    // If the distance is between R + Rcell and 2 * R ... 
+    else if (dist <= 2 * R)
+    {
+        return E0 * sqrt(R) * pow(2 * R - dist, 2.5);
+    }
+    // Otherwise, return zero
+    else
+    {
+        return 0.0;
+    }
+}
+
+/**
+ * Compute the shifted Kihara potential between two neighboring cells
+ * in arbitrary dimensions (2 or 3).
+ *
+ * @param dist Shortest distance from cell 1 to cell 2.
+ * @param R Cell radius, including the EPS.
  * @param exp Exponent in Kihara potential.
  * @param dmin Minimum distance at which the Kihara potential is nonzero.
  * @returns Shifted Kihara potential at the given cell-cell distance. 
@@ -68,15 +107,21 @@ T potentialKihara(const T dist, const T R, const T exp, const T dmin)
     // shift term 
     if (dist <= dmin)
     {
-        // The shift term to be added here is U(dmin) - U(2 * R)
-        return -1.0 / pow(dmin, exp) + 1.0 / pow(2 * R, exp);
+        T denom1 = pow(dmin, exp); 
+        T denom2 = pow(2 * R, exp); 
+        T term1 = exp * dist * ((1.0 / (denom1 * dmin)) - (1.0 / (denom2 * 2 * R)));
+        T term2 = (exp + 1) * ((1.0 / denom2) - (1.0 / denom1));
+        return term1 + term2; 
     }
     // If the distance is greater than dmin and less than 2 * R, then
     // evaluate the potential (plus the corresponding shift term)
-    else if (dist > dmin && dist <= 2 * R)
+    else if (dist <= 2 * R)
     {
-        // The shift term to be subtracted here is U(2 * R)
-        return -1.0 / pow(dist, exp) + 1.0 / pow(2 * R, exp);
+        T term1 = -1.0 / pow(dist, exp); 
+        T denom = pow(2 * R, exp); 
+        T term2 = -exp * dist / (denom * 2 * R);
+        T term3 = (exp + 1) / denom; 
+        return term1 + term2 + term3; 
     }
     // If the distance is greater than 2 * R, return zero 
     else
@@ -173,6 +218,8 @@ T anisotropyParamGBK2(const Ref<const Matrix<T, Dim, 1> >& r1,
  * Compute the shifted Gay-Berne-Kihara potential between two neighboring
  * cells in arbitrary dimensions (2 or 3).
  *
+ * The second anisotropy parameter exponent is assumed to be zero. 
+ *
  * @param r1 Center of cell 1.
  * @param n1 Orientation of cell 1.
  * @param half_l1 Half of length of cell 1.
@@ -185,10 +232,6 @@ T anisotropyParamGBK2(const Ref<const Matrix<T, Dim, 1> >& r1,
  * @param expd Exponent determining the distance dependence in the
  *             Gay-Berne-Kihara potential.
  * @param exp1 Exponent of first anisotropy parameter.
- * @param exp2 Exponent of second anisotropy parameter. 
- * @param kappa0 Constant multiplier for the fold-difference in well-depths
- *               between the side-by-side and head-to-head parallel cell-cell
- *               configurations.
  * @param dmin Minimum distance at which the Kihara potential is nonzero.
  * @returns Shifted Gay-Berne-Kihara potential for the given cell-cell 
  *          configuration. 
@@ -199,30 +242,34 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
                const Ref<const Matrix<T, Dim, 1> >& r2, 
                const Ref<const Matrix<T, Dim, 1> >& n2, const T half_l2,
                const T R, const T Rcell, const T dist, const T expd,
-               const T exp1, const T exp2, const T kappa0, const T dmin)
+               const T exp1, const T dmin)
 {
     // If the distance is greater than 2 * R, return zero 
     if (dist > 2 * R) 
         return 0.0;
 
-    // Otherwise, get the anisotropy parameters 
+    // Otherwise, get the anisotropy parameter (second parameter is fixed to 1) 
     T eps1 = anisotropyParamGBK1<T, Dim>(n1, half_l1, n2, half_l2, Rcell, exp1);
-    T eps2 = anisotropyParamGBK2<T, Dim>(
-        r1, n1, half_l1, r2, n2, half_l2, Rcell, exp2, kappa0
-    );
+    
     // If the distance is less than dmin, then return the corresponding
     // shift term 
     if (dist <= dmin)
     {
-        // The shift term to be added here is U(dmin) - U(2 * R)
-        return eps1 * eps2 * (-1.0 / pow(dmin, expd) + 1.0 / pow(2 * R, expd));
+        T denom1 = pow(dmin, expd); 
+        T denom2 = pow(2 * R, expd); 
+        T term1 = expd * dist * ((1.0 / (denom1 * dmin)) - (1.0 / (denom2 * 2 * R)));
+        T term2 = (expd + 1) * ((1.0 / denom2) - (1.0 / denom1));
+        return eps1 * (term1 + term2); 
     }
     // If the distance is greater than dmin and less than 2 * R, then
     // evaluate the potential (plus the corresponding shift term)
     else
     {
-        // The shift term to be subtracted here is U(2 * R)
-        return eps1 * eps2 * (-1.0 / pow(dist, expd) + 1.0 / pow(2 * R, expd));
+        T denom = pow(2 * R, expd); 
+        T term1 = -1.0 / pow(dmin, expd); 
+        T term2 = -expd * dist / (denom * 2 * R); 
+        T term3 = (expd + 1) / denom;
+        return eps1 * (term1 + term2 + term3); 
     }
 }
 
