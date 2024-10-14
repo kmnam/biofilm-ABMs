@@ -309,33 +309,31 @@ Array<T, 2, 2 * Dim> forcesKihara(const Ref<const Matrix<T, Dim, 1> >& r1,
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
 
-    // Normalize the distance vector 
-    T dist = d12.norm(); 
-    Matrix<T, Dim, 1> d12n = d12 / dist; 
-
-    // If the distance falls within the desired range ... 
-    if (dist > dmin && dist <= 2 * R)
+    // If the distance is less than 2 * R ... 
+    if (dist <= 2 * R)
     {
-        // Get the derivative of the potential with respect to the cell-cell
-        // distance
-        T deriv = exp / pow(dist, exp + 1);
+        // Normalize the distance vector 
+        T dist = d12.norm(); 
+        Matrix<T, Dim, 1> d12n = d12 / dist;
 
-        // Use the above to get the partial derivative of the potential with
-        // respect to each coordinate
-        //
+        // Get the terms that contribute to each generalized force 
+        T term1 = (dist <= dmin ? 1.0 / pow(dmin, exp + 1) : 1.0 / pow(dist, exp + 1)); 
+        T term2 = 1.0 / pow(2 * R, exp + 1);
+        Matrix<T, Dim, 1> v = exp * (term1 - term2) * d12n; 
+        
         // Partial derivatives w.r.t cell 1 center 
-        dEdq(0, Eigen::seq(0, Dim - 1)) = -deriv * d12n; 
-
-        // Partial derivatives w.r.t cell 1 orientation 
-        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -deriv * d12n * s; 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = v; 
 
         // Partial derivatives w.r.t cell 2 center 
-        dEdq(1, Eigen::seq(0, Dim - 1)) = -dEdq(0, Eigen::seq(0, Dim - 1)); 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = -dEdq(0, Eigen::seq(0, Dim - 1));
+
+        // Partial derivatives w.r.t cell 1 orientation 
+        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = s * v; 
 
         // Partial derivatives w.r.t cell 2 orientation 
-        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = deriv * d12n * t;
+        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -t * v;
     }
-
+    
     return dEdq.array(); 
 }
 
