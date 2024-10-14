@@ -308,12 +308,12 @@ Array<T, 2, 2 * Dim> forcesKihara(const Ref<const Matrix<T, Dim, 1> >& r1,
                                   const T dmin)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
+    const T dist = d12.norm(); 
 
     // If the distance is less than 2 * R ... 
     if (dist <= 2 * R)
     {
         // Normalize the distance vector 
-        T dist = d12.norm(); 
         Matrix<T, Dim, 1> d12n = d12 / dist;
 
         // Get the terms that contribute to each generalized force 
@@ -533,7 +533,8 @@ Array<T, 2, 2 * Dim> forcesGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
                                const T s, const T t, const T expd, const T exp1,
                                const T dmin)
 {
-    // If the distance is greater than 2 * R, return zero 
+    // If the distance is greater than 2 * R, return zero
+    const T dist = d12.norm(); 
     if (dist > 2 * R)
         return Matrix<T, 2, 2 * Dim>::Zero(); 
 
@@ -549,7 +550,6 @@ Array<T, 2, 2 * Dim> forcesGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
 
     // Normalize the distance vector 
-    T dist = d12.norm(); 
     Matrix<T, Dim, 1> d12n = d12 / dist;
 
     // If the distance is less than dmin ... 
