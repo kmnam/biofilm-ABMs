@@ -18,29 +18,9 @@ import pyvista as pv
 import seaborn as sns
 from utils import read_cells, parse_dir
 
-__colidx_id = 0
-__colidx_rx = 1
-__colidx_ry = 2
-__colseq_r = [1, 2]
-__colidx_nx = 3
-__colidx_ny = 4
-__colseq_n = [3, 4]
-__colidx_drx = 5
-__colidx_dry = 6
-__colidx_dnx = 7
-__colidx_dny = 8
-__colidx_l = 9
-__colidx_half_l = 10
-__colidx_t0 = 11
-__colidx_growth = 12
-__colidx_eta0 = 13
-__colidx_eta1 = 14
-__colidx_group = 15
-__colidx_bound = -1
-
 #######################################################################
 def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
-               title, view='xy', res=50):
+               title, plot_3d=False, view='xy', res=50):
     """
     Plot the given population of cells with the given colors to the given
     PDF file. 
@@ -70,9 +50,49 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
     res : int
         Resolution for plotting each cylinder and hemisphere.
     """
+    if plot_3d:
+        _colidx_id = 0
+        _colidx_rx = 1
+        _colidx_ry = 2
+        _colidx_rz = 3
+        _colseq_r = [1, 2, 3]
+        _colidx_nx = 4
+        _colidx_ny = 5
+        _colidx_nz = 6
+        _colseq_n = [4, 5, 6]
+        _colidx_l = 7          # TODO For now
+        _colidx_half_l = 8
+        _colidx_group = 9
+    else:
+        _colidx_id = 0
+        _colidx_rx = 1
+        _colidx_ry = 2
+        _colseq_r = [1, 2]
+        _colidx_nx = 3
+        _colidx_ny = 4
+        _colseq_n = [3, 4]
+        _colidx_drx = 5
+        _colidx_dry = 6
+        _colidx_dnx = 7
+        _colidx_dny = 8
+        _colidx_l = 9
+        _colidx_half_l = 10
+        _colidx_t0 = 11
+        _colidx_growth = 12
+        _colidx_eta0 = 13
+        _colidx_eta1 = 14
+        _colidx_maxeta1 = 15
+        _colidx_group = 16
+        _colidx_bound = -1
+
     # Define arrays for cell centers and orientations with z-coordinate
-    positions = np.hstack((cells[:, __colseq_r], rz * np.ones((cells.shape[0], 1))))
-    orientations = np.hstack((cells[:, __colseq_n], np.zeros((cells.shape[0], 1))))
+    if plot_3d:   # If plotting 3-D population, plot only the bottom layer 
+        cells = cells[cells[:, _colidx_rz] < rz + R, :]
+        positions = cells[:, _colseq_r]
+        orientations = cells[:, _colseq_n]
+    else:
+        positions = np.hstack((cells[:, _colseq_r], rz * np.ones((cells.shape[0], 1))))
+        orientations = np.hstack((cells[:, _colseq_n], np.zeros((cells.shape[0], 1))))
 
     # Plot each spherocylinder ... 
     for i in range(cells.shape[0]):
@@ -82,12 +102,12 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
             center=positions[i, :],
             direction=orientations[i, :],
             radius=R,
-            height=cells[i, __colidx_l],
+            height=cells[i, _colidx_l],
             resolution=res,
             capping=False
         )
-        cap1_center = positions[i, :] - cells[i, __colidx_half_l] * orientations[i, :]
-        cap2_center = positions[i, :] + cells[i, __colidx_half_l] * orientations[i, :]
+        cap1_center = positions[i, :] - cells[i, _colidx_half_l] * orientations[i, :]
+        cap2_center = positions[i, :] + cells[i, _colidx_half_l] * orientations[i, :]
         cap1 = pv.Sphere(
             center=cap1_center,
             direction=orientations[i, :],
@@ -140,10 +160,10 @@ def plot_cells(cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
     return pl
 
 #######################################################################
-def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
-               ymax=None, zmin=None, zmax=None, view='xy', res=50, time=None,
-               uniform_color=False, plot_boundary=False, plot_membrane=False,
-               plot_arrested=False):
+def plot_frame(filename, outfilename, pl, xmin=None, xmax=None, ymin=None,
+               ymax=None, zmin=None, zmax=None, plot_3d=False, view='xy', res=50,
+               time=None, uniform_color=False, plot_boundary=False,
+               plot_membrane=False, plot_arrested=False):
     """
     Given an ordered list of files containing cells to be plotted, parse 
     and plot each population of cells and generate a video.
@@ -156,6 +176,8 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
         Path to file containing the cells to be plotted.
     outfilename : str
         Output filename.
+    pl : `pyvista.Plotter`
+        Existing Plotter instance. 
     xmin, xmax : float, float
         x-axis bounds. 
     ymin, ymax : float, float
@@ -181,6 +203,41 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
         If True, look for non-growing cells and plot them with a different 
         color.
     """
+    if plot_3d:
+        _colidx_id = 0
+        _colidx_rx = 1
+        _colidx_ry = 2
+        _colidx_rz = 3
+        _colseq_r = [1, 2, 3]
+        _colidx_nx = 4
+        _colidx_ny = 5
+        _colidx_nz = 6
+        _colseq_n = [4, 5, 6]
+        _colidx_l = 7          # TODO For now
+        _colidx_half_l = 8
+        _colidx_group = 9
+    else:
+        _colidx_id = 0
+        _colidx_rx = 1
+        _colidx_ry = 2
+        _colseq_r = [1, 2]
+        _colidx_nx = 3
+        _colidx_ny = 4
+        _colseq_n = [3, 4]
+        _colidx_drx = 5
+        _colidx_dry = 6
+        _colidx_dnx = 7
+        _colidx_dny = 8
+        _colidx_l = 9
+        _colidx_half_l = 10
+        _colidx_t0 = 11
+        _colidx_growth = 12
+        _colidx_eta0 = 13
+        _colidx_eta1 = 14
+        _colidx_maxeta1 = 15
+        _colidx_group = 16
+        _colidx_bound = -1
+
     palette = [    # Assume a maximum of two groups
         sns.color_palette('hls', 8)[5],
         sns.color_palette('hls', 8)[0]
@@ -193,6 +250,9 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
         sns.color_palette('deep')[4], 
         sns.color_palette('deep')[1]
     ]
+
+    # Clear plotter 
+    #pl.clear()
     
     # Parse the cells and infer axes limits
     cells, params = read_cells(filename)
@@ -202,17 +262,17 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
     sigma0 = params['sigma0']
     rz = R - (1 / R) * ((R * R * sigma0) / (4 * E0)) ** (2 / 3)
     if xmin is None:
-        xmin = np.floor(cells[:, __colidx_rx].min() - 4 * L0)
+        xmin = np.floor(cells[:, _colidx_rx].min() - 4 * L0)
     if xmax is None:
-        xmax = np.ceil(cells[:, __colidx_rx].max() + 4 * L0)
+        xmax = np.ceil(cells[:, _colidx_rx].max() + 4 * L0)
     if ymin is None:
-        ymin = np.floor(cells[:, __colidx_ry].min() - 4 * L0)
+        ymin = np.floor(cells[:, _colidx_ry].min() - 4 * L0)
     if ymax is None:
-        ymax = np.ceil(cells[:, __colidx_ry].max() + 4 * L0)
+        ymax = np.ceil(cells[:, _colidx_ry].max() + 4 * L0)
     if zmin is None:
-        zmin = rz - R
+        zmin = rz - R        # Plot only the bottom layer if in 3-D
     if zmax is None:
-        zmax = rz + 2 * R
+        zmax = rz + 2 * R    # Plot only the bottom layer if in 3-D
     if time is None:
         time = params['t_curr']
 
@@ -220,26 +280,23 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
     if uniform_color:
         colors = [palette[0] for i in range(cells.shape[0])]
     else:
-        ngroups = int(max(cells[:, __colidx_group]))
+        ngroups = int(max(cells[:, _colidx_group]))
         palette_ = palette[:ngroups]
         pastel_ = pastel[:ngroups]
         deep_ = deep[:ngroups]
         colors = []
         for i in range(cells.shape[0]):
-            group_idx = int(cells[i, __colidx_group]) - 1
-            if plot_boundary and cells[i, __colidx_bound] != 0:
+            group_idx = int(cells[i, _colidx_group]) - 1
+            if plot_boundary and cells[i, _colidx_bound] != 0:
                 colors.append(deep_[group_idx])
-            elif plot_arrested and cells[i, __colidx_growth] == 0:
+            elif plot_arrested and cells[i, _colidx_growth] == 0:
                 colors.append(pastel_[group_idx])
             else:
                 colors.append(palette_[group_idx])
 
-    # Set up the plotter
-    pl = pv.Plotter(off_screen=True)
-
     # Plot the circle (if desired)
     if plot_membrane:
-        max_area = cells.shape[0] * np.pi * R * R + 2 * R * cells[:, __colidx_l].sum()
+        max_area = cells.shape[0] * np.pi * R * R + 2 * R * cells[:, _colidx_l].sum()
         radius = params['confine_rest_radius_factor'] * np.sqrt(max_area / np.pi)
         pl.add_mesh(
             pv.Disc(
@@ -256,19 +313,20 @@ def plot_frame(filename, outfilename, xmin=None, xmax=None, ymin=None,
     print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
     title = 't = {:.10f}, n = {}'.format(time, cells.shape[0])
     pl = plot_cells(
-        cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
-        title, view=view, res=res
+        cells, pl, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax, title,
+        plot_3d=plot_3d, view=view, res=res
     )
 
     # Get a screenshot of the plotted cells
     image = Image.fromarray(pl.screenshot())
     print('... saving to {}'.format(outfilename))
     image.save(outfilename)
-    pl.close()
+
+    return pl
 
 #######################################################################
 def plot_simulation(filenames, outfilename, xmin, xmax, ymin, ymax, zmin, zmax,
-                    res=50, fps=20, times=None, uniform_color=False,
+                    plot_3d=False, res=50, fps=20, times=None, uniform_color=False,
                     plot_boundary=False, plot_membrane=False, plot_arrested=False,
                     overwrite_frames=False):
     """
@@ -314,6 +372,9 @@ def plot_simulation(filenames, outfilename, xmin, xmax, ymin, ymax, zmin, zmax,
         If False, then any existing .jpg file with the same name as that 
         for a given frame is kept as is; if not, each frame is overwritten. 
     """
+    # Set up the plotter
+    pl = pv.Plotter(off_screen=True)
+
     image_filenames = []
     for i, filename in enumerate(filenames):
         # Determine the filename for the frame 
@@ -328,14 +389,15 @@ def plot_simulation(filenames, outfilename, xmin, xmax, ymin, ymax, zmin, zmax,
         
         # If the image file does not exist or is to be overwritten ... 
         if overwrite_frames or not os.path.exists(image_filename):
-            plot_frame(
-                filename, image_filename, xmin=xmin, xmax=xmax, ymin=ymin,
-                ymax=ymax, zmin=zmin, zmax=zmax, view='xy', res=res, time=time,
-                uniform_color=uniform_color, plot_boundary=plot_boundary,
-                plot_membrane=plot_membrane, plot_arrested=plot_arrested
+            pl = plot_frame(
+                filename, image_filename, pl, xmin=xmin, xmax=xmax, ymin=ymin,
+                ymax=ymax, zmin=zmin, zmax=zmax, plot_3d=plot_3d, view='xy',
+                res=res, time=time, uniform_color=uniform_color,
+                plot_boundary=plot_boundary, plot_membrane=plot_membrane,
+                plot_arrested=plot_arrested
             )
             image_filenames.append(image_filename)
-            sleep(1.0)
+            #sleep(1.0)
 
     # Stitch the images together and export as an .avi file
     width = None

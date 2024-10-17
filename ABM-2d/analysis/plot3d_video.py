@@ -14,26 +14,6 @@ import numpy as np
 from utils import read_cells, parse_dir
 from plot3d import plot_simulation
 
-__colidx_id = 0
-__colidx_rx = 1
-__colidx_ry = 2
-__colseq_r = [1, 2]
-__colidx_nx = 3
-__colidx_ny = 4
-__colseq_n = [3, 4]
-__colidx_drx = 5
-__colidx_dry = 6
-__colidx_dnx = 7
-__colidx_dny = 8
-__colidx_l = 9
-__colidx_half_l = 10
-__colidx_t0 = 11
-__colidx_growth = 12
-__colidx_eta0 = 13
-__colidx_eta1 = 14
-__colidx_group = 15
-__colidx_bound = -1
-
 #######################################################################
 if __name__ == '__main__':
     inprefix = sys.argv[1]
@@ -45,6 +25,7 @@ if __name__ == '__main__':
     plot_boundary = ('--bound' in args)
     plot_membrane = ('--membrane' in args)
     plot_arrested = ('--arrested' in args)
+    plot_3d = ('--3d' in args)
     overwrite_frames = ('--overwrite' in args)
     multistage = ('--multistage' in args)
     filenames = parse_dir(inprefix, multistage=multistage)
@@ -73,10 +54,12 @@ if __name__ == '__main__':
     E0 = params['E0']
     sigma0 = params['sigma0']
     rz = R - (1 / R) * ((R * R * sigma0) / (4 * E0)) ** (2 / 3)
-    xmin = np.floor(cells[:, __colidx_rx].min() - 4 * L0)
-    xmax = np.ceil(cells[:, __colidx_rx].max() + 4 * L0)
-    ymin = np.floor(cells[:, __colidx_ry].min() - 4 * L0)
-    ymax = np.ceil(cells[:, __colidx_ry].max() + 4 * L0)
+    _colidx_rx = 1
+    _colidx_ry = 2
+    xmin = np.floor(cells[:, _colidx_rx].min() - 4 * L0)
+    xmax = np.ceil(cells[:, _colidx_rx].max() + 4 * L0)
+    ymin = np.floor(cells[:, _colidx_ry].min() - 4 * L0)
+    ymax = np.ceil(cells[:, _colidx_ry].max() + 4 * L0)
     zmin = rz - R
     zmax = rz + R
     t_final = (
@@ -117,7 +100,7 @@ if __name__ == '__main__':
     while end <= nframes_total:
         plot_simulation(
             filenames_nearest[start:end], outprefix + '_{}.avi'.format(i),
-            xmin, xmax, ymin, ymax, zmin, zmax, res=20, fps=20,
+            xmin, xmax, ymin, ymax, zmin, zmax, plot_3d=plot_3d, res=20, fps=20,
             times=plot_timepoints[start:end], uniform_color=uniform_color,
             plot_boundary=plot_boundary, plot_membrane=plot_membrane,
             plot_arrested=plot_arrested, overwrite_frames=overwrite_frames

@@ -9,6 +9,7 @@ Last updated:
 """
 
 import sys
+import pyvista as pv
 from plot3d import plot_frame
 
 #######################################################################
@@ -20,9 +21,12 @@ if __name__ == '__main__':
     plot_boundary = ('--bound' in args)
     plot_membrane = ('--membrane' in args)
     plot_arrested = ('--arrested' in args)
+    plot_3d = ('--3d' in args)
+    pl = pv.Plotter(off_screen=True)
+    #pl.clear()
     plot_frame(
-        filename, outfilename, view='xy', res=20, uniform_color=uniform_color,
-        plot_boundary=plot_boundary, plot_membrane=plot_membrane,
-        plot_arrested=plot_arrested
+        filename, outfilename, pl, plot_3d=plot_3d, view='xy', res=20,
+        uniform_color=uniform_color, plot_boundary=plot_boundary,
+        plot_membrane=plot_membrane, plot_arrested=plot_arrested
     )
 
