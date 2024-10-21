@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/14/2024
+ *     10/21/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -517,6 +517,156 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
 }
 
 /**
+ * Compute two vectors for each pair of neighboring cells: (1) the contact 
+ * point and (2) the relative tangential velocity. 
+ *
+ * In this function, the pairs of neighboring cells in the population have
+ * been pre-computed. 
+ *
+ * @param cells Current population of cells.
+ * @param neighbors Array specifying pairs of neighboring cells in the
+ *                  population.
+ * @param R Cell radius, including the EPS. 
+ * @returns Relative tangential velocities for all pairs of neighboring cells.
+ */
+template <typename T>
+std::tuple<Array<int, Dynamic, 1>, Array<T, Dynamic, 2>, Array<T, Dynamic, 2> >
+    relativeTangentialVelocities(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                 const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                 const T R)
+{
+    int n = cells.rows();       // Number of cells
+    int m = neighbors.rows();   // Number of neighboring pairs
+    
+    // For each pair of neighboring cells ...
+    Array<int, Dynamic, 1> contacting = Array<int, Dynamic, 1>::Zero(m); 
+    Array<T, Dynamic, 2> contact_points = Array<T, Dynamic, 2>::Zero(m, 2); 
+    Array<T, Dynamic, 2> velocities = Array<T, Dynamic, 2>::Zero(m, 2);
+    for (int k = 0; k < m; ++k)
+    {
+        int i = static_cast<int>(neighbors(k, 0)); 
+        int j = static_cast<int>(neighbors(k, 1));
+        Matrix<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3)).matrix();
+        T d = dij.norm();
+
+        // If the two cells are contacting ... 
+        if (d < 2 * R)
+        {
+            contacting(k) = 1; 
+            Matrix<T, 2, 1> dijn = dij / d; 
+            T si = neighbors(k, 4); 
+            T sj = neighbors(k, 5);
+
+            // Determine the contact point 
+            Array<T, 2, 1> ui = cells(i, __colseq_r) + si * cells(i, __colseq_n);
+            Array<T, 2, 1> uj = cells(j, __colseq_r) + sj * cells(j, __colseq_n);
+            Array<T, 2, 1> uij = (ui + uj) / 2;
+            contact_points.row(k) = uij.transpose(); 
+
+            // Determine the angular velocities of the two cells (note that 
+            // these are really the z-coordinates of 3-D vectors that are 
+            // parallel with the z-axis)
+            T wi = cells(i, __colidx_dny) / cells(i, __colidx_nx);
+            T wj = cells(j, __colidx_dny) / cells(j, __colidx_nx);
+
+            // Get the velocities of the two cells at the contact point
+            Array<T, 2, 1> bi = uij - cells(i, __colseq_r);
+            Array<T, 2, 1> bj = uij - cells(j, __colseq_r);
+            Array<T, 2, 1> ci, cj;
+            ci << -wi * bi(1), wi * bi(0); 
+            cj << -wj * bj(1), wj * bj(0);
+            Array<T, 2, 1> vi = cells(i, __colseq_dr) + ci; 
+            Array<T, 2, 1> vj = cells(j, __colseq_dr) + cj;
+
+            // Get the relative velocity ... 
+            Array<T, 2, 1> vij = vi - vj; 
+
+            // ... and its projection onto the normal direction ... 
+            Array<T, 2, 1> vijn = vij.matrix().dot(dijn) * dijn.array();
+
+            // ... and the corresponding rejection 
+            velocities.row(k) = (vij - vijn).transpose();  
+        }
+    }
+
+    return std::make_tuple(contacting, contact_points, velocities);
+}
+
+/**
+ * Compute the derivatives of the dissipation due to cell-cell tangential 
+ * friction for each pair of neighboring cells, with respect to each cell's
+ * translational and orientational velocities.
+ *
+ * In this function, the pairs of neighboring cells in the population have
+ * been pre-computed. 
+ *
+ * @param cells Current population of cells.
+ * @param neighbors Array specifying pairs of neighboring cells in the
+ *                  population.
+ * @param iter Iteration number. Only used for debugging output. 
+ * @param R Cell radius, including the EPS.
+ * @param eta Cell-cell friction coefficient. 
+ * @returns Derivatives of the dissipation due to cell-cell tangential friction
+ *          for each pair of neighboring cells. 
+ */
+template <typename T>
+Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                            const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                            const int iter, const T R, const T eta)
+{
+    int n = cells.rows();       // Number of cells
+    int m = neighbors.rows();   // Number of neighboring pairs
+
+    // If there is only one cell, return zero
+    if (n == 1)
+        return Array<T, Dynamic, 4>::Zero(n, 4); 
+
+    // Maintain array of partial derivatives of the dissipation
+    //
+    // Each row corresponds to a pair of neighboring cells, and contains 
+    // six entries:
+    // 1-2) Negative generalized force with respect to cell i
+    // 3-4) Negative generalized torque with respect to cell i 
+    // 5-6) Negative generalized torque with respect to cell j 
+    Array<T, Dynamic, 6> dEdq = Array<T, Dynamic, 6>::Zero(m, 4);
+
+    // Get contact points and relative tangential velocities 
+    auto result = relativeTangentialVelocities<T>(cells, neighbors, R);
+    Array<int, Dynamic, 1> contacting = std::get<0>(result); 
+    Array<T, Dynamic, 2> contact_points = std::get<1>(result); 
+    Array<T, Dynamic, 2> velocities = std::get<2>(result); 
+
+    // For each pair of neighboring cells ...
+    for (int k = 0; k < neighbors.rows(); ++k)
+    {
+        // If the two cells are contacting ... 
+        if (contacting)
+        {
+            // Get the overlap between the two cells 
+            T overlap = 2 * R - neighbors(k, Eigen::seq(2, 3)).matrix().norm();
+
+            // Get the negative generalized force with respect to cell i
+            dEdq(k, Eigen::seq(0, 1)) = eta * sqrt(overlap) * velocities.row(k); 
+
+            // Get the negative generalized torque with respect to cell i
+            int i = static_cast<int>(neighbors(k, 0)); 
+            int j = static_cast<int>(neighbors(k, 1)); 
+            Array<T, 2, 1> ui = contact_points.row(k) - cells(i, __colseq_r);
+            Array<T, 2, 1> uj = contact_points.row(k) - cells(j, __colseq_r); 
+            Array<T, 2, 1> wi, wj; 
+            wi << -ui(1) / cells(i, __colidx_ny), ui(0) / cells(i, __colidx_nx); 
+            wj << -uj(1) / cells(j, __colidx_ny), uj(0) / cells(j, __colidx_nx); 
+            dEdq(k, Eigen::seq(2, 3)) = eta * sqrt(overlap) * wi * velocities.row(k); 
+
+            // Get the negative generalized torque with respect to cell j 
+            dEdq(k, Eigen::seq(4, 5)) = -eta * sqrt(overlap) * wj * velocities.row(k);
+        }
+    }
+
+    return dEdq;  
+}
+
+/**
  * Given the current positions, orientations, lengths, viscosity coefficients,
  * and surface friction coefficients for the given population of cells, compute
  * their translational and orientational velocities.
@@ -696,10 +846,6 @@ void truncateSurfaceFrictionCoeffsCoulomb(Ref<Array<T, Dynamic, Dynamic> > cells
     for (int i = 0; i < n; ++i)
         cells(i, __colidx_eta1) = min(eta1_bounds(i), cells(i, __colidx_maxeta1)); 
 }
-
-// TODO Introduce cell-cell tangential forces 
-//
-// TODO Introduce cell-cell tangential force truncation 
 
 /**
  * Normalize the orientation vectors of all cells in the given population.
