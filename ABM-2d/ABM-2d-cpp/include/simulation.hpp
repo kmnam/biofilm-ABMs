@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/13/2024
+ *     10/22/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -113,6 +113,7 @@ std::string floatToString(T x, const int precision = 10)
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param eta_cell_cell Cell-cell friction coefficient. 
  * @param truncate_surface_friction If true, truncate cell-surface friction
  *                                  coefficients according to Coulomb's law
  *                                  of friction.
@@ -165,6 +166,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T growth_std,
                   const T daughter_length_std,
                   const T daughter_angle_bound,
+                  const T eta_cell_cell, 
                   const bool truncate_surface_friction,
                   const T surface_coulomb_coeff,
                   const T max_noise,
@@ -282,6 +284,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["growth_std"] = floatToString<T>(growth_std, precision);
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["eta_cell_cell"] = floatToString<T>(eta_cell_cell, precision); 
     params["truncate_surface_friction"] = (truncate_surface_friction ? "1"  : "0"); 
     params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_noise"] = floatToString<T>(max_noise, precision); 
@@ -469,9 +472,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Update cell positions and orientations 
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, max_noise, rng,
-            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
-            confine_params
+            cell_cell_prefactors, surface_contact_density, eta_cell_cell, 
+            max_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+            confine, boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -507,9 +510,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
-                    cell_cell_prefactors, surface_contact_density, max_noise,
-                    rng, uniform_dist, adhesion_mode, adhesion_params, confine,
-                    boundary_idx, confine_params
+                    cell_cell_prefactors, surface_contact_density, eta_cell_cell,
+                    max_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+                    confine, boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -543,9 +546,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-                cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                uniform_dist, adhesion_mode, adhesion_params, confine,
-                boundary_idx, confine_params
+                cell_cell_prefactors, surface_contact_density, eta_cell_cell, 
+                max_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+                confine, boundary_idx, confine_params
             ); 
             cells_new = result.first;
             errors = result.second;
@@ -566,14 +569,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         #endif
         cells = cells_new;
-
-        // Truncate cell-surface friction coefficients according to Coulomb's law
-        if (truncate_surface_friction)
-        {
-            truncateSurfaceFrictionCoeffsCoulomb<T>(
-                cells, R, E0, surface_contact_density, surface_coulomb_coeff
-            );
-        }
 
         // Grow the cells
         growCells<T>(cells, dt, R);
@@ -605,6 +600,14 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Update peripheral cells
         if (find_boundary && iter % iter_update_boundary == 0)
             boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
+
+        // Truncate cell-surface friction coefficients according to Coulomb's law
+        if (truncate_surface_friction)
+        {
+            truncateSurfaceFrictionCoeffsCoulomb<T>(
+                cells, R, E0, surface_contact_density, surface_coulomb_coeff
+            );
+        }
 
         // Introduce or update growth void
         if ((growth_void_mode == GrowthVoidMode::FIXED_CORE && !void_introduced) ||
@@ -731,6 +734,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param eta_cell_cell Cell-cell friction coefficient. 
  * @param truncate_surface_friction If true, truncate cell-surface friction
  *                                  coefficients according to Coulomb's law
  *                                  of friction.
@@ -791,6 +795,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
                   const T daughter_length_std,
                   const T daughter_angle_bound,
+                  const T eta_cell_cell, 
                   const bool truncate_surface_friction,
                   const T surface_coulomb_coeff,
                   const T max_noise,
@@ -971,6 +976,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["eta_cell_cell"] = floatToString<T>(eta_cell_cell, precision); 
     params["truncate_surface_friction"] = (truncate_surface_friction ? "1" : "0"); 
     params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_noise"] = floatToString<T>(max_noise, precision); 
@@ -1174,9 +1180,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Update cell positions and orientations
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, max_noise, rng,
-            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
-            confine_params
+            cell_cell_prefactors, surface_contact_density, eta_cell_cell,
+            max_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+            confine, boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -1212,9 +1218,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
-                    cell_cell_prefactors, surface_contact_density, max_noise,
-                    rng, uniform_dist, adhesion_mode, adhesion_params, confine,
-                    boundary_idx, confine_params
+                    cell_cell_prefactors, surface_contact_density, eta_cell_cell,
+                    max_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+                    confine, boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -1248,9 +1254,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-                cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                uniform_dist, adhesion_mode, adhesion_params, confine,
-                boundary_idx, confine_params
+                cell_cell_prefactors, surface_contact_density, eta_cell_cell, 
+                max_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+                confine, boundary_idx, confine_params
             ); 
             cells_new = result.first;
             errors = result.second;
@@ -1271,14 +1277,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         #endif
         cells = cells_new;
-
-        // Truncate cell-surface friction coefficients according to Coulomb's law
-        if (truncate_surface_friction)
-        {
-            truncateSurfaceFrictionCoeffsCoulomb<T>(
-                cells, R, E0, surface_contact_density, surface_coulomb_coeff
-            );
-        }
 
         // Grow the cells
         growCells<T>(cells, dt, R);
@@ -1335,6 +1333,19 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         {
             if (in_void(i) && cells(i, __colidx_growth) > 0)
                 cells(i, __colidx_growth) = 0.0;
+        }
+
+        // Truncate cell-surface friction coefficients according to Coulomb's law
+        if (truncate_surface_friction)
+        {
+            truncateSurfaceFrictionCoeffsCoulomb<T>(
+                cells, R, E0, surface_contact_density, surface_coulomb_coeff
+            );
+        }
+        else    // Otherwise, ensure that friction coefficients are correct after switching 
+        {
+            for (int i = 0; i < n; ++i)
+                cells(i, __colidx_eta1) = cells(i, __colidx_maxeta1);
         }
 
         // Introduce or update growth void
@@ -1472,6 +1483,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
+ * @param eta_cell_cell Cell-cell friction coefficient. 
  * @param truncate_surface_friction If true, truncate cell-surface friction
  *                                  coefficients according to Coulomb's law
  *                                  of friction.
@@ -1530,6 +1542,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                              const T partition_logratio_std,
                              const T daughter_length_std,
                              const T daughter_angle_bound,
+                             const T eta_cell_cell, 
                              const bool truncate_surface_friction,
                              const T surface_coulomb_coeff,
                              const T max_noise,
@@ -1707,6 +1720,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["partition_logratio_std"] = floatToString<T>(partition_logratio_std, precision); 
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
+    params["eta_cell_cell"] = floatToString<T>(eta_cell_cell, precision); 
     params["truncate_surface_friction"] = (truncate_surface_friction ? "1" : "0"); 
     params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_noise"] = floatToString<T>(max_noise, precision); 
@@ -1921,9 +1935,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Update cell positions and orientations
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, max_noise, rng,
-            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
-            confine_params
+            cell_cell_prefactors, surface_contact_density, eta_cell_cell, 
+            max_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+            confine, boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -1959,9 +1973,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
-                    cell_cell_prefactors, surface_contact_density, max_noise,
-                    rng, uniform_dist, adhesion_mode, adhesion_params, confine,
-                    boundary_idx, confine_params
+                    cell_cell_prefactors, surface_contact_density, eta_cell_cell,
+                    max_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+                    confine, boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -1995,9 +2009,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-                cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                uniform_dist, adhesion_mode, adhesion_params, confine,
-                boundary_idx, confine_params
+                cell_cell_prefactors, surface_contact_density, eta_cell_cell,
+                max_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+                confine, boundary_idx, confine_params
             ); 
             cells_new = result.first;
             errors = result.second;
@@ -2057,6 +2071,19 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Update peripheral cells
         if (find_boundary && iter % iter_update_boundary == 0)
             boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
+
+        // Truncate cell-surface friction coefficients according to Coulomb's law
+        if (truncate_surface_friction)
+        {
+            truncateSurfaceFrictionCoeffsCoulomb<T>(
+                cells, R, E0, surface_contact_density, surface_coulomb_coeff
+            );
+        }
+        else    // Otherwise, ensure that friction coefficients are correct after switching 
+        {
+            for (int i = 0; i < n; ++i)
+                cells(i, __colidx_eta1) = cells(i, __colidx_maxeta1);
+        }
 
         // Introduce or update growth void
         if ((growth_void_mode == GrowthVoidMode::FIXED_CORE && !void_introduced) ||
