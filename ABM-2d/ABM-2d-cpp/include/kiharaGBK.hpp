@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/14/2024
+ *     10/23/2024
  */
 
 #ifndef KIHARA_GBK_POTENTIAL_FORCES_HPP
@@ -274,23 +274,18 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
 }
 
 /* --------------------------------------------------------------------- //
- *                      FORCES IN 2 OR 3 DIMENSIONS                      //
+ *           LAGRANGIAN GENERALIZED FORCES IN 2 OR 3 DIMENSIONS          //
  * --------------------------------------------------------------------- */
 /**
- * Compute the generalized forces between two neighboring cells that arise
- * from the shifted Kihara potential in arbitrary dimensions (2 or 3).
+ * Compute the Lagrangian generalized forces between two neighboring cells
+ * that arise from the shifted Kihara potential in arbitrary dimensions (2
+ * or 3).
  *
  * Note that this function technically calculates the *negatives* of the
  * generalized forces.
  *
- * @param r1 Center of cell 1.
- * @param n1 Orientation of cell 1.
- * @param half_l1 Half of length of cell 1.
- * @param r2 Center of cell 2.
- * @param n2 Orientation of cell 2.
- * @param half_l2 Half of length of cell 2. 
- * @param R Cell radius, including the EPS. 
  * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param R Cell radius, including the EPS. 
  * @param s Cell-body coordinate along cell 1 at which shortest distance is 
  *          achieved. 
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
@@ -300,9 +295,9 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
  * @returns Matrix of generalized forces arising from the Kihara potential. 
  */
 template <typename T, int Dim>
-Array<T, 2, 2 * Dim> forcesKihara(const Ref<const Matrix<T, Dim, 1> >& d12,
-                                  const T R, const T s, const T t, const T exp,
-                                  const T dmin)
+Array<T, 2, 2 * Dim> forcesKiharaLagrange(const Ref<const Matrix<T, Dim, 1> >& d12,
+                                          const T R, const T s, const T t,
+                                          const T exp, const T dmin)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
     const T dist = d12.norm(); 
@@ -523,15 +518,15 @@ std::pair<T, Matrix<T, 2, 2 * Dim> > anisotropyParamWithDerivsGBK2(const Ref<con
  * @returns Matrix of generalized forces arising from the Kihara potential. 
  */
 template <typename T, int Dim>
-Array<T, 2, 2 * Dim> forcesGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
-                               const Ref<const Matrix<T, Dim, 1> >& n1, 
-                               const T half_l1,
-                               const Ref<const Matrix<T, Dim, 1> >& r2, 
-                               const Ref<const Matrix<T, Dim, 1> >& n2,
-                               const T half_l2, const T R, const T Rcell,
-                               const Ref<const Matrix<T, Dim, 1> >& d12, 
-                               const T s, const T t, const T expd, const T exp1,
-                               const T dmin)
+Array<T, 2, 2 * Dim> forcesGBKLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
+                                       const Ref<const Matrix<T, Dim, 1> >& n1, 
+                                       const T half_l1,
+                                       const Ref<const Matrix<T, Dim, 1> >& r2, 
+                                       const Ref<const Matrix<T, Dim, 1> >& n2,
+                                       const T half_l2, const T R, const T Rcell,
+                                       const Ref<const Matrix<T, Dim, 1> >& d12, 
+                                       const T s, const T t, const T expd,
+                                       const T exp1, const T dmin)
 {
     // If the distance is greater than 2 * R, return zero
     const T dist = d12.norm(); 
@@ -570,8 +565,8 @@ Array<T, 2, 2 * Dim> forcesGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
         dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -(w1 + s * v);
         dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -(w2 - t * v); 
     }
-    // Otherwise ... 
-    else
+    // Otherwise, if the distance is less than 2 * R ...  
+    else if (dist <= 2 * R)
     {
         T denom1 = pow(dist, expd); 
         T denom2 = pow(2 * R, expd);
@@ -589,6 +584,116 @@ Array<T, 2, 2 * Dim> forcesGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
     }
 
     return dEdq.array(); 
+}
+
+/* --------------------------------------------------------------------- //
+ *                  NEWTONIAN FORCES IN 2 OR 3 DIMENSIONS                //
+ * --------------------------------------------------------------------- */
+/**
+ * Compute the Newtonian forces between two neighboring cells that arise
+ * from the shifted Kihara potential in arbitrary dimensions (2 or 3).
+ *
+ * Note that this function calculates the force on cell 1 due to cell 2. 
+ *
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param R Cell radius, including the EPS. 
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved. 
+ * @param exp Exponent in Kihara potential.
+ * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @returns Force on cell 1 due to cell 2 arising from the Kihara potential. 
+ */
+template <typename T, int Dim>
+Array<T, Dim, 1> forceKiharaNewton(const Ref<const Matrix<T, Dim, 1> >& d12,
+                                   const T R, const T s, const T t, const T exp,
+                                   const T dmin)
+{
+    Matrix<T, Dim, 1> force = Matrix<T, Dim, 1>::Zero();
+    const T dist = d12.norm(); 
+
+    // If the distance is less than 2 * R ... 
+    if (dist <= 2 * R)
+    {
+        // Normalize the distance vector 
+        Matrix<T, Dim, 1> d12n = d12 / dist;
+
+        // Get the terms that contribute to the force on cell 1 due to cell 2 
+        T term1 = (dist <= dmin ? 1.0 / pow(dmin, exp + 1) : 1.0 / pow(dist, exp + 1)); 
+        T term2 = 1.0 / pow(2 * R, exp + 1);
+        force = exp * (term1 - term2) * d12n; 
+    }
+    
+    return force; 
+}
+
+/**
+ * Compute the Newtonian forces between two neighboring cells that arise
+ * from the shifted Gay-Berne-Kihara potential in arbitrary dimensions (2
+ * or 3).
+ *
+ * The second anisotropy parameter exponent is assumed to be zero.
+ *
+ * Note that this function calculates the force on cell 1 due to cell 2. 
+ *
+ * @param r1 Center of cell 1.
+ * @param n1 Orientation of cell 1.
+ * @param half_l1 Half of length of cell 1.
+ * @param r2 Center of cell 2.
+ * @param n2 Orientation of cell 2.
+ * @param half_l2 Half of length of cell 2. 
+ * @param R Cell radius, including the EPS.
+ * @param Rcell Cell radius, excluding the EPS. 
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved. 
+ * @param expd Exponent determining the distance dependence in the
+ *             Gay-Berne-Kihara potential.
+ * @param exp1 Exponent of first anisotropy parameter.
+ * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @returns Matrix of generalized forces arising from the Kihara potential. 
+ */
+template <typename T, int Dim>
+Array<T, Dim, 1> forceGBKNewton(const Ref<const Matrix<T, Dim, 1> >& r1,
+                                const Ref<const Matrix<T, Dim, 1> >& n1, 
+                                const T half_l1,
+                                const Ref<const Matrix<T, Dim, 1> >& r2, 
+                                const Ref<const Matrix<T, Dim, 1> >& n2,
+                                const T half_l2, const T R, const T Rcell,
+                                const Ref<const Matrix<T, Dim, 1> >& d12, 
+                                const T s, const T t, const T expd, const T exp1,
+                                const T dmin)
+{
+    // If the distance is greater than 2 * R, return zero
+    const T dist = d12.norm(); 
+    if (dist > 2 * R)
+        return Matrix<T, 2, 2 * Dim>::Zero(); 
+
+    // Get the first anisotropy parameter and its partial derivatives (second
+    // anisotropy parameter is fixed to 1)
+    auto result1 = anisotropyParamWithDerivsGBK1<T, Dim>(
+        n1, half_l1, n2, half_l2, Rcell, exp1
+    );
+    T eps1 = result1.first; 
+    Matrix<T, 2, 2 * Dim> deps1 = result1.second;
+
+    // If the distance is less than 2 * R ... 
+    Matrix<T, Dim, 1> force = Matrix<T, Dim, 1>::Zero();
+    if (dist <= 2 * R)
+    {
+        // Normalize the distance vector 
+        Matrix<T, Dim, 1> d12n = d12 / dist;
+
+        // Get the terms that contribute to the force on cell 1 due to cell 2 
+        T term1 = (dist <= dmin ? 1.0 / pow(dmin, expd + 1) : 1.0 / pow(dist, expd + 1)); 
+        T term2 = 1.0 / pow(2 * R, expd + 1); 
+        force = eps1 * expd * (term1 - term2) * d12n; 
+    }
+
+    return force;
 }
 
 #endif 
