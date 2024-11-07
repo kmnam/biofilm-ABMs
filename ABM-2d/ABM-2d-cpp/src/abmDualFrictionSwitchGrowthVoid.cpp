@@ -3,14 +3,14 @@
  * two states that exhibit different friction coefficients and (2) simulates
  * a growth void that grows in extent throughout the simulation.  
  *
- * In what follows, a population of N cells is represented as a 2-D array of
- * size (N, 16+), whose columns are as specified in `include/indices.hpp`.
+ * In what follows, a population of N cells is represented as a 2-D array
+ * with N rows, whose columns are as specified in `include/indices.hpp`.
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/14/2024
+ *     11/7/2024
  */
 
 #include <Eigen/Dense>
@@ -64,6 +64,10 @@ int main(int argc, char** argv)
     const T daughter_angle_bound = static_cast<T>(json_data["daughter_angle_bound"].as_double());
     const T max_noise = static_cast<T>(json_data["max_noise"].as_double()); 
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
+    const bool truncate_surface_friction = json_data["truncate_surface_friction"].as_int64();
+    const T surface_coulomb_coeff = (
+        truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double()) : 0.0
+    );
     const AdhesionMode adhesion_mode = AdhesionMode::NONE;    // No cell-cell adhesion
     std::unordered_map<std::string, T> adhesion_params;
     const bool confine = false;    // No radial confinement forces 
@@ -122,8 +126,9 @@ int main(int argc, char** argv)
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        max_noise, adhesion_mode, adhesion_params, confine, confine_params,
-        growth_void_mode, growth_void_params
+        truncate_surface_friction, surface_coulomb_coeff, max_noise,
+        adhesion_mode, adhesion_params, confine, confine_params, growth_void_mode,
+        growth_void_params
     );
 
     return 0; 
