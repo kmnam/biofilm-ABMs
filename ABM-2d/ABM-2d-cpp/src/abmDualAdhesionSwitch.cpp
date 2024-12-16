@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/7/2024
+ *     12/16/2024
  */
 
 #include <Eigen/Dense>
@@ -71,7 +71,7 @@ int main(int argc, char** argv)
     adhesion_params["mindist"] = static_cast<T>(json_data["adhesion_mindist"].as_double()); 
     if (adhesion_mode == AdhesionMode::GBK) 
         adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double()); 
-    const bool confine = false;    // No radial confinement forces
+    const ConfinementMode confine_mode = ConfinementMode::NONE;     // No confinement forces
     std::unordered_map<std::string, T> confine_params;
     const GrowthVoidMode growth_void_mode = GrowthVoidMode::NONE;   // No growth void 
     std::unordered_map<std::string, T> growth_void_params; 
@@ -124,8 +124,8 @@ int main(int argc, char** argv)
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_noise,
-        adhesion_mode, adhesion_params, confine, confine_params, growth_void_mode,
-        growth_void_params
+        adhesion_mode, adhesion_params, confine_mode, confine_params,
+        growth_void_mode, growth_void_params
     ); 
    
     return 0; 
