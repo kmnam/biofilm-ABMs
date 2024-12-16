@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/7/2024
+ *     12/16/2024
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -24,6 +24,7 @@
 #include <tuple>
 #include <iomanip>
 #include <Eigen/Dense>
+#include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Segment_3.h>
@@ -774,9 +775,11 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     {
         const T rest_radius_factor = confine_params["rest_radius_factor"]; 
         const T spring_const = confine_params["spring_const"];
+        const T max_area = getMaxArea<T>(cells, R); 
+        const T rest_radius = rest_radius_factor * sqrt(max_area / boost::math::constants::pi<T>()); 
         Matrix<T, 2, 1> center = Matrix<T, 2, 1>::Zero();
         dEdq_confine = radialConfinementForces<T>(
-            cells, boundary_idx, R, center, rest_radius_factor, spring_const
+            cells, boundary_idx, R, center, rest_radius, spring_const
         );
         #ifdef DEBUG_CHECK_CONFINEMENT_FORCES_NAN
             for (int i = 0; i < n; ++i)
