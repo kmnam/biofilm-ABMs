@@ -243,12 +243,6 @@ Array<T, Dynamic, 4> radialConfinementForces(const Ref<const Array<T, Dynamic, D
                                              const T rest_radius, 
                                              const T spring_const)
 {
-    // Get the maximum area of the cells in the xy-plane  
-    //const T max_area = getMaxArea<T>(cells, R);
-
-    // Obtain a corresponding rest radius for the confining membrane 
-    //T rest_radius = rest_radius_factor * sqrt(max_area / boost::math::constants::pi<T>());
-
     // Maintain an array of generalized forces on each cell
     Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(cells.rows(), 4); 
 
@@ -323,18 +317,11 @@ template <typename T>
 Array<T, Dynamic, 4> channelConfinementForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                               std::vector<int>& boundary_idx, 
                                               const T R,
-                                              const Ref<const Matrix<T, 2, 1> >& center,
                                               const T short_section_y,
                                               const T left_long_section_x,
                                               const T right_long_section_x,
                                               const T spring_const)
 {
-    // Get the maximum area of the cells in the xy-plane  
-    //const T max_area = getMaxArea<T>(cells, R);
-
-    // Obtain a corresponding rest radius for the confining membrane 
-    //T rest_radius = rest_radius_factor * sqrt(max_area / boost::math::constants::pi<T>());
-
     // Maintain an array of generalized forces on each cell
     Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(cells.rows(), 4); 
 
