@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/12/2024
+ *     12/16/2024
  */
 
 #ifndef BIOFILM_RADIAL_CONFINEMENT_HPP
@@ -227,15 +227,12 @@ std::vector<int> getBoundary(const Ref<const Array<T, Dynamic, Dynamic> >& cells
 /**
  * Compute radial confinement forces on the given array of cells.
  *
- * @param cells              Input population of cells.
- * @param boundary_idx       Pre-computed vector of indices of peripheral cells. 
- * @param R                  Cell radius. 
- * @param center             Fixed center for the elastic membrane. 
- * @param rest_radius_factor Multiply the effective radius obtained from the
- *                           maximum area of the given cells by this value to 
- *                           obtain the rest radius of the elastic membrane. 
- * @param spring_const       Effective spring constant for the elastic 
- *                           membrane.
+ * @param cells        Input population of cells.
+ * @param boundary_idx Pre-computed vector of indices of peripheral cells. 
+ * @param R            Cell radius. 
+ * @param center       Fixed center for the elastic membrane.
+ * @param rest_radius  Rest radius of the elastic membrane. 
+ * @param spring_const Effective spring constant for the elastic membrane.
  * @returns Array of generalized radial confinement forces. 
  */
 template <typename T>
@@ -243,14 +240,14 @@ Array<T, Dynamic, 4> radialConfinementForces(const Ref<const Array<T, Dynamic, D
                                              std::vector<int>& boundary_idx, 
                                              const T R,
                                              const Ref<const Matrix<T, 2, 1> >& center,
-                                             const T rest_radius_factor, 
+                                             const T rest_radius, 
                                              const T spring_const)
 {
     // Get the maximum area of the cells in the xy-plane  
-    const T max_area = getMaxArea<T>(cells, R);
+    //const T max_area = getMaxArea<T>(cells, R);
 
     // Obtain a corresponding rest radius for the confining membrane 
-    T rest_radius = rest_radius_factor * sqrt(max_area / boost::math::constants::pi<T>());
+    //T rest_radius = rest_radius_factor * sqrt(max_area / boost::math::constants::pi<T>());
 
     // Maintain an array of generalized forces on each cell
     Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(cells.rows(), 4); 
@@ -300,6 +297,168 @@ Array<T, Dynamic, 4> radialConfinementForces(const Ref<const Array<T, Dynamic, D
             T prefactor = spring_const * delta;
             dEdq(j, Eigen::seq(0, 1)) = prefactor * direction.transpose().array(); 
             dEdq(j, Eigen::seq(2, 3)) = prefactor * sj * direction.transpose().array();
+        }
+    }
+
+    return dEdq;
+}
+
+/**
+ * Compute channel confinement forces on the given array of cells. 
+ *
+ * @param cells                Input population of cells.
+ * @param boundary_idx         Pre-computed vector of indices of peripheral cells. 
+ * @param R                    Cell radius. 
+ * @param short_section_y      y-position of the short section of the elastic 
+ *                             membrane (parallel to the x-axis).
+ * @param left_long_section_x  x-position of the left-hand long section of the
+ *                             elastic membrane (parallel to the y-axis).
+ * @param right_long_section_x x-position of the right-hand long section of the
+ *                             elastic membrane (parallel to the y-axis).
+ * @param spring_const         Effective spring constant for the elastic 
+ *                             membrane.
+ * @returns Array of generalized channel confinement forces. 
+ */
+template <typename T>
+Array<T, Dynamic, 4> channelConfinementForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                              std::vector<int>& boundary_idx, 
+                                              const T R,
+                                              const Ref<const Matrix<T, 2, 1> >& center,
+                                              const T short_section_y,
+                                              const T left_long_section_x,
+                                              const T right_long_section_x,
+                                              const T spring_const)
+{
+    // Get the maximum area of the cells in the xy-plane  
+    //const T max_area = getMaxArea<T>(cells, R);
+
+    // Obtain a corresponding rest radius for the confining membrane 
+    //T rest_radius = rest_radius_factor * sqrt(max_area / boost::math::constants::pi<T>());
+
+    // Maintain an array of generalized forces on each cell
+    Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(cells.rows(), 4); 
+
+    // For each cell ... 
+    for (const int j : boundary_idx)
+    {
+        Matrix<T, 2, 1> rj = cells(j, __colseq_r).transpose().matrix(); 
+        Matrix<T, 2, 1> nj = cells(j, __colseq_n).transpose().matrix();
+        T half_lj = cells(j, __colidx_half_l);
+
+        // Get the two endpoints of the centerline 
+        Matrix<T, 2, 1> pj = rj - half_lj * nj;
+        Matrix<T, 2, 1> qj = rj + half_lj * nj;
+
+        // Identify the contact point with the short section of the membrane 
+        //
+        // If the cell is exactly parallel to the x-axis, then choose the
+        // cell center as the contact point; otherwise, choose the endpoint
+        // with the lesser y-coordinate
+        Matrix<T, 2, 1> contact;
+        T sj; 
+        if (nj(1) != 0)
+        {
+            if (pj(1) < qj(1))
+            {
+                contact = pj;
+                sj = -half_lj; 
+            }
+            else
+            {
+                contact = qj;
+                sj = half_lj;
+            }
+        }
+        else 
+        {
+            contact = rj;
+            sj = 0.0;
+        }
+        
+        // Does the cell penetrate the short section of the membrane?
+        if (contact(1) - R < short_section_y) 
+        {
+            // If so, determine the generalized forces acting on the cell 
+            T delta = short_section_y - contact(1) + R;
+            T prefactor = spring_const * delta;
+            Matrix<T, 2, 1> direction;    // The force acts upward 
+            direction << 0, 1; 
+            dEdq(j, Eigen::seq(0, 1)) = prefactor * direction.transpose().array(); 
+            dEdq(j, Eigen::seq(2, 3)) = prefactor * sj * direction.transpose().array();  
+        }
+
+        // Identify the contact point with the left-hand long section of the 
+        // membrane 
+        //
+        // If the cell is exactly parallel to the y-axis, then choose the
+        // cell center as the contact point; otherwise, choose the endpoint
+        // with the lesser x-coordinate
+        if (nj(0) != 0)
+        {
+            if (pj(0) < qj(0))
+            {
+                contact = pj;
+                sj = -half_lj; 
+            }
+            else
+            {
+                contact = qj;
+                sj = half_lj;
+            }
+        }
+        else 
+        {
+            contact = rj;
+            sj = 0.0;
+        }
+
+        // Does the cell penetrate this section of the membrane? 
+        if (contact(0) - R < left_long_section_x) 
+        {
+            // If so, determine the generalized forces acting on the cell 
+            T delta = left_long_section_x - contact(0) + R; 
+            T prefactor = spring_const * delta;
+            Matrix<T, 2, 1> direction;    // The force acts to the right  
+            direction << 1, 0;
+            dEdq(j, Eigen::seq(0, 1)) += prefactor * direction.transpose().array(); 
+            dEdq(j, Eigen::seq(2, 3)) += prefactor * sj * direction.transpose().array();  
+        }
+
+        // Identify the contact point with the right-hand long section of the 
+        // membrane 
+        //
+        // If the cell is exactly parallel to the y-axis, then choose the
+        // cell center as the contact point; otherwise, choose the endpoint
+        // with the greater x-coordinate
+        if (nj(0) != 0)
+        {
+            if (pj(0) > qj(0))
+            {
+                contact = pj;
+                sj = -half_lj; 
+            }
+            else
+            {
+                contact = qj;
+                sj = half_lj;
+            }
+        }
+        else 
+        {
+            contact = rj;
+            sj = 0.0;
+        }
+
+        // Does the cell penetrate this section of the membrane?
+        if (contact(0) + R > right_long_section_x)
+        {
+            // If so, determine the generalized forces acting on the cell 
+            T delta = contact(0) + R - right_long_section_x; 
+            T prefactor = spring_const * delta;
+            Matrix<T, 2, 1> direction;    // The force acts to the left
+            direction << -1, 0; 
+            dEdq(j, Eigen::seq(0, 1)) += prefactor * direction.transpose().array(); 
+            dEdq(j, Eigen::seq(2, 3)) += prefactor * sj * direction.transpose().array();  
         }
     }
 
