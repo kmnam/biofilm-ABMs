@@ -54,6 +54,16 @@ enum class AdhesionMode
 };
 
 /**
+ * An enum that enumerates the different confinement modes.
+ */
+enum class ConfinementMode
+{
+    NONE = 0,
+    RADIAL = 1,
+    CHANNEL = 2
+};
+
+/**
  * Output an error message pertaining to the given cell and the generalized 
  * forces exerted upon it.  
  *
@@ -693,11 +703,10 @@ Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
- * @param confine If true, introduce an additional radial confinement on the 
- *                peripheral cells.
+ * @param confine_mode Confinement mode. Can be NONE (0), RADIAL (1), or 
+ *                     CHANNEL (2).
  * @param boundary_idx Pre-computed vector of indices of peripheral cells. 
- * @param confine_params Parameters required to compute radial confinement
- *                       forces.
+ * @param confine_params Parameters required to compute confinement forces.
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -710,7 +719,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const Ref<const Array<T, Dynamic, 4> >& noise,
                                    const AdhesionMode adhesion_mode,
                                    std::unordered_map<std::string, T>& adhesion_params,
-                                   const bool confine,
+                                   const ConfinementMode confine_mode, 
                                    std::vector<int>& boundary_idx,
                                    std::unordered_map<std::string, T>& confine_params)
 {
@@ -769,9 +778,9 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
         );
     }
 
-    // ... and the radial confinement forces (if confinement is present)
+    // ... and the confinement forces (if present)
     Array<T, Dynamic, 4> dEdq_confine = Array<T, Dynamic, 4>::Zero(n, 4); 
-    if (confine_params["spring_const"] > 0)
+    if (confine_mode == ConfinementMode::RADIAL)
     {
         const T rest_radius_factor = confine_params["rest_radius_factor"]; 
         const T spring_const = confine_params["spring_const"];
@@ -780,6 +789,33 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
         Matrix<T, 2, 1> center = Matrix<T, 2, 1>::Zero();
         dEdq_confine = radialConfinementForces<T>(
             cells, boundary_idx, R, center, rest_radius, spring_const
+        );
+        #ifdef DEBUG_CHECK_CONFINEMENT_FORCES_NAN
+            for (int i = 0; i < n; ++i)
+            {
+                if (dEdq_confine.row(i).isNaN().any())
+                {
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in confinement forces for cell "
+                              << i << std::endl;
+                    cellForcesSummary<T>(
+                        cells(i, __colseq_r), cells(i, __colseq_n),
+                        cells(i, __colidx_half_l),
+                        dEdq_confine.row(i).transpose()
+                    );
+                }
+            }
+        #endif
+    }
+    else if (confine_mode == ConfinementMode::CHANNEL) 
+    {
+        const T short_section_y = confine_params["short_section_y"]; 
+        const T left_long_section_x = confine_params["left_long_section_x"]; 
+        const T right_long_section_x = confine_params["right_long_section_y"]; 
+        const T spring_const = confine_params["spring_const"]; 
+        dEdq_confine = channelConfinementForces<T>(
+            cells, boundary_idx, R, short_section_y, left_long_section_x, 
+            right_long_section_x, spring_const
         );
         #ifdef DEBUG_CHECK_CONFINEMENT_FORCES_NAN
             for (int i = 0; i < n; ++i)
@@ -906,11 +942,10 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
- * @param confine If true, introduce an additional radial confinement on the 
- *                peripheral cells.
+ * @param confine_mode Confinement mode. Can be NONE (0), RADIAL (1), or 
+ *                     CHANNEL (2).
  * @param boundary_idx Pre-computed vector of indices of peripheral cells. 
- * @param confine_params Parameters required to compute radial confinement
- *                       forces.
+ * @param confine_params Parameters required to compute confinement forces.
  * @returns Updated population of cells, along with the array of errors in
  *          the cell positions and orientations.  
  */
@@ -929,7 +964,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                            boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode, 
                            std::unordered_map<std::string, T>& adhesion_params,
-                           const bool confine, std::vector<int>& boundary_idx, 
+                           const ConfinementMode confine_mode, 
+                           std::vector<int>& boundary_idx, 
                            std::unordered_map<std::string, T>& confine_params)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
@@ -979,7 +1015,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
     Array<T, Dynamic, 4> v0 = getVelocities<T>(
         cells, neighbors, to_adhere, iter, R, Rcell, cell_cell_prefactors,
         surface_contact_density, noise, adhesion_mode, adhesion_params,
-        confine, boundary_idx, confine_params
+        confine_mode, boundary_idx, confine_params
     );
     velocities.push_back(v0);
     for (int i = 1; i < s; ++i)
@@ -993,7 +1029,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
         Array<T, Dynamic, 4> vi = getVelocities<T>(
             cells_i, neighbors, to_adhere, iter, R, Rcell, cell_cell_prefactors,
             surface_contact_density, noise, adhesion_mode, adhesion_params,
-            confine, boundary_idx, confine_params
+            confine_mode, boundary_idx, confine_params
         );
         velocities.push_back(vi);
     }
