@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/7/2024
+ *     12/16/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -98,7 +98,7 @@ std::string floatToString(T x, const int precision = 10)
  * @param iter_update_neighbors Update neighboring cells every this many 
  *                              iterations. 
  * @param iter_update_boundary Update peripheral cells every this many 
- *                             iterations (only if `confine` is true).
+ *                             iterations (only if `confine_mode` is not NONE).
  * @param iter_update_stepsize Update stepsize every this many iterations. 
  * @param max_error_allowed Upper bound on maximum Runge-Kutta error allowed
  *                          per iteration.
@@ -125,10 +125,9 @@ std::string floatToString(T x, const int precision = 10)
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
- * @param confine If true, introduce an additional radial confinement on the 
- *                peripheral cells.
- * @param confine_params Parameters required to compute radial confinement
- *                       forces.
+ * @param confine_mode Confinement mode. Can be NONE (0), RADIAL (1), or 
+ *                     CHANNEL (2). 
+ * @param confine_params Parameters required to compute confinement forces.
  * @param growth_void_mode Choice of growth void to be introduced within the
  *                         biofilm. Can be NONE (0), FIXED_CORE (1), or
  *                         FRACTIONAL_ANNULUS (2).
@@ -170,7 +169,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T max_noise,
                   const AdhesionMode adhesion_mode,
                   std::unordered_map<std::string, T>& adhesion_params,
-                  const bool confine,
+                  const ConfinementMode confine_mode, 
                   std::unordered_map<std::string, T>& confine_params,
                   const GrowthVoidMode growth_void_mode,
                   std::unordered_map<std::string, T>& growth_void_params)
@@ -297,8 +296,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             params[ss.str()] = floatToString<T>(value); 
         }
     }
-    params["confine"] = (confine ? "1" : "0");
-    if (confine)
+    params["confine_mode"] = std::to_string(static_cast<int>(confine_mode)); 
+    if (confine_mode != ConfinementMode::NONE)
     {
         for (auto&& item : confine_params)
         {
@@ -334,14 +333,16 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     // If both are present, then the minimum number of cells for the boundary
     // calculation is set to the *minimum* of confine_params["mincells_for_boundary"]
     // and growth_void_params["mincells"]
-    const bool find_boundary = (confine || growth_void_mode != GrowthVoidMode::NONE);
+    const bool find_boundary = (
+        confine_mode != ConfinementMode::NONE || growth_void_mode != GrowthVoidMode::NONE
+    );
     int mincells_for_boundary = 0; 
-    if (confine && growth_void_mode != GrowthVoidMode::NONE) 
+    if (confine_mode != ConfinementMode::NONE && growth_void_mode != GrowthVoidMode::NONE) 
         mincells_for_boundary = min(
             static_cast<int>(confine_params["mincells_for_boundary"]),
             static_cast<int>(growth_void_params["mincells"])
         ); 
-    else if (confine)
+    else if (confine_mode != ConfinementMode::NONE)
         mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
     else if (growth_void_mode != GrowthVoidMode::NONE)
         mincells_for_boundary = static_cast<int>(growth_void_params["mincells"]);
@@ -470,8 +471,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
             cell_cell_prefactors, surface_contact_density, max_noise, rng,
-            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
-            confine_params
+            uniform_dist, adhesion_mode, adhesion_params, confine_mode,
+            boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -508,7 +509,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                    uniform_dist, adhesion_mode, adhesion_params, confine,
+                    uniform_dist, adhesion_mode, adhesion_params, confine_mode,
                     boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
@@ -544,7 +545,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                uniform_dist, adhesion_mode, adhesion_params, confine,
+                uniform_dist, adhesion_mode, adhesion_params, confine_mode,
                 boundary_idx, confine_params
             ); 
             cells_new = result.first;
@@ -707,7 +708,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param iter_update_neighbors Update neighboring cells every this many 
  *                              iterations.
  * @param iter_update_boundary Update peripheral cells every this many 
- *                             iterations (only if `confine` is true).
+ *                             iterations (only if `confine_mode` is not NONE).
  * @param iter_update_stepsize Update stepsize every this many iterations. 
  * @param max_error_allowed Upper bound on maximum Runge-Kutta error allowed
  *                          per iteration.
@@ -743,10 +744,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
- * @param confine If true, introduce an additional radial confinement on the 
- *                peripheral cells.
- * @param confine_params Parameters required to compute radial confinement
- *                       forces.
+ * @param confine_mode Confinement mode. Can be NONE (0), RADIAL (1), or 
+ *                     CHANNEL (2). 
+ * @param confine_params Parameters required to compute confinement forces. 
  * @param growth_void_mode Choice of growth void to be introduced within the
  *                         biofilm. Can be NONE (0), FIXED_CORE (1), or
  *                         FRACTIONAL_ANNULUS (2).
@@ -796,7 +796,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T max_noise,
                   const AdhesionMode adhesion_mode, 
                   std::unordered_map<std::string, T>& adhesion_params,
-                  const bool confine,
+                  const ConfinementMode confine_mode,
                   std::unordered_map<std::string, T>& confine_params,
                   const GrowthVoidMode growth_void_mode,
                   std::unordered_map<std::string, T>& growth_void_params,
@@ -986,8 +986,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             params[ss.str()] = floatToString<T>(value); 
         }
     }
-    params["confine"] = (confine ? "1" : "0");
-    if (confine)
+    params["confine_mode"] = std::to_string(static_cast<int>(confine_mode)); 
+    if (confine_mode != ConfinementMode::NONE)
     {
         for (auto&& item : confine_params)
         {
@@ -1023,14 +1023,16 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     // If both are present, then the minimum number of cells for the boundary
     // calculation is set to the *minimum* of confine_params["mincells_for_boundary"]
     // and growth_void_params["mincells"]
-    const bool find_boundary = (confine || growth_void_mode != GrowthVoidMode::NONE);
+    const bool find_boundary = (
+        confine_mode != ConfinementMode::NONE || growth_void_mode != GrowthVoidMode::NONE
+    );
     int mincells_for_boundary = 0; 
-    if (confine && growth_void_mode != GrowthVoidMode::NONE) 
+    if (confine_mode != ConfinementMode::NONE && growth_void_mode != GrowthVoidMode::NONE) 
         mincells_for_boundary = min(
             static_cast<int>(confine_params["mincells_for_boundary"]),
             static_cast<int>(growth_void_params["mincells"])
         ); 
-    else if (confine)
+    else if (confine_mode != ConfinementMode::NONE)
         mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
     else if (growth_void_mode != GrowthVoidMode::NONE) 
         mincells_for_boundary = static_cast<int>(growth_void_params["mincells"]);
@@ -1175,8 +1177,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
             cell_cell_prefactors, surface_contact_density, max_noise, rng,
-            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
-            confine_params
+            uniform_dist, adhesion_mode, adhesion_params, confine_mode,
+            boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -1213,7 +1215,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                    uniform_dist, adhesion_mode, adhesion_params, confine,
+                    uniform_dist, adhesion_mode, adhesion_params, confine_mode,
                     boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
@@ -1249,7 +1251,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                uniform_dist, adhesion_mode, adhesion_params, confine,
+                uniform_dist, adhesion_mode, adhesion_params, confine_mode,
                 boundary_idx, confine_params
             ); 
             cells_new = result.first;
@@ -1449,7 +1451,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param iter_update_neighbors Update neighboring cells every this many 
  *                              iterations.
  * @param iter_update_boundary Update peripheral cells every this many 
- *                             iterations (only if `confine` is true).
+ *                             iterations (only if `confine_mode` is not NONE).
  * @param iter_update_stepsize Update stepsize every this many iterations. 
  * @param max_error_allowed Maximum Runge-Kutta error allowed per iteration. 
  * @param min_error Minimum Runge-Kutta error. 
@@ -1489,10 +1491,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
- * @param confine If true, introduce an additional radial confinement on the 
- *                peripheral cells.
- * @param confine_params Parameters required to compute radial confinement
- *                       forces.
+ * @param confine_mode Confinement mode. Can be NONE (0), RADIAL (1), or 
+ *                     CHANNEL (2). 
+ * @param confine_params Parameters required to compute confinement forces. 
  * @param growth_void_mode Choice of growth void to be introduced within the
  *                         biofilm. Can be NONE (0), FIXED_CORE (1), or
  *                         FRACTIONAL_ANNULUS (2).
@@ -1540,7 +1541,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                              const T max_noise,
                              const AdhesionMode adhesion_mode, 
                              std::unordered_map<std::string, T>& adhesion_params,
-                             const bool confine,
+                             const ConfinementMode confine_mode, 
                              std::unordered_map<std::string, T>& confine_params,
                              const GrowthVoidMode growth_void_mode,
                              std::unordered_map<std::string, T>& growth_void_params)
@@ -1727,8 +1728,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             params[ss.str()] = floatToString<T>(value); 
         }
     }
-    params["confine"] = (confine ? "1" : "0");
-    if (confine)
+    params["confine_mode"] = std::to_string(static_cast<int>(confine_mode)); 
+    if (confine_mode != ConfinementMode::NONE)
     {
         for (auto&& item : confine_params)
         {
@@ -1764,14 +1765,16 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     // If both are present, then the minimum number of cells for the boundary
     // calculation is set to the *minimum* of confine_params["mincells_for_boundary"]
     // and growth_void_params["mincells"]
-    const bool find_boundary = (confine || growth_void_mode != GrowthVoidMode::NONE);
+    const bool find_boundary = (
+        confine_mode != ConfinementMode::NONE || growth_void_mode != GrowthVoidMode::NONE
+    );
     int mincells_for_boundary = 0; 
-    if (confine && growth_void_mode != GrowthVoidMode::NONE) 
+    if (confine_mode != ConfinementMode::NONE && growth_void_mode != GrowthVoidMode::NONE) 
         mincells_for_boundary = min(
             static_cast<int>(confine_params["mincells_for_boundary"]),
             static_cast<int>(growth_void_params["mincells"])
         ); 
-    else if (confine)
+    else if (confine_mode != ConfinementMode::NONE)
         mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
     else if (growth_void_mode != GrowthVoidMode::NONE) 
         mincells_for_boundary = static_cast<int>(growth_void_params["mincells"]);
@@ -1927,8 +1930,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
             cell_cell_prefactors, surface_contact_density, max_noise, rng,
-            uniform_dist, adhesion_mode, adhesion_params, confine, boundary_idx,
-            confine_params
+            uniform_dist, adhesion_mode, adhesion_params, confine_mode,
+            boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -1965,7 +1968,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                    uniform_dist, adhesion_mode, adhesion_params, confine,
+                    uniform_dist, adhesion_mode, adhesion_params, confine_mode,
                     boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
@@ -2001,7 +2004,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                uniform_dist, adhesion_mode, adhesion_params, confine,
+                uniform_dist, adhesion_mode, adhesion_params, confine_mode,
                 boundary_idx, confine_params
             ); 
             cells_new = result.first;
