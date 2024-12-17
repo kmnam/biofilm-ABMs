@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     12/16/2024
+ *     12/17/2024
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -90,7 +90,8 @@ std::string floatToString(T x, const int precision = 10)
  * @param E0 Elastic modulus of EPS.
  * @param Ecell Elastic modulus of cell.
  * @param sigma0 Cell-surface adhesion energy density.
- * @param max_stepsize Maximum stepsize per iteration. 
+ * @param max_stepsize Maximum stepsize per iteration.
+ * @param min_stepsize Minimum stepsize per iteration. 
  * @param write If true, write simulation output to file(s).
  * @param outprefix Output filename prefix. 
  * @param dt_write Write cells to file during each iteration in which the time
@@ -149,6 +150,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T Ecell,
                   const T sigma0,
                   const T max_stepsize,
+                  const T min_stepsize,
                   const bool write,
                   const std::string outprefix,
                   const T dt_write,
@@ -269,6 +271,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["Ecell"] = floatToString<T>(Ecell, precision);
     params["sigma0"] = floatToString<T>(sigma0, precision);
     params["max_stepsize"] = floatToString<T>(max_stepsize, precision);
+    params["min_stepsize"] = floatToString<T>(min_stepsize, precision); 
     params["dt_write"] = floatToString<T>(dt_write, precision); 
     params["iter_update_neighbors"] = std::to_string(iter_update_neighbors);
     params["iter_update_boundary"] = std::to_string(iter_update_boundary);
@@ -536,8 +539,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 j++;  
             }
             
-            // Ensure that the proposed stepsize is less than the maximum 
-            if (dt * factor > max_stepsize)
+            // Ensure that the proposed stepsize is between the minimum and 
+            // maximum
+            if (dt * factor < min_stepsize)
+                factor = min_stepsize / dt; 
+            else if (dt * factor > max_stepsize)
                 factor = max_stepsize / dt;
 
             // Re-do the integration with the new stepsize
@@ -700,7 +706,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param E0 Elastic modulus of EPS.
  * @param Ecell Elastic modulus of cell.
  * @param sigma0 Cell-surface adhesion energy density.
- * @param max_stepsize Maximum stepsize per iteration. 
+ * @param max_stepsize Maximum stepsize per iteration.
+ * @param min_stepsize Minimum stepsize per iteration. 
  * @param write If true, write simulation output to file(s). 
  * @param outprefix Output filename prefix.
  * @param dt_write Write cells to file during each iteration in which the time
@@ -771,6 +778,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T Ecell,
                   const T sigma0,
                   const T max_stepsize,
+                  const T min_stepsize,
                   const bool write,
                   const std::string outprefix,
                   const T dt_write,
@@ -926,6 +934,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["Ecell"] = floatToString<T>(Ecell, precision);
     params["sigma0"] = floatToString<T>(sigma0, precision);
     params["max_stepsize"] = floatToString<T>(max_stepsize, precision);
+    params["min_stepsize"] = floatToString<T>(min_stepsize, precision); 
     params["dt_write"] = floatToString<T>(dt_write, precision); 
     params["iter_update_neighbors"] = std::to_string(iter_update_neighbors);
     params["iter_update_boundary"] = std::to_string(iter_update_boundary);
@@ -947,7 +956,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         ss << "growth_mean" << i + 1;
         params[ss.str()] = floatToString<double>(growth_means(i), precision);
         ss.str(std::string());
-        ss << "growth_std" << i + 1; 
+        ss << "growth_std" << i + 1;
         params[ss.str()] = floatToString<double>(growth_stds(i), precision);
         ss.str(std::string());
         for (int j = i + 1; j < n_groups; ++j)
@@ -1242,8 +1251,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 j++;  
             }
             
-            // Ensure that the proposed stepsize is less than the maximum 
-            if (dt * factor > max_stepsize)
+            // Ensure that the proposed stepsize is between the minimum and 
+            // maximum
+            if (dt * factor < min_stepsize)
+                factor = min_stepsize / dt; 
+            else if (dt * factor > max_stepsize)
                 factor = max_stepsize / dt;
 
             // Re-do the integration with the new stepsize
@@ -1443,7 +1455,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  * @param E0 Elastic modulus of EPS.
  * @param Ecell Elastic modulus of cell.
  * @param sigma0 Cell-surface adhesion energy density.
- * @param max_stepsize Maximum stepsize per iteration. 
+ * @param max_stepsize Maximum stepsize per iteration.
+ * @param min_stepsize Minimum stepsize per iteration. 
  * @param write If true, write simulation output to file(s). 
  * @param outprefix Output filename prefix. 
  * @param dt_write Write cells to file during each iteration in which the time
@@ -1515,6 +1528,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                              const T Ecell,
                              const T sigma0,
                              const T max_stepsize,
+                             const T min_stepsize,
                              const bool write,
                              const std::string outprefix,
                              const T dt_write,
@@ -1676,6 +1690,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["Ecell"] = floatToString<T>(Ecell, precision);
     params["sigma0"] = floatToString<T>(sigma0, precision);
     params["max_stepsize"] = floatToString<T>(max_stepsize, precision);
+    params["min_stepsize"] = floatToString<T>(min_stepsize, precision); 
     params["dt_write"] = floatToString<T>(dt_write, precision); 
     params["iter_update_neighbors"] = std::to_string(iter_update_neighbors);
     params["iter_update_boundary"] = std::to_string(iter_update_boundary);
@@ -1995,8 +2010,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 j++;  
             }
             
-            // Ensure that the proposed stepsize is less than the maximum 
-            if (dt * factor > max_stepsize)
+            // Ensure that the proposed stepsize is between the minimum and 
+            // maximum
+            if (dt * factor < min_stepsize)
+                factor = min_stepsize / dt; 
+            else if (dt * factor > max_stepsize)
                 factor = max_stepsize / dt;
 
             // Re-do the integration with the new stepsize
