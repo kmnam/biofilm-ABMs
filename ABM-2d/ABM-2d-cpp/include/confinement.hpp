@@ -369,8 +369,7 @@ Array<T, Dynamic, 4> channelConfinementForces(const Ref<const Array<T, Dynamic, 
             T delta = short_section_y - contact(1) + R;
             T prefactor = spring_const * delta;
             Array<T, 1, 2> direction;    // The force acts upward 
-            direction << 0, 1;
-            direction *= -1; 
+            direction << 0, -1;
             dEdq(j, Eigen::seq(0, 1)) = prefactor * direction;
             dEdq(j, Eigen::seq(2, 3)) = prefactor * sj * direction;
         }
@@ -407,8 +406,7 @@ Array<T, Dynamic, 4> channelConfinementForces(const Ref<const Array<T, Dynamic, 
             T delta = left_long_section_x - contact(0) + R; 
             T prefactor = spring_const * delta;
             Array<T, 1, 2> direction;    // The force acts to the right  
-            direction << 1, 0;
-            direction *= -1; 
+            direction << -1, 0;
             dEdq(j, Eigen::seq(0, 1)) += prefactor * direction;
             dEdq(j, Eigen::seq(2, 3)) += prefactor * sj * direction;
         }
@@ -444,9 +442,8 @@ Array<T, Dynamic, 4> channelConfinementForces(const Ref<const Array<T, Dynamic, 
             // If so, determine the generalized forces acting on the cell 
             T delta = contact(0) + R - right_long_section_x; 
             T prefactor = spring_const * delta;
-            Array<T, 1, 2> direction;    // The force acts to the right  
-            direction << -1, 0;
-            direction *= -1; 
+            Array<T, 1, 2> direction;    // The force acts to the left 
+            direction << 1, 0;
             dEdq(j, Eigen::seq(0, 1)) += prefactor * direction; 
             dEdq(j, Eigen::seq(2, 3)) += prefactor * sj * direction;  
         }
