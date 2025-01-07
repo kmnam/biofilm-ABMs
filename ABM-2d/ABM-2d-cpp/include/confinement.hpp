@@ -9,11 +9,11 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     12/16/2024
+ *     1/7/2025
  */
 
-#ifndef BIOFILM_RADIAL_CONFINEMENT_HPP
-#define BIOFILM_RADIAL_CONFINEMENT_HPP
+#ifndef BIOFILM_CONFINEMENT_HPP
+#define BIOFILM_CONFINEMENT_HPP
 
 #include <vector>
 #include <utility>
@@ -343,20 +343,20 @@ Array<T, Dynamic, 4> channelConfinementForces(const Ref<const Array<T, Dynamic, 
         // with the lesser y-coordinate
         Matrix<T, 2, 1> contact;
         T sj; 
-        if (nj(1) != 0)
+        if (nj(1) != 0)           // Cell is not parallel to x-axis
         {
-            if (pj(1) < qj(1))
+            if (pj(1) < qj(1))    // pj has lesser y-coordinate 
             {
                 contact = pj;
                 sj = -half_lj; 
             }
-            else
+            else                  // qj has lesser y-coordinate
             {
                 contact = qj;
                 sj = half_lj;
             }
         }
-        else 
+        else                      // Cell is parallel to x-axis
         {
             contact = rj;
             sj = 0.0;
@@ -368,10 +368,11 @@ Array<T, Dynamic, 4> channelConfinementForces(const Ref<const Array<T, Dynamic, 
             // If so, determine the generalized forces acting on the cell 
             T delta = short_section_y - contact(1) + R;
             T prefactor = spring_const * delta;
-            Matrix<T, 2, 1> direction;    // The force acts upward 
-            direction << 0, 1; 
-            dEdq(j, Eigen::seq(0, 1)) = prefactor * direction.transpose().array(); 
-            dEdq(j, Eigen::seq(2, 3)) = prefactor * sj * direction.transpose().array();  
+            Array<T, 1, 2> direction;    // The force acts upward 
+            direction << 0, 1;
+            direction *= -1; 
+            dEdq(j, Eigen::seq(0, 1)) = prefactor * direction;
+            dEdq(j, Eigen::seq(2, 3)) = prefactor * sj * direction;
         }
 
         // Identify the contact point with the left-hand long section of the 
@@ -380,20 +381,20 @@ Array<T, Dynamic, 4> channelConfinementForces(const Ref<const Array<T, Dynamic, 
         // If the cell is exactly parallel to the y-axis, then choose the
         // cell center as the contact point; otherwise, choose the endpoint
         // with the lesser x-coordinate
-        if (nj(0) != 0)
+        if (nj(0) != 0)           // Cell is not parallel to y-axis
         {
-            if (pj(0) < qj(0))
+            if (pj(0) < qj(0))    // pj has lesser x-coordinate 
             {
                 contact = pj;
                 sj = -half_lj; 
             }
-            else
+            else                  // qj has lesser x-coordinate 
             {
                 contact = qj;
                 sj = half_lj;
             }
         }
-        else 
+        else                      // Cell is parallel to y-axis
         {
             contact = rj;
             sj = 0.0;
@@ -405,10 +406,11 @@ Array<T, Dynamic, 4> channelConfinementForces(const Ref<const Array<T, Dynamic, 
             // If so, determine the generalized forces acting on the cell 
             T delta = left_long_section_x - contact(0) + R; 
             T prefactor = spring_const * delta;
-            Matrix<T, 2, 1> direction;    // The force acts to the right  
+            Array<T, 1, 2> direction;    // The force acts to the right  
             direction << 1, 0;
-            dEdq(j, Eigen::seq(0, 1)) += prefactor * direction.transpose().array(); 
-            dEdq(j, Eigen::seq(2, 3)) += prefactor * sj * direction.transpose().array();  
+            direction *= -1; 
+            dEdq(j, Eigen::seq(0, 1)) += prefactor * direction;
+            dEdq(j, Eigen::seq(2, 3)) += prefactor * sj * direction;
         }
 
         // Identify the contact point with the right-hand long section of the 
@@ -417,20 +419,20 @@ Array<T, Dynamic, 4> channelConfinementForces(const Ref<const Array<T, Dynamic, 
         // If the cell is exactly parallel to the y-axis, then choose the
         // cell center as the contact point; otherwise, choose the endpoint
         // with the greater x-coordinate
-        if (nj(0) != 0)
+        if (nj(0) != 0)           // Cell is not parallel to y-axis
         {
-            if (pj(0) > qj(0))
+            if (pj(0) > qj(0))    // pj has greater x-coordinate 
             {
                 contact = pj;
                 sj = -half_lj; 
             }
-            else
+            else                  // qj has greater x-coordinate 
             {
                 contact = qj;
                 sj = half_lj;
             }
         }
-        else 
+        else                      // Cell is parallel to y-axis
         {
             contact = rj;
             sj = 0.0;
@@ -442,10 +444,11 @@ Array<T, Dynamic, 4> channelConfinementForces(const Ref<const Array<T, Dynamic, 
             // If so, determine the generalized forces acting on the cell 
             T delta = contact(0) + R - right_long_section_x; 
             T prefactor = spring_const * delta;
-            Matrix<T, 2, 1> direction;    // The force acts to the left
-            direction << -1, 0; 
-            dEdq(j, Eigen::seq(0, 1)) += prefactor * direction.transpose().array(); 
-            dEdq(j, Eigen::seq(2, 3)) += prefactor * sj * direction.transpose().array();  
+            Array<T, 1, 2> direction;    // The force acts to the right  
+            direction << -1, 0;
+            direction *= -1; 
+            dEdq(j, Eigen::seq(0, 1)) += prefactor * direction; 
+            dEdq(j, Eigen::seq(2, 3)) += prefactor * sj * direction;  
         }
     }
 
