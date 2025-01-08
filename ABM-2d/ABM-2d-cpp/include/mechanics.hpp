@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     12/16/2024
+ *     1/7/2025
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -234,7 +234,7 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
         {
             // For two cells to be within neighbor_threshold of each other,
             // their centers must be within neighbor_threshold + Ldiv + 2 * R
-            T dist_rij = (cells(i, __colseq_r) - cells(j, __colseq_r)).matrix().norm();  
+            T dist_rij = (cells(i, __colseq_r) - cells(j, __colseq_r)).matrix().norm(); 
             if (dist_rij < neighbor_threshold + Ldiv + 2 * R)
             {
                 // In this case, compute their actual distance and check that 
@@ -811,7 +811,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     {
         const T short_section_y = confine_params["short_section_y"]; 
         const T left_long_section_x = confine_params["left_long_section_x"]; 
-        const T right_long_section_x = confine_params["right_long_section_y"]; 
+        const T right_long_section_x = confine_params["right_long_section_x"]; 
         const T spring_const = confine_params["spring_const"]; 
         dEdq_confine = channelConfinementForces<T>(
             cells, boundary_idx, R, short_section_y, left_long_section_x, 
