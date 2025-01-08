@@ -20,6 +20,7 @@
 #include <vector>
 #include <map>
 #include <Eigen/Dense>
+#include <boost/container_hash/hash.hpp>
 #include <boost/random.hpp>
 #include <boost/multiprecision/mpfr.hpp>
 #include "indices.hpp"
@@ -138,6 +139,8 @@ std::string floatToString(T x, const int precision = 10)
  *                  to compute the velocities.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ * @param adhesion_map Set of pairs of group IDs (1, 2, ...) for which cells 
+ *                     can adhere to each other. 
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
  * @param confine_mode Confinement mode. Can be NONE (0), RADIAL (1), or 
@@ -192,6 +195,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T surface_coulomb_coeff,
                   const T max_noise,
                   const AdhesionMode adhesion_mode, 
+                  std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > >& adhesion_map, 
                   std::unordered_map<std::string, T>& adhesion_params,
                   const ConfinementMode confine_mode,
                   std::unordered_map<std::string, T>& confine_params,
@@ -236,15 +240,23 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     // Compute initial array of neighboring cells
     Array<T, Dynamic, 6> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
 
-    // Allow adhesion between all pairs of neighboring cells in state 1 
+    // Allow adhesion between all pairs of neighboring cells according to the
+    // given adhesion map 
     Array<int, Dynamic, 1> to_adhere = Array<int, Dynamic, 1>::Zero(neighbors.rows());
     for (int k = 0; k < neighbors.rows(); ++k)
     {
         int ni = neighbors(k, 0); 
         int nj = neighbors(k, 1);
+        int gi = cells(ni, __colidx_group); 
+        int gj = cells(nj, __colidx_group);
+        std::pair<int, int> pair; 
+        if (gi < gj)
+            pair = std::make_pair(gi, gj); 
+        else 
+            pair = std::make_pair(gj, gi); 
         T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
         to_adhere(k) = (
-            cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+            adhesion_map.find(pair) != adhesion_map.end() &&
             dist > R + Rcell && dist < 2 * R
         ); 
     }
@@ -548,14 +560,22 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         {
             // Update neighboring cells 
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+            // Update pairs of adhering cells 
             to_adhere.resize(neighbors.rows());
             for (int k = 0; k < neighbors.rows(); ++k)
             {
                 int ni = neighbors(k, 0); 
                 int nj = neighbors(k, 1);
+                int gi = cells(ni, __colidx_group); 
+                int gj = cells(nj, __colidx_group);
+                std::pair<int, int> pair; 
+                if (gi < gj)
+                    pair = std::make_pair(gi, gj); 
+                else 
+                    pair = std::make_pair(gj, gi); 
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
                 to_adhere(k) = (
-                    cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+                    adhesion_map.find(pair) != adhesion_map.end() &&
                     dist > R + Rcell && dist < 2 * R
                 ); 
             }
@@ -689,14 +709,22 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (iter % iter_update_neighbors == 0)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+            // Update pairs of adhering cells 
             to_adhere.resize(neighbors.rows());
             for (int k = 0; k < neighbors.rows(); ++k)
             {
                 int ni = neighbors(k, 0); 
                 int nj = neighbors(k, 1);
+                int gi = cells(ni, __colidx_group); 
+                int gj = cells(nj, __colidx_group);
+                std::pair<int, int> pair; 
+                if (gi < gj)
+                    pair = std::make_pair(gi, gj); 
+                else 
+                    pair = std::make_pair(gj, gi); 
                 T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
                 to_adhere(k) = (
-                    cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+                    adhesion_map.find(pair) != adhesion_map.end() &&
                     dist > R + Rcell && dist < 2 * R
                 ); 
             }
@@ -712,14 +740,21 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             attribute_dists, rng, uniform_dist
         );
 
-        // Ensure that only cells in group 1 can adhere to each other 
+        // Update pairs of adhering cells 
         for (int k = 0; k < neighbors.rows(); ++k)
         {
             int ni = neighbors(k, 0); 
-            int nj = neighbors(k, 1); 
+            int nj = neighbors(k, 1);
+            int gi = cells(ni, __colidx_group); 
+            int gj = cells(nj, __colidx_group);
+            std::pair<int, int> pair; 
+            if (gi < gj)
+                pair = std::make_pair(gi, gj); 
+            else 
+                pair = std::make_pair(gj, gi); 
             T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
             to_adhere(k) = (
-                cells(ni, __colidx_group) == 1 && cells(nj, __colidx_group) == 1 &&
+                adhesion_map.find(pair) != adhesion_map.end() &&
                 dist > R + Rcell && dist < 2 * R
             ); 
         }
