@@ -352,7 +352,8 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
 template <typename T>
 Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                              const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                             const int iter, const T R, const T Rcell,
+                                             const T dt, const int iter,
+											 const T R, const T Rcell,
                                              const Ref<const Array<T, 4, 1> >& prefactors)
 {
     int n = cells.rows();   // Number of cells
@@ -419,6 +420,7 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
                     std::cerr << "Iteration " << iter
                               << ": Found nan in repulsive forces between cells " 
                               << i << " and " << j << std::endl;
+					std::cerr << "Timestep: " << dt << std::endl; 
                     pairForcesSummary<T>(
                         cells(i, __colseq_r), cells(i, __colseq_n),
                         cells(i, __colseq_dr), cells(i, __colseq_dn), 
@@ -466,7 +468,8 @@ template <typename T>
 Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                             const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                             const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                                            const int iter, const T R, const T Rcell, 
+                                            const T dt, const int iter,
+											const T R, const T Rcell, 
                                             const AdhesionMode mode, 
                                             std::unordered_map<std::string, T>& params)
 {
@@ -531,6 +534,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                     std::cerr << "Iteration " << iter
                               << ": Found nan in adhesive forces between cells " 
                               << i << " and " << j << std::endl;
+					std::cerr << "Timestep: " << dt << std::endl; 
                     pairForcesSummary<T>(
                         ri.array(), ni.array(), cells(i, __colseq_dr), cells(i, __colseq_dn), half_li,
                         rj.array(), nj.array(), cells(j, __colseq_dr), cells(j, __colseq_dn), half_lj,  
@@ -571,7 +575,8 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
 template <typename T>
 Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                             const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                            const int iter, const T R, const T eta)
+                                            const T dt, const int iter,
+											const T R, const T eta)
 {
     int n = cells.rows();       // Number of cells
     int m = neighbors.rows();   // Number of neighboring pairs
@@ -651,6 +656,10 @@ Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
             #ifdef DEBUG_CHECK_FRICTION_FORCES_NAN
                 if (dPdq_ij.isNaN().any())
                 {
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in friction forces between cells " 
+                              << i << " and " << j << std::endl;
+					std::cerr << "Timestep: " << dt << std::endl; 
                     pairForcesSummary<T>(
                         ri, ni, dri, dni, cells(i, __colidx_half_l),
                         rj, nj, drj, dnj, cells(j, __colidx_half_l), 
@@ -713,7 +722,7 @@ template <typename T>
 Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                    const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                    const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                                   const int iter, const T R, const T Rcell,
+                                   const T dt, const int iter, const T R, const T Rcell,
                                    const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                                    const T surface_contact_density,
                                    const Ref<const Array<T, Dynamic, 4> >& noise,
@@ -765,7 +774,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
 
     // Compute the repulsive forces ... 
     Array<T, Dynamic, 4> dEdq_repulsion = cellCellRepulsiveForces<T>(
-        cells, neighbors, iter, R, Rcell, cell_cell_prefactors
+        cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors
     );
 
     // ... the adhesive forces (if adhesion is present) ... 
@@ -773,7 +782,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     if (adhesion_mode != AdhesionMode::NONE)
     {
         dEdq_adhesion = cellCellAdhesiveForces<T>(
-            cells, neighbors, to_adhere, iter, R, Rcell, adhesion_mode,
+            cells, neighbors, to_adhere, dt, iter, R, Rcell, adhesion_mode,
             adhesion_params
         );
     }
@@ -798,6 +807,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                     std::cerr << "Iteration " << iter
                               << ": Found nan in confinement forces for cell "
                               << i << std::endl;
+					std::cerr << "Timestep: " << dt << std::endl; 
                     cellForcesSummary<T>(
                         cells(i, __colseq_r), cells(i, __colseq_n),
                         cells(i, __colidx_half_l),
@@ -825,6 +835,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                     std::cerr << "Iteration " << iter
                               << ": Found nan in confinement forces for cell "
                               << i << std::endl;
+					std::cerr << "Timestep: " << dt << std::endl; 
                     cellForcesSummary<T>(
                         cells(i, __colseq_r), cells(i, __colseq_n),
                         cells(i, __colidx_half_l),
@@ -978,6 +989,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                 std::cerr << "Iteration " << iter
                           << ": Found near-zero distance between cells "
                           << i << " and " << j << std::endl;
+			    std::cerr << "Timestep: " << dt << std::endl; 
                 pairConfigSummary<T>(
                     static_cast<int>(cells(i, __colidx_id)),
                     cells(i, __colseq_r).matrix(),
@@ -1013,7 +1025,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
     int s = b.size(); 
     std::vector<Array<T, Dynamic, 4> > velocities;
     Array<T, Dynamic, 4> v0 = getVelocities<T>(
-        cells, neighbors, to_adhere, iter, R, Rcell, cell_cell_prefactors,
+        cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
         surface_contact_density, noise, adhesion_mode, adhesion_params,
         confine_mode, boundary_idx, confine_params
     );
@@ -1027,7 +1039,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
         cells_i(Eigen::all, __colseq_coords) += multipliers * dt;
         normalizeOrientations<T>(cells_i);    // Renormalize orientations after each modification
         Array<T, Dynamic, 4> vi = getVelocities<T>(
-            cells_i, neighbors, to_adhere, iter, R, Rcell, cell_cell_prefactors,
+            cells_i, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
             surface_contact_density, noise, adhesion_mode, adhesion_params,
             confine_mode, boundary_idx, confine_params
         );
