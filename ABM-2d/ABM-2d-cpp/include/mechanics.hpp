@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/7/2025
+ *     1/9/2025
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -665,15 +665,15 @@ Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
                         rj, nj, drj, dnj, cells(j, __colidx_half_l), 
                         dij.array(), si, sj, dPdq_ij
                     );
-                    std::cout << "Contact point = (" << contact(0) << ", "
+                    std::cerr << "Contact point = (" << contact(0) << ", "
                               << contact(1) << ")" << std::endl; 
-                    std::cout << "Cell 1 angular velocity = " << angvel_i << std::endl; 
-                    std::cout << "Cell 2 angular velocity = " << angvel_j << std::endl; 
-                    std::cout << "Relative velocity = (" << vij(0) << ", "
+                    std::cerr << "Cell 1 angular velocity = " << angvel_i << std::endl; 
+                    std::cerr << "Cell 2 angular velocity = " << angvel_j << std::endl; 
+                    std::cerr << "Relative velocity = (" << vij(0) << ", "
                               << vij(1) << ")" << std::endl;
-                    std::cout << "Relative normal velocity = (" << vijn(0) << ", "
+                    std::cerr << "Relative normal velocity = (" << vijn(0) << ", "
                               << vijn(1) << ")" << std::endl; 
-                    std::cout << "Relative tangential velocity = (" << vijt(0) << ", "
+                    std::cerr << "Relative tangential velocity = (" << vijt(0) << ", "
                               << vijt(1) << ")" << std::endl;
                     throw std::runtime_error("Found nan in cell-cell friction forces"); 
                 }
