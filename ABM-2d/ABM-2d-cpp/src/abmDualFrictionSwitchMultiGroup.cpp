@@ -180,7 +180,7 @@ int main(int argc, char** argv)
     // coefficients
     Array<T, Dynamic, Dynamic> cells(1, __ncols_required);
     cells << 0, 0, 0, 1, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean, eta_ambient,
-             std::get<0>(groups_combined[0]), std::get<1>(groups_combined[0]), 1;
+             std::get<0>(groups_combined[0]), std::get<0>(groups_combined[0]), 1;
 
     // Initialize parent IDs 
     std::vector<int> parents; 
