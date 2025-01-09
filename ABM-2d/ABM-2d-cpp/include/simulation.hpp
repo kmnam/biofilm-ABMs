@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/8/2025
+ *     1/9/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -1540,9 +1540,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         double t_new_factor = std::fmod(t + 1e-12, dt_write);  
         if (write && t_old_factor > t_new_factor)
         {
-            std::cout << iter << ": " << std::max(t - dt - 1e-12, 0.0) << " " << dt_write
-                      << " " << t_old_factor << " " << t + dt + 1e-12 << " " << dt_write
-                      << " " << t_new_factor << std::endl;
             std::cout << "Iteration " << iter << ": " << n << " cells, time = "
                       << t << ", max error = " << errors.abs().maxCoeff()
                       << ", avg error = " << errors.abs().sum() / (4 * n)
