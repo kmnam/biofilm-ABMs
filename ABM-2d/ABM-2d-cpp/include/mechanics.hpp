@@ -828,11 +828,11 @@ Array<T, Dynamic, 3> cellCellRepulsiveForcesNewton(const Ref<const Array<T, Dyna
             idx(nforces - 1, 1) = i; 
 
             // Compute the contact point between cell i and cell j
-            Array<T, 2, 1> ri = (cells(i, __colseq_r) + si * cells(i, __colseq_n)).transpose(); 
-            Array<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3)).transpose();
+            Array<T, 2, 1> ri = cells(i, __colseq_r) + si * cells(i, __colseq_n); 
+            Array<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3));
             Array<T, 2, 1> contact = ri + 0.5 * dij; 
-            points.row(nforces - 2) = contact.transpose();
-            points.row(nforces - 1) = contact.transpose();
+            points.row(nforces - 2) = contact;
+            points.row(nforces - 1) = contact;
 
             /*    TODO Fix this
             #ifdef DEBUG_CHECK_REPULSIVE_FORCES_NAN
@@ -975,11 +975,11 @@ Array<T, Dynamic, 4> cellCellAdhesiveForcesNewton(const Ref<const Array<T, Dynam
             idx(nforces - 1, 1) = i;
 
             // Compute the contact point between cell i and cell j
-            Array<T, 2, 1> ri = (cells(i, __colseq_r) + si * cells(i, __colseq_n)).transpose(); 
-            Array<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3)).transpose();
+            Array<T, 2, 1> ri = cells(i, __colseq_r) + si * cells(i, __colseq_n); 
+            Array<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3));
             Array<T, 2, 1> contact = ri + 0.5 * dij; 
-            points.row(nforces - 2) = contact.transpose();
-            points.row(nforces - 1) = contact.transpose();
+            points.row(nforces - 2) = contact;
+            points.row(nforces - 1) = contact;
 
             /*   TODO Fix this
             #ifdef DEBUG_CHECK_ADHESIVE_FORCES_NAN
@@ -1001,6 +1001,161 @@ Array<T, Dynamic, 4> cellCellAdhesiveForcesNewton(const Ref<const Array<T, Dynam
         }
     }
     
+    // Get corresponding torques 
+    Array<T, Dynamic, 1> torques = getTorques<T>(cells, forces, idx, points);
+
+    // Sum all forces and torques exerted on each cell 
+    Array<T, Dynamic, 3> forces_total; 
+    for (int i = 0; i < nforces; ++i)
+    {
+        forces_total(idx(i, 1), Eigen::seq(0, 1)) += forces.row(i); 
+        forces_total(idx(i, 1), 2) += torques(i); 
+    }
+
+    return forces_total;
+}
+
+/**
+ * Compute the forces due to cell-cell tangential friction for each pair of
+ * neighboring cells. 
+ *
+ * In this function, the pairs of neighboring cells in the population have
+ * been pre-computed.
+ *
+ * TODO This function is being evaluated for correctness. It may not be 
+ * correct, and may be removed in the future (in favor of a Newtonian 
+ * implementation). 
+ *
+ * @param cells Current population of cells.
+ * @param neighbors Array specifying pairs of neighboring cells in the
+ *                  population.
+ * @param iter Iteration number. Only used for debugging output. 
+ * @param R Cell radius, including the EPS.
+ * @param eta Array of cell-cell friction coefficients between cells of 
+ *            different groups. 
+ * @returns Derivatives of the dissipation due to cell-cell tangential friction
+ *          for each pair of neighboring cells. 
+ */
+template <typename T>
+Array<T, Dynamic, 4> cellCellFrictionForcesNewton(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                                  const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                                  const T dt, const int iter, const T R,
+                                                  const Ref<const Array<T, Dynamic, Dynamic> >& eta)
+{
+    int n = cells.rows();       // Number of cells
+    int m = neighbors.rows();   // Number of neighboring pairs
+
+    // If there is only one cell, return zero
+    if (n == 1)
+        return Array<T, Dynamic, 4>::Zero(n, 4);
+
+    // Initialize array of derivatives 
+    Array<T, Dynamic, 2> forces(0, 2); 
+    Array<T, Dynamic, 2> points(0, 2); 
+    Array<int, Dynamic, 2> idx(0, 2);
+    int nforces = 0; 
+    for (int k = 0; k < m; ++k)
+    {
+        int i = static_cast<int>(neighbors(k, 0)); 
+        int j = static_cast<int>(neighbors(k, 1));
+        Matrix<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3)).matrix();
+        T d = dij.norm();
+
+        // If the two cells are contacting ... 
+        if (d < 2 * R)
+        {
+            Array<T, 2, 1> ri = cells(i, __colseq_r); 
+            Array<T, 2, 1> ni = cells(i, __colseq_n);
+            Array<T, 2, 1> dri = cells(i, __colseq_dr); 
+            Array<T, 2, 1> dni = cells(i, __colseq_dn); 
+            Array<T, 2, 1> rj = cells(j, __colseq_r); 
+            Array<T, 2, 1> nj = cells(j, __colseq_n); 
+            Array<T, 2, 1> drj = cells(j, __colseq_dr); 
+            Array<T, 2, 1> dnj = cells(j, __colseq_dn); 
+            Matrix<T, 2, 1> dijn = dij / d; 
+            T si = neighbors(k, 4); 
+            T sj = neighbors(k, 5);
+
+            // Determine the cell-cell friction coefficient 
+            int gi = static_cast<int>(cells(i, __colidx_group));
+            int gj = static_cast<int>(cells(j, __colidx_group));
+            T eta_ij = (gi < gj ? eta(gi - 1, gj - 1) : eta(gj - 1, gi - 1)); 
+
+            // Determine the contact point 
+            Array<T, 2, 1> contact = (ri + si * ni + rj + sj * nj) / 2; 
+
+            // Determine the angular velocities of the two cells (note that 
+            // these are really the z-coordinates of 3-D vectors that are 
+            // parallel with the z-axis)
+            T angvel_i = (ni(0) == 0 ? -dni(0) / ni(1) : dni(1) / ni(0)); 
+            T angvel_j = (nj(0) == 0 ? -dnj(0) / nj(1) : dnj(1) / nj(0));  
+
+            // Get the relative velocity of the two cells at the contact point ... 
+            Array<T, 2, 1> ui = contact - ri; 
+            Array<T, 2, 1> uj = contact - rj;
+            Array<T, 2, 1> ci, cj;
+            ci << -angvel_i * ui(1), angvel_i * ui(0); 
+            cj << -angvel_j * uj(1), angvel_j * uj(0);
+            Array<T, 2, 1> vij = (dri + ci) - (drj + cj);
+
+            // ... and its projection onto the normal direction ... 
+            Array<T, 2, 1> vijn = vij.matrix().dot(dijn) * dijn.array();
+
+            // ... and the corresponding rejection 
+            Array<T, 2, 1> vijt = vij - vijn; 
+
+            // Get the square root of the overlap between the two cells,
+            // multiplied by the radius 
+            T sqrt_overlap = sqrt((2 * R - d) * R); 
+
+            // Compute the force on cell i due to cell j
+            Array<T, 2, 1> force_ji = -eta_ij * sqrt_overlap * vijt;
+
+            // Compute the forces exerted on cell i by cell j and vice versa 
+            nforces += 2; 
+            forces.conservativeResize(nforces, 2); 
+            points.conservativeResize(nforces, 2); 
+            idx.conservativeResize(nforces, 2); 
+            forces.row(nforces - 2) = -force_ji;
+            forces.row(nforces - 1) = force_ji;
+			points.row(nforces - 2) = contact; 
+			points.row(nforces - 1) = contact;
+            idx(nforces - 2, 0) = i; 
+            idx(nforces - 2, 1) = j; 
+            idx(nforces - 1, 0) = j; 
+            idx(nforces - 1, 1) = i;
+
+            /*   TODO Fix this
+            #ifdef DEBUG_CHECK_FRICTION_FORCES_NAN
+                if (dPdq_ij.isNaN().any())
+                {
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in friction forces between cells " 
+                              << i << " and " << j << std::endl;
+                    std::cerr << "Timestep: " << dt << std::endl; 
+                    pairForcesSummary<T>(
+                        ri, ni, dri, dni, cells(i, __colidx_half_l),
+                        rj, nj, drj, dnj, cells(j, __colidx_half_l), 
+                        dij.array(), si, sj, dPdq_ij
+                    );
+                    std::cerr << "Cell-cell friction coefficient = " << eta_ij << std::endl;
+                    std::cerr << "Contact point = (" << contact(0) << ", "
+                              << contact(1) << ")" << std::endl; 
+                    std::cerr << "Cell 1 angular velocity = " << angvel_i << std::endl; 
+                    std::cerr << "Cell 2 angular velocity = " << angvel_j << std::endl; 
+                    std::cerr << "Relative velocity = (" << vij(0) << ", "
+                              << vij(1) << ")" << std::endl;
+                    std::cerr << "Relative normal velocity = (" << vijn(0) << ", "
+                              << vijn(1) << ")" << std::endl; 
+                    std::cerr << "Relative tangential velocity = (" << vijt(0) << ", "
+                              << vijt(1) << ")" << std::endl;
+                    throw std::runtime_error("Found nan in cell-cell friction forces"); 
+                }
+            #endif
+			*/
+        }
+    }
+
     // Get corresponding torques 
     Array<T, Dynamic, 1> torques = getTorques<T>(cells, forces, idx, points);
 
