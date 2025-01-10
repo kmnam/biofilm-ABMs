@@ -975,9 +975,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForcesNewton(const Ref<const Array<T, Dynam
             idx(nforces - 1, 1) = i;
 
             // Compute the contact point between cell i and cell j
-            Array<T, 2, 1> ri = cells(i, __colseq_r) + si * cells(i, __colseq_n); 
-            Array<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3));
-            Array<T, 2, 1> contact = ri + 0.5 * dij; 
+            Array<T, 2, 1> contact = ri.array() + si * ni.array() + 0.5 * dij.array(); 
             points.row(nforces - 2) = contact;
             points.row(nforces - 1) = contact;
 
