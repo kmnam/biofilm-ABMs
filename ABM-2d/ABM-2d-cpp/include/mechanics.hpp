@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/9/2025
+ *     1/10/2025
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -327,7 +327,11 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
         neighbors(k, 4) = si; 
         neighbors(k, 5) = sj;
     }
-} 
+}
+
+/* -------------------------------------------------------------------- // 
+//                    LAGRANGIAN GENERALIZED FORCES                     // 
+// -------------------------------------------------------------------- */ 
 
 /**
  * Compute the derivatives of the cell-cell repulsion energy for each pair
@@ -353,7 +357,7 @@ template <typename T>
 Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                              const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                              const T dt, const int iter,
-											 const T R, const T Rcell,
+                                             const T R, const T Rcell,
                                              const Ref<const Array<T, 4, 1> >& prefactors)
 {
     int n = cells.rows();   // Number of cells
@@ -420,7 +424,7 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
                     std::cerr << "Iteration " << iter
                               << ": Found nan in repulsive forces between cells " 
                               << i << " and " << j << std::endl;
-					std::cerr << "Timestep: " << dt << std::endl; 
+                    std::cerr << "Timestep: " << dt << std::endl; 
                     pairForcesSummary<T>(
                         cells(i, __colseq_r), cells(i, __colseq_n),
                         cells(i, __colseq_dr), cells(i, __colseq_dn), 
@@ -469,7 +473,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                                             const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                             const Ref<const Array<int, Dynamic, 1> >& to_adhere,
                                             const T dt, const int iter,
-											const T R, const T Rcell, 
+                                            const T R, const T Rcell, 
                                             const AdhesionMode mode, 
                                             std::unordered_map<std::string, T>& params)
 {
@@ -534,7 +538,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                     std::cerr << "Iteration " << iter
                               << ": Found nan in adhesive forces between cells " 
                               << i << " and " << j << std::endl;
-					std::cerr << "Timestep: " << dt << std::endl; 
+                    std::cerr << "Timestep: " << dt << std::endl; 
                     pairForcesSummary<T>(
                         ri.array(), ni.array(), cells(i, __colseq_dr), cells(i, __colseq_dn), half_li,
                         rj.array(), nj.array(), cells(j, __colseq_dr), cells(j, __colseq_dn), half_lj,  
@@ -568,15 +572,16 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  *                  population.
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
- * @param eta Cell-cell friction coefficient. 
+ * @param eta Array of cell-cell friction coefficients between cells of 
+ *            different groups. 
  * @returns Derivatives of the dissipation due to cell-cell tangential friction
  *          for each pair of neighboring cells. 
  */
 template <typename T>
 Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                             const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                            const T dt, const int iter,
-											const T R, const T eta)
+                                            const T dt, const int iter, const T R,
+                                            const Ref<const Array<T, Dynamic, Dynamic> >& eta)
 {
     int n = cells.rows();       // Number of cells
     int m = neighbors.rows();   // Number of neighboring pairs
@@ -608,6 +613,11 @@ Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
             Matrix<T, 2, 1> dijn = dij / d; 
             T si = neighbors(k, 4); 
             T sj = neighbors(k, 5);
+
+            // Determine the cell-cell friction coefficient 
+            int gi = static_cast<int>(cells(i, __colidx_group));
+            int gj = static_cast<int>(cells(j, __colidx_group));
+            T eta_ij = (gi < gj ? eta(gi - 1, gj - 1) : eta(gj - 1, gi - 1)); 
 
             // Determine the contact point 
             Array<T, 2, 1> contact = (ri + si * ni + rj + sj * nj) / 2; 
@@ -642,7 +652,7 @@ Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
             // Note that this is the *negative* of the force on cell i due
             // to cell j (and vice versa)
             Array<T, 2, 4> dPdq_ij = Array<T, 2, 4>::Zero();  
-            dPdq_ij(0, Eigen::seq(0, 1)) = eta * sqrt_overlap * vijt;
+            dPdq_ij(0, Eigen::seq(0, 1)) = eta_ij * sqrt_overlap * vijt;
             dPdq_ij(1, Eigen::seq(0, 1)) = -dPdq_ij(0, Eigen::seq(0, 1)); 
 
             // Derivatives of the dissipation w.r.t the orientational velocities 
@@ -650,8 +660,8 @@ Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
             Array<T, 2, 1> wi, wj;
             wi << ui(1) / ni(1), ui(0) / ni(0); 
             wj << uj(1) / nj(1), uj(0) / nj(0); 
-            dPdq_ij(0, Eigen::seq(2, 3)) = eta * sqrt_overlap * (wi * vijt);
-            dPdq_ij(1, Eigen::seq(2, 3)) = -eta * sqrt_overlap * (wj * vijt);
+            dPdq_ij(0, Eigen::seq(2, 3)) = eta_ij * sqrt_overlap * (wi * vijt);
+            dPdq_ij(1, Eigen::seq(2, 3)) = -eta_ij * sqrt_overlap * (wj * vijt);
 
             #ifdef DEBUG_CHECK_FRICTION_FORCES_NAN
                 if (dPdq_ij.isNaN().any())
@@ -659,12 +669,13 @@ Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
                     std::cerr << "Iteration " << iter
                               << ": Found nan in friction forces between cells " 
                               << i << " and " << j << std::endl;
-					std::cerr << "Timestep: " << dt << std::endl; 
+                    std::cerr << "Timestep: " << dt << std::endl; 
                     pairForcesSummary<T>(
                         ri, ni, dri, dni, cells(i, __colidx_half_l),
                         rj, nj, drj, dnj, cells(j, __colidx_half_l), 
                         dij.array(), si, sj, dPdq_ij
                     );
+                    std::cerr << "Cell-cell friction coefficient = " << eta_ij << std::endl;
                     std::cerr << "Contact point = (" << contact(0) << ", "
                               << contact(1) << ")" << std::endl; 
                     std::cerr << "Cell 1 angular velocity = " << angvel_i << std::endl; 
@@ -687,15 +698,188 @@ Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
     return dPdq; 
 }
 
+/* -------------------------------------------------------------------- // 
+//                     NEWTONIAN FORCES AND TORQUES                     // 
+// -------------------------------------------------------------------- */
+
 /**
- * Given the current positions, orientations, lengths, viscosity coefficients,
- * and surface friction coefficients for the given population of cells, compute
- * their translational and orientational velocities.
- *
- * In this function, the pairs of neighboring cells in the population have 
- * been pre-computed, and there is *no* cell-cell tangential friction. 
+ * Given an array of forces in two dimensions, the cell positions, and the 
+ * point within each cell at which each force is exerted, compute the 
+ * corresponding torques.
  *
  * @param cells Current population of cells. 
+ * @param forces Array of cell-cell forces. 
+ * @param idx Array of interacting cell indices (each row i, j entails a 
+ *            force on cell j by cell i). 
+ * @param points Array of points at which each force is exerted.
+ * @returns Corresponding array of torques. 
+ */
+template <typename T>
+Array<T, Dynamic, 1> getTorques(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
+                                const Ref<const Array<T, Dynamic, 2> >& forces,
+                                const Ref<const Array<int, Dynamic, 2> >& idx, 
+                                const Ref<const Array<T, Dynamic, 2> >& points)
+{
+    const int nforces = forces.rows(); 
+    Array<T, Dynamic, 1> torques(nforces); 
+    for (int i = 0; i < nforces; ++i)
+    {
+        int j = idx(i, 1);    // Get index of cell on which the force is exerted 
+        Array<T, 2, 1> a = points.row(i) - cells(j, __colseq_r); 
+        Array<T, 2, 1> b = forces.row(i); 
+        torques(i) = a(0) * b(1) - a(1) * b(0); 
+    }
+
+    return torques; 
+}
+
+/**
+ * Compute the cell-cell repulsive forces for each pair of neighboring cells.
+ *
+ * In this function, the pairs of neighboring cells in the population have
+ * been pre-computed. 
+ *
+ * @param cells Current population of cells.
+ * @param neighbors Array specifying pairs of neighboring cells in the
+ *                  population.
+ * @param iter Iteration number. Only used for debugging output. 
+ * @param R Cell radius, including the EPS. 
+ * @param Rcell Cell radius, excluding the EPS.
+ * @param E0 Elastic modulus of EPS. 
+ * @param prefactors Array of four pre-computed prefactors, namely `2.5 * sqrt(R)`,
+ *                   `2.5 * E0 * sqrt(R)`, `E0 * pow(R - Rcell, 1.5)`, and `Ecell`.
+ * @returns Derivatives of the cell-cell interaction energies with respect 
+ *          to cell positions and orientations.   
+ */
+template <typename T>
+Array<T, Dynamic, 3> cellCellRepulsiveForcesNewton(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                                   const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                                   const T dt, const int iter,
+                                                   const T R, const T Rcell,
+                                                   const Ref<const Array<T, 4, 1> >& prefactors)
+{
+    int n = cells.rows();   // Number of cells
+
+    // If there is only one cell, return zero
+    if (n == 1)
+        return Array<T, Dynamic, 4>::Zero(n, 4); 
+
+    // Maintain array of partial derivatives of the interaction energies 
+    // with respect to x-position, y-position, x-orientation, y-orientation
+    Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(n, 4);
+
+    // Compute distance vector magnitude, direction, and corresponding
+    // cell-cell overlap for every pair of neighboring cells
+    Array<T, Dynamic, 1> magnitudes = neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array(); 
+    Array<T, Dynamic, 2> directions = neighbors(Eigen::all, Eigen::seq(2, 3)).colwise() / magnitudes;
+    Array<T, Dynamic, 1> overlaps = 2 * R - magnitudes;  
+
+    // Note that:
+    //     prefactors(0) = 2.5 * std::sqrt(R)
+    //     prefactors(1) = 2.5 * E0 * std::sqrt(R)
+    //     prefactors(2) = E0 * std::pow(R - Rcell, 1.5)
+    //     prefactors(3) = Ecell
+
+    // For each pair of neighboring cells ...
+    Array<T, Dynamic, 2> forces(0, 2); 
+    Array<T, Dynamic, 2> points(0, 2); 
+    Array<int, Dynamic, 2> idx(0, 2);
+    int nforces = 0; 
+    for (int k = 0; k < neighbors.rows(); ++k)
+    {
+        int i = static_cast<int>(neighbors(k, 0)); 
+        int j = static_cast<int>(neighbors(k, 1)); 
+        T si = neighbors(k, 4);                         // Cell-body coordinate along cell i
+        T sj = neighbors(k, 5);                         // Cell-body coordinate along cell j
+        Array<T, 2, 1> dir_ij = directions.row(k);      // Normalized distance vector 
+        T overlap = overlaps(k);                        // Cell-cell overlap 
+
+        // Define prefactors that determine the magnitudes of the interaction
+        // forces, depending on the size of the overlap 
+        //
+        // Case 1: the overlap is positive but less than R - Rcell (i.e., it 
+        // is limited to within the EPS coating)
+        T prefactor = 0; 
+        if (overlap > 0 && overlap < R - Rcell)
+        {
+            prefactor = prefactors(1) * std::pow(overlap, 1.5); 
+        }
+        // Case 2: the overlap is instead greater than R - Rcell (i.e., it 
+        // encroaches into the bodies of the two cells)
+        else if (overlap >= R - Rcell)
+        {
+            T term = prefactors(3) * std::pow(overlap - R + Rcell, 1.5);
+            prefactor = prefactors(0) * (prefactors(2) + term);
+        }
+
+        if (overlap > 0)
+        {
+            // Compute the forces exerted on cell j by cell i and vice versa 
+            Array<T, 2, 1> vij = prefactor * dir_ij;
+            nforces += 2; 
+            forces.conservativeResize(nforces, 2); 
+            points.conservativeResize(nforces, 2); 
+            idx.conservativeResize(nforces, 2); 
+            forces.row(nforces - 2) = vij; 
+            forces.row(nforces - 1) = -vij;
+            idx(nforces - 2, 0) = i; 
+            idx(nforces - 2, 1) = j; 
+            idx(nforces - 1, 0) = j; 
+            idx(nforces - 1, 1) = i; 
+
+            // Compute the contact point between cell i and cell j
+            Array<T, 2, 1> ri = (cells(i, __colseq_r) + si * cells(i, __colseq_n)).transpose(); 
+            Array<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3)).transpose();
+            Array<T, 2, 1> contact = ri + 0.5 * dij; 
+            points.row(nforces - 2) = contact.transpose();
+            points.row(nforces - 1) = contact.transpose();
+
+            /*    TODO Fix this
+            #ifdef DEBUG_CHECK_REPULSIVE_FORCES_NAN
+                if (forces.isNaN().any())
+                {
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in repulsive forces between cells " 
+                              << i << " and " << j << std::endl;
+                    std::cerr << "Timestep: " << dt << std::endl; 
+                    pairForcesSummary<T>(
+                        cells(i, __colseq_r), cells(i, __colseq_n),
+                        cells(i, __colseq_dr), cells(i, __colseq_dn), 
+                        cells(i, __colidx_half_l),
+                        cells(j, __colseq_r), cells(j, __colseq_n),
+                        cells(j, __colseq_dr), cells(j, __colseq_dn), 
+                        cells(j, __colidx_half_l),
+                        neighbors(k, Eigen::seq(2, 3)), si, sj, 
+                        forces
+                    );
+                    throw std::runtime_error("Found nan in repulsive forces"); 
+                }
+            #endif
+            */
+        }
+    }
+    
+    // Get corresponding torques 
+    Array<T, Dynamic, 1> torques = getTorques<T>(cells, forces, idx, points);
+
+    // Sum all forces and torques exerted on each cell 
+    Array<T, Dynamic, 3> forces_total; 
+    for (int i = 0; i < nforces; ++i)
+    {
+        forces_total(idx(i, 1), Eigen::seq(0, 1)) += forces.row(i); 
+        forces_total(idx(i, 1), 2) += torques(i); 
+    }
+
+    return forces_total; 
+}
+
+/**
+ * Compute the cell-cell adhesive forces for each pair of neighboring cells.
+ *
+ * In this function, the pairs of neighboring cells in the population have
+ * been pre-computed. 
+ *
+ * @param cells Current population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
  * @param to_adhere Boolean array specifying whether, for each pair of 
@@ -703,169 +887,137 @@ Array<T, Dynamic, 4> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
- * @param cell_cell_prefactors Array of four pre-computed prefactors for 
- *                             cell-cell interaction forces.
- * @param surface_contact_density Cell-surface contact area density.
- * @param noise Noise to be added to each generalized force used to compute
- *              the velocities. 
- * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
- *                      Can be NONE (0), KIHARA (1), or GBK (2).
- * @param adhesion_params Parameters required to compute cell-cell adhesion
- *                        forces.
- * @param confine_mode Confinement mode. Can be NONE (0), RADIAL (1), or 
- *                     CHANNEL (2).
- * @param boundary_idx Pre-computed vector of indices of peripheral cells. 
- * @param confine_params Parameters required to compute confinement forces.
- * @returns Array of translational and orientational velocities.   
+ * @param mode Choice of potential used to model cell-cell adhesion. Can be
+ *             NONE (0), KIHARA (1), or GBK (2).
+ * @param params Parameters required to compute cell-cell adhesion forces. 
+ * @returns Derivatives of the cell-cell adhesion energies with respect to  
+ *          cell positions and orientations.   
  */
 template <typename T>
-Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                   const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                   const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                                   const T dt, const int iter, const T R, const T Rcell,
-                                   const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                                   const T surface_contact_density,
-                                   const Ref<const Array<T, Dynamic, 4> >& noise,
-                                   const AdhesionMode adhesion_mode,
-                                   std::unordered_map<std::string, T>& adhesion_params,
-                                   const ConfinementMode confine_mode, 
-                                   std::vector<int>& boundary_idx,
-                                   std::unordered_map<std::string, T>& confine_params)
+Array<T, Dynamic, 4> cellCellAdhesiveForcesNewton(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                                  const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                                  const Ref<const Array<int, Dynamic, 1> >& to_adhere,
+                                                  const T dt, const int iter,
+                                                  const T R, const T Rcell, 
+                                                  const AdhesionMode mode, 
+                                                  std::unordered_map<std::string, T>& params)
 {
-    // For each cell, the relevant Lagrangian mechanics are given by 
-    // 
-    // dP/d(dq) = -dE/dq + lambda * d(nx^2 + ny^2 - 1)/dq, 
-    //
-    // where:
-    // - P is the total dissipation due to bulk viscosity and surface friction,
-    // - E is the total cell-cell interaction energy involving the given cell,
-    // - q is a generalized coordinate (x-position, y-position, x-orientation, 
-    //   y-orientation),
-    // - nx and ny are the x-orientation and y-orientation, respectively,
-    // - dq is the corresponding velocity, and 
-    // - lambda is a Lagrange multiplier. 
-    //
-    // Note that dP/d(dq) = K * dq for some prefactor K, which is given in 
-    // `composite_viscosity_force_prefactors()`. Moreover, the constraint 
-    // 
-    // nx^2 + ny^2 - 1 == 0
-    // 
-    // implies the constraint 
-    //
-    // 2 * nx * dnx + 2 * ny * dny == 0
-    //
-    // where dnx and dny are the orientational velocities. This yields the 
-    // following value of the Lagrange multiplier:
-    //
-    // lambda = 0.5 * (nx * dE/dnx + ny * dE/dny)
-    //
-    // Moreover, one of the orientational velocities can be obtained from 
-    // the other, as in 
-    //
-    // dny = -nx * dnx / ny
-    //
-    int n = cells.rows(); 
-    Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4); 
-    Array<T, Dynamic, 2> prefactors = compositeViscosityForcePrefactors<T>(
-        cells, R, surface_contact_density
-    );
-    Array<T, Dynamic, 1> K = prefactors.col(0);
-    Array<T, Dynamic, 1> L = prefactors.col(1);
+    int n = cells.rows();   // Number of cells
 
-    // Compute the repulsive forces ... 
-    Array<T, Dynamic, 4> dEdq_repulsion = cellCellRepulsiveForces<T>(
-        cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors
-    );
+    // If there is only one cell, return zero
+    if (n == 1)
+        return Array<T, Dynamic, 4>::Zero(n, 4); 
 
-    // ... the adhesive forces (if adhesion is present) ... 
-    Array<T, Dynamic, 4> dEdq_adhesion = Array<T, Dynamic, 4>::Zero(n, 4); 
-    if (adhesion_mode != AdhesionMode::NONE)
+    // Maintain array of partial derivatives of the interaction energies 
+    // with respect to x-position, y-position, x-orientation, y-orientation
+    Array<T, Dynamic, 4> dEdq = Array<T, Dynamic, 4>::Zero(n, 4);
+
+    // Compute distance vector magnitude, direction, and corresponding
+    // cell-cell overlap for every pair of neighboring cells
+    Array<T, Dynamic, 1> magnitudes = neighbors(Eigen::all, Eigen::seq(2, 3)).matrix().rowwise().norm().array(); 
+    Array<T, Dynamic, 1> overlaps = 2 * R - magnitudes;  
+
+    // For each pair of neighboring cells ...
+    Array<T, Dynamic, 2> forces(0, 2); 
+    Array<T, Dynamic, 2> points(0, 2); 
+    Array<int, Dynamic, 2> idx(0, 2);
+    int nforces = 0; 
+    for (int k = 0; k < neighbors.rows(); ++k)
     {
-        dEdq_adhesion = cellCellAdhesiveForces<T>(
-            cells, neighbors, to_adhere, dt, iter, R, Rcell, adhesion_mode,
-            adhesion_params
-        );
-    }
+        int i = static_cast<int>(neighbors(k, 0)); 
+        int j = static_cast<int>(neighbors(k, 1));
 
-    // ... and the confinement forces (if present)
-    Array<T, Dynamic, 4> dEdq_confine = Array<T, Dynamic, 4>::Zero(n, 4); 
-    if (confine_mode == ConfinementMode::RADIAL)
-    {
-        const T rest_radius_factor = confine_params["rest_radius_factor"]; 
-        const T spring_const = confine_params["spring_const"];
-        const T max_area = getMaxArea<T>(cells, R); 
-        const T rest_radius = rest_radius_factor * sqrt(max_area / boost::math::constants::pi<T>()); 
-        Matrix<T, 2, 1> center = Matrix<T, 2, 1>::Zero();
-        dEdq_confine = radialConfinementForces<T>(
-            cells, boundary_idx, R, center, rest_radius, spring_const
-        );
-        #ifdef DEBUG_CHECK_CONFINEMENT_FORCES_NAN
-            for (int i = 0; i < n; ++i)
+        // Check that the two cells adhere and their overlap is nonzero 
+        if (to_adhere(k) && overlaps(k) > 0)
+        {
+            // Extract the cell position and orientation vectors 
+            Matrix<T, 2, 1> ri = cells(i, __colseq_r).matrix();
+            Matrix<T, 2, 1> ni = cells(i, __colseq_n).matrix();
+            Matrix<T, 2, 1> rj = cells(j, __colseq_r).matrix();
+            Matrix<T, 2, 1> nj = cells(j, __colseq_n).matrix();
+            T half_li = cells(i, __colidx_half_l);
+            T half_lj = cells(j, __colidx_half_l);
+            Matrix<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3)).matrix();
+            T si = neighbors(k, 4); 
+            T sj = neighbors(k, 5); 
+
+            // Get the corresponding force on cell i due to cell j 
+            Array<T, 2, 1> force_ji; 
+            if (mode == AdhesionMode::KIHARA) 
             {
-                if (dEdq_confine.row(i).isNaN().any())
+                const T strength = params["strength"];
+                const T expd = params["distance_exp"]; 
+                const T dmin = params["mindist"];
+                force_ji = strength * forceKiharaNewton<T, 2>(dij, R, si, sj, expd, dmin);
+            }
+            else if (mode == AdhesionMode::GBK)
+            {
+                const T strength = params["strength"];
+                const T exp1 = params["anisotropy_exp1"];
+                const T expd = params["distance_exp"]; 
+                const T dmin = params["mindist"];
+                force_ji = strength * forceGBKNewton<T, 2>(
+                    ri, ni, half_li, rj, nj, half_lj, R, Rcell, dij, si, sj,
+                    expd, exp1, dmin
+                ); 
+            }
+
+            // Compute the forces exerted on cell i by cell j and vice versa 
+            nforces += 2; 
+            forces.conservativeResize(nforces, 2); 
+            points.conservativeResize(nforces, 2); 
+            idx.conservativeResize(nforces, 2); 
+            forces.row(nforces - 2) = -force_ji;
+            forces.row(nforces - 1) = force_ji;
+            idx(nforces - 2, 0) = i; 
+            idx(nforces - 2, 1) = j; 
+            idx(nforces - 1, 0) = j; 
+            idx(nforces - 1, 1) = i;
+
+            // Compute the contact point between cell i and cell j
+            Array<T, 2, 1> ri = (cells(i, __colseq_r) + si * cells(i, __colseq_n)).transpose(); 
+            Array<T, 2, 1> dij = neighbors(k, Eigen::seq(2, 3)).transpose();
+            Array<T, 2, 1> contact = ri + 0.5 * dij; 
+            points.row(nforces - 2) = contact.transpose();
+            points.row(nforces - 1) = contact.transpose();
+
+            /*   TODO Fix this
+            #ifdef DEBUG_CHECK_ADHESIVE_FORCES_NAN
+                if (forces.isNaN().any())
                 {
                     std::cerr << "Iteration " << iter
-                              << ": Found nan in confinement forces for cell "
-                              << i << std::endl;
-					std::cerr << "Timestep: " << dt << std::endl; 
-                    cellForcesSummary<T>(
-                        cells(i, __colseq_r), cells(i, __colseq_n),
-                        cells(i, __colidx_half_l),
-                        dEdq_confine.row(i).transpose()
+                              << ": Found nan in adhesive forces between cells " 
+                              << i << " and " << j << std::endl;
+                    std::cerr << "Timestep: " << dt << std::endl; 
+                    pairForcesSummary<T>(
+                        ri.array(), ni.array(), cells(i, __colseq_dr), cells(i, __colseq_dn), half_li,
+                        rj.array(), nj.array(), cells(j, __colseq_dr), cells(j, __colseq_dn), half_lj,  
+                        dij.array(), si, sj, forces
                     );
+                    throw std::runtime_error("Found nan in adhesive forces"); 
                 }
-            }
-        #endif
+            #endif
+            */
+        }
     }
-    else if (confine_mode == ConfinementMode::CHANNEL) 
+    
+    // Get corresponding torques 
+    Array<T, Dynamic, 1> torques = getTorques<T>(cells, forces, idx, points);
+
+    // Sum all forces and torques exerted on each cell 
+    Array<T, Dynamic, 3> forces_total; 
+    for (int i = 0; i < nforces; ++i)
     {
-        const T short_section_y = confine_params["short_section_y"]; 
-        const T left_long_section_x = confine_params["left_long_section_x"]; 
-        const T right_long_section_x = confine_params["right_long_section_x"]; 
-        const T spring_const = confine_params["spring_const"]; 
-        dEdq_confine = channelConfinementForces<T>(
-            cells, boundary_idx, R, short_section_y, left_long_section_x, 
-            right_long_section_x, spring_const
-        );
-        #ifdef DEBUG_CHECK_CONFINEMENT_FORCES_NAN
-            for (int i = 0; i < n; ++i)
-            {
-                if (dEdq_confine.row(i).isNaN().any())
-                {
-                    std::cerr << "Iteration " << iter
-                              << ": Found nan in confinement forces for cell "
-                              << i << std::endl;
-					std::cerr << "Timestep: " << dt << std::endl; 
-                    cellForcesSummary<T>(
-                        cells(i, __colseq_r), cells(i, __colseq_n),
-                        cells(i, __colidx_half_l),
-                        dEdq_confine.row(i).transpose()
-                    );
-                }
-            }
-        #endif
+        forces_total(idx(i, 1), Eigen::seq(0, 1)) += forces.row(i); 
+        forces_total(idx(i, 1), 2) += torques(i); 
     }
 
-    // Combine the three types of forces (with the noise) 
-    Array<T, Dynamic, 4> dEdq = dEdq_repulsion + dEdq_adhesion + dEdq_confine + noise;
-
-    // Set mult = 2 * lambda
-    Array<T, Dynamic, 1> mult = (
-        cells.col(__colidx_nx) * dEdq.col(2) + cells.col(__colidx_ny) * dEdq.col(3)
-    );
-
-    // Solve the Lagrangian equations of motion for each cell in the population
-    Array<T, Dynamic, 2> dEdn_constrained = (
-        dEdq(Eigen::all, Eigen::seq(2, 3)) -
-        cells(Eigen::all, __colseq_n).colwise() * mult
-    );
-    velocities.col(0) = -dEdq.col(0) / K;
-    velocities.col(1) = -dEdq.col(1) / K; 
-    velocities.col(2) = -dEdn_constrained.col(0) / L;
-    velocities.col(3) = -dEdn_constrained.col(1) / L;
-
-    return velocities;  
+    return forces_total;
 }
+
+/* -------------------------------------------------------------------- // 
+//                      ADDITIONAL UTILITY FUNCTIONS                    //
+// -------------------------------------------------------------------- */
 
 /**
  * Truncate the cell-surface friction coefficients so that the cell velocities
@@ -919,6 +1071,202 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
     cells.col(__colidx_ny) /= norms;
 }
 
+/* -------------------------------------------------------------------- // 
+//             VELOCITY UPDATES IN THE LAGRANGIAN FRAMEWORK             //
+// -------------------------------------------------------------------- */
+
+/**
+ * Given the current positions, orientations, lengths, viscosity coefficients,
+ * and surface friction coefficients for the given population of cells, compute
+ * their translational and orientational velocities.
+ *
+ * In this function, the pairs of neighboring cells in the population have 
+ * been pre-computed, and there is *no* cell-cell tangential friction. 
+ *
+ * @param cells Current population of cells. 
+ * @param neighbors Array specifying pairs of neighboring cells in the
+ *                  population.
+ * @param to_adhere Boolean array specifying whether, for each pair of 
+ *                  neighboring cells, the adhesive force is nonzero.
+ * @param iter Iteration number. Only used for debugging output. 
+ * @param R Cell radius, including the EPS.
+ * @param Rcell Cell radius, excluding the EPS.
+ * @param cell_cell_prefactors Array of four pre-computed prefactors for 
+ *                             cell-cell interaction forces.
+ * @param surface_contact_density Cell-surface contact area density.
+ * @param noise Noise to be added to each generalized force used to compute
+ *              the velocities.
+ * @param eta_cell_cell Array of cell-cell friction coefficients between cells 
+ *                      in different groups. 
+ * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
+ *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ * @param adhesion_params Parameters required to compute cell-cell adhesion
+ *                        forces.
+ * @param confine_mode Confinement mode. Can be NONE (0), RADIAL (1), or 
+ *                     CHANNEL (2).
+ * @param boundary_idx Pre-computed vector of indices of peripheral cells. 
+ * @param confine_params Parameters required to compute confinement forces.
+ * @returns Array of translational and orientational velocities.   
+ */
+template <typename T>
+Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                   const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                                   const Ref<const Array<int, Dynamic, 1> >& to_adhere,
+                                   const T dt, const int iter, const T R, const T Rcell,
+                                   const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                                   const T surface_contact_density,
+                                   const Ref<const Array<T, Dynamic, 4> >& noise,
+                                   const Ref<const Array<T, Dynamic, Dynamic> >& eta_cell_cell, 
+                                   const AdhesionMode adhesion_mode,
+                                   std::unordered_map<std::string, T>& adhesion_params,
+                                   const ConfinementMode confine_mode, 
+                                   std::vector<int>& boundary_idx,
+                                   std::unordered_map<std::string, T>& confine_params)
+{
+    // For each cell, the relevant Lagrangian mechanics are given by 
+    // 
+    // dP/d(dq) = -dE/dq + lambda * d(nx^2 + ny^2 - 1)/dq, 
+    //
+    // where:
+    // - P is the total dissipation due to bulk viscosity and surface friction,
+    // - E is the total cell-cell interaction energy involving the given cell,
+    // - q is a generalized coordinate (x-position, y-position, x-orientation, 
+    //   y-orientation),
+    // - nx and ny are the x-orientation and y-orientation, respectively,
+    // - dq is the corresponding velocity, and 
+    // - lambda is a Lagrange multiplier. 
+    //
+    // Note that dP/d(dq) = K * dq for some prefactor K, which is given in 
+    // `composite_viscosity_force_prefactors()`. Moreover, the constraint 
+    // 
+    // nx^2 + ny^2 - 1 == 0
+    // 
+    // implies the constraint 
+    //
+    // 2 * nx * dnx + 2 * ny * dny == 0
+    //
+    // where dnx and dny are the orientational velocities. This yields the 
+    // following value of the Lagrange multiplier:
+    //
+    // lambda = 0.5 * (nx * dE/dnx + ny * dE/dny)
+    //
+    // Moreover, one of the orientational velocities can be obtained from 
+    // the other, as in 
+    //
+    // dny = -nx * dnx / ny
+    //
+    int n = cells.rows(); 
+    Array<T, Dynamic, 4> velocities = Array<T, Dynamic, 4>::Zero(n, 4); 
+    Array<T, Dynamic, 2> prefactors = compositeViscosityForcePrefactors<T>(
+        cells, R, surface_contact_density
+    );
+    Array<T, Dynamic, 1> K = prefactors.col(0);
+    Array<T, Dynamic, 1> L = prefactors.col(1);
+
+    // Compute the repulsive forces ... 
+    Array<T, Dynamic, 4> dEdq_repulsion = cellCellRepulsiveForces<T>(
+        cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors
+    );
+
+    // ... and the adhesive forces (if present) ... 
+    Array<T, Dynamic, 4> dEdq_adhesion = Array<T, Dynamic, 4>::Zero(n, 4); 
+    if (adhesion_mode != AdhesionMode::NONE)
+    {
+        dEdq_adhesion = cellCellAdhesiveForces<T>(
+            cells, neighbors, to_adhere, dt, iter, R, Rcell, adhesion_mode,
+            adhesion_params
+        );
+    }
+
+    // ... and the cell-cell friction forces (if present) ...
+    Array<T, Dynamic, 4> dEdq_friction = Array<T, Dynamic, 4>::Zero(n, 4);
+    if ((eta_cell_cell > 0).any())
+    {
+        dEdq_friction = cellCellFrictionForces<T>(
+            cells, neighbors, dt, iter, R, eta_cell_cell
+        ); 
+    }
+
+    // ... and the confinement forces (if present)
+    Array<T, Dynamic, 4> dEdq_confine = Array<T, Dynamic, 4>::Zero(n, 4); 
+    if (confine_mode == ConfinementMode::RADIAL)
+    {
+        const T rest_radius_factor = confine_params["rest_radius_factor"]; 
+        const T spring_const = confine_params["spring_const"];
+        const T max_area = getMaxArea<T>(cells, R); 
+        const T rest_radius = rest_radius_factor * sqrt(max_area / boost::math::constants::pi<T>()); 
+        Matrix<T, 2, 1> center = Matrix<T, 2, 1>::Zero();
+        dEdq_confine = radialConfinementForces<T>(
+            cells, boundary_idx, R, center, rest_radius, spring_const
+        );
+        #ifdef DEBUG_CHECK_CONFINEMENT_FORCES_NAN
+            for (int i = 0; i < n; ++i)
+            {
+                if (dEdq_confine.row(i).isNaN().any())
+                {
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in confinement forces for cell "
+                              << i << std::endl;
+                    std::cerr << "Timestep: " << dt << std::endl; 
+                    cellForcesSummary<T>(
+                        cells(i, __colseq_r), cells(i, __colseq_n),
+                        cells(i, __colidx_half_l),
+                        dEdq_confine.row(i).transpose()
+                    );
+                }
+            }
+        #endif
+    }
+    else if (confine_mode == ConfinementMode::CHANNEL) 
+    {
+        const T short_section_y = confine_params["short_section_y"]; 
+        const T left_long_section_x = confine_params["left_long_section_x"]; 
+        const T right_long_section_x = confine_params["right_long_section_x"]; 
+        const T spring_const = confine_params["spring_const"]; 
+        dEdq_confine = channelConfinementForces<T>(
+            cells, boundary_idx, R, short_section_y, left_long_section_x, 
+            right_long_section_x, spring_const
+        );
+        #ifdef DEBUG_CHECK_CONFINEMENT_FORCES_NAN
+            for (int i = 0; i < n; ++i)
+            {
+                if (dEdq_confine.row(i).isNaN().any())
+                {
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in confinement forces for cell "
+                              << i << std::endl;
+                    std::cerr << "Timestep: " << dt << std::endl; 
+                    cellForcesSummary<T>(
+                        cells(i, __colseq_r), cells(i, __colseq_n),
+                        cells(i, __colidx_half_l),
+                        dEdq_confine.row(i).transpose()
+                    );
+                }
+            }
+        #endif
+    }
+
+    // Combine the three types of forces (with the noise) 
+    Array<T, Dynamic, 4> dEdq = dEdq_repulsion + dEdq_adhesion + dEdq_confine + noise;
+
+    // Set mult = 2 * lambda
+    Array<T, Dynamic, 1> mult = (
+        cells.col(__colidx_nx) * dEdq.col(2) + cells.col(__colidx_ny) * dEdq.col(3)
+    );
+
+    // Solve the Lagrangian equations of motion for each cell in the population
+    Array<T, Dynamic, 2> dEdn_constrained = (
+        dEdq(Eigen::all, Eigen::seq(2, 3)) -
+        cells(Eigen::all, __colseq_n).colwise() * mult
+    );
+    velocities.col(0) = -dEdq.col(0) / K;
+    velocities.col(1) = -dEdq.col(1) / K; 
+    velocities.col(2) = -dEdn_constrained.col(0) / L;
+    velocities.col(3) = -dEdn_constrained.col(1) / L;
+
+    return velocities;  
+}
+
 /**
  * Run one step of an adaptive Runge-Kutta method with the given Butcher 
  * tableau for the given timestep.
@@ -948,7 +1296,9 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param max_noise Maximum noise to be added to each generalized force used 
  *                  to compute the velocities.
  * @param rng Random number generator.
- * @param uniform_dist Pre-defined instance of standard uniform distribution. 
+ * @param uniform_dist Pre-defined instance of standard uniform distribution.
+ * @param eta_cell_cell Array of cell-cell friction coefficients between cells 
+ *                      in different groups. 
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
@@ -973,6 +1323,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                            const T surface_contact_density, const T max_noise,
                            boost::random::mt19937& rng,
                            boost::random::uniform_01<>& uniform_dist,
+                           const Ref<const Array<T, Dynamic, Dynamic> >& eta_cell_cell,
                            const AdhesionMode adhesion_mode, 
                            std::unordered_map<std::string, T>& adhesion_params,
                            const ConfinementMode confine_mode, 
@@ -989,7 +1340,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                 std::cerr << "Iteration " << iter
                           << ": Found near-zero distance between cells "
                           << i << " and " << j << std::endl;
-			    std::cerr << "Timestep: " << dt << std::endl; 
+                std::cerr << "Timestep: " << dt << std::endl; 
                 pairConfigSummary<T>(
                     static_cast<int>(cells(i, __colidx_id)),
                     cells(i, __colseq_r).matrix(),
@@ -1026,8 +1377,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
     std::vector<Array<T, Dynamic, 4> > velocities;
     Array<T, Dynamic, 4> v0 = getVelocities<T>(
         cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
-        surface_contact_density, noise, adhesion_mode, adhesion_params,
-        confine_mode, boundary_idx, confine_params
+        surface_contact_density, noise, eta_cell_cell, adhesion_mode,
+        adhesion_params, confine_mode, boundary_idx, confine_params
     );
     velocities.push_back(v0);
     for (int i = 1; i < s; ++i)
@@ -1040,8 +1391,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
         normalizeOrientations<T>(cells_i);    // Renormalize orientations after each modification
         Array<T, Dynamic, 4> vi = getVelocities<T>(
             cells_i, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
-            surface_contact_density, noise, adhesion_mode, adhesion_params,
-            confine_mode, boundary_idx, confine_params
+            surface_contact_density, noise, eta_cell_cell, adhesion_mode,
+            adhesion_params, confine_mode, boundary_idx, confine_params
         );
         velocities.push_back(vi);
     }
