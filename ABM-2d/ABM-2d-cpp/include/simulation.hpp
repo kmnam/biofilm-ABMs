@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/9/2025
+ *     1/10/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -137,6 +137,8 @@ std::string floatToString(T x, const int precision = 10)
  *                              surface repulsion. 
  * @param max_noise Maximum noise to be added to each generalized force used 
  *                  to compute the velocities.
+ * @param eta_cell_cell Array of cell-cell friction coefficient between cells
+ *                      in different groups. 
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_map Set of pairs of group IDs (1, 2, ...) for which cells 
@@ -194,6 +196,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const bool truncate_surface_friction,
                   const T surface_coulomb_coeff,
                   const T max_noise,
+				  const Ref<const Array<T, Dynamic, Dynamic> >& eta_cell_cell, 
                   const AdhesionMode adhesion_mode, 
                   std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > >& adhesion_map, 
                   std::unordered_map<std::string, T>& adhesion_params,
@@ -378,6 +381,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             params[ss.str()] = floatToString<T>(attribute_stds(i, j), precision);
             ss.str(std::string());
         }
+		for (int j = i + 1; j < n_groups; ++j)
+		{
+		    ss << "eta_cell_cell_" << i + 1 << "_" << j + 1; 
+			params[ss.str()] = floatToString<T>(eta_cell_cell(i, j), precision); 
+			ss.str(std::string()); 
+		}
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
@@ -595,8 +604,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
             cell_cell_prefactors, surface_contact_density, max_noise, rng,
-            uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-            boundary_idx, confine_params
+            uniform_dist, eta_cell_cell, adhesion_mode, adhesion_params,
+			confine_mode, boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -633,8 +642,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                    uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-                    boundary_idx, confine_params
+                    uniform_dist, eta_cell_cell, adhesion_mode, adhesion_params,
+					confine_mode, boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -672,8 +681,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-                boundary_idx, confine_params
+                uniform_dist, eta_cell_cell, adhesion_mode, adhesion_params,
+				confine_mode, boundary_idx, confine_params
             ); 
             cells_new = result.first;
             errors = result.second;
@@ -851,6 +860,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 }
 
 /**
+ * TODO This code should be updated 
+ *
  * Run a simulation with the given initial population of cells.
  *
  * This function runs simulations in which the cells switch between two 
@@ -1370,7 +1381,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
             cell_cell_prefactors, surface_contact_density, max_noise, rng,
             uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-            boundary_idx, confine_params
+			boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -1408,7 +1419,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, max_noise, rng,
                     uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-                    boundary_idx, confine_params
+					boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -1447,7 +1458,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, max_noise, rng,
                 uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-                boundary_idx, confine_params
+				boundary_idx, confine_params
             ); 
             cells_new = result.first;
             errors = result.second;
