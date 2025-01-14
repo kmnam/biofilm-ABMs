@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/23/2024
+ *     1/14/2025
  */
 
 #ifndef KIHARA_GBK_POTENTIAL_FORCES_HPP
@@ -670,7 +670,7 @@ Array<T, Dim, 1> forceGBKNewton(const Ref<const Matrix<T, Dim, 1> >& r1,
     // If the distance is greater than 2 * R, return zero
     const T dist = d12.norm(); 
     if (dist > 2 * R)
-        return Matrix<T, 2, 2 * Dim>::Zero(); 
+        return Matrix<T, Dim, 1>::Zero();
 
     // Get the first anisotropy parameter and its partial derivatives (second
     // anisotropy parameter is fixed to 1)
@@ -678,7 +678,6 @@ Array<T, Dim, 1> forceGBKNewton(const Ref<const Matrix<T, Dim, 1> >& r1,
         n1, half_l1, n2, half_l2, Rcell, exp1
     );
     T eps1 = result1.first; 
-    Matrix<T, 2, 2 * Dim> deps1 = result1.second;
 
     // If the distance is less than 2 * R ... 
     Matrix<T, Dim, 1> force = Matrix<T, Dim, 1>::Zero();
