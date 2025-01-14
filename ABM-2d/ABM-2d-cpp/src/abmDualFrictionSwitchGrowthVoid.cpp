@@ -10,7 +10,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/8/2025
+ *     1/14/2025
  */
 
 #include <Eigen/Dense>
@@ -90,7 +90,7 @@ int main(int argc, char** argv)
     growth_stds << growth_std, growth_std; 
 
     // Vectors of friction coefficient means and standard deviations
-    std::vector<int> switch_attributes { __colidx_eta1 }; 
+    std::vector<int> switch_attributes { __colidx_maxeta1 }; 
     Array<T, Dynamic, Dynamic> attribute_means(2, 1); 
     Array<T, Dynamic, Dynamic> attribute_stds(2, 1);
     attribute_means << eta_mean1, eta_mean2; 
