@@ -492,6 +492,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
     // Write the initial population to file
     std::unordered_map<int, int> write_other_cols;
+	if (find_boundary)
+	{
+	    write_other_cols[__colidx_group + 1] = 0;
+	}
     if (track_poles)
     {
         write_other_cols[colidx_negpole_t0] = 1; 
@@ -1250,6 +1254,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
     // Write the initial population to file
     std::unordered_map<int, int> write_other_cols;
+	if (find_boundary)
+	{
+	    write_other_cols[__colidx_group + 1] = 0;
+	}
     if (track_poles)
     {
         write_other_cols[colidx_negpole_t0] = 1; 
