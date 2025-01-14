@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     12/17/2024
+ *     1/14/2025
  */
 
 #include <Eigen/Dense>
@@ -65,17 +65,32 @@ int main(int argc, char** argv)
     const T surface_coulomb_coeff = (
         truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double()) : 0.0
     );
-    const AdhesionMode adhesion_mode = static_cast<AdhesionMode>(json_data["adhesion_mode"].as_int64()); 
+
+	// Parse cell-cell adhesion parameters
+    AdhesionMode adhesion_mode; 
+	const int token = json_data["adhesion_mode"].as_int64(); 
+	if (token == 0)
+	    adhesion_mode = AdhesionMode::NONE;
+	else if (token == 1)
+	    adhesion_mode = AdhesionMode::KIHARA; 
+	else if (token == 2)
+	    adhesion_mode = AdhesionMode::GBK;
+	else 
+	    throw std::runtime_error("Invalid cell-cell adhesion mode specified"); 
+	std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map;
+	adhesion_map.insert(std::make_pair(1, 1)); 
     std::unordered_map<std::string, T> adhesion_params;
     adhesion_params["strength"] = static_cast<T>(json_data["adhesion_strength"].as_double());
     adhesion_params["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double()); 
     adhesion_params["mindist"] = static_cast<T>(json_data["adhesion_mindist"].as_double()); 
     if (adhesion_mode == AdhesionMode::GBK) 
         adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double()); 
-    const ConfinementMode confine_mode = ConfinementMode::NONE;     // No confinement forces
-    std::unordered_map<std::string, T> confine_params;
-    const GrowthVoidMode growth_void_mode = GrowthVoidMode::NONE;   // No growth void 
-    std::unordered_map<std::string, T> growth_void_params; 
+
+    // No confinement forces or growth void 
+    const ConfinementMode confine_mode = ConfinementMode::NONE; 
+    std::unordered_map<std::string, T> confine_params; 
+    const GrowthVoidMode growth_void_mode = GrowthVoidMode::NONE;
+    std::unordered_map<std::string, T> growth_void_params;
 
     // Vectors of growth rate means and standard deviations (identical for
     // both groups) 
@@ -125,8 +140,8 @@ int main(int argc, char** argv)
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_noise,
-        adhesion_mode, adhesion_params, confine_mode, confine_params,
-        growth_void_mode, growth_void_params
+        adhesion_mode, adhesion_map, adhesion_params, confine_mode,
+		confine_params, growth_void_mode, growth_void_params
     ); 
    
     return 0; 
