@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/10/2025
+ *     1/14/2025
  */
 
 #include <Eigen/Dense>
@@ -95,9 +95,6 @@ int main(int argc, char** argv)
     switch_rates << 0.0, 1.0 / lifetime_mean1,
                     1.0 / lifetime_mean2, 0.0;
 
-    // Fix cell-cell friction coefficients to zero 
-	Array<T, Dynamic, Dynamic> eta_cell_cell = Array<T, Dynamic, Dynamic>::Zero(2, 2); 
-
     // Output file prefix
     std::string outprefix = argv[2];
 
@@ -118,7 +115,7 @@ int main(int argc, char** argv)
     parents.push_back(-1); 
     
     // Run the simulation
-    runSimulation<T>(
+    runSimulationAdaptiveLagrangian<T>(
         cells, parents, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
         max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
@@ -126,7 +123,7 @@ int main(int argc, char** argv)
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_noise,
-        eta_cell_cell, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
+        adhesion_mode, adhesion_map, adhesion_params, confine_mode,
 		confine_params, growth_void_mode, growth_void_params
     ); 
     
