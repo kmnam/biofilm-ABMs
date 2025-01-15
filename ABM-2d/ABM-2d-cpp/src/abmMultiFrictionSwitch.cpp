@@ -154,11 +154,11 @@ int main(int argc, char** argv)
 	{
 	    if (i == 0)
 		{
-		    switch_rates(i, i + 1) = 1.0 / lifetimes[i];
+		    switch_rates(i, i + 1) = 1.0 / std::get<2>(groups_combined[i]);
 		}
 		else if (i == n_groups - 1)
 		{
-		    switch_rates(i, i - 1) = 1.0 / lifetimes[i];
+		    switch_rates(i, i - 1) = 1.0 / std::get<2>(groups_combined[i]); 
 		}
 		else 
 		{
