@@ -113,7 +113,7 @@ int main(int argc, char** argv)
     parents.push_back(-1); 
 
     // Run the simulation
-    runSimulation<T>(
+    runSimulationAdaptiveLagrangian<T>(
         cells, parents, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
         max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
