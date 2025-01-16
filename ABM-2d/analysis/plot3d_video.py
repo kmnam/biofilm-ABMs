@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    8/12/2024
+    1/15/2025
 """
 
 import sys
@@ -27,25 +27,8 @@ if __name__ == '__main__':
     plot_arrested = ('--arrested' in args)
     plot_3d = ('--3d' in args)
     overwrite_frames = ('--overwrite' in args)
-    multistage = ('--multistage' in args)
-    filenames = parse_dir(inprefix, multistage=multistage)
+    filenames = parse_dir(inprefix)
     print('Parsing {} files ...'.format(len(filenames)))
-
-    # Parse the initial files in each stage
-    init_timepoints = {1: 0.0}
-    n_stages = 1
-    if multistage:
-        n_stages = max(
-            int(re.search(r'_stage(\d+)_(?:init|iter\d+|final)\.txt$', filename).group(1))
-            for filename in filenames
-        )
-        for stage in range(2, n_stages + 1):
-            filename_prev_final = next(
-                filename for filename in filenames
-                if re.search(r'_stage{}_final\.txt$'.format(stage - 1), filename) is not None
-            )
-            _, params = read_cells(filename_prev_final)
-            init_timepoints[stage] = params['t_curr']
 
     # Get cell radius, final dimensions, and final timepoint from final file
     cells, params = read_cells(filenames[-1])
@@ -62,10 +45,7 @@ if __name__ == '__main__':
     ymax = np.ceil(cells[:, _colidx_ry].max() + 4 * L0)
     zmin = rz - R
     zmax = rz + R
-    t_final = (
-        params['t_curr'] if not multistage else
-        init_timepoints[n_stages] + params['t_curr']
-    )
+    t_final = params['t_curr']
 
     # Generate array of timepoints
     timepoints = np.linspace(0, t_final, nframes_total)
@@ -74,15 +54,7 @@ if __name__ == '__main__':
     file_timepoints = []    # Timepoints for all files 
     for filename in filenames:
         _, params = read_cells(filename)
-        if not multistage:
-            file_timepoints.append(params['t_curr'])
-        # If processing a multi-stage simulation, we must update the timepoint
-        # in each file
-        else:
-            stage = int(
-                re.search(r'_stage(\d+)_(?:init|iter\d+|final)\.txt$', filename).group(1)
-            )
-            file_timepoints.append(params['t_curr'] + init_timepoints[stage])
+        file_timepoints.append(params['t_curr'])
 
     # Run through the files and identify, for each timepoint, the file 
     # whose timepoint is closest
