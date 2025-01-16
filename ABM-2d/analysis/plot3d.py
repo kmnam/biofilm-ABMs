@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    8/15/2024
+    1/15/2025
 """
 
 import os
@@ -238,19 +238,6 @@ def plot_frame(filename, outfilename, pl, xmin=None, xmax=None, ymin=None,
         _colidx_group = 16
         _colidx_bound = -1
 
-    palette = [    # Assume a maximum of two groups
-        sns.color_palette('hls', 8)[5],
-        sns.color_palette('hls', 8)[0]
-    ]
-    pastel = [
-        sns.color_palette('pastel')[0],
-        sns.color_palette('pastel')[3]
-    ]
-    deep = [
-        sns.color_palette('deep')[4], 
-        sns.color_palette('deep')[1]
-    ]
-
     # Clear plotter 
     #pl.clear()
     
@@ -276,23 +263,30 @@ def plot_frame(filename, outfilename, pl, xmin=None, xmax=None, ymin=None,
     if time is None:
         time = params['t_curr']
 
-    # Determine cell colors 
+    # Use a spectral colormap
+    ngroups = int(max(cells[:, _colidx_group]))
     if uniform_color:
-        colors = [palette[0] for i in range(cells.shape[0])]
+        palette = np.array([sns.color_palette('hls')[5]]) * np.ones((ngroups, 4))
     else:
-        ngroups = int(max(cells[:, _colidx_group]))
-        palette_ = palette[:ngroups]
-        pastel_ = pastel[:ngroups]
-        deep_ = deep[:ngroups]
+        cmap = sns.color_palette('coolwarm', as_cmap=True)
+        idx = np.linspace(0.1, 0.9, ngroups)
+        palette = np.array([cmap(i) for i in idx])[:, :3]
+    pastel = 0.5 * palette + 0.5 * np.ones((ngroups, 3))
+    deep = 0.5 * palette + 0.5 * np.zeros((ngroups, 3))
+
+    # Determine cell colors
+    if uniform_color:
+        colors = [palette[0, :] for i in range(cells.shape[0])]
+    else:
         colors = []
         for i in range(cells.shape[0]):
             group_idx = int(cells[i, _colidx_group]) - 1
             if plot_boundary and cells[i, _colidx_bound] != 0:
-                colors.append(deep_[group_idx])
+                colors.append(deep[group_idx, :])
             elif plot_arrested and cells[i, _colidx_growth] == 0:
-                colors.append(pastel_[group_idx])
+                colors.append(pastel[group_idx, :])
             else:
-                colors.append(palette_[group_idx])
+                colors.append(palette[group_idx, :])
 
     # Plot the circle (if desired)
     if plot_membrane:
