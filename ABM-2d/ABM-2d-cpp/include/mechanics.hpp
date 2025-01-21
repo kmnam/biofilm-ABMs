@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/14/2025
+ *     1/20/2025
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -180,7 +180,7 @@ void cellNewtonianForceSummary(const Ref<const Array<T, 2, 1> >& r,
               << "Cell orientational velocity = (" << dn(0) << ", " << dn(1) << ")" << std::endl
               << "Cell half-length = " << half_l << std::endl
               << "Force = (" << force(0) << ", " << force(1) << ")" << std::endl
-			  << "Torque = " << torque << std::endl; 
+              << "Torque = " << torque << std::endl; 
 }
 
 /**
@@ -1252,10 +1252,10 @@ Array<T, Dynamic, 3> cellCellFrictionForcesNewton(const Ref<const Array<T, Dynam
             T sqrt_overlap = sqrt((2 * R - d) * R); 
 
             // Compute the force on cell i due to cell j
-			//
-			// Note that vijt = vij - vijn increases with the velocity of cell i, 
-			// and the force on cell i should therefore go in the opposite 
-			// direction as vijt 
+            //
+            // Note that vijt = vij - vijn increases with the velocity of cell i, 
+            // and the force on cell i should therefore go in the opposite 
+            // direction as vijt 
             Array<T, 2, 1> force_ji = -eta_ij * sqrt_overlap * vijt;
 
             // Compute the forces exerted on cell i by cell j and vice versa 
@@ -1340,14 +1340,14 @@ Array<T, Dynamic, 3> viscosityForcesNewton(const Ref<const Array<T, Dynamic, Dyn
     forces(Eigen::all, Eigen::seq(0, 1)) = -(cells(Eigen::all, __colseq_dr).colwise() * prefactors.col(0));
 
     // Compute the corresponding torques TODO Check this
-	Array<T, Dynamic, 1> angvels(n); 
-	for (int i = 0; i < n; ++i)
-	{
-	    if (abs(cells(i, __colidx_nx)) > 1e-2)
-			angvels(i) = cells(i, __colidx_dny) / cells(i, __colidx_nx); 
-		else 
-		    angvels(i) = -cells(i, __colidx_dnx) / cells(i, __colidx_ny);
-	}
+    Array<T, Dynamic, 1> angvels(n); 
+    for (int i = 0; i < n; ++i)
+    {
+        if (abs(cells(i, __colidx_nx)) > 1e-2)
+            angvels(i) = cells(i, __colidx_dny) / cells(i, __colidx_nx); 
+        else 
+            angvels(i) = -cells(i, __colidx_dnx) / cells(i, __colidx_ny);
+    }
     forces.col(2) = -prefactors.col(1) * angvels;
 
     #ifdef DEBUG_CHECK_VISCOSITY_FORCES_NAN
@@ -1787,9 +1787,10 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
  * forces and torques in the Newtonian framework.  
  *
  * In this function, the pairs of neighboring cells in the population have 
- * been pre-computed.
+ * been pre-computed, and the cell data are updated in place. 
  *
- * @param cells Current population of cells. 
+ * @param cells Current population of cells. This array is overwritten by
+ *              this function. 
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
  * @param to_adhere Boolean array specifying whether, for each pair of 
@@ -1815,26 +1816,22 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
  *                     CHANNEL (2).
  * @param boundary_idx Pre-computed vector of indices of peripheral cells. 
  * @param confine_params Parameters required to compute confinement forces.
- * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
-Array<T, Dynamic, Dynamic> stepVerlet(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                      const Ref<const Array<T, Dynamic, 6> >& neighbors,
-                                      const Ref<const Array<int, Dynamic, 1> >& to_adhere,
-                                      const T dt, const int iter, const T R,
-                                      const T Rcell,
-                                      const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                                      const T density,
-                                      const T surface_contact_density,
-                                      const T max_noise,
-                                      boost::random::mt19937& rng,
-                                      boost::random::uniform_01<>& uniform_dist,
-                                      const Ref<const Array<T, Dynamic, Dynamic> >& eta_cell_cell, 
-                                      const AdhesionMode adhesion_mode,
-                                      std::unordered_map<std::string, T>& adhesion_params,
-                                      const ConfinementMode confine_mode, 
-                                      std::vector<int>& boundary_idx,
-                                      std::unordered_map<std::string, T>& confine_params)
+void stepVerlet(Ref<Array<T, Dynamic, Dynamic> > cells,
+                const Ref<const Array<T, Dynamic, 6> >& neighbors,
+                const Ref<const Array<int, Dynamic, 1> >& to_adhere,
+                const T dt, const int iter, const T R, const T Rcell,
+                const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                const T density, const T surface_contact_density,
+                const T max_noise, boost::random::mt19937& rng,
+                boost::random::uniform_01<>& uniform_dist,
+                const Ref<const Array<T, Dynamic, Dynamic> >& eta_cell_cell, 
+                const AdhesionMode adhesion_mode,
+                std::unordered_map<std::string, T>& adhesion_params,
+                const ConfinementMode confine_mode, 
+                std::vector<int>& boundary_idx,
+                std::unordered_map<std::string, T>& confine_params)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
         for (int k = 0; k < neighbors.rows(); ++k)
@@ -1863,7 +1860,6 @@ Array<T, Dynamic, Dynamic> stepVerlet(const Ref<const Array<T, Dynamic, Dynamic>
     #endif
 
     int n = cells.rows();
-    Array<T, Dynamic, Dynamic> cells_new(cells);
     
     // Compute the masses of the cells 
     Array<T, Dynamic, 1> masses = getMasses<T>(cells, density, R);
@@ -1916,7 +1912,7 @@ Array<T, Dynamic, Dynamic> stepVerlet(const Ref<const Array<T, Dynamic, Dynamic>
         cells, R, surface_contact_density
     );
     Array<T, Dynamic, 3> forces_viscosity = viscosityForcesNewton<T>(
-	    cells, prefactors, dt, iter
+        cells, prefactors, dt, iter
     );
 
     // ... and the confinement forces (if present)
@@ -1990,14 +1986,14 @@ Array<T, Dynamic, Dynamic> stepVerlet(const Ref<const Array<T, Dynamic, Dynamic>
 
     // Extract the current cell velocities and angular velocities 
     Array<T, Dynamic, 2> velocities = cells(Eigen::all, __colseq_dr);
-	Array<T, Dynamic, 1> angvels(n); 
-	for (int i = 0; i < n; ++i)
-	{
-	    if (abs(cells(i, __colidx_nx)) > 1e-2)
-			angvels(i) = cells(i, __colidx_dny) / cells(i, __colidx_nx); 
-		else 
-		    angvels(i) = -cells(i, __colidx_dnx) / cells(i, __colidx_ny);
-	}
+    Array<T, Dynamic, 1> angvels(n); 
+    for (int i = 0; i < n; ++i)
+    {
+        if (abs(cells(i, __colidx_nx)) > 1e-2)
+            angvels(i) = cells(i, __colidx_dny) / cells(i, __colidx_nx); 
+        else 
+            angvels(i) = -cells(i, __colidx_dnx) / cells(i, __colidx_ny);
+    }
 
     // Update by a half-timestep ... 
     Array<T, Dynamic, 2> accelerations = forces(Eigen::all, Eigen::seq(0, 1)).colwise() / masses;
@@ -2005,23 +2001,23 @@ Array<T, Dynamic, Dynamic> stepVerlet(const Ref<const Array<T, Dynamic, Dynamic>
     angvels += 0.5 * dt * forces.col(2) / moments.col(1);
 
     // Update cell positions and orientations
-    cells_new(Eigen::all, __colseq_r) += dt * velocities;
+    cells(Eigen::all, __colseq_r) += dt * velocities;
     for (int i = 0; i < n; ++i)
     {
         Array<T, 2, 1> cross; 
-        cross << -angvels(i) * cells_new(i, __colidx_ny),
-                  angvels(i) * cells_new(i, __colidx_nx); 
-        cells_new(i, __colseq_n) += dt * cross;
+        cross << -angvels(i) * cells(i, __colidx_ny),
+                  angvels(i) * cells(i, __colidx_nx); 
+        cells(i, __colseq_n) += dt * cross;
     }
     
     // Renormalize orientations 
-    normalizeOrientations<T>(cells_new);
+    normalizeOrientations<T>(cells);
 
     // Update cell velocities and angular velocities with the intermediate 
     // values
-    cells_new(Eigen::all, __colseq_dr) = velocities;
-    cells_new.col(__colidx_dnx) = -angvels * cells_new.col(__colidx_ny);
-    cells_new.col(__colidx_dny) = angvels * cells_new.col(__colidx_nx);
+    cells(Eigen::all, __colseq_dr) = velocities;
+    cells.col(__colidx_dnx) = -angvels * cells.col(__colidx_ny);
+    cells.col(__colidx_dny) = angvels * cells.col(__colidx_nx);
 
     // Re-sample noise components to be added to the forces and torques
     //
@@ -2040,14 +2036,14 @@ Array<T, Dynamic, Dynamic> stepVerlet(const Ref<const Array<T, Dynamic, Dynamic>
 
     // Re-compute the repulsive forces and torques ... 
     forces_repulsion = cellCellRepulsiveForcesNewton<T>(
-        cells_new, neighbors, dt, iter, R, Rcell, cell_cell_prefactors
+        cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors
     );
 
     // ... and the adhesive forces and torques (if present) ... 
     if (adhesion_mode != AdhesionMode::NONE)
     {
         forces_adhesion = cellCellAdhesiveForcesNewton<T>(
-            cells_new, neighbors, to_adhere, dt, iter, R, Rcell, adhesion_mode,
+            cells, neighbors, to_adhere, dt, iter, R, Rcell, adhesion_mode,
             adhesion_params
         );
     }
@@ -2056,12 +2052,12 @@ Array<T, Dynamic, Dynamic> stepVerlet(const Ref<const Array<T, Dynamic, Dynamic>
     if ((eta_cell_cell > 0).any())
     {
         forces_friction = cellCellFrictionForcesNewton<T>(
-            cells_new, neighbors, dt, iter, R, eta_cell_cell
+            cells, neighbors, dt, iter, R, eta_cell_cell
         ); 
     }
 
     // ... and the ambient viscosity and cell-surface friction forces ...
-    forces_viscosity = viscosityForcesNewton<T>(cells_new, prefactors, dt, iter); 
+    forces_viscosity = viscosityForcesNewton<T>(cells, prefactors, dt, iter); 
 
     // ... and the confinement forces (if present)
     // TODO Implement this!
@@ -2134,12 +2130,10 @@ Array<T, Dynamic, Dynamic> stepVerlet(const Ref<const Array<T, Dynamic, Dynamic>
 
     // Update cell velocities and angular velocities with the re-computed forces 
     accelerations = forces(Eigen::all, Eigen::seq(0, 1)).colwise() / masses;
-    cells_new(Eigen::all, __colseq_dr) += 0.5 * dt * accelerations; 
+    cells(Eigen::all, __colseq_dr) += 0.5 * dt * accelerations; 
     angvels += 0.5 * dt * (forces.col(2) / moments.col(1)); 
-    cells_new.col(__colidx_dnx) = -angvels * cells_new.col(__colidx_ny);
-    cells_new.col(__colidx_dny) = angvels * cells_new.col(__colidx_nx);
-
-    return cells_new; 
+    cells.col(__colidx_dnx) = -angvels * cells.col(__colidx_ny);
+    cells.col(__colidx_dny) = angvels * cells.col(__colidx_nx);
 }
 
 #endif

@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/14/2025
+ *     1/20/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -492,10 +492,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
     // Write the initial population to file
     std::unordered_map<int, int> write_other_cols;
-	if (find_boundary)
-	{
-	    write_other_cols[__colidx_group + 1] = 0;
-	}
+    if (find_boundary)
+    {
+        write_other_cols[__colidx_group + 1] = 0;
+    }
     if (track_poles)
     {
         write_other_cols[colidx_negpole_t0] = 1; 
@@ -600,7 +600,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
             cell_cell_prefactors, surface_contact_density, max_noise, rng,
             uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-			boundary_idx, confine_params
+            boundary_idx, confine_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 4> errors = result.second;
@@ -638,7 +638,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, max_noise, rng,
                     uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-					boundary_idx, confine_params
+                    boundary_idx, confine_params
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -677,7 +677,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, max_noise, rng,
                 uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-				boundary_idx, confine_params
+                boundary_idx, confine_params
             ); 
             cells_new = result.first;
             errors = result.second;
@@ -945,7 +945,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                  const T E0,
                                  const T Ecell,
                                  const T sigma0,
-								 const T density, 
+                                 const T density, 
                                  const T dt,
                                  const bool write,
                                  const std::string outprefix,
@@ -1093,7 +1093,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["E0"] = floatToString<T>(E0, precision);
     params["Ecell"] = floatToString<T>(Ecell, precision);
     params["sigma0"] = floatToString<T>(sigma0, precision);
-	params["density"] = floatToString<T>(density, precision); 
+    params["density"] = floatToString<T>(density, precision); 
     params["stepsize"] = floatToString<T>(dt, precision); 
     params["dt_write"] = floatToString<T>(dt_write, precision); 
     params["iter_update_neighbors"] = std::to_string(iter_update_neighbors);
@@ -1254,10 +1254,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
     // Write the initial population to file
     std::unordered_map<int, int> write_other_cols;
-	if (find_boundary)
-	{
-	    write_other_cols[__colidx_group + 1] = 0;
-	}
+    if (find_boundary)
+    {
+        write_other_cols[__colidx_group + 1] = 0;
+    }
     if (track_poles)
     {
         write_other_cols[colidx_negpole_t0] = 1; 
@@ -1358,11 +1358,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         }
 
         // Update cell positions and orientations
-        cells = stepVerlet<T>(
+        stepVerlet<T>(
             cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
-			density, surface_contact_density, max_noise, rng, uniform_dist,
-			eta_cell_cell, adhesion_mode, adhesion_params, confine_mode,
-			boundary_idx, confine_params
+            density, surface_contact_density, max_noise, rng, uniform_dist,
+            eta_cell_cell, adhesion_mode, adhesion_params, confine_mode,
+            boundary_idx, confine_params
         );
 
         // Grow the cells
