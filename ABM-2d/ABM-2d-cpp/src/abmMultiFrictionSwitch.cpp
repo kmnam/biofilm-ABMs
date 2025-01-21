@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/8/2025
+ *     1/21/2025
  */
 
 #include <Eigen/Dense>
@@ -63,75 +63,75 @@ int main(int argc, char** argv)
         truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double()) : 0.0
     );
     const AdhesionMode adhesion_mode = AdhesionMode::NONE;           // No cell-cell adhesion
-	std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map; 
+    std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map; 
     std::unordered_map<std::string, T> adhesion_params;
     const ConfinementMode confine_mode = ConfinementMode::NONE;      // No confinement forces 
     std::unordered_map<std::string, T> confine_params; 
     const GrowthVoidMode growth_void_mode = GrowthVoidMode::NONE;    // No growth void 
     std::unordered_map<std::string, T> growth_void_params;
 
-	// Parse friction coefficients for each group 
-	int n_groups = 0;
-	std::vector<T> eta_means, eta_stds; 
-	while (true)
-	{
-	    std::stringstream ss1, ss2; 
-		ss1 << "eta_mean" << n_groups + 1; 
-		ss2 << "eta_std" << n_groups + 1;
-		T eta_mean, eta_std;
+    // Parse friction coefficients for each group 
+    int n_groups = 0;
+    std::vector<T> eta_means, eta_stds; 
+    while (true)
+    {
+        std::stringstream ss1, ss2; 
+        ss1 << "eta_mean" << n_groups + 1; 
+        ss2 << "eta_std" << n_groups + 1;
+        T eta_mean, eta_std;
         // Parse friction coefficient mean for next group
-	    if (json_data.if_contains(ss1.str()))
-		    eta_mean = static_cast<T>(json_data[ss1.str()].as_double());
+        if (json_data.if_contains(ss1.str()))
+            eta_mean = static_cast<T>(json_data[ss1.str()].as_double());
         else
-		    break;
-	    // Parse friction coefficient SD for next group 
+            break;
+        // Parse friction coefficient SD for next group 
         if (json_data.if_contains(ss2.str()))
-			eta_std = static_cast<T>(json_data[ss2.str()].as_double());
-		else
-		    throw std::runtime_error(
-			    "Improperly specified cell group (mean only, no SD, for friction "
-				"coefficient)"
-	        );
+            eta_std = static_cast<T>(json_data[ss2.str()].as_double());
+        else
+            throw std::runtime_error(
+                "Improperly specified cell group (mean only, no SD, for friction "
+                "coefficient)"
+            );
         n_groups++;
         eta_means.push_back(eta_mean); 
-		eta_stds.push_back(eta_std); 
-	}
+        eta_stds.push_back(eta_std); 
+    }
 
-	// Has at least one group been specified? 
-	if (n_groups == 0)
-	    throw std::runtime_error("No cell groups specified");
+    // Has at least one group been specified? 
+    if (n_groups == 0)
+        throw std::runtime_error("No cell groups specified");
 
     // Parse group lifetimes
-	std::vector<T> lifetimes; 
-	for (int i = 0; i < n_groups; ++i)
-	{
-	    std::stringstream ss; 
-		ss << "lifetime_mean" << i + 1;
-		T lifetime; 
-		if (json_data.if_contains(ss.str()))    // Parse lifetime for next group 
-		{
-		    lifetime = static_cast<T>(json_data[ss.str()].as_double());
-	    }
-	    else
-		{
-		    std::stringstream ss_err; 
-			ss_err << "Unspecified lifetime for cell group " << i + 1; 
-			throw std::runtime_error(ss_err.str()); 
-	    }
+    std::vector<T> lifetimes; 
+    for (int i = 0; i < n_groups; ++i)
+    {
+        std::stringstream ss; 
+        ss << "lifetime_mean" << i + 1;
+        T lifetime; 
+        if (json_data.if_contains(ss.str()))    // Parse lifetime for next group 
+        {
+            lifetime = static_cast<T>(json_data[ss.str()].as_double());
+        }
+        else
+        {
+            std::stringstream ss_err; 
+            ss_err << "Unspecified lifetime for cell group " << i + 1; 
+            throw std::runtime_error(ss_err.str()); 
+        }
         lifetimes.push_back(lifetime); 
-	}
+    }
 
-	// Sort the groups by descending friction coefficient
-	std::vector<std::tuple<T, T, T> > groups_combined;
-	for (int i = 0; i < n_groups; ++i)
-	    groups_combined.push_back(std::make_tuple(eta_means[i], eta_stds[i], lifetimes[i]));
-	std::sort(
-	    groups_combined.begin(), groups_combined.end(),
-		[](std::tuple<T, T, T>& a, std::tuple<T, T, T>& b)
-		{
-		    return std::get<0>(a) > std::get<0>(b);
-	    }
-	);
+    // Sort the groups by descending friction coefficient
+    std::vector<std::tuple<T, T, T> > groups_combined;
+    for (int i = 0; i < n_groups; ++i)
+        groups_combined.push_back(std::make_tuple(eta_means[i], eta_stds[i], lifetimes[i]));
+    std::sort(
+        groups_combined.begin(), groups_combined.end(),
+        [](std::tuple<T, T, T>& a, std::tuple<T, T, T>& b)
+        {
+            return std::get<0>(a) > std::get<0>(b);
+        }
+    );
 
     // Vectors of growth rate means and standard deviations (identical for
     // all groups) 
@@ -142,30 +142,30 @@ int main(int argc, char** argv)
     std::vector<int> switch_attributes { __colidx_maxeta1 };
     Array<T, Dynamic, Dynamic> attribute_means(n_groups, 1);
     Array<T, Dynamic, Dynamic> attribute_stds(n_groups, 1);
-	for (int i = 0; i < n_groups; ++i)
-	{
-	    attribute_means(i, 0) = std::get<0>(groups_combined[i]); 
-		attribute_stds(i, 0) = std::get<1>(groups_combined[i]);
-	}
+    for (int i = 0; i < n_groups; ++i)
+    {
+        attribute_means(i, 0) = std::get<0>(groups_combined[i]); 
+        attribute_stds(i, 0) = std::get<1>(groups_combined[i]);
+    }
 
     // Switching rates between consecutive groups 
     Array<T, Dynamic, Dynamic> switch_rates(n_groups, n_groups);
-	for (int i = 0; i < n_groups; ++i)
-	{
-	    if (i == 0)
-		{
-		    switch_rates(i, i + 1) = 1.0 / std::get<2>(groups_combined[i]);
-		}
-		else if (i == n_groups - 1)
-		{
-		    switch_rates(i, i - 1) = 1.0 / std::get<2>(groups_combined[i]); 
-		}
-		else 
-		{
-		    switch_rates(i, i + 1) = 1.0 / (2 * std::get<2>(groups_combined[i])); 
-			switch_rates(i, i - 1) = 1.0 / (2 * std::get<2>(groups_combined[i])); 
-		}
-	}
+    for (int i = 0; i < n_groups; ++i)
+    {
+        if (i == 0)
+        {
+            switch_rates(i, i + 1) = 1.0 / std::get<2>(groups_combined[i]);
+        }
+        else if (i == n_groups - 1)
+        {
+            switch_rates(i, i - 1) = 1.0 / std::get<2>(groups_combined[i]); 
+        }
+        else 
+        {
+            switch_rates(i, i + 1) = 1.0 / (2 * std::get<2>(groups_combined[i])); 
+            switch_rates(i, i - 1) = 1.0 / (2 * std::get<2>(groups_combined[i])); 
+        }
+    }
 
     // Output file prefix
     std::string outprefix = argv[2];
@@ -193,10 +193,10 @@ int main(int argc, char** argv)
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, n_groups,
         switch_attributes, growth_means, growth_stds, attribute_means, 
-        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
-        adhesion_mode, adhesion_map, adhesion_params, confine_mode,
-		confine_params, growth_void_mode, growth_void_params
+        attribute_stds, SwitchMode::MARKOV, switch_rates, daughter_length_std,
+        daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
+        max_noise, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
+        confine_params, growth_void_mode, growth_void_params
     ); 
     
     return 0; 
