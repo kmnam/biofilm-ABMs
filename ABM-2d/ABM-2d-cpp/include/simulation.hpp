@@ -379,7 +379,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["switch_mode"] = std::to_string(static_cast<int>(switch_mode));
     if (switch_mode != SwitchMode::NONE)
     {
-        std::stringstream ss; 	
+        std::stringstream ss;
         for (int i = 0; i < n_groups; ++i)
         {
             for (int j = i + 1; j < n_groups; ++j)
@@ -552,7 +552,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     {
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
-	std::vector<std::pair<int, int> > daughter_pairs; 
+        std::vector<std::pair<int, int> > daughter_pairs; 
         if (to_divide.sum() > 0)
             std::cout << "... Dividing " << to_divide.sum() << " cells "
                       << "(iteration " << iter << ")" << std::endl;
@@ -563,8 +563,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 daughter_length_dist, daughter_angle_dist, colidx_negpole_t0,
                 colidx_pospole_t0
             );
-	    cells = div_result.first;
-	    daughter_pairs = div_result.second; 
+            cells = div_result.first;
+            daughter_pairs = div_result.second; 
         }
         else                // Otherwise, simply divide 
         {
@@ -572,8 +572,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
                 daughter_length_dist, daughter_angle_dist
             );
-	    cells = div_result.first; 
-	    daughter_pairs = div_result.second; 
+            cells = div_result.first; 
+            daughter_pairs = div_result.second; 
         }
         n = cells.rows();
 
@@ -585,7 +585,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             {
                 switchGroupsInherit<T>(
                     cells, daughter_pairs, group_attributes, n_groups, dt,
-		    switch_rates, growth_dists, attribute_dists, rng, uniform_dist
+                    switch_rates, growth_dists, attribute_dists, rng, uniform_dist
                 );
             }
             // Update neighboring cells 
@@ -1162,7 +1162,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["switch_mode"] = std::to_string(static_cast<int>(switch_mode));
     if (switch_mode != SwitchMode::NONE)
     {       
-	std::stringstream ss; 
+        std::stringstream ss; 
         for (int i = 0; i < n_groups; ++i)
         {
             for (int j = i + 1; j < n_groups; ++j)
@@ -1185,7 +1185,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     {
         for (int j = i + 1; j < n_groups; ++j)
         {
-	    std::stringstream ss; 
+            std::stringstream ss; 
             ss << "eta_cell_cell_" << i + 1 << "_" << j + 1; 
             params[ss.str()] = floatToString<T>(eta_cell_cell(i, j), precision); 
         }
@@ -1344,23 +1344,28 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     {
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
+        std::vector<std::pair<int, int> > daughter_pairs; 
         if (to_divide.sum() > 0)
             std::cout << "... Dividing " << to_divide.sum() << " cells "
                       << "(iteration " << iter << ")" << std::endl;
-        if (track_poles)
+        if (track_poles)    // Track poles if desired 
         {
-            cells = divideCellsWithPoles<T>(
+            auto div_result = divideCellsWithPoles<T>(
                 cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
                 daughter_length_dist, daughter_angle_dist, colidx_negpole_t0,
                 colidx_pospole_t0
             );
+            cells = div_result.first;
+            daughter_pairs = div_result.second; 
         }
-        else 
+        else                // Otherwise, simply divide 
         {
-            cells = divideCells<T>(
+            auto div_result = divideCells<T>(
                 cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
                 daughter_length_dist, daughter_angle_dist
             );
+            cells = div_result.first; 
+            daughter_pairs = div_result.second; 
         }
         n = cells.rows();
 
@@ -1368,6 +1373,14 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // void if division has occurred
         if (to_divide.sum() > 0)
         {
+            // Switch cells between groups if desired 
+            if (switch_mode == SwitchMode::INHERIT)
+            {
+                switchGroupsInherit<T>(
+                    cells, daughter_pairs, group_attributes, n_groups, dt,
+                    switch_rates, growth_dists, attribute_dists, rng, uniform_dist
+                );
+            }
             // Update neighboring cells 
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             // Update pairs of adhering cells 
@@ -1448,50 +1461,51 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (find_boundary && iter % iter_update_boundary == 0)
             boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
 
-        // Switch cells between groups
-        switchGroupsMarkov<T>(
-            cells, group_attributes, n_groups, dt, switch_rates, growth_dists,
-            attribute_dists, rng, uniform_dist
-        );
-
-        // Update pairs of adhering cells 
-        for (int k = 0; k < neighbors.rows(); ++k)
+        // Switch cells between groups if desired 
+        if (switch_mode == SwitchMode::MARKOV)
         {
-            int ni = neighbors(k, 0); 
-            int nj = neighbors(k, 1);
-            int gi = cells(ni, __colidx_group); 
-            int gj = cells(nj, __colidx_group);
-            std::pair<int, int> pair; 
-            if (gi < gj)
-                pair = std::make_pair(gi, gj); 
-            else 
-                pair = std::make_pair(gj, gi); 
-            T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-            to_adhere(k) = (
-                adhesion_map.find(pair) != adhesion_map.end() &&
-                dist > R + Rcell && dist < 2 * R
-            ); 
-        }
-
-        // Correct growth rates for cells within the growth void that have 
-        // just switched 
-        for (int i = 0; i < n; ++i)
-        {
-            if (in_void(i) && cells(i, __colidx_growth) > 0)
-                cells(i, __colidx_growth) = 0.0;
-        }
-
-        // Truncate cell-surface friction coefficients according to Coulomb's law
-        if (truncate_surface_friction)
-        {
-            truncateSurfaceFrictionCoeffsCoulomb<T>(
-                cells, R, E0, surface_contact_density, surface_coulomb_coeff
+            // First switch the cells 
+            switchGroupsMarkov<T>(
+                cells, group_attributes, n_groups, dt, switch_rates, growth_dists,
+                attribute_dists, rng, uniform_dist
             );
-        }
-        else    // Otherwise, ensure that friction coefficients are correct after switching 
-        {
+            // Update pairs of adhering cells 
+            for (int k = 0; k < neighbors.rows(); ++k)
+            {
+                int ni = neighbors(k, 0); 
+                int nj = neighbors(k, 1);
+                int gi = cells(ni, __colidx_group); 
+                int gj = cells(nj, __colidx_group);
+                std::pair<int, int> pair; 
+                if (gi < gj)
+                    pair = std::make_pair(gi, gj); 
+                else 
+                    pair = std::make_pair(gj, gi); 
+                T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
+                to_adhere(k) = (
+                    adhesion_map.find(pair) != adhesion_map.end() &&
+                    dist > R + Rcell && dist < 2 * R
+                ); 
+            }
+            // Correct growth rates for cells within the growth void that have 
+            // just switched 
             for (int i = 0; i < n; ++i)
-                cells(i, __colidx_eta1) = cells(i, __colidx_maxeta1);
+            {
+                if (in_void(i) && cells(i, __colidx_growth) > 0)
+                    cells(i, __colidx_growth) = 0.0;
+            }
+            // Truncate cell-surface friction coefficients according to Coulomb's law
+            if (truncate_surface_friction)
+            {
+                truncateSurfaceFrictionCoeffsCoulomb<T>(
+                    cells, R, E0, surface_contact_density, surface_coulomb_coeff
+                );
+            }
+            else    // Otherwise, ensure that friction coefficients are correct after switching 
+            {
+                for (int i = 0; i < n; ++i)
+                    cells(i, __colidx_eta1) = cells(i, __colidx_maxeta1);
+            }
         }
 
         // Introduce or update growth void
@@ -1561,8 +1575,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
     return std::make_pair(cells, parents);
 }
-
-
 
 /**
  * TODO This code should be updated 
