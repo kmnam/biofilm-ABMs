@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/14/2025
+ *     1/21/2025
  */
 
 #include <Eigen/Dense>
@@ -69,7 +69,7 @@ int main(int argc, char** argv)
         truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double()) : 0.0
     );
     const AdhesionMode adhesion_mode = AdhesionMode::NONE;           // No cell-cell adhesion
-	std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map; 
+        std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map; 
     std::unordered_map<std::string, T> adhesion_params;
     const ConfinementMode confine_mode = ConfinementMode::NONE;      // No confinement forces 
     std::unordered_map<std::string, T> confine_params; 
@@ -121,10 +121,10 @@ int main(int argc, char** argv)
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
-        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
-        adhesion_mode, adhesion_map, adhesion_params, confine_mode,
-		confine_params, growth_void_mode, growth_void_params
+        attribute_stds, SwitchMode::MARKOV, switch_rates, daughter_length_std,
+	daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
+	max_noise, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
+	confine_params, growth_void_mode, growth_void_params
     ); 
     
     return 0; 
