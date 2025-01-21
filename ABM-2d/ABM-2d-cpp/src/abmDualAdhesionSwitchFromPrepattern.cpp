@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/14/2025
+ *     1/21/2025
  */
 
 #include <Eigen/Dense>
@@ -67,23 +67,23 @@ int main(int argc, char** argv)
         truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double()) : 0.0
     );
 
-	// Parse cell-cell adhesion parameters
+    // Parse cell-cell adhesion parameters
     AdhesionMode adhesion_mode; 
-	const int token = json_data["adhesion_mode"].as_int64(); 
-	if (token == 0)
-	    adhesion_mode = AdhesionMode::NONE;
-	else if (token == 1)
-	    adhesion_mode = AdhesionMode::KIHARA; 
-	else if (token == 2)
-	    adhesion_mode = AdhesionMode::GBK;
-	else 
-	    throw std::runtime_error("Invalid cell-cell adhesion mode specified"); 
-	std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map;
-	adhesion_map.insert(std::make_pair(1, 1)); 
-    std::unordered_map<std::string, T> adhesion_params;
-    adhesion_params["strength"] = static_cast<T>(json_data["adhesion_strength"].as_double());
-    adhesion_params["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double()); 
-    adhesion_params["mindist"] = static_cast<T>(json_data["adhesion_mindist"].as_double()); 
+    const int token = json_data["adhesion_mode"].as_int64(); 
+    if (token == 0)
+        adhesion_mode = AdhesionMode::NONE;
+    else if (token == 1)
+        adhesion_mode = AdhesionMode::KIHARA; 
+    else if (token == 2)
+        adhesion_mode = AdhesionMode::GBK;
+    else 
+        throw std::runtime_error("Invalid cell-cell adhesion mode specified"); 
+    std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map1, adhesion_map2;
+    adhesion_map2.insert(std::make_pair(1, 1)); 
+    std::unordered_map<std::string, T> adhesion_params1, adhesion_params2;
+    adhesion_params2["strength"] = static_cast<T>(json_data["adhesion_strength"].as_double());
+    adhesion_params2["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double()); 
+    adhesion_params2["mindist"] = static_cast<T>(json_data["adhesion_mindist"].as_double()); 
     if (adhesion_mode == AdhesionMode::GBK) 
         adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double()); 
 
@@ -93,10 +93,10 @@ int main(int argc, char** argv)
     const GrowthVoidMode growth_void_mode = GrowthVoidMode::NONE;
     std::unordered_map<std::string, T> growth_void_params;
 
-	// Parse pre-patterning parameters
-	const int n_cells_init = json_data["n_cells_init"].as_int64();
-	const PrepatternMode prepattern_mode = static_cast<PrepatternMode>(json_data["prepattern_mode"].as_int64());
-	const double prepattern_switch_fraction = json_data["prepattern_switch_fraction"].as_double();
+    // Parse pre-patterning parameters
+    const int n_cells_init = json_data["n_cells_init"].as_int64();
+    const PrepatternMode prepattern_mode = static_cast<PrepatternMode>(json_data["prepattern_mode"].as_int64());
+    const double prepattern_switch_fraction = json_data["prepattern_switch_fraction"].as_double();
 
     // Vectors of growth rate means and standard deviations (identical for
     // both groups) 
@@ -120,9 +120,9 @@ int main(int argc, char** argv)
 
     // Output file prefix
     std::string outprefix = argv[2];
-	std::stringstream ss; 
-	ss << outprefix << "_pre"; 
-	std::string outprefix_pre = ss.str();  
+    std::stringstream ss; 
+    ss << outprefix << "_pre"; 
+    std::string outprefix_pre = ss.str();  
 
     // Random seed
     const int rng_seed = std::stoi(argv[3]);
@@ -140,21 +140,21 @@ int main(int argc, char** argv)
     std::vector<int> parents; 
     parents.push_back(-1); 
     
-	// Run the first stage of the simulation
+    // Run the first stage of the simulation (with no adhesion)
     auto result = runSimulationAdaptiveLagrangian<T>(
         cells, parents, max_iter, n_cells_init, R, Rcell, L0, Ldiv, E0, Ecell,
-		sigma0, max_stepsize, min_stepsize, true, outprefix, dt_write,
-		iter_update_neighbors, iter_update_boundary, iter_update_stepsize,
-		max_error_allowed, min_error, max_tries_update_stepsize, neighbor_threshold,
-		rng_seed, 2, switch_attributes, growth_means, growth_stds, attribute_means,
+        sigma0, max_stepsize, min_stepsize, true, outprefix, dt_write,
+        iter_update_neighbors, iter_update_boundary, iter_update_stepsize,
+        max_error_allowed, min_error, max_tries_update_stepsize, neighbor_threshold,
+        rng_seed, 2, switch_attributes, growth_means, growth_stds, attribute_means,
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_noise,
-        adhesion_mode, adhesion_map, adhesion_params, confine_mode,
-		confine_params, growth_void_mode, growth_void_params
+        AdhesionMode::NONE, adhesion_map1, adhesion_params1, confine_mode,
+        confine_params, growth_void_mode, growth_void_params
     );
 
-	cells = result.first; 
-	parents = result.second;
+    cells = result.first; 
+    parents = result.second;
 
     // Growth rate distribution functions: normal distributions with given means
     // and standard deviations
@@ -192,12 +192,12 @@ int main(int argc, char** argv)
         }
     }
 
-	// Prepattern the cells
-	boost::random::mt19937 rng(rng_seed); 
-	prepattern<T>(
-	    cells, prepattern_mode, prepattern_switch_fraction, switch_attributes,
-	    growth_dists, attribute_dists, rng
-	);
+    // Prepattern the cells
+    boost::random::mt19937 rng(rng_seed); 
+    prepattern<T>(
+        cells, prepattern_mode, prepattern_switch_fraction, switch_attributes,
+        growth_dists, attribute_dists, rng
+    );
     
     // Run the second stage of the simulation
     runSimulationAdaptiveLagrangian<T>(
@@ -208,8 +208,8 @@ int main(int argc, char** argv)
         switch_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_noise,
-        adhesion_mode, adhesion_map, adhesion_params, confine_mode,
-		confine_params, growth_void_mode, growth_void_params
+        adhesion_mode, adhesion_map2, adhesion_params2, confine_mode,
+        confine_params, growth_void_mode, growth_void_params
     ); 
    
     return 0; 

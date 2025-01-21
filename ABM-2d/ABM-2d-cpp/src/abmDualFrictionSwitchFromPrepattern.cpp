@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/14/2025
+ *     1/21/2025
  */
 
 #include <Eigen/Dense>
@@ -70,17 +70,17 @@ int main(int argc, char** argv)
         truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double()) : 0.0
     );
     const AdhesionMode adhesion_mode = AdhesionMode::NONE;           // No cell-cell adhesion
-	std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map; 
+    std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map; 
     std::unordered_map<std::string, T> adhesion_params;
     const ConfinementMode confine_mode = ConfinementMode::NONE;      // No confinement forces 
     std::unordered_map<std::string, T> confine_params; 
     const GrowthVoidMode growth_void_mode = GrowthVoidMode::NONE;    // No growth void 
     std::unordered_map<std::string, T> growth_void_params;
 
-	// Parse pre-patterning parameters
-	const int n_cells_init = json_data["n_cells_init"].as_int64();
-	const PrepatternMode prepattern_mode = static_cast<PrepatternMode>(json_data["prepattern_mode"].as_int64());
-	const double prepattern_switch_fraction = json_data["prepattern_switch_fraction"].as_double();
+    // Parse pre-patterning parameters
+    const int n_cells_init = json_data["n_cells_init"].as_int64();
+    const PrepatternMode prepattern_mode = static_cast<PrepatternMode>(json_data["prepattern_mode"].as_int64());
+    const double prepattern_switch_fraction = json_data["prepattern_switch_fraction"].as_double();
 
     // Vectors of growth rate means and standard deviations (identical for
     // both groups) 
@@ -96,12 +96,12 @@ int main(int argc, char** argv)
     attribute_means << eta_mean1, eta_mean2;
     attribute_stds << eta_std1, eta_std2;
 
-	// Vectors of dummy friction coefficient means and standard deviations
-	// (identical for both groups) 
-	Array<T, Dynamic, Dynamic> dummy_means(2, 1); 
-	Array<T, Dynamic, Dynamic> dummy_stds(2, 1);
-	dummy_means << eta_mean1, eta_mean1; 
-	dummy_stds << eta_std1, eta_std1; 
+    // Vectors of dummy friction coefficient means and standard deviations
+    // (identical for both groups) 
+    Array<T, Dynamic, Dynamic> dummy_means(2, 1); 
+    Array<T, Dynamic, Dynamic> dummy_stds(2, 1);
+    dummy_means << eta_mean1, eta_mean1; 
+    dummy_stds << eta_std1, eta_std1; 
 
     // Switching rates between groups 1 and 2
     Array<T, Dynamic, Dynamic> switch_rates(2, 2); 
@@ -110,9 +110,9 @@ int main(int argc, char** argv)
 
     // Output file prefix
     std::string outprefix = argv[2];
-	std::stringstream ss; 
-	ss << outprefix << "_pre"; 
-	std::string outprefix_pre = ss.str();  
+    std::stringstream ss; 
+    ss << outprefix << "_pre"; 
+    std::string outprefix_pre = ss.str();  
 
     // Random seed
     const int rng_seed = std::stoi(argv[3]);
@@ -130,20 +130,20 @@ int main(int argc, char** argv)
     std::vector<int> parents; 
     parents.push_back(-1);
 
-	// Run the first stage of the simulation
-	auto result = runSimulationAdaptiveLagrangian<T>(
-	    cells, parents, max_iter, n_cells_init, R, Rcell, L0, Ldiv, E0, Ecell, 
-		sigma0, max_stepsize, min_stepsize, true, outprefix_pre, dt_write,
-		iter_update_neighbors, iter_update_boundary, iter_update_stepsize, 
-		max_error_allowed, min_error, max_tries_update_stepsize, neighbor_threshold,
-		rng_seed, 2, switch_attributes, growth_means, growth_stds, attribute_means, 
-        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
+    // Run the first stage of the simulation
+    auto result = runSimulationAdaptiveLagrangian<T>(
+        cells, parents, max_iter, n_cells_init, R, Rcell, L0, Ldiv, E0, Ecell, 
+        sigma0, max_stepsize, min_stepsize, true, outprefix_pre, dt_write,
+        iter_update_neighbors, iter_update_boundary, iter_update_stepsize, 
+        max_error_allowed, min_error, max_tries_update_stepsize, neighbor_threshold,
+        rng_seed, 2, switch_attributes, growth_means, growth_stds, dummy_means,
+        dummy_stds, switch_rates, daughter_length_std, daughter_angle_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_noise,
         adhesion_mode, adhesion_map, adhesion_params, confine_mode,
-		confine_params, growth_void_mode, growth_void_params
-	); 
-	cells = result.first; 
-	parents = result.second;
+        confine_params, growth_void_mode, growth_void_params
+    ); 
+    cells = result.first; 
+    parents = result.second;
 
     // Growth rate distribution functions: normal distributions with given means
     // and standard deviations
@@ -181,12 +181,12 @@ int main(int argc, char** argv)
         }
     }
 
-	// Prepattern the cells
-	boost::random::mt19937 rng(rng_seed); 
-	prepattern<T>(
-	    cells, prepattern_mode, prepattern_switch_fraction, switch_attributes,
-	    growth_dists, attribute_dists, rng
-	);
+    // Prepattern the cells
+    boost::random::mt19937 rng(rng_seed); 
+    prepattern<T>(
+        cells, prepattern_mode, prepattern_switch_fraction, switch_attributes,
+        growth_dists, attribute_dists, rng
+    );
     
     // Run the second stage of the simulation
     runSimulationAdaptiveLagrangian<T>(
@@ -198,7 +198,7 @@ int main(int argc, char** argv)
         attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_noise,
         adhesion_mode, adhesion_map, adhesion_params, confine_mode,
-		confine_params, growth_void_mode, growth_void_params
+        confine_params, growth_void_mode, growth_void_params
     ); 
     
     return 0; 
