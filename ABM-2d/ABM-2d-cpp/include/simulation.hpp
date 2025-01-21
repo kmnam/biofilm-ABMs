@@ -917,8 +917,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  *                           and non-neighboring cells.
  * @param rng_seed Random number generator seed. 
  * @param n_groups Number of groups.
- * @param switch_mode Switching mode. Can by NONE (0), MARKOV (1), or INHERIT
- *                    (2).
  * @param group_attributes Indices of attributes that differ between groups. 
  * @param growth_means Mean growth rate for cells in each group.
  * @param growth_stds Standard deviation of growth rate for cells in each
@@ -927,6 +925,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  *                        group.
  * @param attribute_stds Array of standard deviations of attributes for cells
  *                       in each group.
+ * @param switch_mode Switching mode. Can by NONE (0), MARKOV (1), or INHERIT
+ *                    (2).
  * @param switch_rates Array of between-group switching rates. In the Markovian
  *                     mode (`switch_mode` is MARKOV), this is the matrix of
  *                     transition rates; in the inheritance mode (`switch_mode`
@@ -987,12 +987,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                  const T neighbor_threshold,
                                  const int rng_seed,
                                  const int n_groups,
-                                 const SwitchMode switch_mode, 
                                  std::vector<int>& group_attributes,
                                  const Ref<const Array<T, Dynamic, 1> >& growth_means,
                                  const Ref<const Array<T, Dynamic, 1> >& growth_stds,
                                  const Ref<const Array<T, Dynamic, Dynamic> >& attribute_means,
                                  const Ref<const Array<T, Dynamic, Dynamic> >& attribute_stds,
+                                 const SwitchMode switch_mode, 
                                  const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
                                  const T daughter_length_std,
                                  const T daughter_angle_bound,
