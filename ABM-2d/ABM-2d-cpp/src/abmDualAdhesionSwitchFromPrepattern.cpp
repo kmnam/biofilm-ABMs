@@ -85,7 +85,7 @@ int main(int argc, char** argv)
     adhesion_params2["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double()); 
     adhesion_params2["mindist"] = static_cast<T>(json_data["adhesion_mindist"].as_double()); 
     if (adhesion_mode == AdhesionMode::GBK) 
-        adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double()); 
+        adhesion_params2["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double()); 
 
     // No confinement forces or growth void 
     const ConfinementMode confine_mode = ConfinementMode::NONE; 
@@ -147,10 +147,10 @@ int main(int argc, char** argv)
         iter_update_neighbors, iter_update_boundary, iter_update_stepsize,
         max_error_allowed, min_error, max_tries_update_stepsize, neighbor_threshold,
         rng_seed, 2, switch_attributes, growth_means, growth_stds, attribute_means,
-        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
-        AdhesionMode::NONE, adhesion_map1, adhesion_params1, confine_mode,
-        confine_params, growth_void_mode, growth_void_params
+        attribute_stds, SwitchMode::NONE, switch_rates, daughter_length_std,
+	daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
+	max_noise, AdhesionMode::NONE, adhesion_map1, adhesion_params1,
+	confine_mode, confine_params, growth_void_mode, growth_void_params
     );
 
     cells = result.first; 
@@ -206,9 +206,9 @@ int main(int argc, char** argv)
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
-        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
-        adhesion_mode, adhesion_map2, adhesion_params2, confine_mode,
+        attribute_stds, SwitchMode::MARKOV, switch_rates, daughter_length_std,
+	daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
+	max_noise, adhesion_mode, adhesion_map2, adhesion_params2, confine_mode,
         confine_params, growth_void_mode, growth_void_params
     ); 
    

@@ -137,9 +137,9 @@ int main(int argc, char** argv)
         iter_update_neighbors, iter_update_boundary, iter_update_stepsize, 
         max_error_allowed, min_error, max_tries_update_stepsize, neighbor_threshold,
         rng_seed, 2, switch_attributes, growth_means, growth_stds, dummy_means,
-        dummy_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
-        adhesion_mode, adhesion_map, adhesion_params, confine_mode,
+        dummy_stds, SwitchMode::NONE, switch_rates, daughter_length_std,
+	daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
+	max_noise, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
         confine_params, growth_void_mode, growth_void_params
     ); 
     cells = result.first; 
@@ -195,9 +195,9 @@ int main(int argc, char** argv)
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         switch_attributes, growth_means, growth_stds, attribute_means, 
-        attribute_stds, switch_rates, daughter_length_std, daughter_angle_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
-        adhesion_mode, adhesion_map, adhesion_params, confine_mode,
+        attribute_stds, SwitchMode::MARKOV, switch_rates, daughter_length_std,
+	daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
+	max_noise, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
         confine_params, growth_void_mode, growth_void_params
     ); 
     
