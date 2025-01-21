@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/20/2025
+ *     1/21/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -116,8 +116,7 @@ std::string floatToString(T x, const int precision = 10)
  *                           and non-neighboring cells.
  * @param rng_seed Random number generator seed. 
  * @param n_groups Number of groups.
- * @param switch_attributes Indices of attributes to change when switching
- *                          groups.
+ * @param group_attributes Indices of attributes that differ between groups. 
  * @param growth_means Mean growth rate for cells in each group.
  * @param growth_stds Standard deviation of growth rate for cells in each
  *                    group.
@@ -125,7 +124,13 @@ std::string floatToString(T x, const int precision = 10)
  *                        group.
  * @param attribute_stds Array of standard deviations of attributes for cells
  *                       in each group.
- * @param switch_rates Array of between-group switching rates. 
+ * @param switch_mode Switching mode. Can by NONE (0), MARKOV (1), or INHERIT
+ *                    (2).
+ * @param switch_rates Array of between-group switching rates. In the Markovian
+ *                     mode (`switch_mode` is MARKOV), this is the matrix of
+ *                     transition rates; in the inheritance mode (`switch_mode`
+ *                     is INHERIT), this is the matrix of transition probabilities
+ *                     at each division event. 
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
@@ -183,11 +188,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     const T neighbor_threshold,
                                     const int rng_seed,
                                     const int n_groups,
-                                    std::vector<int>& switch_attributes,
+                                    std::vector<int>& group_attributes,
                                     const Ref<const Array<T, Dynamic, 1> >& growth_means,
                                     const Ref<const Array<T, Dynamic, 1> >& growth_stds,
                                     const Ref<const Array<T, Dynamic, Dynamic> >& attribute_means,
                                     const Ref<const Array<T, Dynamic, Dynamic> >& attribute_stds,
+                                    const SwitchMode switch_mode, 
                                     const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
                                     const T daughter_length_std,
                                     const T daughter_angle_bound,
@@ -282,7 +288,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
     // Attribute distribution functions: normal distributions with given means
     // and standard deviations
-    const int n_attributes = switch_attributes.size();
+    const int n_attributes = group_attributes.size();
     std::map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> > attribute_dists;
     for (int i = 0; i < n_groups; ++i)
     {
@@ -348,8 +354,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     for (int i = 0; i < n_attributes; ++i)
     {
         std::stringstream ss; 
-        ss << "switch_attribute" << i + 1;
-        params[ss.str()] = std::to_string(switch_attributes[i]);
+        ss << "group_attribute" << i + 1;
+        params[ss.str()] = std::to_string(group_attributes[i]);
     }
     for (int i = 0; i < n_groups; ++i)
     {
@@ -360,15 +366,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         ss << "growth_std" << i + 1;
         params[ss.str()] = floatToString<double>(growth_stds(i), precision);
         ss.str(std::string());
-        for (int j = i + 1; j < n_groups; ++j)
-        {
-            ss << "switch_rate_" << i + 1 << "_" << j + 1;
-            params[ss.str()] = floatToString<T>(switch_rates(i, j), precision);
-            ss.str(std::string());
-            ss << "switch_rate_" << j + 1 << "_" << i + 1;
-            params[ss.str()] = floatToString<T>(switch_rates(j, i), precision);
-            ss.str(std::string()); 
-        }
         for (int j = 0; j < n_attributes; ++j)
         {
             ss << "attribute_mean_" << i + 1 << "_" << j + 1;
@@ -377,6 +374,23 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             ss << "attribute_std_" << i + 1 << "_" << j + 1;
             params[ss.str()] = floatToString<T>(attribute_stds(i, j), precision);
             ss.str(std::string());
+        }
+    }
+    params["switch_mode"] = std::to_string(static_cast<int>(switch_mode));
+    if (switch_mode != SwitchMode::NONE)
+    {
+        std::stringstream ss; 	
+        for (int i = 0; i < n_groups; ++i)
+        {
+            for (int j = i + 1; j < n_groups; ++j)
+            {
+                ss << "switch_rate_" << i + 1 << "_" << j + 1;
+                params[ss.str()] = floatToString<T>(switch_rates(i, j), precision);
+                ss.str(std::string());
+                ss << "switch_rate_" << j + 1 << "_" << i + 1;
+                params[ss.str()] = floatToString<T>(switch_rates(j, i), precision);
+                ss.str(std::string()); 
+            }
         }
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
@@ -538,30 +552,42 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     {
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
+	std::vector<std::pair<int, int> > daughter_pairs; 
         if (to_divide.sum() > 0)
             std::cout << "... Dividing " << to_divide.sum() << " cells "
                       << "(iteration " << iter << ")" << std::endl;
-        if (track_poles)
+        if (track_poles)    // Track poles if desired 
         {
-            cells = divideCellsWithPoles<T>(
+            auto div_result = divideCellsWithPoles<T>(
                 cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
                 daughter_length_dist, daughter_angle_dist, colidx_negpole_t0,
                 colidx_pospole_t0
             );
+	    cells = div_result.first;
+	    daughter_pairs = div_result.second; 
         }
-        else 
+        else                // Otherwise, simply divide 
         {
-            cells = divideCells<T>(
+            auto div_result = divideCells<T>(
                 cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
                 daughter_length_dist, daughter_angle_dist
             );
+	    cells = div_result.first; 
+	    daughter_pairs = div_result.second; 
         }
         n = cells.rows();
 
-        // Update neighboring cells, peripheral cells, and cells within growth
-        // void if division has occurred
+        // If division has occurred ... 
         if (to_divide.sum() > 0)
         {
+            // Switch cells between groups if desired 
+            if (switch_mode == SwitchMode::INHERIT)
+            {
+                switchGroupsInherit<T>(
+                    cells, daughter_pairs, group_attributes, n_groups, dt,
+		    switch_rates, growth_dists, attribute_dists, rng, uniform_dist
+                );
+            }
             // Update neighboring cells 
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             // Update pairs of adhering cells 
@@ -738,50 +764,51 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (find_boundary && iter % iter_update_boundary == 0)
             boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
 
-        // Switch cells between groups
-        switchGroups<T>(
-            cells, switch_attributes, n_groups, dt, switch_rates, growth_dists,
-            attribute_dists, rng, uniform_dist
-        );
-
-        // Update pairs of adhering cells 
-        for (int k = 0; k < neighbors.rows(); ++k)
+        // Switch cells between groups if desired 
+        if (switch_mode == SwitchMode::MARKOV)
         {
-            int ni = neighbors(k, 0); 
-            int nj = neighbors(k, 1);
-            int gi = cells(ni, __colidx_group); 
-            int gj = cells(nj, __colidx_group);
-            std::pair<int, int> pair; 
-            if (gi < gj)
-                pair = std::make_pair(gi, gj); 
-            else 
-                pair = std::make_pair(gj, gi); 
-            T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
-            to_adhere(k) = (
-                adhesion_map.find(pair) != adhesion_map.end() &&
-                dist > R + Rcell && dist < 2 * R
-            ); 
-        }
-
-        // Correct growth rates for cells within the growth void that have 
-        // just switched 
-        for (int i = 0; i < n; ++i)
-        {
-            if (in_void(i) && cells(i, __colidx_growth) > 0)
-                cells(i, __colidx_growth) = 0.0;
-        }
-
-        // Truncate cell-surface friction coefficients according to Coulomb's law
-        if (truncate_surface_friction)
-        {
-            truncateSurfaceFrictionCoeffsCoulomb<T>(
-                cells, R, E0, surface_contact_density, surface_coulomb_coeff
+            // First switch the cells 
+            switchGroupsMarkov<T>(
+                cells, group_attributes, n_groups, dt, switch_rates, growth_dists,
+                attribute_dists, rng, uniform_dist
             );
-        }
-        else    // Otherwise, ensure that friction coefficients are correct after switching 
-        {
+            // Update pairs of adhering cells 
+            for (int k = 0; k < neighbors.rows(); ++k)
+            {
+                int ni = neighbors(k, 0); 
+                int nj = neighbors(k, 1);
+                int gi = cells(ni, __colidx_group); 
+                int gj = cells(nj, __colidx_group);
+                std::pair<int, int> pair; 
+                if (gi < gj)
+                    pair = std::make_pair(gi, gj); 
+                else 
+                    pair = std::make_pair(gj, gi); 
+                T dist = neighbors(k, Eigen::seq(2, 3)).matrix().norm(); 
+                to_adhere(k) = (
+                    adhesion_map.find(pair) != adhesion_map.end() &&
+                    dist > R + Rcell && dist < 2 * R
+                ); 
+            }
+            // Correct growth rates for cells within the growth void that have 
+            // just switched 
             for (int i = 0; i < n; ++i)
-                cells(i, __colidx_eta1) = cells(i, __colidx_maxeta1);
+            {
+                if (in_void(i) && cells(i, __colidx_growth) > 0)
+                    cells(i, __colidx_growth) = 0.0;
+            }
+            // Truncate cell-surface friction coefficients according to Coulomb's law
+            if (truncate_surface_friction)
+            {
+                truncateSurfaceFrictionCoeffsCoulomb<T>(
+                    cells, R, E0, surface_contact_density, surface_coulomb_coeff
+                );
+            }
+            else    // Otherwise, ensure that friction coefficients are correct after switching 
+            {
+                for (int i = 0; i < n; ++i)
+                    cells(i, __colidx_eta1) = cells(i, __colidx_maxeta1);
+            }
         }
 
         // Introduce or update growth void
@@ -890,8 +917,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  *                           and non-neighboring cells.
  * @param rng_seed Random number generator seed. 
  * @param n_groups Number of groups.
- * @param switch_attributes Indices of attributes to change when switching
- *                          groups.
+ * @param switch_mode Switching mode. Can by NONE (0), MARKOV (1), or INHERIT
+ *                    (2).
+ * @param group_attributes Indices of attributes that differ between groups. 
  * @param growth_means Mean growth rate for cells in each group.
  * @param growth_stds Standard deviation of growth rate for cells in each
  *                    group.
@@ -899,7 +927,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
  *                        group.
  * @param attribute_stds Array of standard deviations of attributes for cells
  *                       in each group.
- * @param switch_rates Array of between-group switching rates. 
+ * @param switch_rates Array of between-group switching rates. In the Markovian
+ *                     mode (`switch_mode` is MARKOV), this is the matrix of
+ *                     transition rates; in the inheritance mode (`switch_mode`
+ *                     is INHERIT), this is the matrix of transition probabilities
+ *                     at each division event. 
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_bound Bound on daughter cell re-orientation angle.
@@ -955,7 +987,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                  const T neighbor_threshold,
                                  const int rng_seed,
                                  const int n_groups,
-                                 std::vector<int>& switch_attributes,
+                                 const SwitchMode switch_mode, 
+                                 std::vector<int>& group_attributes,
                                  const Ref<const Array<T, Dynamic, 1> >& growth_means,
                                  const Ref<const Array<T, Dynamic, 1> >& growth_stds,
                                  const Ref<const Array<T, Dynamic, Dynamic> >& attribute_means,
@@ -1041,7 +1074,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
     // Attribute distribution functions: normal distributions with given means
     // and standard deviations
-    const int n_attributes = switch_attributes.size();
+    const int n_attributes = group_attributes.size();
     std::map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> > attribute_dists;
     for (int i = 0; i < n_groups; ++i)
     {
@@ -1104,8 +1137,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     for (int i = 0; i < n_attributes; ++i)
     {
         std::stringstream ss; 
-        ss << "switch_attribute" << i + 1;
-        params[ss.str()] = std::to_string(switch_attributes[i]);
+        ss << "group_attribute" << i + 1;
+        params[ss.str()] = std::to_string(group_attributes[i]);
     }
     for (int i = 0; i < n_groups; ++i)
     {
@@ -1116,15 +1149,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         ss << "growth_std" << i + 1;
         params[ss.str()] = floatToString<double>(growth_stds(i), precision);
         ss.str(std::string());
-        for (int j = i + 1; j < n_groups; ++j)
-        {
-            ss << "switch_rate_" << i + 1 << "_" << j + 1;
-            params[ss.str()] = floatToString<T>(switch_rates(i, j), precision);
-            ss.str(std::string());
-            ss << "switch_rate_" << j + 1 << "_" << i + 1;
-            params[ss.str()] = floatToString<T>(switch_rates(j, i), precision);
-            ss.str(std::string()); 
-        }
         for (int j = 0; j < n_attributes; ++j)
         {
             ss << "attribute_mean_" << i + 1 << "_" << j + 1;
@@ -1134,18 +1158,38 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             params[ss.str()] = floatToString<T>(attribute_stds(i, j), precision);
             ss.str(std::string());
         }
-        for (int j = i + 1; j < n_groups; ++j)
+    }
+    params["switch_mode"] = std::to_string(static_cast<int>(switch_mode));
+    if (switch_mode != SwitchMode::NONE)
+    {       
+	std::stringstream ss; 
+        for (int i = 0; i < n_groups; ++i)
         {
-            ss << "eta_cell_cell_" << i + 1 << "_" << j + 1; 
-            params[ss.str()] = floatToString<T>(eta_cell_cell(i, j), precision); 
-            ss.str(std::string()); 
+            for (int j = i + 1; j < n_groups; ++j)
+            {
+                ss << "switch_rate_" << i + 1 << "_" << j + 1;
+                params[ss.str()] = floatToString<T>(switch_rates(i, j), precision);
+                ss.str(std::string());
+                ss << "switch_rate_" << j + 1 << "_" << i + 1;
+                params[ss.str()] = floatToString<T>(switch_rates(j, i), precision);
+                ss.str(std::string()); 
+            }
         }
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_bound"] = floatToString<T>(daughter_angle_bound, precision);
     params["truncate_surface_friction"] = (truncate_surface_friction ? "1" : "0"); 
     params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
-    params["max_noise"] = floatToString<T>(max_noise, precision); 
+    params["max_noise"] = floatToString<T>(max_noise, precision);
+    for (int i = 0; i < n_groups; ++i)
+    {
+        for (int j = i + 1; j < n_groups; ++j)
+        {
+	    std::stringstream ss; 
+            ss << "eta_cell_cell_" << i + 1 << "_" << j + 1; 
+            params[ss.str()] = floatToString<T>(eta_cell_cell(i, j), precision); 
+        }
+    }
     params["adhesion_mode"] = std::to_string(static_cast<int>(adhesion_mode)); 
     if (adhesion_mode != AdhesionMode::NONE)
     {
@@ -1280,7 +1324,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         }
         writeCells<T>(cells_, params, filename_init, write_other_cols);
     }
-    
+
     // Define termination criterion, assuming that at least one of n_cells
     // or max_iter is positive
     std::function<bool(int, int)> terminate = [&n_cells, &max_iter](int n, int iter)
@@ -1405,8 +1449,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
 
         // Switch cells between groups
-        switchGroups<T>(
-            cells, switch_attributes, n_groups, dt, switch_rates, growth_dists,
+        switchGroupsMarkov<T>(
+            cells, group_attributes, n_groups, dt, switch_rates, growth_dists,
             attribute_dists, rng, uniform_dist
         );
 
