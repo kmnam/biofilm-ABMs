@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/14/2025
+ *     1/21/2025
  */
 
 #include <Eigen/Dense>
@@ -36,7 +36,7 @@ int main(int argc, char** argv)
     const T E0 = static_cast<T>(json_data["E0"].as_double());
     const T Ecell = static_cast<T>(json_data["Ecell"].as_double()); 
     const T sigma0 = static_cast<T>(json_data["sigma0"].as_double());
-	const T density = static_cast<T>(json_data["density"].as_double()); 
+        const T density = static_cast<T>(json_data["density"].as_double()); 
     const T eta_ambient = static_cast<T>(json_data["eta_ambient"].as_double()); 
     const T dt = static_cast<T>(json_data["stepsize"].as_double()); 
     const T dt_write = static_cast<T>(json_data["dt_write"].as_double()); 
@@ -61,7 +61,7 @@ int main(int argc, char** argv)
         truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double()) : 0.0
     );
     const AdhesionMode adhesion_mode = AdhesionMode::NONE;           // No cell-cell adhesion
-	std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map; 
+    std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map; 
     std::unordered_map<std::string, T> adhesion_params;
     const ConfinementMode confine_mode = ConfinementMode::NONE;      // No confinement forces 
     std::unordered_map<std::string, T> confine_params; 
@@ -82,8 +82,8 @@ int main(int argc, char** argv)
     attribute_means << eta_mean1, eta_mean2;
     attribute_stds << eta_std1, eta_std2;
 
-	// No cell-cell friction 
-	Array<T, Dynamic, Dynamic> eta_cell_cell = Array<T, Dynamic, Dynamic>::Zero(2, 2); 
+    // No cell-cell friction 
+    Array<T, Dynamic, Dynamic> eta_cell_cell = Array<T, Dynamic, Dynamic>::Zero(2, 2); 
 
     // Switching rates between groups 1 and 2
     Array<T, Dynamic, Dynamic> switch_rates(2, 2); 
@@ -113,12 +113,12 @@ int main(int argc, char** argv)
     runSimulationVerletNewtonian<T>(
         cells, parents, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
         density, dt, true, outprefix, dt_write, iter_update_neighbors,
-		iter_update_boundary, neighbor_threshold, rng_seed, 2, switch_attributes,
-		growth_means, growth_stds, attribute_means, attribute_stds, switch_rates,
-		daughter_length_std, daughter_angle_bound, truncate_surface_friction,
-		surface_coulomb_coeff, max_noise, eta_cell_cell, adhesion_mode,
-		adhesion_map, adhesion_params, confine_mode, confine_params,
-		growth_void_mode, growth_void_params
+        iter_update_boundary, neighbor_threshold, rng_seed, 2, switch_attributes,
+        growth_means, growth_stds, attribute_means, attribute_stds, SwitchMode::MARKOV,
+        switch_rates, daughter_length_std, daughter_angle_bound,
+        truncate_surface_friction, surface_coulomb_coeff, max_noise, eta_cell_cell,
+        adhesion_mode, adhesion_map, adhesion_params, confine_mode, confine_params,
+        growth_void_mode, growth_void_params
     ); 
     
     return 0; 

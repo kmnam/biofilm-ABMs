@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/14/2025
+ *     1/21/2025
  */
 
 #include <Eigen/Dense>
@@ -36,7 +36,7 @@ int main(int argc, char** argv)
     const T E0 = static_cast<T>(json_data["E0"].as_double());
     const T Ecell = static_cast<T>(json_data["Ecell"].as_double()); 
     const T sigma0 = static_cast<T>(json_data["sigma0"].as_double());
-	const T density = static_cast<T>(json_data["density"].as_double()); 
+    const T density = static_cast<T>(json_data["density"].as_double()); 
     const T eta_ambient = static_cast<T>(json_data["eta_ambient"].as_double()); 
     const T dt = static_cast<T>(json_data["stepsize"].as_double()); 
     const T dt_write = static_cast<T>(json_data["dt_write"].as_double()); 
@@ -61,19 +61,19 @@ int main(int argc, char** argv)
         truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double()) : 0.0
     );
 
-	// Parse cell-cell adhesion parameters
+    // Parse cell-cell adhesion parameters
     AdhesionMode adhesion_mode;
-	const int token = json_data["adhesion_mode"].as_int64(); 
-	if (token == 0)
-	    adhesion_mode = AdhesionMode::NONE;
-	else if (token == 1)
-	    adhesion_mode = AdhesionMode::KIHARA; 
-	else if (token == 2)
-	    adhesion_mode = AdhesionMode::GBK;
-	else 
-	    throw std::runtime_error("Invalid cell-cell adhesion mode specified");
-	std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map;
-	adhesion_map.insert(std::make_pair(1, 1)); 
+    const int token = json_data["adhesion_mode"].as_int64(); 
+    if (token == 0)
+        adhesion_mode = AdhesionMode::NONE;
+    else if (token == 1)
+        adhesion_mode = AdhesionMode::KIHARA; 
+    else if (token == 2)
+        adhesion_mode = AdhesionMode::GBK;
+    else 
+        throw std::runtime_error("Invalid cell-cell adhesion mode specified");
+    std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map;
+    adhesion_map.insert(std::make_pair(1, 1)); 
     std::unordered_map<std::string, T> adhesion_params;
     adhesion_params["strength"] = static_cast<T>(json_data["adhesion_strength"].as_double());
     adhesion_params["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double()); 
@@ -81,21 +81,21 @@ int main(int argc, char** argv)
     if (adhesion_mode == AdhesionMode::GBK) 
         adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double());
 
-	// Parse cell-cell friction coefficient, which is assumed to be the same 
-	// across all groups
-	Array<T, Dynamic, Dynamic> eta_cell_cell = Array<T, Dynamic, Dynamic>::Zero(2, 2);
-	for (int i = 0; i < 2; ++i)
-	{
-	    for (int j = i; j < 2; ++j)
-		{
-		    std::stringstream ss; 
-			ss << "eta_cc" << i + 1 << j + 1; 
-			T eta = static_cast<T>(json_data[ss.str()].as_double()); 
-			eta_cell_cell(i, j) = eta;
-			if (j > i)
-			    eta_cell_cell(j, i) = eta;
-		}
-	}
+    // Parse cell-cell friction coefficient, which is assumed to be the same 
+    // across all groups
+    Array<T, Dynamic, Dynamic> eta_cell_cell = Array<T, Dynamic, Dynamic>::Zero(2, 2);
+    for (int i = 0; i < 2; ++i)
+    {
+        for (int j = i; j < 2; ++j)
+        {
+            std::stringstream ss; 
+            ss << "eta_cc" << i + 1 << j + 1; 
+            T eta = static_cast<T>(json_data[ss.str()].as_double()); 
+            eta_cell_cell(i, j) = eta;
+            if (j > i)
+                eta_cell_cell(j, i) = eta;
+        }
+    }
 
     // No confinement forces or growth void 
     const ConfinementMode confine_mode = ConfinementMode::NONE; 
@@ -145,12 +145,12 @@ int main(int argc, char** argv)
     runSimulationVerletNewtonian<T>(
         cells, parents, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, sigma0, 
         density, dt, true, outprefix, dt_write, iter_update_neighbors,
-		iter_update_boundary, neighbor_threshold, rng_seed, 2, switch_attributes,
-		growth_means, growth_stds, attribute_means, attribute_stds, switch_rates,
-		daughter_length_std, daughter_angle_bound, truncate_surface_friction,
-		surface_coulomb_coeff, max_noise, eta_cell_cell, adhesion_mode,
-		adhesion_map, adhesion_params, confine_mode, confine_params,
-		growth_void_mode, growth_void_params
+        iter_update_boundary, neighbor_threshold, rng_seed, 2, switch_attributes,
+        growth_means, growth_stds, attribute_means, attribute_stds, SwitchMode::MARKOV,
+        switch_rates, daughter_length_std, daughter_angle_bound,
+        truncate_surface_friction, surface_coulomb_coeff, max_noise, eta_cell_cell,
+        adhesion_mode, adhesion_map, adhesion_params, confine_mode, confine_params,
+        growth_void_mode, growth_void_params
     ); 
     
     return 0; 
