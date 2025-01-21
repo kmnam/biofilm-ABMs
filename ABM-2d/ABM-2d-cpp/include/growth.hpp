@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/13/2024
+ *     1/21/2025
  */
 
 #ifndef BIOFILM_CELL_GROWTH_HPP
@@ -157,20 +157,22 @@ T minDistToCell(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
  *                             cell length ratio distribution. 
  * @param daughter_angle_dist Function instance specifying the daughter 
  *                            cell re-orientation distribution.
- * @returns Updated population of cells. 
+ * @returns Updated population of cells, as well as a vector of pairs of 
+ *          daughter cell indices. 
  */
 template <typename T>
-Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                       std::vector<int>& parents, 
-                                       const T t, const T R, const T Rcell,
-                                       const Ref<const Array<int, Dynamic, 1> >& to_divide,
-                                       std::function<T(boost::random::mt19937&)>& growth_dist,
-                                       boost::random::mt19937& rng,
-                                       std::function<T(boost::random::mt19937&)>& daughter_length_dist,
-                                       std::function<T(boost::random::mt19937&)>& daughter_angle_dist)
+std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
+    divideCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+	        std::vector<int>& parents, const T t, const T R, const T Rcell,
+	        const Ref<const Array<int, Dynamic, 1> >& to_divide,
+	        std::function<T(boost::random::mt19937&)>& growth_dist,
+	        boost::random::mt19937& rng,
+	        std::function<T(boost::random::mt19937&)>& daughter_length_dist,
+	        std::function<T(boost::random::mt19937&)>& daughter_angle_dist)
 {
     // If there are cells to be divided ...
     const int n_divide = to_divide.sum();
+    std::vector<std::pair<int, int> > daughter_pairs; 
     if (n_divide > 0)
     {
         // Get indices of cells to be divided
@@ -238,7 +240,7 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
         {
             // Get a copy of the corresponding sub-array
             cells_total(Eigen::seqN(0, n), Eigen::all) = cells;
-            Array<T, Dynamic, Dynamic> new_cells(cells(idx_divide, Eigen::all)); 
+            Array<T, Dynamic, Dynamic> new_cells(cells(idx_divide, Eigen::all));
 
             // Update cell orientations ...
             Array<T, Dynamic, 2> dividing_orientations(new_cells(Eigen::all, __colseq_n)); 
@@ -344,6 +346,8 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             // Note that each daughter cell inherits its mother cell's viscosity
             // and friction coefficient
             cells_total(Eigen::seqN(n, n_divide), Eigen::all) = new_cells;
+	    for (int i = 0; i < n_divide; ++i)
+		daughter_pairs.emplace_back(std::make_pair(idx_divide[i], n + i));  
 
             // Generate Segment_3 instances for the new population of cells
             std::vector<Segment_3> segments_total = generateSegments<T>(cells_total);
@@ -393,11 +397,11 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
         if (satisfies_distance.sum() < n_divide)
             std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion";
 
-        return cells_total; 
+        return std::make_pair(cells_total, daughter_pairs); 
     }
     else 
     {
-        return cells; 
+        return std::make_pair(cells, daughter_pairs); 
     }
 } 
 
@@ -422,21 +426,22 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
  *                             cell length ratio distribution. 
  * @param daughter_angle_dist Function instance specifying the daughter 
  *                            cell orientation distribution.
- * @returns Updated population of cells. 
+ * @returns Updated population of cells, as well as a vector of pairs of 
+ *          daughter cell indices. 
  */
 template <typename T>
-Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                       std::vector<int>& parents, 
-                                       const T t, const T R, const T Rcell,
-                                       const Ref<const Array<int, Dynamic, 1> >& to_divide,
-                                       std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
-                                       boost::random::mt19937& rng,
-                                       std::function<T(boost::random::mt19937&)>& daughter_length_dist,
-                                       std::function<T(boost::random::mt19937&)>& daughter_angle_dist)
+std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
+    divideCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+	        std::vector<int>& parents, const T t, const T R, const T Rcell,
+		const Ref<const Array<int, Dynamic, 1> >& to_divide,
+		std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
+		boost::random::mt19937& rng,
+		std::function<T(boost::random::mt19937&)>& daughter_length_dist,
+		std::function<T(boost::random::mt19937&)>& daughter_angle_dist)
 {
     // If there are cells to be divided ...
     const int n_divide = to_divide.sum();
-
+    std::vector<std::pair<int, int> > daughter_pairs; 
     if (n_divide > 0)
     {
         // Get indices of cells to be divided
@@ -616,6 +621,8 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
             // Note that each daughter cell inherits its mother cell's viscosity
             // and friction coefficient
             cells_total(Eigen::seqN(n, n_divide), Eigen::all) = new_cells;
+	    for (int i = 0; i < n_divide; ++i)
+		daughter_pairs.emplace_back(std::make_pair(idx_divide[i], n + i));  
 
             // Generate Segment_3 instances for the new population of cells
             std::vector<Segment_3> segments_total = generateSegments<T>(cells_total);
@@ -665,16 +672,18 @@ Array<T, Dynamic, Dynamic> divideCells(const Ref<const Array<T, Dynamic, Dynamic
         if (satisfies_distance.sum() < n_divide)
             std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion";
 
-        return cells_total; 
+        return std::make_pair(cells_total, daughter_pairs); 
     }
     else 
     {
-        return cells; 
+        return std::make_pair(cells, daughter_pairs);  
     }
 }
 
 /**
  * Divide the indicated cells at the given time.
+ *
+ * TODO Re-implement with more realistic plasmid dynamics. 
  *
  * This is an extended version of `divideCells()` that:
  *
@@ -1015,19 +1024,19 @@ Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynam
  *                            cell orientation distribution.
  * @param colidx_negpole_t0 Column index for negative pole birth time. 
  * @param colidx_pospole_t0 Column index for positive pole birth time.
- * @returns Updated population of cells. 
+ * @returns Updated population of cells, as well as a vector of pairs of 
+ *          daughter cell indices. 
  */
 template <typename T>
-Array<T, Dynamic, Dynamic> divideCellsWithPoles(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                                std::vector<int>& parents, 
-                                                const T t, const T R, const T Rcell,
-                                                const Ref<const Array<int, Dynamic, 1> >& to_divide,
-                                                std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
-                                                boost::random::mt19937& rng,
-                                                std::function<T(boost::random::mt19937&)>& daughter_length_dist,
-                                                std::function<T(boost::random::mt19937&)>& daughter_angle_dist,
-                                                const int colidx_negpole_t0,
-                                                const int colidx_pospole_t0)
+std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
+    divideCellsWithPoles(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+	                 std::vector<int>& parents, const T t, const T R,
+			 const T Rcell, const Ref<const Array<int, Dynamic, 1> >& to_divide,
+			 std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
+			 boost::random::mt19937& rng,
+			 std::function<T(boost::random::mt19937&)>& daughter_length_dist,
+			 std::function<T(boost::random::mt19937&)>& daughter_angle_dist,
+			 const int colidx_negpole_t0, const int colidx_pospole_t0)
 {
     // Check that the pole birth time column indices are valid
     #ifdef DEBUG_CHECK_COLUMN_INDICES
@@ -1038,7 +1047,7 @@ Array<T, Dynamic, Dynamic> divideCellsWithPoles(const Ref<const Array<T, Dynamic
 
     // If there are cells to be divided ...
     const int n_divide = to_divide.sum();
-
+    std::vector<std::pair<int, int> > daughter_pairs; 
     if (n_divide > 0)
     {
         // Get indices of cells to be divided
@@ -1240,6 +1249,8 @@ Array<T, Dynamic, Dynamic> divideCellsWithPoles(const Ref<const Array<T, Dynamic
             // Note that each daughter cell inherits its mother cell's viscosity
             // and friction coefficient
             cells_total(Eigen::seqN(n, n_divide), Eigen::all) = new_cells;
+	    for (int i = 0; i < n_divide; ++i)
+		daughter_pairs.emplace_back(std::make_pair(idx_divide[i], n + i));  
 
             // Generate Segment_3 instances for the new population of cells
             std::vector<Segment_3> segments_total = generateSegments<T>(cells_total);
@@ -1289,11 +1300,11 @@ Array<T, Dynamic, Dynamic> divideCellsWithPoles(const Ref<const Array<T, Dynamic
         if (satisfies_distance.sum() < n_divide)
             std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion";
 
-        return cells_total; 
+        return std::make_pair(cells_total, daughter_pairs);  
     }
     else 
     {
-        return cells; 
+        return std::make_pair(cells, daughter_pairs); 
     }
 }
 
