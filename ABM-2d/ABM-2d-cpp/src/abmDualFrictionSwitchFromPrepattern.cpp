@@ -90,7 +90,7 @@ int main(int argc, char** argv)
     growth_stds << growth_std, growth_std; 
 
     // Vectors of friction coefficient means and standard deviations
-    std::vector<int> switch_attributes { __colidx_maxeta1 };
+    std::vector<int> group_attributes { __colidx_maxeta1 };
     Array<T, Dynamic, Dynamic> attribute_means(2, 1);
     Array<T, Dynamic, Dynamic> attribute_stds(2, 1);
     attribute_means << eta_mean1, eta_mean2;
@@ -136,7 +136,7 @@ int main(int argc, char** argv)
         sigma0, max_stepsize, min_stepsize, true, outprefix_pre, dt_write,
         iter_update_neighbors, iter_update_boundary, iter_update_stepsize, 
         max_error_allowed, min_error, max_tries_update_stepsize, neighbor_threshold,
-        rng_seed, 2, switch_attributes, growth_means, growth_stds, dummy_means,
+        rng_seed, 2, group_attributes, growth_means, growth_stds, dummy_means,
         dummy_stds, SwitchMode::NONE, switch_rates, daughter_length_std,
 	daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
 	max_noise, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
@@ -163,7 +163,7 @@ int main(int argc, char** argv)
 
     // Attribute distribution functions: normal distributions with given means
     // and standard deviations
-    const int n_attributes = switch_attributes.size();
+    const int n_attributes = group_attributes.size();
     std::map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> > attribute_dists;
     for (int i = 0; i < 2; ++i)    // There are two groups 
     {
@@ -184,7 +184,7 @@ int main(int argc, char** argv)
     // Prepattern the cells
     boost::random::mt19937 rng(rng_seed); 
     prepattern<T>(
-        cells, prepattern_mode, prepattern_switch_fraction, switch_attributes,
+        cells, prepattern_mode, prepattern_switch_fraction, group_attributes,
         growth_dists, attribute_dists, rng
     );
     
@@ -194,7 +194,7 @@ int main(int argc, char** argv)
         max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
-        switch_attributes, growth_means, growth_stds, attribute_means, 
+        group_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, SwitchMode::MARKOV, switch_rates, daughter_length_std,
 	daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
 	max_noise, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
