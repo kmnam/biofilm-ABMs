@@ -101,7 +101,7 @@ int main(int argc, char** argv)
 
     // Vectors of friction coefficient means and standard deviations (identical
     // for both groups)
-    std::vector<int> switch_attributes { __colidx_maxeta1 };
+    std::vector<int> group_attributes { __colidx_maxeta1 };
     Array<T, Dynamic, Dynamic> attribute_means(2, 1);
     Array<T, Dynamic, Dynamic> attribute_stds(2, 1);
     attribute_means << eta_surface, eta_surface;
@@ -137,7 +137,7 @@ int main(int argc, char** argv)
         max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
         iter_update_boundary, iter_update_stepsize, max_error_allowed,
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
-        switch_attributes, growth_means, growth_stds, attribute_means, 
+        group_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, SwitchMode::MARKOV, switch_rates, daughter_length_std,
         daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
         max_noise, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
