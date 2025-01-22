@@ -139,7 +139,7 @@ int main(int argc, char** argv)
     // Run the first stage of the simulation (with no adhesion)
     auto result = runSimulationAdaptiveLagrangian<T>(
         cells, parents, max_iter, n_cells_init, R, Rcell, L0, Ldiv, E0, Ecell,
-        sigma0, max_stepsize, min_stepsize, true, outprefix, dt_write,
+        sigma0, max_stepsize, min_stepsize, true, outprefix_pre, dt_write,
         iter_update_neighbors, iter_update_boundary, iter_update_stepsize,
         max_error_allowed, min_error, max_tries_update_stepsize, neighbor_threshold,
         rng_seed, 2, group_attributes, growth_means, growth_stds, attribute_means,
@@ -148,7 +148,6 @@ int main(int argc, char** argv)
 	max_noise, AdhesionMode::NONE, adhesion_map1, adhesion_params1,
 	confine_mode, confine_params, growth_void_mode, growth_void_params
     );
-
     cells = result.first; 
     parents = result.second;
 
