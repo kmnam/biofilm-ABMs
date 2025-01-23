@@ -134,8 +134,8 @@ int main(int argc, char** argv)
         max_error_allowed, min_error, max_tries_update_stepsize, neighbor_threshold,
         rng_seed, 2, group_attributes, growth_means, growth_stds, dummy_means,
         dummy_stds, SwitchMode::NONE, switch_rates, daughter_length_std,
-	daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
-	max_noise, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
+        daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
+        max_noise, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
         confine_params, growth_void_mode, growth_void_params
     ); 
     cells = result.first; 
@@ -183,6 +183,10 @@ int main(int argc, char** argv)
         cells, prepattern_mode, prepattern_switch_fraction, group_attributes,
         growth_dists, attribute_dists, rng
     );
+
+    // Ensure that each cell has the right cell-surface friction coefficient 
+    for (int i = 0; i < cells.rows(); ++i)
+        cells(i, __colidx_eta1) = cells(i, __colidx_maxeta1); 
     
     // Run the second stage of the simulation
     runSimulationAdaptiveLagrangian<T>(
@@ -192,8 +196,8 @@ int main(int argc, char** argv)
         min_error, max_tries_update_stepsize, neighbor_threshold, rng_seed, 2,
         group_attributes, growth_means, growth_stds, attribute_means, 
         attribute_stds, SwitchMode::NONE, switch_rates, daughter_length_std,
-	daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
-	max_noise, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
+        daughter_angle_bound, truncate_surface_friction, surface_coulomb_coeff,
+        max_noise, adhesion_mode, adhesion_map, adhesion_params, confine_mode,
         confine_params, growth_void_mode, growth_void_params
     ); 
     
