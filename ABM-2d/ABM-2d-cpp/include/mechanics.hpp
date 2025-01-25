@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/20/2025
+ *     1/25/2025
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -335,12 +335,10 @@ Array<T, Dynamic, 6> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
                     cells(i, __colseq_r).matrix(), 
                     cells(i, __colseq_n).matrix(),
                     cells(i, __colidx_half_l),
-                    cells(i, __colseq_dr).matrix(), 
                     static_cast<int>(cells(j, __colidx_id)),
                     cells(j, __colseq_r).matrix(),
                     cells(j, __colseq_n).matrix(),
                     cells(j, __colidx_half_l),
-                    cells(j, __colseq_dr).matrix(), 
                     kernel
                 );
                 Matrix<T, 2, 1> dist_ij = std::get<0>(result); 
@@ -402,12 +400,10 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
             cells(i, __colseq_r).matrix(),
             cells(i, __colseq_n).matrix(),
             cells(i, __colidx_half_l),
-            cells(i, __colseq_dr).matrix(),
             static_cast<int>(cells(j, __colidx_id)), 
             cells(j, __colseq_r).matrix(),
             cells(j, __colseq_n).matrix(),
             cells(j, __colidx_half_l),
-            cells(j, __colseq_dr).matrix(),
             kernel
         ); 
         Matrix<T, 2, 1> dist_ij = std::get<0>(result); 
@@ -1699,7 +1695,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                           << ": Found near-zero distance between cells "
                           << i << " and " << j << std::endl;
                 std::cerr << "Timestep: " << dt << std::endl; 
-                pairConfigSummary<T>(
+                pairConfigSummaryWithVelocities<T>(
                     static_cast<int>(cells(i, __colidx_id)),
                     cells(i, __colseq_r).matrix(),
                     cells(i, __colseq_n).matrix(), cells(i, __colidx_half_l),
@@ -1844,7 +1840,7 @@ void stepVerlet(Ref<Array<T, Dynamic, Dynamic> > cells,
                           << ": Found near-zero distance between cells "
                           << i << " and " << j << std::endl;
                 std::cerr << "Timestep: " << dt << std::endl; 
-                pairConfigSummary<T>(
+                pairConfigSummaryWithVelocities<T>(
                     static_cast<int>(cells(i, __colidx_id)),
                     cells(i, __colseq_r).matrix(),
                     cells(i, __colseq_n).matrix(), cells(i, __colidx_half_l),

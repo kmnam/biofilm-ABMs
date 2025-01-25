@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/13/2024
+ *     1/25/2025
  */
 
 #ifndef DISTANCES_2D_HPP
@@ -114,20 +114,54 @@ T nearestCellBodyCoordToPoint(const Ref<const Matrix<T, 2, 1> >& r,
  * @param r1 Center of cell 1.
  * @param v1 Orientation of cell 1. May not be normalized. 
  * @param half_l1 Half of length of cell 1.
+ * @param id2 ID of cell 2. 
+ * @param r2 Center of cell 2.
+ * @param v2 Orientation of cell 2. May not be normalized. 
+ * @param half_l2 Half of length of cell 2.
+ */
+template <typename T>
+void pairConfigSummary(const int id1, const Ref<const Matrix<T, 2, 1> >& r1,
+                       const Ref<const Matrix<T, 2, 1> >& v1, const T half_l1,
+                       const int id2, const Ref<const Matrix<T, 2, 1> >& r2,
+                       const Ref<const Matrix<T, 2, 1> >& v2, const T half_l2)
+{
+    std::cerr << "Cell 1 ID = " << id1 << std::endl
+              << "Cell 1 center = (" << r1(0) << ", " << r1(1) << ")" << std::endl
+              << "Cell 1 orientation = (" << v1(0) << ", " << v1(1) << ")" << std::endl
+              << "Cell 1 half-length = " << half_l1 << std::endl
+              << "Cell 2 ID = " << id2 << std::endl
+              << "Cell 2 center = (" << r2(0) << ", " << r2(1) << ")" << std::endl
+              << "Cell 2 orientation = (" << v2(0) << ", " << v2(1) << ")" << std::endl
+              << "Cell 2 half-length = " << half_l2 << std::endl;
+}
+
+/**
+ * Output an error message pertaining to the given cell-cell configuration.
+ *
+ * This error message contains the velocities of the cells as well.  
+ *
+ * @param id1 ID of cell 1.
+ * @param r1 Center of cell 1.
+ * @param v1 Orientation of cell 1. May not be normalized. 
+ * @param half_l1 Half of length of cell 1.
  * @param dr1 Translational velocity of cell 1. 
  * @param id2 ID of cell 2. 
  * @param r2 Center of cell 2.
  * @param v2 Orientation of cell 2. May not be normalized. 
  * @param half_l2 Half of length of cell 2.
- * @param dr2 Translational velocity of cell 2.
+ * @param dr2 Translational velocity of cell 2. 
  */
 template <typename T>
-void pairConfigSummary(const int id1, const Ref<const Matrix<T, 2, 1> >& r1,
-                       const Ref<const Matrix<T, 2, 1> >& v1, const T half_l1,
-                       const Ref<const Matrix<T, 2, 1> >& dr1,
-                       const int id2, const Ref<const Matrix<T, 2, 1> >& r2,
-                       const Ref<const Matrix<T, 2, 1> >& v2, const T half_l2,
-                       const Ref<const Matrix<T, 2, 1> >& dr2)
+void pairConfigSummaryWithVelocities(const int id1,
+                                     const Ref<const Matrix<T, 2, 1> >& r1,
+                                     const Ref<const Matrix<T, 2, 1> >& v1,
+                                     const T half_l1,
+                                     const Ref<const Matrix<T, 2, 1> >& dr1,
+                                     const int id2,
+                                     const Ref<const Matrix<T, 2, 1> >& r2,
+                                     const Ref<const Matrix<T, 2, 1> >& v2,
+                                     const T half_l2,
+                                     const Ref<const Matrix<T, 2, 1> >& dr2)
 {
     std::cerr << "Cell 1 ID = " << id1 << std::endl
               << "Cell 1 center = (" << r1(0) << ", " << r1(1) << ")" << std::endl
@@ -153,12 +187,10 @@ void pairConfigSummary(const int id1, const Ref<const Matrix<T, 2, 1> >& r1,
  * @param r1 Center of cell 1.
  * @param v1 Orientation of cell 1. May not be normalized. 
  * @param half_l1 Half of length of cell 1.
- * @param dr1 Translational velocity of cell 1. Only used for debugging output.
  * @param id2 ID of cell 2. Only used for debugging output. 
  * @param r2 Center of cell 2.
  * @param v2 Orientation of cell 2. May not be normalized. 
  * @param half_l2 Half of length of cell 2.
- * @param dr2 Translational velocity of cell 2. Only used for debugging output.
  * @param kernel CGAL kernel instance to be passed to CGAL::...::squared_distance().
  * @returns Shortest distance between the two cells, along with the cell-body
  *          coordinates at which the shortest distance is achieved. The
@@ -171,12 +203,10 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                                                    const Ref<const Matrix<T, 2, 1> >& r1,
                                                    const Ref<const Matrix<T, 2, 1> >& v1,
                                                    T half_l1,
-                                                   const Ref<const Matrix<T, 2, 1> >& dr1,
                                                    const int id2, 
                                                    const Ref<const Matrix<T, 2, 1> >& r2,
                                                    const Ref<const Matrix<T, 2, 1> >& v2,
                                                    T half_l2,
-                                                   const Ref<const Matrix<T, 2, 1> >& dr2,
                                                    const K& kernel)
 {
     Matrix<T, 2, 1> d = Matrix<T, 2, 1>::Zero(); 
@@ -336,7 +366,7 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
         if (d.array().isNaN().any())
         {
             std::cerr << "Found nan in distance vector:" << std::endl;
-            pairConfigSummary<T>(id1, r1, v1, half_l1, dr1, id2, r2, v2, half_l2, dr2); 
+            pairConfigSummary<T>(id1, r1, v1, half_l1, id2, r2, v2, half_l2); 
             throw std::runtime_error("Found nan in distance vector");
         }
     #endif
