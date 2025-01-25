@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/8/2024
+ *     1/25/2025
  */
 #include <cmath>
 #include <Eigen/Dense>
@@ -38,7 +38,24 @@ void testNearestCellBodyCoordToPoint(const T rx, const T ry, const T nx,
 }
 
 /**
- * A generic test function for distBetweenCells(). 
+ * A generic test function for distBetweenCells().
+ *
+ * @param r1x x-coordinate of cell 1 center. 
+ * @param r1y y-coordinate of cell 1 center. 
+ * @param n1x x-coordinate of cell 1 orientation. 
+ * @param n1y y-coordinate of cell 1 orientation.
+ * @param half_l1 Half-length of cell 1.
+ * @param r2x x-coordinate of cell 2 center. 
+ * @param r2y y-coordinate of cell 2 center. 
+ * @param n2x x-coordinate of cell 2 orientation. 
+ * @param n2y y-coordinate of cell 2 orientation.
+ * @param half_l2 Half-length of cell 2.
+ * @param target_dx x-coordinate of pre-computed distance vector from cell 1 to
+ *                  cell 2.
+ * @param target_dy y-coordinate of pre-computed distance vector from cell 1 to
+ *                  cell 2.
+ * @param target_s Pre-computed centerline coordinate along cell 1.
+ * @param target_t Pre-computed centerline coordinate along cell 2.  
  */
 void testDistBetweenCells(const T r1x, const T r1y, const T n1x, const T n1y, 
                           const T half_l1, const T r2x, const T r2y, const T n2x,
@@ -53,7 +70,9 @@ void testDistBetweenCells(const T r1x, const T r1y, const T n1x, const T n1y,
     n2 << n2x, n2y;
     Segment_3 seg1 = generateSegment<T>(r1, n1, half_l1); 
     Segment_3 seg2 = generateSegment<T>(r2, n2, half_l2); 
-    auto result = distBetweenCells<T>(seg1, seg2, r1, n1, half_l1, r2, n2, half_l2, kernel);
+    auto result = distBetweenCells<T>(
+        seg1, seg2, 0, r1, n1, half_l1, 1, r2, n2, half_l2, kernel    // Use IDs 0 and 1
+    );
     REQUIRE_THAT(std::get<0>(result)(0), Catch::Matchers::WithinAbs(target_dx, 1e-8)); 
     REQUIRE_THAT(std::get<0>(result)(1), Catch::Matchers::WithinAbs(target_dy, 1e-8)); 
     REQUIRE_THAT(std::get<1>(result), Catch::Matchers::WithinAbs(target_s, 1e-8)); 
