@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/25/2025
+ *     1/30/2025
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -499,11 +499,17 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
         if (overlap > 0)
         {
             Array<T, 2, 1> vij = prefactor * dir_ij;
+	    Array<T, 2, 1> ni = cells(i, __colseq_n); 
+	    Array<T, 2, 1> nj = cells(j, __colseq_n);
+	    T wi = ni.matrix().dot(vij.matrix()); 
+	    T wj = nj.matrix().dot(vij.matrix());  
             Array<T, 2, 4> forces;
             forces << vij(0),       vij(1),        // Derivatives w.r.t position of cell i
-                      vij(0) * si,  vij(1) * si,   // Derivatives w.r.t orientation of cell i
+                      //vij(0) * si,  vij(1) * si,   // Derivatives w.r.t orientation of cell i
+		      si * (-wi * ni(0) + vij(0)), si * (-wi * ni(1) + vij(1)), 
                       -vij(0),      -vij(1),       // Derivatives w.r.t position of cell j
-                      -vij(0) * sj, -vij(1) * sj;  // Derivatives w.r.t orientation of cell j
+                      //-vij(0) * sj, -vij(1) * sj;  // Derivatives w.r.t orientation of cell j
+		      sj * (wj * nj(0) - vij(0)),  sj * (wj * nj(1) - vij(1));
             #ifdef DEBUG_CHECK_REPULSIVE_FORCES_NAN
                 if (forces.isNaN().any() || forces.isInf().any())
                 {
