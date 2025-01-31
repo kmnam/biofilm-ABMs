@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/25/2025
+ *     1/31/2025
  */
 
 #ifndef DISTANCES_2D_HPP
@@ -241,7 +241,7 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
         // From here, we exclusively use the orientation vector for cell 1,
         // setting n2 to either n1 or -n1 depending on the value of theta
         if (cos_theta >= 0.9999)
-            n2 = n1; 
+	    n2 = n1; 
         else 
             n2 = -n1; 
         
