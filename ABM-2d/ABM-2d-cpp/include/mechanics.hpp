@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/30/2025
+ *     1/31/2025
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -498,17 +498,17 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
 
         if (overlap > 0)
         {
+            // Use formulas from You et al. (2018, 2019, 2021), which allows
+	    // for omitting the Lagrange multiplier 
             Array<T, 2, 1> vij = prefactor * dir_ij;
 	    Array<T, 2, 1> ni = cells(i, __colseq_n); 
 	    Array<T, 2, 1> nj = cells(j, __colseq_n);
 	    T wi = ni.matrix().dot(vij.matrix()); 
 	    T wj = nj.matrix().dot(vij.matrix());  
             Array<T, 2, 4> forces;
-            forces << vij(0),       vij(1),        // Derivatives w.r.t position of cell i
-                      //vij(0) * si,  vij(1) * si,   // Derivatives w.r.t orientation of cell i
+            forces << vij(0),                      vij(1),
 		      si * (-wi * ni(0) + vij(0)), si * (-wi * ni(1) + vij(1)), 
-                      -vij(0),      -vij(1),       // Derivatives w.r.t position of cell j
-                      //-vij(0) * sj, -vij(1) * sj;  // Derivatives w.r.t orientation of cell j
+                      -vij(0),                     -vij(1),
 		      sj * (wj * nj(0) - vij(0)),  sj * (wj * nj(1) - vij(1));
             #ifdef DEBUG_CHECK_REPULSIVE_FORCES_NAN
                 if (forces.isNaN().any() || forces.isInf().any())
@@ -886,7 +886,7 @@ Array<T, Dynamic, 1> getTorques(const Ref<const Array<T, Dynamic, Dynamic> >& ce
  * Compute the cell-cell repulsive forces for each pair of neighboring cells.
  *
  * In this function, the pairs of neighboring cells in the population have
- * been pre-computed. 
+ * been pre-computed.
  *
  * @param cells Current population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the
@@ -1165,10 +1165,6 @@ Array<T, Dynamic, 3> cellCellAdhesiveForcesNewton(const Ref<const Array<T, Dynam
  *
  * In this function, the pairs of neighboring cells in the population have
  * been pre-computed.
- *
- * TODO This function is being evaluated for correctness. It may not be 
- * correct, and may be removed in the future (in favor of a Newtonian 
- * implementation). 
  *
  * @param cells Current population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the
@@ -1612,6 +1608,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     // Combine the three types of forces (with the noise) 
     Array<T, Dynamic, 4> dEdq = dEdq_repulsion + dEdq_adhesion + dEdq_confine + noise;
 
+    /*
     // Set mult = 2 * lambda
     Array<T, Dynamic, 1> mult = (
         cells.col(__colidx_nx) * dEdq.col(2) + cells.col(__colidx_ny) * dEdq.col(3)
@@ -1626,6 +1623,11 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     velocities.col(1) = -dEdq.col(1) / K; 
     velocities.col(2) = -dEdn_constrained.col(0) / L;
     velocities.col(3) = -dEdn_constrained.col(1) / L;
+    */
+    velocities.col(0) = -dEdq.col(0) / K;
+    velocities.col(1) = -dEdq.col(1) / K; 
+    velocities.col(2) = -dEdq.col(2) / L;
+    velocities.col(3) = -dEdq.col(3) / L;
 
     return velocities;  
 }
