@@ -35,9 +35,9 @@ typedef K::Segment_3 Segment_3;
 /**
  * Generate a Segment_3 instance for the given cell. 
  *
- * @param r Center of cell 1.
- * @param n Orientation of cell 1.
- * @param half_l Half of length of cell 1.
+ * @param r Cell center.
+ * @param n Cell orientation. Assumed to be normalized. 
+ * @param half_l Cell half-length.
  * @returns Segment_3 instance for the given cell. 
  */
 template <typename T>
@@ -87,8 +87,8 @@ std::vector<Segment_3> generateSegments(const Ref<const Array<T, Dynamic, Dynami
  * a given point.
  *
  * @param r Cell center.
- * @param n Cell orientation.
- * @param half_l Half of cell length.  
+ * @param n Cell orientation. Assumed to be normalized. 
+ * @param half_l Cell half-length.
  * @param q Input point.
  * @returns Distance from cell to input point.
  */
@@ -112,26 +112,26 @@ T nearestCellBodyCoordToPoint(const Ref<const Matrix<T, 2, 1> >& r,
  *
  * @param id1 ID of cell 1.
  * @param r1 Center of cell 1.
- * @param v1 Orientation of cell 1. May not be normalized. 
- * @param half_l1 Half of length of cell 1.
+ * @param n1 Orientation of cell 1. Assumed to be normalized. 
+ * @param half_l1 Half-length of cell 1.
  * @param id2 ID of cell 2. 
  * @param r2 Center of cell 2.
- * @param v2 Orientation of cell 2. May not be normalized. 
- * @param half_l2 Half of length of cell 2.
+ * @param n2 Orientation of cell 2. Assumed to be normalized. 
+ * @param half_l2 Half-length of cell 2.
  */
 template <typename T>
 void pairConfigSummary(const int id1, const Ref<const Matrix<T, 2, 1> >& r1,
-                       const Ref<const Matrix<T, 2, 1> >& v1, const T half_l1,
+                       const Ref<const Matrix<T, 2, 1> >& n1, const T half_l1,
                        const int id2, const Ref<const Matrix<T, 2, 1> >& r2,
-                       const Ref<const Matrix<T, 2, 1> >& v2, const T half_l2)
+                       const Ref<const Matrix<T, 2, 1> >& n2, const T half_l2)
 {
     std::cerr << "Cell 1 ID = " << id1 << std::endl
               << "Cell 1 center = (" << r1(0) << ", " << r1(1) << ")" << std::endl
-              << "Cell 1 orientation = (" << v1(0) << ", " << v1(1) << ")" << std::endl
+              << "Cell 1 orientation = (" << n1(0) << ", " << n1(1) << ")" << std::endl
               << "Cell 1 half-length = " << half_l1 << std::endl
               << "Cell 2 ID = " << id2 << std::endl
               << "Cell 2 center = (" << r2(0) << ", " << r2(1) << ")" << std::endl
-              << "Cell 2 orientation = (" << v2(0) << ", " << v2(1) << ")" << std::endl
+              << "Cell 2 orientation = (" << n2(0) << ", " << n2(1) << ")" << std::endl
               << "Cell 2 half-length = " << half_l2 << std::endl;
 }
 
@@ -142,35 +142,35 @@ void pairConfigSummary(const int id1, const Ref<const Matrix<T, 2, 1> >& r1,
  *
  * @param id1 ID of cell 1.
  * @param r1 Center of cell 1.
- * @param v1 Orientation of cell 1. May not be normalized. 
- * @param half_l1 Half of length of cell 1.
+ * @param n1 Orientation of cell 1. Assumed to be normalized. 
+ * @param half_l1 Half-length of cell 1.
  * @param dr1 Translational velocity of cell 1. 
  * @param id2 ID of cell 2. 
  * @param r2 Center of cell 2.
- * @param v2 Orientation of cell 2. May not be normalized. 
- * @param half_l2 Half of length of cell 2.
+ * @param n2 Orientation of cell 2. Assumed to be normalized.
+ * @param half_l2 Half-length of cell 2.
  * @param dr2 Translational velocity of cell 2. 
  */
 template <typename T>
 void pairConfigSummaryWithVelocities(const int id1,
                                      const Ref<const Matrix<T, 2, 1> >& r1,
-                                     const Ref<const Matrix<T, 2, 1> >& v1,
+                                     const Ref<const Matrix<T, 2, 1> >& n1,
                                      const T half_l1,
                                      const Ref<const Matrix<T, 2, 1> >& dr1,
                                      const int id2,
                                      const Ref<const Matrix<T, 2, 1> >& r2,
-                                     const Ref<const Matrix<T, 2, 1> >& v2,
+                                     const Ref<const Matrix<T, 2, 1> >& n2,
                                      const T half_l2,
                                      const Ref<const Matrix<T, 2, 1> >& dr2)
 {
     std::cerr << "Cell 1 ID = " << id1 << std::endl
               << "Cell 1 center = (" << r1(0) << ", " << r1(1) << ")" << std::endl
-              << "Cell 1 orientation = (" << v1(0) << ", " << v1(1) << ")" << std::endl
+              << "Cell 1 orientation = (" << n1(0) << ", " << n1(1) << ")" << std::endl
               << "Cell 1 half-length = " << half_l1 << std::endl
               << "Cell 1 velocity = (" << dr1(0) << ", " << dr1(1) << ")" << std::endl
               << "Cell 2 ID = " << id2 << std::endl
               << "Cell 2 center = (" << r2(0) << ", " << r2(1) << ")" << std::endl
-              << "Cell 2 orientation = (" << v2(0) << ", " << v2(1) << ")" << std::endl
+              << "Cell 2 orientation = (" << n2(0) << ", " << n2(1) << ")" << std::endl
               << "Cell 2 half-length = " << half_l2 << std::endl
               << "Cell 2 velocity = (" << dr2(0) << ", " << dr2(1) << ")" << std::endl;
 }
@@ -185,11 +185,11 @@ void pairConfigSummaryWithVelocities(const int id1,
  * @param cell2 Segment_3 instance for cell 2.
  * @param id1 ID of cell 1. Only used for debugging output. 
  * @param r1 Center of cell 1.
- * @param v1 Orientation of cell 1. May not be normalized. 
+ * @param n1 Orientation of cell 1. Assumed to be normalized. 
  * @param half_l1 Half of length of cell 1.
  * @param id2 ID of cell 2. Only used for debugging output. 
  * @param r2 Center of cell 2.
- * @param v2 Orientation of cell 2. May not be normalized. 
+ * @param n2 Orientation of cell 2. Assumed to be normalized.
  * @param half_l2 Half of length of cell 2.
  * @param kernel CGAL kernel instance to be passed to CGAL::...::squared_distance().
  * @returns Shortest distance between the two cells, along with the cell-body
@@ -201,35 +201,17 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                                                    const Segment_3& cell2,
                                                    const int id1, 
                                                    const Ref<const Matrix<T, 2, 1> >& r1,
-                                                   const Ref<const Matrix<T, 2, 1> >& v1,
+                                                   const Ref<const Matrix<T, 2, 1> >& n1,
                                                    T half_l1,
                                                    const int id2, 
                                                    const Ref<const Matrix<T, 2, 1> >& r2,
-                                                   const Ref<const Matrix<T, 2, 1> >& v2,
+                                                   const Ref<const Matrix<T, 2, 1> >& n2,
                                                    T half_l2,
                                                    const K& kernel)
 {
     Matrix<T, 2, 1> d = Matrix<T, 2, 1>::Zero(); 
     T s = 0;
     T t = 0;
-
-    // If n1 or n2 are not normalized, normalize and rescale the half-lengths
-    Matrix<T, 2, 1> n1(v1);
-    Matrix<T, 2, 1> n2(v2); 
-    T sqnorm_v1 = v1.squaredNorm(); 
-    T sqnorm_v2 = v2.squaredNorm(); 
-    if (std::abs(sqnorm_v1 - 1.0) > 2e-8)
-    {
-        T norm_v1 = std::sqrt(sqnorm_v1); 
-        n1 /= norm_v1;
-        half_l1 *= norm_v1;
-    }
-    if (std::abs(sqnorm_v2 - 1.0) > 2e-8)
-    {
-        T norm_v2 = std::sqrt(sqnorm_v2);
-        n2 /= norm_v2; 
-        half_l2 *= norm_v2; 
-    }
 
     // Are the two cells (nearly) parallel?
     //
@@ -238,13 +220,6 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
     T cos_theta = n1.dot(n2);
     if (cos_theta >= 0.9999 || cos_theta <= -0.9999)
     {
-        // From here, we exclusively use the orientation vector for cell 1,
-        // setting n2 to either n1 or -n1 depending on the value of theta
-        if (cos_theta >= 0.9999)
-	    n2 = n1; 
-        else 
-            n2 = -n1; 
-        
         // Identify the four endpoint vectors 
         Matrix<T, 2, 1> p1 = r1 - half_l1 * n1; 
         Matrix<T, 2, 1> q1 = r1 + half_l1 * n1; 
@@ -366,7 +341,7 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
         if (d.array().isNaN().any())
         {
             std::cerr << "Found nan in distance vector:" << std::endl;
-            pairConfigSummary<T>(id1, r1, v1, half_l1, id2, r2, v2, half_l2); 
+            pairConfigSummary<T>(id1, r1, n1, half_l1, id2, r2, n2, half_l2); 
             throw std::runtime_error("Found nan in distance vector");
         }
     #endif
