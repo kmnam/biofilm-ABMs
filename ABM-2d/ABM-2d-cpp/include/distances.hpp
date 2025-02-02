@@ -220,18 +220,21 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
     T cos_theta = n1.dot(n2);
     if (cos_theta >= 0.9999 || cos_theta <= -0.9999)
     {
+	// Copy over the orientation vector of cell 1 for cell 2 
+	Matrix<T, 2, 1> n1_(n1), n2_(n1); 
+
         // Identify the four endpoint vectors 
-        Matrix<T, 2, 1> p1 = r1 - half_l1 * n1; 
-        Matrix<T, 2, 1> q1 = r1 + half_l1 * n1; 
-        Matrix<T, 2, 1> p2 = r2 - half_l2 * n2;  
-        Matrix<T, 2, 1> q2 = r2 + half_l2 * n2; 
+        Matrix<T, 2, 1> p1 = r1 - half_l1 * n1_; 
+        Matrix<T, 2, 1> q1 = r1 + half_l1 * n1_; 
+        Matrix<T, 2, 1> p2 = r2 - half_l2 * n2_;  
+        Matrix<T, 2, 1> q2 = r2 + half_l2 * n2_; 
 
         // Get the distance vectors between the endpoints of cell 1 and the
         // body of cell 2  
-        T s_p1_to_cell2 = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, p1); 
-        T s_q1_to_cell2 = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, q1);
-        Matrix<T, 2, 1> d_p1_to_cell2 = r2 + s_p1_to_cell2 * n2 - p1; 
-        Matrix<T, 2, 1> d_q1_to_cell2 = r2 + s_q1_to_cell2 * n2 - q1;
+        T s_p1_to_cell2 = nearestCellBodyCoordToPoint<T>(r2, n2_, half_l2, p1); 
+        T s_q1_to_cell2 = nearestCellBodyCoordToPoint<T>(r2, n2_, half_l2, q1);
+        Matrix<T, 2, 1> d_p1_to_cell2 = r2 + s_p1_to_cell2 * n2_ - p1; 
+        Matrix<T, 2, 1> d_q1_to_cell2 = r2 + s_q1_to_cell2 * n2_ - q1;
         T dist_p1_to_cell2 = d_p1_to_cell2.norm(); 
         T dist_q1_to_cell2 = d_q1_to_cell2.norm(); 
 
@@ -256,10 +259,10 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
         // and the body of cell 1
         else 
         {
-            T s_p2_to_cell1 = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, p2); 
-            T s_q2_to_cell1 = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, q2); 
-            Matrix<T, 2, 1> d_p2_to_cell1 = r1 + s_p2_to_cell1 * n1 - p2; 
-            Matrix<T, 2, 1> d_q2_to_cell1 = r1 + s_q2_to_cell1 * n1 - q2;
+            T s_p2_to_cell1 = nearestCellBodyCoordToPoint<T>(r1, n1_, half_l1, p2); 
+            T s_q2_to_cell1 = nearestCellBodyCoordToPoint<T>(r1, n1_, half_l1, q2); 
+            Matrix<T, 2, 1> d_p2_to_cell1 = r1 + s_p2_to_cell1 * n1_ - p2; 
+            Matrix<T, 2, 1> d_q2_to_cell1 = r1 + s_q2_to_cell1 * n1_ - q2;
             T dist_p2_to_cell1 = d_p2_to_cell1.norm(); 
             T dist_q2_to_cell1 = d_q2_to_cell1.norm(); 
 
@@ -284,22 +287,22 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                 {
                     // Average between d_p1_to_cell2 and d_q1_to_cell2
                     s = 0.0; 
-                    t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1);
-                    d = r2 + t * n2 - r1;
+                    t = nearestCellBodyCoordToPoint<T>(r2, n2_, half_l2, r1);
+                    d = r2 + t * n2_ - r1;
                 }
                 else if (min_idx.find(2) != min_idx.end())
                 {
                     // Average between d_p1_to_cell2 and d_p2_to_cell1
                     s = (-half_l1 + s_p2_to_cell1) / 2; 
-                    t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
-                    d = r2 + t * n2 - r1 - s * n1;
+                    t = nearestCellBodyCoordToPoint<T>(r2, n2_, half_l2, r1 + s * n1_);
+                    d = r2 + t * n2_ - r1 - s * n1_;
                 }
                 else    // min_idx.find(3) != min_idx.end()
                 {
                     // Average between d_p1_to_cell2 and d_q2_to_cell1
                     s = (-half_l1 + s_q2_to_cell1) / 2; 
-                    t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
-                    d = r2 + t * n2 - r1 - s * n1;
+                    t = nearestCellBodyCoordToPoint<T>(r2, n2_, half_l2, r1 + s * n1_);
+                    d = r2 + t * n2_ - r1 - s * n1_;
                 }
             }
             else if (min_idx.find(1) != min_idx.end())
@@ -308,23 +311,23 @@ std::tuple<Matrix<T, 2, 1>, T, T> distBetweenCells(const Segment_3& cell1,
                 {
                     // Average between d_q1_to_cell2 and d_p2_to_cell1
                     s = (half_l1 + s_p2_to_cell1) / 2; 
-                    t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
-                    d = r2 + t * n2 - r1 - s * n1;
+                    t = nearestCellBodyCoordToPoint<T>(r2, n2_, half_l2, r1 + s * n1_);
+                    d = r2 + t * n2_ - r1 - s * n1_;
                 }
                 else    // min_idx.find(3) != min_idx.end()
                 {
                     // Average between d_q1_to_cell2 and d_q2_to_cell1
                     s = (half_l1 + s_q2_to_cell1) / 2; 
-                    t = nearestCellBodyCoordToPoint<T>(r2, n2, half_l2, r1 + s * n1);
-                    d = r2 + t * n2 - r1 - s * n1;
+                    t = nearestCellBodyCoordToPoint<T>(r2, n2_, half_l2, r1 + s * n1_);
+                    d = r2 + t * n2_ - r1 - s * n1_;
                 }
             }
             else    // min_idx.find(2) != min_idx.end() && min_idx.find(3) != min_idx.end()
             {
                 // Average between d_p2_to_cell1 and d_q2_to_cell1
                 t = 0.0;
-                s = nearestCellBodyCoordToPoint<T>(r1, n1, half_l1, r2); 
-                d = r2 - r1 - s * n1;
+                s = nearestCellBodyCoordToPoint<T>(r1, n1_, half_l1, r2); 
+                d = r2 - r1 - s * n1_;
             }
         }
     }
