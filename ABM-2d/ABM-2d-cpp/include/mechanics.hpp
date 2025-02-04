@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/31/2025
+ *     2/4/2025
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -38,7 +38,9 @@ using namespace Eigen;
 using std::min; 
 using boost::multiprecision::min;
 using std::sqrt; 
-using boost::multiprecision::sqrt; 
+using boost::multiprecision::sqrt;
+using std::pow; 
+using boost::multiprecision::pow; 
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Segment_3 Segment_3;
@@ -486,30 +488,30 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
         T prefactor = 0; 
         if (overlap > 0 && overlap < R - Rcell)
         {
-            prefactor = prefactors(1) * std::pow(overlap, 1.5); 
+            prefactor = prefactors(1) * pow(overlap, 1.5); 
         }
         // Case 2: the overlap is instead greater than R - Rcell (i.e., it 
         // encroaches into the bodies of the two cells)
         else if (overlap >= R - Rcell)
         {
-            T term = prefactors(3) * std::pow(overlap - R + Rcell, 1.5);
+            T term = prefactors(3) * pow(overlap - R + Rcell, 1.5);
             prefactor = prefactors(0) * (prefactors(2) + term);
         }
 
         if (overlap > 0)
         {
             // Use formulas from You et al. (2018, 2019, 2021), which allows
-	    // for omitting the Lagrange multiplier 
+            // for omitting the Lagrange multiplier 
             Array<T, 2, 1> vij = prefactor * dir_ij;
-	    Array<T, 2, 1> ni = cells(i, __colseq_n); 
-	    Array<T, 2, 1> nj = cells(j, __colseq_n);
-	    T wi = ni.matrix().dot(vij.matrix()); 
-	    T wj = nj.matrix().dot(vij.matrix());  
+            Array<T, 2, 1> ni = cells(i, __colseq_n); 
+            Array<T, 2, 1> nj = cells(j, __colseq_n);
+            T wi = ni.matrix().dot(vij.matrix()); 
+            T wj = nj.matrix().dot(vij.matrix());  
             Array<T, 2, 4> forces;
             forces << vij(0),                      vij(1),
-		      si * (-wi * ni(0) + vij(0)), si * (-wi * ni(1) + vij(1)), 
+                      si * (-wi * ni(0) + vij(0)), si * (-wi * ni(1) + vij(1)), 
                       -vij(0),                     -vij(1),
-		      sj * (wj * nj(0) - vij(0)),  sj * (wj * nj(1) - vij(1));
+                      sj * (wj * nj(0) - vij(0)),  sj * (wj * nj(1) - vij(1));
             #ifdef DEBUG_CHECK_REPULSIVE_FORCES_NAN
                 if (forces.isNaN().any() || forces.isInf().any())
                 {
@@ -611,7 +613,9 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                 const T strength = params["strength"];
                 const T expd = params["distance_exp"]; 
                 const T dmin = params["mindist"];
-                forces = strength * forcesKiharaLagrange<T, 2>(dij, R, si, sj, expd, dmin);
+                forces = strength * forcesKiharaLagrange<T, 2>(
+                    ni, nj, dij, R, si, sj, expd, dmin, true
+                );
             }
             else if (mode == AdhesionMode::GBK)
             {
@@ -621,7 +625,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                 const T dmin = params["mindist"];
                 forces = strength * forcesGBKLagrange<T, 2>(
                     ri, ni, half_li, rj, nj, half_lj, R, Rcell, dij, si, sj,
-                    expd, exp1, dmin
+                    expd, exp1, dmin, true
                 ); 
             }
             #ifdef DEBUG_CHECK_ADHESIVE_FORCES_NAN
@@ -947,13 +951,13 @@ Array<T, Dynamic, 3> cellCellRepulsiveForcesNewton(const Ref<const Array<T, Dyna
         T prefactor = 0; 
         if (overlap > 0 && overlap < R - Rcell)
         {
-            prefactor = prefactors(1) * std::pow(overlap, 1.5); 
+            prefactor = prefactors(1) * pow(overlap, 1.5); 
         }
         // Case 2: the overlap is instead greater than R - Rcell (i.e., it 
         // encroaches into the bodies of the two cells)
         else if (overlap >= R - Rcell)
         {
-            T term = prefactors(3) * std::pow(overlap - R + Rcell, 1.5);
+            T term = prefactors(3) * pow(overlap - R + Rcell, 1.5);
             prefactor = prefactors(0) * (prefactors(2) + term);
         }
 
