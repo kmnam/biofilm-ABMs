@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/3/2025
+ *     2/4/2025
  */
 #include <cmath>
 #include <Eigen/Dense>
@@ -183,8 +183,6 @@ Array<T, 2, 4> cellCellRepulsiveForcesFiniteDiff(const Ref<const Array<T, 2, 1> 
  * @param Ecell Elastic modulus of cell body.
  * @param delta Increment for finite difference approximation. 
  * @param target_force_21 Pre-computed force vector on cell 1 due to cell 2. 
- * @param check_zero_torque If true, check that the torques on both cells are
- *                          zero.   
  */
 void testCellCellRepulsiveForces(const Ref<const Array<T, 2, 1> >& r1,
                                  const Ref<const Array<T, 2, 1> >& n1,
@@ -193,8 +191,7 @@ void testCellCellRepulsiveForces(const Ref<const Array<T, 2, 1> >& r1,
                                  const Ref<const Array<T, 2, 1> >& n2,
                                  const T half_l2, const T R, const T Rcell,
                                  const T E0, const T Ecell, const T delta,
-				 const Ref<const Array<T, 2, 1> >& target_force_21,
-				 const bool check_zero_torque)
+                                 const Ref<const Array<T, 2, 1> >& target_force_21)
 {
     // Compute the distance vector from cell 1 to cell 2 
     K kernel; 
@@ -207,11 +204,11 @@ void testCellCellRepulsiveForces(const Ref<const Array<T, 2, 1> >& r1,
     T dist = d12.norm();
     T threshold;
     if (dist < R + Rcell)
-	threshold = delta * Ecell; 
+        threshold = delta * Ecell; 
     else if (dist < 2 * R)
-	threshold = delta * E0; 
+        threshold = delta * E0; 
     else 
-	threshold = delta; 
+        threshold = delta; 
 
     // Prepare the arrays to be passed into cellCellRepulsiveForces() 
     Array<T, Dynamic, Dynamic> cells(2, __ncols_required);
@@ -234,8 +231,8 @@ void testCellCellRepulsiveForces(const Ref<const Array<T, 2, 1> >& r1,
 
     // Check that the force on cell 1 due to cell 2 is correct 
     REQUIRE_THAT(
-	(forces1(0, Eigen::seq(0, 1)) - target_force_21.transpose()).matrix().norm(),
-	Catch::Matchers::WithinAbs(0.0, threshold)
+        (forces1(0, Eigen::seq(0, 1)) - target_force_21.transpose()).matrix().norm(),
+        Catch::Matchers::WithinAbs(0.0, threshold)
     );
 
     // Check that the torque on cell 1 due to cell 2, inferred from the given
@@ -247,8 +244,8 @@ void testCellCellRepulsiveForces(const Ref<const Array<T, 2, 1> >& r1,
     v << target_force_21(0), target_force_21(1), 0;
     Array<T, 2, 1> target_torque_21 = (s * u).cross(v).cross(u)(Eigen::seq(0, 1)).array();
     REQUIRE_THAT(
-	(forces1(0, Eigen::seq(2, 3)) - target_torque_21.transpose()).matrix().norm(),
-	Catch::Matchers::WithinAbs(0.0, threshold)
+        (forces1(0, Eigen::seq(2, 3)) - target_torque_21.transpose()).matrix().norm(),
+        Catch::Matchers::WithinAbs(0.0, threshold)
     ); 
 
     // Check that the two force vectors are equal and opposite 
@@ -257,12 +254,22 @@ void testCellCellRepulsiveForces(const Ref<const Array<T, 2, 1> >& r1,
         Catch::Matchers::WithinAbs(0.0, threshold)
     );
 
-    // Check that the two torque vectors are zero, if that is expected 
-    if (check_zero_torque)
-    {
-	REQUIRE_THAT(forces1(0, Eigen::seq(2, 3)).matrix().norm(), Catch::Matchers::WithinAbs(0.0, threshold));
-        REQUIRE_THAT(forces1(1, Eigen::seq(2, 3)).matrix().norm(), Catch::Matchers::WithinAbs(0.0, threshold)); 	
-    }
+    // Check that the two torque vectors are zero, if either is expected 
+    //
+    // The torque on either cell should be zero if:
+    // (1) the force is acting on the center of the cell and the force vector
+    // is orthogonal to the cell orientation, or 
+    // (2) the force is acting on either end of the cell and the force vector 
+    // is parallel to the cell orientation
+    Matrix<T, 2, 1> dnorm = d12 / dist;
+    bool cond1 = (abs(s) < delta && abs(dnorm.dot(n1.matrix())) < delta); 
+    bool cond2 = (half_l1 - abs(s) < delta && 1.0 - abs(dnorm.dot(n1.matrix())) < delta);
+    bool cond3 = (abs(t) < delta && abs(dnorm.dot(n2.matrix())) < delta); 
+    bool cond4 = (half_l2 - abs(t) < delta && 1.0 - abs(dnorm.dot(n2.matrix())) < delta);  
+    if (cond1 || cond2)
+        REQUIRE_THAT(forces1(0, Eigen::seq(2, 3)).matrix().norm(), Catch::Matchers::WithinAbs(0.0, threshold));
+    if (cond3 || cond4)
+        REQUIRE_THAT(forces1(1, Eigen::seq(2, 3)).matrix().norm(), Catch::Matchers::WithinAbs(0.0, threshold));         
 
     // Compute the forces via finite differences 
     Array<T, 2, 4> dEdq2 = cellCellRepulsiveForcesFiniteDiff(
@@ -305,8 +312,7 @@ TEST_CASE("Tests for cellCellRepulsiveForces(), skew cells", "[cellCellRepulsive
     n2 << 0, 1;
     Array<T, 2, 1> target_force_21 = Array<T, 2, 1>::Zero();  
     testCellCellRepulsiveForces(
-	r1, n1, 1, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21,
-	true
+        r1, n1, 1, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
     );
 
     // r1 = (0, 0), n1 = (1, 0), l1 = 1
@@ -324,12 +330,11 @@ TEST_CASE("Tests for cellCellRepulsiveForces(), skew cells", "[cellCellRepulsive
     Array<T, 2, 1> d12; 
     d12 << 0, 1;
     target_force_21 = -d12 * (
-	2.5 * E0 * sqrt(R) * pow(R - Rcell, 1.5) +
-	2.5 * Ecell * sqrt(R) * pow(R + Rcell - 1, 1.5)
+        2.5 * E0 * sqrt(R) * pow(R - Rcell, 1.5) +
+        2.5 * Ecell * sqrt(R) * pow(R + Rcell - 1, 1.5)
     ); 
     testCellCellRepulsiveForces(
-	r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21,
-	false
+        r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
     );
 
     // r1 = (0, 0), n1 = (1, 0), l1 = 1
@@ -345,9 +350,28 @@ TEST_CASE("Tests for cellCellRepulsiveForces(), skew cells", "[cellCellRepulsive
     n2(0) = cos(boost::math::constants::sixth_pi<T>()); 
     n2(1) = sin(boost::math::constants::sixth_pi<T>());
     testCellCellRepulsiveForces(
-	r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21,
-	false
+        r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
     );
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.5 + 1.4 / sqrt(2), 1.4 / sqrt(2)), n2 = (1 / sqrt(2), -1 / sqrt(2)), l2 = 1
+    //
+    // The shortest distance between the two cells is (1.4 / sqrt(2), 1.4 / sqrt(2))
+    //
+    // The torque on cell 2 should be zero, since the force acts on the cell 
+    // center (r2)
+    r2(0) = 0.5 + 1.4 / sqrt(2.0); 
+    r2(1) = 1.4 / sqrt(2.0); 
+    n2(0) = 1.0 / sqrt(2.0); 
+    n2(1) = -1.0 / sqrt(2.0);
+    d12(0) = 1.4 / sqrt(2.0); 
+    d12(1) = 1.4 / sqrt(2.0);
+    T dist = d12.matrix().norm(); 
+    Array<T, 2, 1> dnorm = d12 / dist; 
+    target_force_21 = -dnorm * (2.5 * E0 * sqrt(R) * pow(2 * R - dist, 1.5));
+    testCellCellRepulsiveForces(
+        r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
+    ); 
 }
 
 /**
@@ -379,8 +403,7 @@ TEST_CASE("Tests for cellCellRepulsiveForces(), parallel cells", "[cellCellRepul
     Array<T, 2, 1> dnorm = d12 / dist; 
     Array<T, 2, 1> target_force_21 = -dnorm * (2.5 * E0 * sqrt(R) * pow(2 * R - dist, 1.5));
     testCellCellRepulsiveForces(
-	r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21,
-	true
+        r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
     );
 
     // r1 = (0, 0), n1 = (1, 0), l1 = 1
@@ -396,8 +419,7 @@ TEST_CASE("Tests for cellCellRepulsiveForces(), parallel cells", "[cellCellRepul
     dnorm = d12 / dist; 
     target_force_21 = -dnorm * (2.5 * E0 * sqrt(R) * pow(2 * R - dist, 1.5));
     testCellCellRepulsiveForces(
-	r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21,
-	false
+        r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
     );
 
     // r1 = (0, 0), n1 = (1, 0), l1 = 1
@@ -414,8 +436,7 @@ TEST_CASE("Tests for cellCellRepulsiveForces(), parallel cells", "[cellCellRepul
     dnorm = d12 / dist; 
     target_force_21 = -dnorm * (2.5 * E0 * sqrt(R) * pow(2 * R - dist, 1.5));
     testCellCellRepulsiveForces(
-	r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21,
-	true
+        r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
     );
 
     // r1 = (0, 0), n1 = (1, 0), l1 = 1
@@ -426,8 +447,18 @@ TEST_CASE("Tests for cellCellRepulsiveForces(), parallel cells", "[cellCellRepul
     // torque
     r2(0) = 0.2; 
     testCellCellRepulsiveForces(
-	r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21,
-	false
+        r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
+    );
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 2
+    // r2 = (-0.3, 1.5), n2 = (1, 0), l2 = 1
+    //
+    // The shortest distance between the two cells is, again, the vector 
+    // (0, 1.5), but cell 1 should experience a nonzero torque while cell 2
+    // experiences zero torque
+    r2(0) = -0.3; 
+    testCellCellRepulsiveForces(
+        r1, n1, 1, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
     );
 }
 
@@ -459,24 +490,22 @@ TEST_CASE("Tests for cellCellRepulsiveForces(), perpendicular cells", "[cellCell
     T dist = d12.matrix().norm(); 
     Array<T, 2, 1> dnorm = d12 / dist; 
     Array<T, 2, 1> target_force_21 = -dnorm * (
-	2.5 * E0 * sqrt(R) * pow(R - Rcell, 1.5) +
-	2.5 * Ecell * sqrt(R) * pow(R + Rcell - dist, 1.5)
+        2.5 * E0 * sqrt(R) * pow(R - Rcell, 1.5) +
+        2.5 * Ecell * sqrt(R) * pow(R + Rcell - dist, 1.5)
     );
     testCellCellRepulsiveForces(
-	r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21,
-	true
+        r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
     );
 
     // r1 = (0, 0), n1 = (1, 0), l1 = 1
     // r2 = (1.5, 0.2), n2 = (0, 1), l2 = 1
     //
     // The shortest distance between the two cells is, again, the vector
-    // (1, 0), but the cells are not aligned and there should be nonzero 
-    // torque
+    // (1, 0), but cell 1 should experience zero torque while cell 2 experiences
+    // a nonzero torque 
     r2(1) = 0.2;  
     testCellCellRepulsiveForces(
-	r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21,
-	false
+        r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
     );
 }
 
