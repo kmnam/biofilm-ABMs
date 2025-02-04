@@ -1,5 +1,5 @@
 /**
- * Test module for the `forcesKiharaLagrange()`, `forcesKiharaNewton()`, 
+ * Test module for the `forcesKiharaLagrange()`, `forceKiharaNewton()`, 
  * `forcesGBKLagrange()`, and `forcesGBKNewton()` functions.  
  *
  * Authors:
@@ -326,6 +326,79 @@ void testForcesKiharaLagrange(const Ref<const Array<T, 2, 1> >& r1,
 }
 
 /**
+ * A generic test function for forceKiharaNewton().
+ *
+ * This function compares the calculated forces against those obtained from 
+ * forcesKiharaLagrange().  
+ *
+ * @param r1 Cell 1 center. 
+ * @param n1 Cell 1 orientation. 
+ * @param half_l1 Cell 1 half-length. 
+ * @param r2 Cell 2 center. 
+ * @param n2 Cell 2 orientation. 
+ * @param half_l2 Cell 2 half-length. 
+ * @param R Cell radius, including the EPS. 
+ * @param exp Exponent in Kihara potential. 
+ * @param dmin Minimum distance at which the Kihara potential is nonzero. 
+ */
+void testForceKiharaNewton(const Ref<const Array<T, 2, 1> >& r1,
+                           const Ref<const Array<T, 2, 1> >& n1, const T half_l1,
+                           const Ref<const Array<T, 2, 1> >& r2, 
+                           const Ref<const Array<T, 2, 1> >& n2, const T half_l2,
+                           const T R, const T exp, const T dmin) 
+{
+    // Compute the distance vector from cell 1 to cell 2 
+    K kernel; 
+    Segment_3 seg1 = generateSegment<T>(r1, n1, half_l1); 
+    Segment_3 seg2 = generateSegment<T>(r2, n2, half_l2);
+    auto result = distBetweenCells<T>(seg1, seg2, 0, r1, n1, half_l1, 1, r2, n2, half_l2, kernel);
+    Matrix<T, 2, 1> d12 = std::get<0>(result); 
+    T s = std::get<1>(result); 
+    T t = std::get<2>(result);
+    T dist = d12.norm();
+
+    // Compute the forces via forcesKiharaLagrange()
+    Array<T, 2, 4> forces1 = -forcesKiharaLagrange<T, 2>(
+        n1.matrix(), n2.matrix(), d12, R, s, t, exp, dmin, true
+    );
+
+    // Compute the force vector on cell 1 due to cell 2 via forceKiharaNewton() 
+    Array<T, 2, 1> force_21 = forceKiharaNewton<T, 2>(d12, R, exp, dmin);
+
+    // Compute the force vector on cell 2 due to cell 1
+    Array<T, 2, 1> force_12 = -force_21; 
+
+    // Compute the torque on cell 1 due to cell 2 
+    Matrix<T, 3, 1> u1, u2, v1, v2, cross1, cross2; 
+    u1 << n1(0), n1(1), 0; 
+    u2 << n2(0), n2(1), 0; 
+    v1 << force_21(0), force_21(1), 0; 
+    v2 << force_12(0), force_12(1), 0; 
+    cross1 = (s * u1.cross(v1)).cross(u1);
+    cross2 = (t * u2.cross(v2)).cross(u2); 
+
+    // Check that the force vectors match 
+    REQUIRE_THAT(
+        (forces1(0, Eigen::seq(0, 1)) - force_21.transpose()).matrix().norm(),
+        Catch::Matchers::WithinAbs(0.0, 1e-8)
+    );
+    REQUIRE_THAT(
+        (forces1(1, Eigen::seq(0, 1)) - force_12.transpose()).matrix().norm(), 
+        Catch::Matchers::WithinAbs(0.0, 1e-8)
+    );
+
+    // Check that the torque vectors match 
+    REQUIRE_THAT(
+        (cross1.head(2) - forces1(0, Eigen::seq(2, 3)).matrix().transpose()).norm(),
+	Catch::Matchers::WithinAbs(0.0, 1e-8)
+    ); 
+    REQUIRE_THAT(
+	(cross2.head(2) - forces1(1, Eigen::seq(2, 3)).matrix().transpose()).norm(),
+	Catch::Matchers::WithinAbs(0.0, 1e-8)
+    ); 
+}
+
+/**
  * A series of tests for forcesKiharaLagrange() for skew cell-cell configurations. 
  */
 TEST_CASE("Tests for forcesKiharaLagrange(), skew cells", "[forcesKiharaLagrange()]") 
@@ -405,14 +478,74 @@ TEST_CASE("Tests for forcesKiharaLagrange(), skew cells", "[forcesKiharaLagrange
 }
 
 /**
- * A series of tests for forcesKiharaLagrange() for parallel cell-cell configurations.
+ * A series of tests for forceKiharaNewton() for skew cell-cell configurations. 
  */
-TEST_CASE("Tests for forcesKiharaLagrange(), parallel cells", "[forcesKiharaLagrange()]")
+TEST_CASE("Tests for forceKiharaNewton(), skew cells", "[forceKiharaNewton()]") 
 {
     const T R = 0.8;
     const T exp = 4; 
     const T dmin = 1.05;
-    const T delta = 1e-7;  
+
+    // r1 = (2, 1), n1 = (0.6, 0.8), l1 = 2
+    // r2 = (0, 3), n2 = (0, 1), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (-2, 1.5),
+    // which has norm 2.5 > 2 * R = 1.6, which means that the force between
+    // these cells should be zero 
+    Array<T, 2, 1> r1, n1, r2, n2; 
+    r1 << 2, 1; 
+    n1 << 0.6, 0.8; 
+    r2 << 0, 3; 
+    n2 << 0, 1;
+    testForceKiharaNewton(r1, n1, 1, r2, n2, 0.5, R, exp, dmin);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.5 + 0.5 * cos(pi/6), 1 + 0.5 * sin(pi/6)), n2 = (cos(pi/6), sin(pi/6)), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (0, 1)
+    r1(0) = 0; 
+    r1(1) = 0; 
+    n1(0) = 1; 
+    n1(1) = 0; 
+    r2(0) = 0.5 + 0.5 * cos(boost::math::constants::sixth_pi<T>()); 
+    r2(1) = 1 + 0.5 * sin(boost::math::constants::sixth_pi<T>()); 
+    n2(0) = cos(boost::math::constants::sixth_pi<T>()); 
+    n2(1) = sin(boost::math::constants::sixth_pi<T>());
+    testForceKiharaNewton(r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.2 + 0.5 * cos(pi/6), 1 + 0.5 * sin(pi/6)), n2 = (cos(pi/6), sin(pi/6)), l2 = 1
+    //
+    // The shortest distance between the two cells is, again, (0, 1)
+    r1(0) = 0; 
+    r1(1) = 0; 
+    n1(0) = 1; 
+    n1(1) = 0; 
+    r2(0) = 0.2 + 0.5 * cos(boost::math::constants::sixth_pi<T>()); 
+    r2(1) = 1 + 0.5 * sin(boost::math::constants::sixth_pi<T>()); 
+    n2(0) = cos(boost::math::constants::sixth_pi<T>()); 
+    n2(1) = sin(boost::math::constants::sixth_pi<T>());
+    testForceKiharaNewton(r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.5 + 1.4 / sqrt(2), 1.4 / sqrt(2)), n2 = (1 / sqrt(2), -1 / sqrt(2)), l2 = 1
+    //
+    // The shortest distance between the two cells is (1.4 / sqrt(2), 1.4 / sqrt(2))
+    r2(0) = 0.5 + 1.4 / sqrt(2.0); 
+    r2(1) = 1.4 / sqrt(2.0); 
+    n2(0) = 1.0 / sqrt(2.0); 
+    n2(1) = -1.0 / sqrt(2.0);
+    testForceKiharaNewton(r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin);
+}
+
+/**
+ * A series of tests for forceKiharaNewton() for parallel cell-cell configurations.
+ */
+TEST_CASE("Tests for forceKiharaNewton(), parallel cells", "[forceKiharaNewton()]")
+{
+    const T R = 0.8;
+    const T exp = 4; 
+    const T dmin = 1.05;
 
     // r1 = (0, 0), n1 = (1, 0), l1 = 1
     // r2 = (2.4, 0), n2 = (1, 0), l2 = 1
@@ -425,14 +558,7 @@ TEST_CASE("Tests for forcesKiharaLagrange(), parallel cells", "[forcesKiharaLagr
     n1 << 1, 0;
     r2 << 2.4, 0;
     n2 << 1, 0;
-    Array<T, 2, 1> d12;  
-    d12 << 1.4, 0;
-    T dist = d12.matrix().norm(); 
-    Array<T, 2, 1> dnorm = d12 / dist; 
-    Array<T, 2, 1> target_force_21 = dnorm * exp * (pow(dist, -exp - 1) - pow(2 * R, -exp - 1)); 
-    testForcesKiharaLagrange(
-        r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin, delta, target_force_21
-    );
+    testForceKiharaNewton(r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin);
 
     // r1 = (0, 0), n1 = (1, 0), l1 = 1
     // r2 = (1 + 1.4 * cos(pi/6), 1.4 * sin(pi/6)), n2 = (1, 0), l2 = 1
@@ -441,14 +567,7 @@ TEST_CASE("Tests for forcesKiharaLagrange(), parallel cells", "[forcesKiharaLagr
     // (1.4 * cos(pi/6), 1.4 * sin(pi/6)), which has norm 1.4
     r2(0) = 1.0 + 1.4 * cos(boost::math::constants::sixth_pi<T>());
     r2(1) = 1.4 * sin(boost::math::constants::sixth_pi<T>());  
-    d12(0) = 1.4 * cos(boost::math::constants::sixth_pi<T>()); 
-    d12(1) = 1.4 * sin(boost::math::constants::sixth_pi<T>()); 
-    dist = d12.matrix().norm(); 
-    dnorm = d12 / dist; 
-    target_force_21 = dnorm * exp * (pow(dist, -exp - 1) - pow(2 * R, -exp - 1)); 
-    testForcesKiharaLagrange(
-        r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin, delta, target_force_21
-    );
+    testForceKiharaNewton(r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin);
 
     // r1 = (0, 0), n1 = (1, 0), l1 = 1
     // r2 = (0, 1.5), n2 = (1, 0), l2 = 1
@@ -458,14 +577,7 @@ TEST_CASE("Tests for forcesKiharaLagrange(), parallel cells", "[forcesKiharaLagr
     // Since the cells are aligned, there should be zero torque
     r2(0) = 0; 
     r2(1) = 1.5; 
-    d12(0) = 0; 
-    d12(1) = 1.5;
-    dist = d12.matrix().norm(); 
-    dnorm = d12 / dist; 
-    target_force_21 = dnorm * exp * (pow(dist, -exp - 1) - pow(2 * R, -exp - 1)); 
-    testForcesKiharaLagrange(
-        r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin, delta, target_force_21
-    );
+    testForceKiharaNewton(r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin);
 
     // r1 = (0, 0), n1 = (1, 0), l1 = 1
     // r2 = (0.2, 1.5), n2 = (1, 0), l2 = 1
@@ -474,9 +586,7 @@ TEST_CASE("Tests for forcesKiharaLagrange(), parallel cells", "[forcesKiharaLagr
     // (0, 1.5), but the cells are not aligned and there should be nonzero
     // torque
     r2(0) = 0.2; 
-    testForcesKiharaLagrange(
-        r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin, delta, target_force_21
-    );
+    testForceKiharaNewton(r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin);
 
     // r1 = (0, 0), n1 = (1, 0), l1 = 2
     // r2 = (-0.3, 1.5), n2 = (1, 0), l2 = 1
@@ -484,10 +594,8 @@ TEST_CASE("Tests for forcesKiharaLagrange(), parallel cells", "[forcesKiharaLagr
     // The shortest distance between the two cells is, again, the vector 
     // (0, 1.5), but cell 1 should experience a nonzero torque while cell 2
     // experiences zero torque
-    r2(0) = -0.3; 
-    testForcesKiharaLagrange(
-        r1, n1, 1, r2, n2, 0.5, R, exp, dmin, delta, target_force_21
-    );
+    r2(0) = -0.3;
+    testForceKiharaNewton(r1, n1, 1, r2, n2, 0.5, R, exp, dmin);
 }
 
 /**
@@ -531,5 +639,38 @@ TEST_CASE("Tests for forcesKiharaLagrange(), perpendicular cells", "[forcesKihar
     testForcesKiharaLagrange(
         r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin, delta, target_force_21
     );
+}
+
+/**
+ * A series of tests for forceKiharaNewton() for perpendicular cell-cell
+ * configurations. 
+ */
+TEST_CASE("Tests for forceKiharaNewton(), perpendicular cells", "[forceKiharaNewton()]") 
+{
+    const T R = 0.8;
+    const T exp = 4; 
+    const T dmin = 1.05;
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (1.5, 0), n2 = (0, 1), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (1, 0)
+    // 
+    // Since the cells are aligned, there should be zero torque
+    Array<T, 2, 1> r1, n1, r2, n2; 
+    r1 << 0, 0; 
+    n1 << 1, 0;
+    r2 << 1.5, 0;
+    n2 << 0, 1;
+    testForceKiharaNewton(r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (1.5, 0.2), n2 = (0, 1), l2 = 1
+    //
+    // The shortest distance between the two cells is, again, the vector
+    // (1, 0), but cell 1 should experience zero torque while cell 2 experiences
+    // a nonzero torque 
+    r2(1) = 0.2;  
+    testForceKiharaNewton(r1, n1, 0.5, r2, n2, 0.5, R, exp, dmin);
 }
 
