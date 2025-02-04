@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/14/2025
+ *     2/3/2025
  */
 
 #ifndef KIHARA_GBK_POTENTIAL_FORCES_HPP
@@ -120,7 +120,7 @@ T potentialKihara(const T dist, const T R, const T exp, const T dmin)
         T term1 = -1.0 / pow(dist, exp); 
         T denom = pow(2 * R, exp); 
         T term2 = -exp * dist / (denom * 2 * R);
-        T term3 = (exp + 1) / denom; 
+        T term3 = (exp + 1) / denom;
         return term1 + term2 + term3; 
     }
     // If the distance is greater than 2 * R, return zero 
@@ -284,6 +284,8 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
  * Note that this function technically calculates the *negatives* of the
  * generalized forces.
  *
+ * @param n1 Orientation of cell 1.
+ * @param n2 Orientation of cell 2. 
  * @param d12 Shortest distance vector from cell 1 to cell 2.
  * @param R Cell radius, including the EPS. 
  * @param s Cell-body coordinate along cell 1 at which shortest distance is 
@@ -292,12 +294,17 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
  *          achieved. 
  * @param exp Exponent in Kihara potential.
  * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @param include_constraint If true, enforce the orientation vector norm 
+ *                           constraint on the generalized torques. 
  * @returns Matrix of generalized forces arising from the Kihara potential. 
  */
 template <typename T, int Dim>
-Array<T, 2, 2 * Dim> forcesKiharaLagrange(const Ref<const Matrix<T, Dim, 1> >& d12,
+Array<T, 2, 2 * Dim> forcesKiharaLagrange(const Ref<const Matrix<T, Dim, 1> >& n1, 
+                                          const Ref<const Matrix<T, Dim, 1> >& n2, 
+                                          const Ref<const Matrix<T, Dim, 1> >& d12,
                                           const T R, const T s, const T t,
-                                          const T exp, const T dmin)
+                                          const T exp, const T dmin, 
+                                          const bool include_constraint = true)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
     const T dist = d12.norm(); 
@@ -311,7 +318,7 @@ Array<T, 2, 2 * Dim> forcesKiharaLagrange(const Ref<const Matrix<T, Dim, 1> >& d
         // Get the terms that contribute to each generalized force 
         T term1 = (dist <= dmin ? 1.0 / pow(dmin, exp + 1) : 1.0 / pow(dist, exp + 1)); 
         T term2 = 1.0 / pow(2 * R, exp + 1);
-        Matrix<T, Dim, 1> v = exp * (term1 - term2) * d12n; 
+        Matrix<T, Dim, 1> v = exp * (term1 - term2) * d12n;
         
         // Partial derivatives w.r.t cell 1 center 
         dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
@@ -319,11 +326,19 @@ Array<T, 2, 2 * Dim> forcesKiharaLagrange(const Ref<const Matrix<T, Dim, 1> >& d
         // Partial derivatives w.r.t cell 2 center 
         dEdq(1, Eigen::seq(0, Dim - 1)) = v;
 
-        // Partial derivatives w.r.t cell 1 orientation 
-        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -s * v; 
-
-        // Partial derivatives w.r.t cell 2 orientation 
-        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * v;
+        // Partial derivatives w.r.t cell orientations 
+        if (!include_constraint)
+        {
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -s * v; 
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * v;
+        }
+        else    // Correct torques to account for orientation norm constraint 
+        {
+            T w1 = n1.dot(-v);
+            T w2 = n2.dot(-v);  
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = s * (-w1 * n1 - v);
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * (w2 * n2 + v);  
+        }
     }
     
     return dEdq.array(); 
