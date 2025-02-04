@@ -530,6 +530,8 @@ std::pair<T, Matrix<T, 2, 2 * Dim> > anisotropyParamWithDerivsGBK2(const Ref<con
  *             Gay-Berne-Kihara potential.
  * @param exp1 Exponent of first anisotropy parameter.
  * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @param include_constraint If true, enforce the orientation vector norm 
+ *                           constraint on the generalized torques. 
  * @returns Matrix of generalized forces arising from the Kihara potential. 
  */
 template <typename T, int Dim>
@@ -541,7 +543,8 @@ Array<T, 2, 2 * Dim> forcesGBKLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
                                        const T half_l2, const T R, const T Rcell,
                                        const Ref<const Matrix<T, Dim, 1> >& d12, 
                                        const T s, const T t, const T expd,
-                                       const T exp1, const T dmin)
+                                       const T exp1, const T dmin,
+                                       const bool include_constraint = true)
 {
     // If the distance is greater than 2 * R, return zero
     const T dist = d12.norm(); 
@@ -576,7 +579,8 @@ Array<T, 2, 2 * Dim> forcesGBKLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
         Matrix<T, 2, 1> w1 = -(term2 + term3) * deps1(0, Eigen::seq(Dim, 2 * Dim - 1));
         Matrix<T, 2, 1> w2 = -(term2 + term3) * deps1(1, Eigen::seq(Dim, 2 * Dim - 1)); 
         dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
-        dEdq(1, Eigen::seq(0, Dim - 1)) = v; 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = v;
+        // TODO Add constraint  
         dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -(w1 + s * v);
         dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -(w2 - t * v); 
     }
@@ -593,7 +597,8 @@ Array<T, 2, 2 * Dim> forcesGBKLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
         Matrix<T, 2, 1> w1 = -term2 * deps1(0, Eigen::seq(Dim, 2 * Dim - 1)); 
         Matrix<T, 2, 1> w2 = -term2 * deps1(1, Eigen::seq(Dim, 2 * Dim - 1)); 
         dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
-        dEdq(1, Eigen::seq(0, Dim - 1)) = v; 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = v;
+        // TODO Add constraint  
         dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -(w1 + s * v); 
         dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -(w2 - t * v); 
     }
