@@ -289,6 +289,99 @@ void testCellCellRepulsiveForces(const Ref<const Array<T, 2, 1> >& r1,
 }
 
 /**
+ * A generic test function for cellCellRepulsiveForcesNewton().
+ *
+ * This function compares the calculated forces against those obtained from 
+ * cellCellRepulsiveForces(). 
+ *
+ * @param r1 Cell 1 center. 
+ * @param n1 Cell 1 orientation. 
+ * @param half_l1 Cell 1 half-length. 
+ * @param r2 Cell 2 center. 
+ * @param n2 Cell 2 orientation. 
+ * @param half_l2 Cell 2 half-length. 
+ * @param R Cell radius, including the EPS. 
+ * @param Rcell Cell radius, excluding the EPS. 
+ * @param E0 Elastic modulus of EPS. 
+ * @param Ecell Elastic modulus of cell body.
+ */
+void testCellCellRepulsiveForcesNewton(const Ref<const Array<T, 2, 1> >& r1,
+                                       const Ref<const Array<T, 2, 1> >& n1,
+                                       const T half_l1,
+                                       const Ref<const Array<T, 2, 1> >& r2, 
+                                       const Ref<const Array<T, 2, 1> >& n2,
+                                       const T half_l2, const T R, const T Rcell,
+                                       const T E0, const T Ecell)
+{
+    // Compute the distance vector from cell 1 to cell 2 
+    K kernel; 
+    Segment_3 seg1 = generateSegment<T>(r1, n1, half_l1); 
+    Segment_3 seg2 = generateSegment<T>(r2, n2, half_l2);
+    auto result = distBetweenCells<T>(seg1, seg2, 0, r1, n1, half_l1, 1, r2, n2, half_l2, kernel);
+    Matrix<T, 2, 1> d12 = std::get<0>(result); 
+    T s = std::get<1>(result); 
+    T t = std::get<2>(result);
+    T dist = d12.norm();
+    T threshold;
+    if (dist < R + Rcell)
+        threshold = 1e-8 * Ecell; 
+    else if (dist < 2 * R)
+        threshold = 1e-8 * E0; 
+    else 
+        threshold = 1e-8; 
+
+    // Prepare the arrays to be passed into cellCellRepulsiveForces() 
+    Array<T, Dynamic, Dynamic> cells(2, __ncols_required);
+    cells << 0, r1(0), r1(1), n1(0), n1(1), 0, 0, 0, 0, 2 * half_l1, half_l1, 0, 1, 1, 1, 1, 1, 
+             1, r2(0), r2(1), n2(0), n2(1), 0, 0, 0, 0, 2 * half_l2, half_l2, 0, 1, 1, 1, 1, 1;
+    Array<T, Dynamic, 6> neighbors(1, 6);
+    neighbors << 0, 1, d12(0), d12(1), s, t;
+    Array<T, 4, 1> prefactors; 
+    prefactors << 2.5 * sqrt(R), 
+                  2.5 * E0 * sqrt(R), 
+                  E0 * pow(R - Rcell, 1.5), 
+                  Ecell;  
+
+    // Compute the forces via cellCellRepulsiveForcesNewton()
+    Array<T, 2, 3> forces1 = cellCellRepulsiveForcesNewton<T>(
+        cells, neighbors, 1e-6, 0, R, Rcell, prefactors
+    );
+
+    // Compute the forces via cellCellRepulsiveForces() 
+    Array<T, 2, 4> forces2 = -cellCellRepulsiveForces<T>(
+        cells, neighbors, 1e-6, 0, R, Rcell, prefactors
+    );
+
+    // Check that the force vectors match 
+    REQUIRE_THAT(
+        (forces1(0, Eigen::seq(0, 1)) - forces2(0, Eigen::seq(0, 1))).matrix().norm(), 
+        Catch::Matchers::WithinAbs(0.0, threshold)
+    );
+    REQUIRE_THAT(
+        (forces1(1, Eigen::seq(0, 1)) - forces2(1, Eigen::seq(0, 1))).matrix().norm(), 
+        Catch::Matchers::WithinAbs(0.0, threshold)
+    );
+
+    // Calculate the torque vectors from the angular velocities and check that
+    // they match the torque vectors calculated using cellCellRepulsiveForces() 
+    Matrix<T, 3, 1> torque1, torque2, v1, v2, cross1, cross2; 
+    torque1 << 0, 0, forces1(0, 2); 
+    torque2 << 0, 0, forces1(1, 2);
+    v1 << n1(0), n1(1), 0; 
+    v2 << n2(0), n2(1), 0;
+    cross1 = torque1.cross(v1.matrix()); 
+    cross2 = torque2.cross(v2.matrix()); 
+    REQUIRE_THAT(
+        (cross1.head(2) - forces2(0, Eigen::seq(2, 3)).matrix().transpose()).norm(), 
+        Catch::Matchers::WithinAbs(0.0, threshold)
+    );
+    REQUIRE_THAT(
+        (cross2.head(2) - forces2(1, Eigen::seq(2, 3)).matrix().transpose()).norm(),
+        Catch::Matchers::WithinAbs(0.0, threshold)
+    );
+}
+
+/**
  * A series of tests for cellCellRepulsiveForces() for skew cell-cell configurations. 
  */
 TEST_CASE("Tests for cellCellRepulsiveForces(), skew cells", "[cellCellRepulsiveForces()]")
@@ -507,5 +600,167 @@ TEST_CASE("Tests for cellCellRepulsiveForces(), perpendicular cells", "[cellCell
     testCellCellRepulsiveForces(
         r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
     );
+}
+
+/**
+ * A series of tests for cellCellRepulsiveForcesNewton() for skew cell-cell
+ * configurations. 
+ */
+TEST_CASE("Tests for cellCellRepulsiveForcesNewton(), skew cells", "[cellCellRepulsiveForcesNewton()]")
+{
+    const T R = 0.8;
+    const T Rcell = 0.5; 
+    const T E0 = 1.0;
+    const T Ecell = 100.0;
+
+    // r1 = (2, 1), n1 = (0.6, 0.8), l1 = 2
+    // r2 = (0, 3), n2 = (0, 1), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (-2, 1.5),
+    // which has norm 2.5 > 2 * R = 1.6, which means that the force between
+    // these cells should be zero 
+    Array<T, 2, 1> r1, n1, r2, n2; 
+    r1 << 2, 1; 
+    n1 << 0.6, 0.8; 
+    r2 << 0, 3; 
+    n2 << 0, 1;
+    testCellCellRepulsiveForcesNewton(r1, n1, 1, r2, n2, 0.5, R, Rcell, E0, Ecell);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.5 + 0.5 * cos(pi/6), 1 + 0.5 * sin(pi/6)), n2 = (cos(pi/6), sin(pi/6)), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (0, 1)
+    r1(0) = 0; 
+    r1(1) = 0; 
+    n1(0) = 1; 
+    n1(1) = 0; 
+    r2(0) = 0.5 + 0.5 * cos(boost::math::constants::sixth_pi<T>()); 
+    r2(1) = 1 + 0.5 * sin(boost::math::constants::sixth_pi<T>()); 
+    n2(0) = cos(boost::math::constants::sixth_pi<T>()); 
+    n2(1) = sin(boost::math::constants::sixth_pi<T>());
+    testCellCellRepulsiveForcesNewton(r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.2 + 0.5 * cos(pi/6), 1 + 0.5 * sin(pi/6)), n2 = (cos(pi/6), sin(pi/6)), l2 = 1
+    //
+    // The shortest distance between the two cells is, again, (0, 1)
+    r1(0) = 0; 
+    r1(1) = 0; 
+    n1(0) = 1; 
+    n1(1) = 0; 
+    r2(0) = 0.2 + 0.5 * cos(boost::math::constants::sixth_pi<T>()); 
+    r2(1) = 1 + 0.5 * sin(boost::math::constants::sixth_pi<T>()); 
+    n2(0) = cos(boost::math::constants::sixth_pi<T>()); 
+    n2(1) = sin(boost::math::constants::sixth_pi<T>());
+    testCellCellRepulsiveForcesNewton(r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.5 + 1.4 / sqrt(2), 1.4 / sqrt(2)), n2 = (1 / sqrt(2), -1 / sqrt(2)), l2 = 1
+    //
+    // The shortest distance between the two cells is (1.4 / sqrt(2), 1.4 / sqrt(2))
+    //
+    // The torque on cell 2 should be zero, since the force acts on the cell 
+    // center (r2)
+    r2(0) = 0.5 + 1.4 / sqrt(2.0); 
+    r2(1) = 1.4 / sqrt(2.0); 
+    n2(0) = 1.0 / sqrt(2.0); 
+    n2(1) = -1.0 / sqrt(2.0);
+    testCellCellRepulsiveForcesNewton(r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell);
+}
+
+/**
+ * A series of tests for cellCellRepulsiveForcesNewton() for parallel cell-cell
+ * configurations.
+ */
+TEST_CASE("Tests for cellCellRepulsiveForcesNewton(), parallel cells", "[cellCellRepulsiveForcesNewton()]")
+{
+    const T R = 0.8;
+    const T Rcell = 0.5; 
+    const T E0 = 1.0;
+    const T Ecell = 100.0;
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (2.4, 0), n2 = (1, 0), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (1.4, 0)
+    // 
+    // Since the cells are aligned, there should be zero torque
+    Array<T, 2, 1> r1, n1, r2, n2; 
+    r1 << 0, 0; 
+    n1 << 1, 0;
+    r2 << 2.4, 0;
+    n2 << 1, 0;
+    testCellCellRepulsiveForcesNewton(r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (1 + 1.4 * cos(pi/6), 1.4 * sin(pi/6)), n2 = (1, 0), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector
+    // (1.4 * cos(pi/6), 1.4 * sin(pi/6)), which has norm 1.4
+    r2(0) = 1.0 + 1.4 * cos(boost::math::constants::sixth_pi<T>());
+    r2(1) = 1.4 * sin(boost::math::constants::sixth_pi<T>());  
+    testCellCellRepulsiveForcesNewton(r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0, 1.5), n2 = (1, 0), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (0, 1.5)
+    // 
+    // Since the cells are aligned, there should be zero torque
+    r2(0) = 0; 
+    r2(1) = 1.5; 
+    testCellCellRepulsiveForcesNewton(r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.2, 1.5), n2 = (1, 0), l2 = 1
+    //
+    // The shortest distance between the two cells is, again, the vector
+    // (0, 1.5), but the cells are not aligned and there should be nonzero
+    // torque
+    r2(0) = 0.2; 
+    testCellCellRepulsiveForcesNewton(r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 2
+    // r2 = (-0.3, 1.5), n2 = (1, 0), l2 = 1
+    //
+    // The shortest distance between the two cells is, again, the vector 
+    // (0, 1.5), but cell 1 should experience a nonzero torque while cell 2
+    // experiences zero torque
+    r2(0) = -0.3; 
+    testCellCellRepulsiveForcesNewton(r1, n1, 1, r2, n2, 0.5, R, Rcell, E0, Ecell);
+}
+
+/**
+ * A series of tests for cellCellRepulsiveForcesNewton() for perpendicular cell-cell
+ * configurations. 
+ */
+TEST_CASE("Tests for cellCellRepulsiveForcesNewton(), perpendicular cells", "[cellCellRepulsiveForcesNewton()]") 
+{
+    const T R = 0.8;
+    const T Rcell = 0.5; 
+    const T E0 = 1.0;
+    const T Ecell = 100.0;
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (1.5, 0), n2 = (0, 1), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (1, 0)
+    // 
+    // Since the cells are aligned, there should be zero torque
+    Array<T, 2, 1> r1, n1, r2, n2; 
+    r1 << 0, 0; 
+    n1 << 1, 0;
+    r2 << 1.5, 0;
+    n2 << 0, 1;
+    testCellCellRepulsiveForcesNewton(r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (1.5, 0.2), n2 = (0, 1), l2 = 1
+    //
+    // The shortest distance between the two cells is, again, the vector
+    // (1, 0), but cell 1 should experience zero torque while cell 2 experiences
+    // a nonzero torque 
+    r2(1) = 0.2;  
+    testCellCellRepulsiveForcesNewton(r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell);
 }
 
