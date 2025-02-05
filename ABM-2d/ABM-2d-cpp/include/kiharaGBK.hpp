@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/3/2025
+ *     2/5/2025
  */
 
 #ifndef KIHARA_GBK_POTENTIAL_FORCES_HPP
@@ -97,7 +97,7 @@ T potentialHertz(const T dist, const T R, const T Rcell, const T E0, const T Ece
  * @param dist Shortest distance from cell 1 to cell 2.
  * @param R Cell radius, including the EPS.
  * @param exp Exponent in Kihara potential.
- * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @param dmin Minimum distance at which the potential is nonzero.
  * @returns Shifted Kihara potential at the given cell-cell distance. 
  */
 template <typename T>
@@ -232,7 +232,7 @@ T anisotropyParamGBK2(const Ref<const Matrix<T, Dim, 1> >& r1,
  * @param expd Exponent determining the distance dependence in the
  *             Gay-Berne-Kihara potential.
  * @param exp1 Exponent of first anisotropy parameter.
- * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @param dmin Minimum distance at which the potential is nonzero.
  * @returns Shifted Gay-Berne-Kihara potential for the given cell-cell 
  *          configuration. 
  */
@@ -266,7 +266,7 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
     else
     {
         T denom = pow(2 * R, expd); 
-        T term1 = -1.0 / pow(dmin, expd); 
+        T term1 = -1.0 / pow(dist, expd); 
         T term2 = -expd * dist / (denom * 2 * R); 
         T term3 = (expd + 1) / denom;
         return eps1 * (term1 + term2 + term3); 
@@ -293,7 +293,7 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
  *          achieved. 
  * @param exp Exponent in Kihara potential.
- * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @param dmin Minimum distance at which the potential is nonzero.
  * @param include_constraint If true, enforce the orientation vector norm 
  *                           constraint on the generalized torques. 
  * @returns Matrix of generalized forces arising from the Kihara potential. 
@@ -381,7 +381,8 @@ std::pair<T, Matrix<T, 2, 2 * Dim> > anisotropyParamWithDerivsGBK1(const Ref<con
     Matrix<T, 2, 2 * Dim> derivs = Matrix<T, 2, 2 * Dim>::Zero();
 
     // Compute the prefactor for each partial derivative 
-    T prefactor = exp * pow(eps, exp - 1) * chi2 * pow(arg, -1.5) * n1_dot_n2; 
+    //T prefactor = exp * pow(eps, exp - 1) * chi2 * pow(arg, -1.5) * n1_dot_n2;
+    T prefactor = exp * eps * chi2 * pow(arg, -1) * n1_dot_n2; 
 
     // The partial derivatives w.r.t the cell center coordinates are
     // uniformly zero 
@@ -529,7 +530,7 @@ std::pair<T, Matrix<T, 2, 2 * Dim> > anisotropyParamWithDerivsGBK2(const Ref<con
  * @param expd Exponent determining the distance dependence in the
  *             Gay-Berne-Kihara potential.
  * @param exp1 Exponent of first anisotropy parameter.
- * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @param dmin Minimum distance at which the potential is nonzero.
  * @param include_constraint If true, enforce the orientation vector norm 
  *                           constraint on the generalized torques. 
  * @returns Matrix of generalized forces arising from the Kihara potential. 
@@ -575,14 +576,22 @@ Array<T, 2, 2 * Dim> forcesGBKLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
         T term1 = eps1 * expd * ((1.0 / denom3) - (1.0 / denom4));
         T term2 = expd * dist * ((1.0 / denom3) - (1.0 / denom4));
         T term3 = (expd + 1) * ((1.0 / denom2) - (1.0 / denom1));
-        Matrix<T, 2, 1> v = term1 * d12n;
-        Matrix<T, 2, 1> w1 = -(term2 + term3) * deps1(0, Eigen::seq(Dim, 2 * Dim - 1));
-        Matrix<T, 2, 1> w2 = -(term2 + term3) * deps1(1, Eigen::seq(Dim, 2 * Dim - 1)); 
+        Matrix<T, Dim, 1> v = term1 * d12n;
+        Matrix<T, Dim, 1> w1 = -(term2 + term3) * deps1(0, Eigen::seq(Dim, 2 * Dim - 1));
+        Matrix<T, Dim, 1> w2 = -(term2 + term3) * deps1(1, Eigen::seq(Dim, 2 * Dim - 1)); 
         dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
         dEdq(1, Eigen::seq(0, Dim - 1)) = v;
-        // TODO Add constraint  
         dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -(w1 + s * v);
-        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -(w2 - t * v); 
+        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -(w2 - t * v);
+
+        // Enforce the orientation vector norm constraint if desired 
+        if (include_constraint) 
+        {
+            T lambda1 = n1.matrix().dot(dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)).matrix());
+            T lambda2 = n2.matrix().dot(dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)).matrix()); 
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) -= lambda1 * n1; 
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) -= lambda2 * n2;  
+        }            
     }
     // Otherwise, if the distance is less than 2 * R ...  
     else if (dist <= 2 * R)
@@ -593,14 +602,22 @@ Array<T, 2, 2 * Dim> forcesGBKLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
         T denom4 = denom2 * 2 * R;
         T term1 = eps1 * expd * ((1.0 / denom3) - (1.0 / denom4));
         T term2 = -(1.0 / denom1) - (expd * dist / denom4) + ((expd + 1) / denom2);
-        Matrix<T, 2, 1> v = term1 * d12n; 
-        Matrix<T, 2, 1> w1 = -term2 * deps1(0, Eigen::seq(Dim, 2 * Dim - 1)); 
-        Matrix<T, 2, 1> w2 = -term2 * deps1(1, Eigen::seq(Dim, 2 * Dim - 1)); 
+        Matrix<T, Dim, 1> v = term1 * d12n;
+        Matrix<T, Dim, 1> w1 = -term2 * deps1(0, Eigen::seq(Dim, 2 * Dim - 1)); 
+        Matrix<T, Dim, 1> w2 = -term2 * deps1(1, Eigen::seq(Dim, 2 * Dim - 1)); 
         dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
         dEdq(1, Eigen::seq(0, Dim - 1)) = v;
-        // TODO Add constraint  
         dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -(w1 + s * v); 
-        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -(w2 - t * v); 
+        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -(w2 - t * v);
+        
+        // Enforce the orientation vector norm constraint if desired 
+        if (include_constraint) 
+        {
+            T lambda1 = n1.matrix().dot(dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)).matrix());
+            T lambda2 = n2.matrix().dot(dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)).matrix()); 
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) -= lambda1 * n1; 
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) -= lambda2 * n2;  
+        }            
     }
 
     return dEdq.array(); 
@@ -622,13 +639,12 @@ Array<T, 2, 2 * Dim> forcesGBKLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
  *          achieved. 
  * @param exp Exponent in Kihara potential.
- * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @param dmin Minimum distance at which the potential is nonzero.
  * @returns Force on cell 1 due to cell 2 arising from the Kihara potential. 
  */
 template <typename T, int Dim>
 Array<T, Dim, 1> forceKiharaNewton(const Ref<const Matrix<T, Dim, 1> >& d12,
-                                   const T R, const T s, const T t, const T exp,
-                                   const T dmin)
+                                   const T R, const T exp, const T dmin)
 {
     Matrix<T, Dim, 1> force = Matrix<T, Dim, 1>::Zero();
     const T dist = d12.norm(); 
@@ -673,7 +689,7 @@ Array<T, Dim, 1> forceKiharaNewton(const Ref<const Matrix<T, Dim, 1> >& d12,
  * @param expd Exponent determining the distance dependence in the
  *             Gay-Berne-Kihara potential.
  * @param exp1 Exponent of first anisotropy parameter.
- * @param dmin Minimum distance at which the Kihara potential is nonzero.
+ * @param dmin Minimum distance at which the potential is nonzero.
  * @returns Matrix of generalized forces arising from the Kihara potential. 
  */
 template <typename T, int Dim>
