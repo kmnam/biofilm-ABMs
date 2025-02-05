@@ -745,21 +745,21 @@ void testForcesGBKLagrange(const Ref<const Array<T, 2, 1> >& r1,
     //    constraint
     T eps = anisotropyParamGBK1<T, 2>(n1, half_l1, n2, half_l2, Rcell, 1.0); 
     Array<T, 2, 4> deps = anisotropyParamGBK1FiniteDiff(
-	n1, half_l1, n2, half_l2, Rcell, 1.0, delta
+        n1, half_l1, n2, half_l2, Rcell, 1.0, delta
     );
     T Ek = potentialKihara<T>(dist, R, expd, dmin);
     Array<T, 2, 4> dEkdq = forcesKiharaLagrange<T, 2>(
-	n1.matrix(), n2.matrix(), d12, R, s, t, expd, dmin, false
+        n1.matrix(), n2.matrix(), d12, R, s, t, expd, dmin, false
     ); 
     Array<T, 2, 1> dEdn1 = deps(0, Eigen::seq(2, 3)) * Ek + eps * dEkdq(0, Eigen::seq(2, 3));
     REQUIRE_THAT(
-	(forces1_unconstrained(0, Eigen::seq(2, 3)) + dEdn1.transpose()).abs().maxCoeff(), 
-	Catch::Matchers::WithinAbs(0.0, delta)
+        (forces1_unconstrained(0, Eigen::seq(2, 3)) + dEdn1.transpose()).abs().maxCoeff(), 
+        Catch::Matchers::WithinAbs(0.0, delta)
     );
     Array<T, 2, 1> dEdn1_constrained = dEdn1 - 2 * lambda1 * n1; 
     REQUIRE_THAT(
-	(forces1_constrained(0, Eigen::seq(2, 3)) + dEdn1_constrained.transpose()).abs().maxCoeff(), 
-	Catch::Matchers::WithinAbs(0.0, delta)
+        (forces1_constrained(0, Eigen::seq(2, 3)) + dEdn1_constrained.transpose()).abs().maxCoeff(), 
+        Catch::Matchers::WithinAbs(0.0, delta)
     ); 
 
     // Check that the two force vectors are equal and opposite
@@ -842,24 +842,24 @@ void testForceGBKNewton(const Ref<const Array<T, 2, 1> >& r1,
     // Compute the forces via forcesGBKLagrange()
     Array<T, 2, 4> forces1 = -forcesGBKLagrange<T, 2>(
         r1.matrix(), n1.matrix(), half_l1, r2.matrix(), n2.matrix(), half_l2, 
-	R, Rcell, d12, s, t, expd, 1.0, dmin, true
+        R, Rcell, d12, s, t, expd, 1.0, dmin, true
     );
 
     // Compute the force vector on cell 1 due to cell 2 via forceGBKNewton() 
     Array<T, 2, 1> force_21 = forceGBKNewton<T, 2>(
-	n1.matrix(), half_l1, n2.matrix(), half_l2, R, Rcell, d12, expd, 1.0,
-	dmin
+        n1.matrix(), half_l1, n2.matrix(), half_l2, R, Rcell, d12, expd, 1.0,
+        dmin
     );
 
     // Compute the torque vector on cell 1 due to cell 2 and vice versa via
     // torqueGBKNewton()
     Array<T, 3, 1> torque_21 = torqueGBKNewton<T, 2>(
-	n1.matrix(), half_l1, n2.matrix(), half_l2, R, Rcell, d12, s, t, expd,
-	1.0, dmin
+        n1.matrix(), half_l1, n2.matrix(), half_l2, R, Rcell, d12, s, t, expd,
+        1.0, dmin
     ); 
     Array<T, 3, 1> torque_12 = torqueGBKNewton<T, 2>(
-	n2.matrix(), half_l2, n1.matrix(), half_l1, R, Rcell, -d12, t, s, expd,
-	1.0, dmin
+        n2.matrix(), half_l2, n1.matrix(), half_l1, R, Rcell, -d12, t, s, expd,
+        1.0, dmin
     ); 
 
     // Compute the force vector on cell 2 due to cell 1
