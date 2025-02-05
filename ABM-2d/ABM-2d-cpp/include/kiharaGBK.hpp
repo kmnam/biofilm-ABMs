@@ -721,7 +721,8 @@ Array<T, Dim, 1> forceGBKNewton(const Ref<const Matrix<T, Dim, 1> >& n1,
  *
  * The second anisotropy parameter exponent is assumed to be zero.
  *
- * Note that this function calculates the torque on cell 1 due to cell 2.
+ * Note that this function calculates the torque on cell 1 due to cell 2 
+ * according to the prescription given by Allen and Tildesley (Appendix C).
  *
  * If Dim == 2, then this vector should be nonzero only in the z-coordinate; 
  * if Dim == 3, then this vector can be nonzero in all three coordinates. 
