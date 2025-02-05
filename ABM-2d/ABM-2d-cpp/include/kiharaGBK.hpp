@@ -583,15 +583,6 @@ Array<T, 2, 2 * Dim> forcesGBKLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
         dEdq(1, Eigen::seq(0, Dim - 1)) = v;
         dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -(w1 + s * v);
         dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -(w2 - t * v);
-
-        // Enforce the orientation vector norm constraint if desired 
-        if (include_constraint) 
-        {
-            T lambda1 = n1.matrix().dot(dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)).matrix());
-            T lambda2 = n2.matrix().dot(dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)).matrix()); 
-            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) -= lambda1 * n1; 
-            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) -= lambda2 * n2;  
-        }            
     }
     // Otherwise, if the distance is less than 2 * R ...  
     else if (dist <= 2 * R)
@@ -609,16 +600,16 @@ Array<T, 2, 2 * Dim> forcesGBKLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
         dEdq(1, Eigen::seq(0, Dim - 1)) = v;
         dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -(w1 + s * v); 
         dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = -(w2 - t * v);
-        
-        // Enforce the orientation vector norm constraint if desired 
-        if (include_constraint) 
-        {
-            T lambda1 = n1.matrix().dot(dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)).matrix());
-            T lambda2 = n2.matrix().dot(dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)).matrix()); 
-            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) -= lambda1 * n1; 
-            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) -= lambda2 * n2;  
-        }            
     }
+
+    // Enforce the orientation vector norm constraint if desired 
+    if (include_constraint) 
+    {
+        T lambda1 = n1.dot(dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)));
+        T lambda2 = n2.dot(dEdq(1, Eigen::seq(Dim, 2 * Dim - 1))); 
+        dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) -= lambda1 * n1; 
+        dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) -= lambda2 * n2;  
+    }            
 
     return dEdq.array(); 
 }
@@ -665,43 +656,35 @@ Array<T, Dim, 1> forceKiharaNewton(const Ref<const Matrix<T, Dim, 1> >& d12,
 }
 
 /**
- * Compute the Newtonian forces between two neighboring cells that arise
- * from the shifted Gay-Berne-Kihara potential in arbitrary dimensions (2
- * or 3).
+ * Compute the Newtonian force on one cell due to another neighboring cell,
+ * arising from the shifted Gay-Berne-Kihara potential in arbitrary dimensions
+ * (2 or 3).
  *
  * The second anisotropy parameter exponent is assumed to be zero.
  *
  * Note that this function calculates the force on cell 1 due to cell 2. 
  *
- * @param r1 Center of cell 1.
  * @param n1 Orientation of cell 1.
  * @param half_l1 Half of length of cell 1.
- * @param r2 Center of cell 2.
  * @param n2 Orientation of cell 2.
  * @param half_l2 Half of length of cell 2. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS. 
  * @param d12 Shortest distance vector from cell 1 to cell 2.
- * @param s Cell-body coordinate along cell 1 at which shortest distance is 
- *          achieved. 
- * @param t Cell-body coordinate along cell 2 at which shortest distance is
- *          achieved. 
  * @param expd Exponent determining the distance dependence in the
  *             Gay-Berne-Kihara potential.
  * @param exp1 Exponent of first anisotropy parameter.
  * @param dmin Minimum distance at which the potential is nonzero.
- * @returns Matrix of generalized forces arising from the Kihara potential. 
+ * @returns Force on cell 1 due to cell 2 arising from the Gay-Berne-Kihara
+ *          potential. 
  */
 template <typename T, int Dim>
-Array<T, Dim, 1> forceGBKNewton(const Ref<const Matrix<T, Dim, 1> >& r1,
-                                const Ref<const Matrix<T, Dim, 1> >& n1, 
+Array<T, Dim, 1> forceGBKNewton(const Ref<const Matrix<T, Dim, 1> >& n1, 
                                 const T half_l1,
-                                const Ref<const Matrix<T, Dim, 1> >& r2, 
                                 const Ref<const Matrix<T, Dim, 1> >& n2,
                                 const T half_l2, const T R, const T Rcell,
                                 const Ref<const Matrix<T, Dim, 1> >& d12, 
-                                const T s, const T t, const T expd, const T exp1,
-                                const T dmin)
+                                const T expd, const T exp1, const T dmin)
 {
     // If the distance is greater than 2 * R, return zero
     const T dist = d12.norm(); 
@@ -729,6 +712,105 @@ Array<T, Dim, 1> forceGBKNewton(const Ref<const Matrix<T, Dim, 1> >& r1,
     }
 
     return force;
+}
+
+/**
+ * Compute the Newtonian torque on one cell due to another neighboring cell,
+ * arising from the shifted Gay-Berne-Kihara potential in arbitrary dimensions
+ * (2 or 3).
+ *
+ * The second anisotropy parameter exponent is assumed to be zero.
+ *
+ * Note that this function calculates the torque on cell 1 due to cell 2.
+ *
+ * If Dim == 2, then this vector should be nonzero only in the z-coordinate; 
+ * if Dim == 3, then this vector can be nonzero in all three coordinates. 
+ *
+ * @param n1 Orientation of cell 1.
+ * @param half_l1 Half of length of cell 1.
+ * @param n2 Orientation of cell 2.
+ * @param half_l2 Half of length of cell 2. 
+ * @param R Cell radius, including the EPS.
+ * @param Rcell Cell radius, excluding the EPS. 
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved. 
+ * @param expd Exponent determining the distance dependence in the
+ *             Gay-Berne-Kihara potential.
+ * @param exp1 Exponent of first anisotropy parameter.
+ * @param dmin Minimum distance at which the potential is nonzero.
+ * @returns Force on cell 1 due to cell 2 arising from the Gay-Berne-Kihara
+ *          potential. 
+ */
+template <typename T, int Dim>
+Array<T, 3, 1> torqueGBKNewton(const Ref<const Matrix<T, Dim, 1> >& n1,
+                               const T half_l1,
+                               const Ref<const Matrix<T, Dim, 1> >& n2,
+                               const T half_l2, const T R, const T Rcell,
+                               const Ref<const Matrix<T, Dim, 1> >& d12, 
+                               const T s, const T t, const T expd, const T exp1,
+                               const T dmin)
+{
+    // If the distance is greater than 2 * R, return zero
+    const T dist = d12.norm(); 
+    if (dist > 2 * R)
+        return Array<T, 3, 1>::Zero(); 
+
+    // Get the first anisotropy parameter and its partial derivatives (second
+    // anisotropy parameter is fixed to 1)
+    auto result1 = anisotropyParamWithDerivsGBK1<T, Dim>(
+        n1, half_l1, n2, half_l2, Rcell, exp1
+    );
+    T eps1 = result1.first; 
+    Matrix<T, 2, 2 * Dim> deps1 = result1.second; 
+
+    // Normalize the distance vector 
+    Matrix<T, Dim, 1> d12n = d12 / dist;
+
+    // If the distance is less than dmin ...
+    Matrix<T, Dim, 1> torque; 
+    if (dist <= dmin)
+    {
+        T denom1 = pow(dmin, expd); 
+        T denom2 = pow(2 * R, expd);
+        T denom3 = denom1 * dmin; 
+        T denom4 = denom2 * 2 * R; 
+        T term1 = eps1 * expd * ((1.0 / denom3) - (1.0 / denom4));
+        T term2 = expd * dist * ((1.0 / denom3) - (1.0 / denom4));
+        T term3 = (expd + 1) * ((1.0 / denom2) - (1.0 / denom1));
+        Matrix<T, Dim, 1> v = term1 * d12n;
+        Matrix<T, Dim, 1> w1 = -(term2 + term3) * deps1(0, Eigen::seq(Dim, 2 * Dim - 1));
+        torque = w1 + s * v;
+    }
+    // Otherwise, if the distance is less than 2 * R ...  
+    else if (dist <= 2 * R)
+    {
+        T denom1 = pow(dist, expd); 
+        T denom2 = pow(2 * R, expd);
+        T denom3 = denom1 * dist; 
+        T denom4 = denom2 * 2 * R;
+        T term1 = eps1 * expd * ((1.0 / denom3) - (1.0 / denom4));
+        T term2 = -(1.0 / denom1) - (expd * dist / denom4) + ((expd + 1) / denom2);
+        Matrix<T, Dim, 1> v = term1 * d12n;
+        Matrix<T, Dim, 1> w1 = -term2 * deps1(0, Eigen::seq(Dim, 2 * Dim - 1)); 
+        torque = w1 + s * v; 
+    }
+
+    // Enforce the orientation vector norm constraint
+    T lambda1 = n1.dot(-torque);
+    torque += lambda1 * n1;
+
+    // Take the cross product with the orientation vector 
+    Matrix<T, 3, 1> u = Matrix<T, 3, 1>::Zero();
+    Matrix<T, 3, 1> v = Matrix<T, 3, 1>::Zero();
+    for (int i = 0; i < Dim; ++i)
+    {
+        u(i) = n1(i); 
+        v(i) = torque(i);
+    }
+    return u.cross(v).array(); 
 }
 
 #endif 
