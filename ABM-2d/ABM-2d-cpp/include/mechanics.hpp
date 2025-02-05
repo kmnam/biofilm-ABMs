@@ -1101,8 +1101,8 @@ Array<T, Dynamic, 3> cellCellAdhesiveForcesNewton(const Ref<const Array<T, Dynam
                 Matrix<T, 3, 1> ui, uj; 
                 ui << ni(0), ni(1), 0; 
                 uj << nj(0), nj(1), 0; 
-                torque_ji = (s * ui).cross(force_ji.matrix()).array(); 
-                torque_ij = (t * uj).cross(-force_ji.matrix()).array();
+                torque_ji = (si * ui).cross(force_ji.matrix()).array(); 
+                torque_ij = (sj * uj).cross(-force_ji.matrix()).array();
             }
             else if (mode == AdhesionMode::GBK)
             {
