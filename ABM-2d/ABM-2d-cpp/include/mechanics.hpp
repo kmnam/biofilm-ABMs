@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/4/2025
+ *     2/5/2025
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -613,6 +613,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                 const T strength = params["strength"];
                 const T expd = params["distance_exp"]; 
                 const T dmin = params["mindist"];
+                // Enforce orientation vector norm constraint 
                 forces = strength * forcesKiharaLagrange<T, 2>(
                     ni, nj, dij, R, si, sj, expd, dmin, true
                 );
@@ -623,6 +624,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                 const T exp1 = params["anisotropy_exp1"];
                 const T expd = params["distance_exp"]; 
                 const T dmin = params["mindist"];
+                // Enforce orientation vector norm constraint 
                 forces = strength * forcesGBKLagrange<T, 2>(
                     ri, ni, half_li, rj, nj, half_lj, R, Rcell, dij, si, sj,
                     expd, exp1, dmin, true
@@ -1063,7 +1065,8 @@ Array<T, Dynamic, 3> cellCellAdhesiveForcesNewton(const Ref<const Array<T, Dynam
     Array<T, Dynamic, 1> overlaps = 2 * R - magnitudes;  
 
     // For each pair of neighboring cells ...
-    Array<T, Dynamic, 2> forces(0, 2); 
+    Array<T, Dynamic, 2> forces(0, 2);
+    Array<T, Dynamic, 3> torques(0, 3);  
     Array<T, Dynamic, 2> points(0, 2); 
     Array<int, Dynamic, 2> idx(0, 2);
     int nforces = 0; 
@@ -1086,14 +1089,20 @@ Array<T, Dynamic, 3> cellCellAdhesiveForcesNewton(const Ref<const Array<T, Dynam
             T si = neighbors(k, 4); 
             T sj = neighbors(k, 5); 
 
-            // Get the corresponding force on cell i due to cell j 
-            Array<T, 2, 1> force_ji; 
+            // Get the forces and torques on each cell due to the other 
+            Array<T, 2, 1> force_ji;
+            Array<T, 3, 1> torque_ji, torque_ij; 
             if (mode == AdhesionMode::KIHARA) 
             {
                 const T strength = params["strength"];
                 const T expd = params["distance_exp"]; 
                 const T dmin = params["mindist"];
                 force_ji = strength * forceKiharaNewton<T, 2>(dij, R, si, sj, expd, dmin);
+                Matrix<T, 3, 1> ui, uj; 
+                ui << ni(0), ni(1), 0; 
+                uj << nj(0), nj(1), 0; 
+                torque_ji = (s * ui).cross(force_ji.matrix()).array(); 
+                torque_ij = (t * uj).cross(-force_ji.matrix()).array();
             }
             else if (mode == AdhesionMode::GBK)
             {
@@ -1102,29 +1111,28 @@ Array<T, Dynamic, 3> cellCellAdhesiveForcesNewton(const Ref<const Array<T, Dynam
                 const T expd = params["distance_exp"]; 
                 const T dmin = params["mindist"];
                 force_ji = strength * forceGBKNewton<T, 2>(
-                    ri, ni, half_li, rj, nj, half_lj, R, Rcell, dij, si, sj,
-                    expd, exp1, dmin
-                ); 
+                    ni, half_li, nj, half_lj, R, Rcell, dij, expd, exp1, dmin
+                );
+                torque_ji = strength * torqueGBKNewton<T, 2>(
+                    ni, half_li, nj, half_lj, R, Rcell, dij, si, sj, expd, exp1, dmin
+                );
+                torque_ij = strength * torqueGBKNewton<T, 2>(
+                    nj, half_lj, ni, half_li, R, Rcell, -dij, sj, si, expd, exp1, dmin
+                );                    
             }
-
-            // Compute the forces exerted on cell i by cell j and vice versa 
             nforces += 2; 
-            forces.conservativeResize(nforces, 2); 
+            forces.conservativeResize(nforces, 2);
+            torques.conservativeResize(nforces, 3); 
             points.conservativeResize(nforces, 2); 
             idx.conservativeResize(nforces, 2); 
             forces.row(nforces - 2) = -force_ji;
             forces.row(nforces - 1) = force_ji;
+            torques.row(nforces - 2) = torque_ij; 
+            torques.row(nforces - 1) = torque_ji; 
             idx(nforces - 2, 0) = i; 
             idx(nforces - 2, 1) = j; 
             idx(nforces - 1, 0) = j; 
             idx(nforces - 1, 1) = i;
-
-            // Compute the contact point between cell i and cell j
-            //
-            // TODO Is this correct? Should this be the centerline point? 
-            Array<T, 2, 1> contact = ri.array() + si * ni.array() + 0.5 * dij.array(); 
-            points.row(nforces - 2) = contact;
-            points.row(nforces - 1) = contact;
 
             #ifdef DEBUG_CHECK_ADHESIVE_FORCES_NAN
                 if (force_ji.isNaN().any() || force_ji.isInf().any())
@@ -1149,15 +1157,12 @@ Array<T, Dynamic, 3> cellCellAdhesiveForcesNewton(const Ref<const Array<T, Dynam
         }
     }
     
-    // Get corresponding torques 
-    Array<T, Dynamic, 1> torques = getTorques<T>(cells, forces, idx, points);
-
     // Sum all forces and torques exerted on each cell 
     Array<T, Dynamic, 3> forces_total = Array<T, Dynamic, 3>::Zero(n, 3); 
     for (int i = 0; i < nforces; ++i)
     {
         forces_total(idx(i, 1), Eigen::seq(0, 1)) += forces.row(i); 
-        forces_total(idx(i, 1), 2) += torques(i); 
+        forces_total(idx(i, 1), 2) += torques(i, 2); 
     }
 
     return forces_total;
