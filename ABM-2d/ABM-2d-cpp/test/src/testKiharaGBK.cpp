@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/5/2025
+ *     2/11/2025
  */
 #include <cmath>
 #include <Eigen/Dense>
@@ -890,6 +890,152 @@ void testForceGBKNewton(const Ref<const Array<T, 2, 1> >& r1,
 }
 
 /* ------------------------------------------------------------------ //
+ *      TEST MODULES FOR PERPENDICULAR CELL-CELL CONFIGURATIONS       //
+ * ------------------------------------------------------------------ */
+/**
+ * A series of tests for Kihara potential/force parameter calibration. 
+ */
+TEST_CASE(
+    "Tests for Kihara potential/force parameter calibration",
+    "[potentialKihara(), forceKiharaNewton()]"
+)
+{
+    const T R = 0.8;
+    const T Rcell = 0.5; 
+    const T E0 = 3900.0;
+    const T Ecell = 100.0 * E0; 
+    const T dmin = 1.05;
+    Array<T, 2, 1> dnorm; 
+    dnorm << 1, 0; 
+
+    // Define an array of distances 
+    const int n = 1000; 
+    Array<T, Dynamic, 1> dists = Array<T, Dynamic, 1>::LinSpaced(n, dmin - 0.05, 2 * R + 0.05);
+    std::vector<T> exps { 2.0, 3.0, 4.0, 5.0, 6.0 };
+    std::vector<T> coefs { 43000.0, 29000.0, 24000.0, 21000.0, 20000.0 }; 
+
+    // Define output arrays for potentials and forces 
+    Array<T, Dynamic, 5> potentials(n, 5), forces(n, 5);
+
+    // For each distance and exponent ...
+    for (int j = 0; j < exps.size(); ++j)
+    {
+        for (int i = 0; i < n; ++i)
+        {        
+            // Calculate the corresponding hybrid potential and force
+            Matrix<T, 2, 1> d12; 
+            d12 << dists(i), 0; 
+            potentials(i, j) = (
+                potentialHertz<T>(dists(i), R, Rcell, E0, Ecell) +
+                coefs[j] * potentialKihara<T>(dists(i), R, exps[j], dmin)
+            );
+            Array<T, 2, 1> force = coefs[j] * forceKiharaNewton<T, 2>(d12, R, exps[j], dmin);
+            if (dists(i) < R + Rcell)
+            {
+                force -= 2.5 * (
+                    E0 * sqrt(R) * pow(R - Rcell, 1.5) +
+                    Ecell * sqrt(R) * pow(R + Rcell - dists(i), 1.5)
+                ) * dnorm; 
+            }
+            else if (dists(i) < 2 * R)
+            {
+                force -= 2.5 * E0 * sqrt(R) * pow(2 * R - dists(i), 1.5) * dnorm; 
+            }
+            forces(i, j) = force(0);    // Get only the x-coordinate  
+        }
+
+        // Find the distance at which the potential is minimized 
+        Eigen::Index minpi;
+        potentials.col(j).minCoeff(&minpi);
+
+	// Check that the minimum distance is close to 1.2 
+	REQUIRE_THAT(dists(minpi), Catch::Matchers::WithinAbs(1.2, 0.01)); 
+
+        // Check that the force at this distance is near zero 
+        REQUIRE(forces(minpi - 1, j) < 0);
+	REQUIRE(forces(minpi + 1, j) > 0);
+    }
+}
+
+/**
+ * A series of tests for Gay-Berne-Kihara potential/force parameter calibration. 
+ */
+TEST_CASE(
+    "Tests for GBK potential/force parameter calibration",
+    "[potentialGBK(), forceKiharaGBK()]"
+)
+{
+    const T R = 0.8;
+    const T Rcell = 0.5; 
+    const T E0 = 3900.0;
+    const T Ecell = 100.0 * E0; 
+    const T dmin = 1.05;
+    Array<T, 2, 1> dnorm; 
+    dnorm << 1, 0;
+
+    // Define cell 1: r1 = (0, 0), n1 = (1, 0), l1 = 1
+    Array<T, 2, 1> r1, n1, r2, n2; 
+    r1 << 0, 0; 
+    n1 << 1, 0; 
+
+    // Define an array of distances 
+    const int n = 1000; 
+    Array<T, Dynamic, 1> dists = Array<T, Dynamic, 1>::LinSpaced(n, dmin - 0.05, 2 * R + 0.05);
+    std::vector<T> exps { 2.0, 3.0, 4.0, 5.0, 6.0 };
+    std::vector<T> coefs { 35000.0, 23000.0, 19000.0, 17000.0, 16000.0 }; 
+
+    // Define output arrays for potentials and forces 
+    Array<T, Dynamic, 5> potentials(n, 5), forces(n, 5);
+
+    // For each distance and exponent ...
+    for (int j = 0; j < exps.size(); ++j)
+    {
+        for (int i = 0; i < n; ++i)
+        {
+	    // Define cell 2: r2 = (1 + dist, 0), n2 = (1, 0), l2 = 1
+	    r2 << 1 + dists(i), 0; 
+	    n2 << 1, 0; 
+
+            // Calculate the corresponding hybrid potential and force
+            Matrix<T, 2, 1> d12; 
+            d12 << dists(i), 0; 
+            potentials(i, j) = (
+                potentialHertz<T>(dists(i), R, Rcell, E0, Ecell) +
+                coefs[j] * potentialGBK<T, 2>(
+		    r1, n1, 0.5, r2, n2, 0.5, R, Rcell, dists(i), exps[j], 1.0, dmin
+		)
+            );
+            Array<T, 2, 1> force = coefs[j] * forceGBKNewton<T, 2>(
+		n1, 0.5, n2, 0.5, R, Rcell, d12, exps[j], 1.0, dmin
+	    );
+            if (dists(i) < R + Rcell)
+            {
+                force -= 2.5 * (
+                    E0 * sqrt(R) * pow(R - Rcell, 1.5) +
+                    Ecell * sqrt(R) * pow(R + Rcell - dists(i), 1.5)
+                ) * dnorm; 
+            }
+            else if (dists(i) < 2 * R)
+            {
+                force -= 2.5 * E0 * sqrt(R) * pow(2 * R - dists(i), 1.5) * dnorm; 
+            }
+            forces(i, j) = force(0);    // Get only the x-coordinate  
+        }
+
+        // Find the distance at which the potential is minimized 
+        Eigen::Index minpi;
+        potentials.col(j).minCoeff(&minpi);
+
+	// Check that the minimum distance is close to 1.2 
+	REQUIRE_THAT(dists(minpi), Catch::Matchers::WithinAbs(1.2, 0.01)); 
+
+        // Check that the force at this distance is near zero 
+        REQUIRE(forces(minpi - 1, j) < 0);
+	REQUIRE(forces(minpi + 1, j) > 0);
+    }
+}
+
+/* ------------------------------------------------------------------ //
  *           TEST MODULES FOR SKEW CELL-CELL CONFIGURATIONS           //
  * ------------------------------------------------------------------ */
 /**
@@ -1673,4 +1819,5 @@ TEST_CASE("Tests for forceGBKNewton(), perpendicular cells", "[forceGBKNewton()]
     r2(1) = 0.2;  
     testForceGBKNewton(r1, n1, 0.5, r2, n2, 0.5, R, Rcell, expd, dmin);
 }
+
 
