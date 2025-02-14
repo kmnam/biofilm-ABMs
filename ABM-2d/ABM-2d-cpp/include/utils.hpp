@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/13/2024
+ *     2/14/2025
  */
 
 #ifndef BIOFILM_UTILS_HPP
@@ -54,6 +54,60 @@ boost::json::value parseConfigFile(const std::string filename)
         return nullptr;
     
     return p.release(); 
+}
+
+/**
+ * Read a file containing data for a population of cells, with the corresponding
+ * simulation parameters.
+ *
+ * @param filename Input file.
+ * @returns Array of cell data, together with a dictionary of simulation 
+ *          parameters.  
+ */
+template <typename T>
+std::pair<Array<T, Dynamic, Dynamic>, std::map<std::string, std::string> > readCells(const std::string filename)
+{
+    // Open input file 
+    std::ifstream infile(filename);
+    std::map<std::string, std::string> params;
+    Array<T, Dynamic, Dynamic> cells(0, __ncols_required);
+    int nrows = 0;
+    int ncols = __ncols_required;  
+
+    // For each line in the file ... 
+    std::string line;
+    while (std::getline(infile, line))
+    {
+        // Check if the line specifies a simulation parameter 
+        if (line[0] == '#')
+        {
+            std::string token = line.substr(2, line.find(" = "));   // Remove leading "# "
+            line.erase(0, line.find(" = ") + 3);
+            params[token] = line;  
+        }
+        // Otherwise, read in the cell array coordinates 
+        else 
+        {
+            std::stringstream ss; 
+            std::string token;
+            ss << line;
+            nrows++; 
+            cells.conservativeResize(nrows, ncols);
+            int j = 0;  
+            while (std::getline(ss, token, '\t'))
+            {
+                if (j >= ncols)
+                {
+                    ncols++; 
+                    cells.conservativeResize(nrows, ncols); 
+                }
+                cells(nrows - 1, j) = static_cast<T>(std::stod(token)); 
+                j++; 
+            } 
+        }
+    }
+
+    return std::make_pair(cells, params);  
 }
 
 /**
