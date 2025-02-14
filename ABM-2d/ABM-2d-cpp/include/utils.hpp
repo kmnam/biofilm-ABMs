@@ -81,8 +81,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::map<std::string, std::string> > readC
         // Check if the line specifies a simulation parameter 
         if (line[0] == '#')
         {
-            std::string token = line.substr(2, line.find(" = "));   // Remove leading "# "
+            std::string token = line.substr(2, line.find(" = ") - 2);   // Remove leading "# "
             line.erase(0, line.find(" = ") + 3);
+            std::cout << token << " : " << line << std::endl; 
             params[token] = line;  
         }
         // Otherwise, read in the cell array coordinates 
