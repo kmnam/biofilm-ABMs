@@ -125,7 +125,8 @@ Array<int, Dynamic, 3> getTriangles(const Graph& graph)
  */
 template <typename T>
 void writeGraph(const Graph& graph, std::vector<int>& components,
-                const std::string filename, const Ref<const Array<int, Dynamic, 3> >& triangles)
+                const std::string filename, const bool write_triangles, 
+                const Ref<const Array<int, Dynamic, 3> >& triangles)
 {
     // Get the component sizes 
     int num_components = *std::max_element(components.begin(), components.end()) + 1;
@@ -133,11 +134,15 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
     for (int i = 0; i < components.size(); ++i)
         component_sizes(components[i]) += 1;
 
-    // Write the vertices to the output file 
+    // Open output file and write header 
     std::ofstream outfile(filename);
     outfile << "NUM_VERTICES\t" << boost::num_vertices(graph) << std::endl; 
     outfile << "NUM_EDGES\t" << boost::num_edges(graph) << std::endl; 
-    outfile << "NUM_COMPONENTS\t" << num_components << std::endl; 
+    outfile << "NUM_COMPONENTS\t" << num_components << std::endl;
+    if (write_triangles)
+        outfile << "NUM_TRIANGLES\t" << triangles.rows() << std::endl; 
+
+    // Write the vertices to the output file 
     for (int i = 0; i < boost::num_vertices(graph); ++i)
         outfile << "VERTEX\t" << i << '\t' << components[i] << std::endl;
 
@@ -156,8 +161,8 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
     for (int i = 0; i < num_components; ++i)
         outfile << "COMPONENT\t" << i << '\t' << component_sizes(i) << std::endl;
 
-    // If any triangles were specified, write them to the output file 
-    if (triangles.rows() > 0)
+    // Write triangles to the output file, if desired 
+    if (write_triangles)
     {
         for (int i = 0; i < triangles.rows(); ++i)
         {
