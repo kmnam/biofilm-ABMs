@@ -83,7 +83,7 @@ int main(int argc, char** argv)
             }        
 
             // Output the graph 
-            writeGraph<T>(graph, components, outfilename, triangles); 
+            writeGraph<T>(graph, components, outfilename, get_triangles, triangles); 
         }
     }
 
