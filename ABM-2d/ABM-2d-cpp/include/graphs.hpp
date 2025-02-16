@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/14/2025
+ *     2/15/2025
  */
 
 #ifndef CELL_CELL_NEIGHBOR_GRAPH_HPP
@@ -22,7 +22,7 @@
 
 using namespace Eigen;
 
-typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS> Graph; 
+typedef boost::adjacency_list<boost::hash_setS, boost::vecS, boost::undirectedS> Graph; 
 
 /**
  * Define and return a graph in which each cell is a vertex, and two vertices
@@ -78,6 +78,45 @@ std::vector<int> getConnectedComponents(const Graph& graph)
 }
 
 /**
+ * Get all triangles (3-cliques) in the given graph. 
+ *
+ * Each row in the returned array is a combination of three vertices that 
+ * form a triangle. 
+ *
+ * @param graph 
+ * @returns Array of triangle-forming vertices. 
+ */
+template <typename T>
+Array<int, Dynamic, 3> getTriangles(const Graph& graph)
+{
+    const int n = boost::num_vertices(graph);
+    int nt = 0;  
+    Array<int, Dynamic, 3> triangles(nt, 3);
+    for (int i = 0; i < n; ++i)
+    {
+        for (int j = i + 1; j < n; ++j)
+        {
+            if (boost::edge(i, j, graph).second)
+            {
+                for (int k = j + 1; k < n; ++k)
+                {
+                    if (boost::edge(j, k, graph).second && boost::edge(i, k, graph).second)
+                    {
+                        nt++; 
+                        triangles.conservativeResize(nt, 3); 
+                        triangles(nt - 1, 0) = i; 
+                        triangles(nt - 1, 1) = j; 
+                        triangles(nt - 1, 2) = k; 
+                    }
+                }
+            }
+        }
+    }
+
+    return triangles; 
+}
+
+/**
  * Write the given graph and its connectivity information to file. 
  *
  * @param graph
@@ -86,7 +125,7 @@ std::vector<int> getConnectedComponents(const Graph& graph)
  */
 template <typename T>
 void writeGraph(const Graph& graph, std::vector<int>& components,
-                const std::string filename)
+                const std::string filename, const Ref<const Array<int, Dynamic, 3> >& triangles)
 {
     // Get the component sizes 
     int num_components = *std::max_element(components.begin(), components.end()) + 1;
@@ -117,8 +156,19 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
     for (int i = 0; i < num_components; ++i)
         outfile << "COMPONENT\t" << i << '\t' << component_sizes(i) << std::endl;
 
+    // If any triangles were specified, write them to the output file 
+    if (triangles.rows() > 0)
+    {
+        for (int i = 0; i < triangles.rows(); ++i)
+        {
+            outfile << "TRIANGLE\t" << triangles(i, 0) << '\t'
+                                    << triangles(i, 1) << '\t'
+                                    << triangles(i, 2) << std::endl;
+        } 
+    }
+
     // Close output file 
-    outfile.close();  
+    outfile.close();
 }
 
 #endif 
