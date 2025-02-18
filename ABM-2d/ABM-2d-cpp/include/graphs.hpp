@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/15/2025
+ *     2/18/2025
  */
 
 #ifndef CELL_CELL_NEIGHBOR_GRAPH_HPP
@@ -78,6 +78,32 @@ std::vector<int> getConnectedComponents(const Graph& graph)
 }
 
 /**
+ * Get the degrees of all vertices in the given graph. 
+ *
+ * The i-th entry in the returned array is the number of edges incident on 
+ * the vertex i. 
+ *
+ * @param graph
+ * @returns Degrees of vertices in the graph. 
+ */
+template <typename T>
+Array<int, Dynamic, 1> getDegrees(const Graph& graph)
+{
+    Array<int, Dynamic, 1> degrees = Array<int, Dynamic, 1>::Zero(boost::num_vertices(graph));
+    boost::property_map<Graph, boost::vertex_index_t>::type index = boost::get(boost::vertex_index, graph); 
+    boost::graph_traits<Graph>::edge_iterator ei, ei_end;
+    for (boost::tie(ei, ei_end) = boost::edges(graph); ei != ei_end; ++ei)
+    {
+        int i = index[boost::target(*ei, graph)]; 
+        int j = index[boost::target(*ei, graph)];
+        degrees(i) += 1; 
+        degrees(j) += 1;         
+    }
+
+    return degrees; 
+}
+
+/**
  * Get all triangles (3-cliques) in the given graph. 
  *
  * Each row in the returned array is a combination of three vertices that 
@@ -117,16 +143,74 @@ Array<int, Dynamic, 3> getTriangles(const Graph& graph)
 }
 
 /**
+ * Get all tetrahedra (4-cliques) in the given graph. 
+ *
+ * Each row in the returned array is a combination of four vertices that 
+ * form a tetrahedron.  
+ *
+ * @param graph 
+ * @returns Array of tetrahedron-forming vertices. 
+ */
+template <typename T>
+Array<int, Dynamic, 4> getTetrahedra(const Graph& graph)
+{
+    const int n = boost::num_vertices(graph);
+    int nt = 0;  
+    Array<int, Dynamic, 4> tetrahedra(nt, 4);
+    for (int i = 0; i < n; ++i)
+    {
+        for (int j = i + 1; j < n; ++j)
+        {
+            if (boost::edge(i, j, graph).second)    // Check that i-j
+            {
+                for (int k = j + 1; k < n; ++k)
+                {
+                    // Check that j-k and i-k
+                    if (boost::edge(j, k, graph).second && boost::edge(i, k, graph).second)
+                    {
+                        for (int m = k + 1; m < n; ++m)
+                        {
+                            // Check that i-m, j-m, and k-m
+                            if (boost::edge(i, m, graph).second && 
+                                boost::edge(j, m, graph).second &&
+                                boost::edge(k, m, graph).second)
+                            {
+                                nt++; 
+                                tetrahedra.conservativeResize(nt, 4); 
+                                tetrahedra(nt - 1, 0) = i; 
+                                tetrahedra(nt - 1, 1) = j; 
+                                tetrahedra(nt - 1, 2) = k;
+                                tetrahedra(nt - 1, 3) = m;
+                            }
+                        } 
+                    }
+                }
+            }
+        }
+    }
+
+    return tetrahedra; 
+}
+
+/**
  * Write the given graph and its connectivity information to file. 
  *
  * @param graph
  * @param components
+ * @param degrees
  * @param filename
+ * @param write_triangles
+ * @param triangles
+ * @param write_tetrahedra
+ * @param tetrahedra
  */
 template <typename T>
 void writeGraph(const Graph& graph, std::vector<int>& components,
+                const Ref<const Array<int, Dynamic, 1> >& degrees, 
                 const std::string filename, const bool write_triangles, 
-                const Ref<const Array<int, Dynamic, 3> >& triangles)
+                const Ref<const Array<int, Dynamic, 3> >& triangles,
+                const bool write_tetrahedra,
+                const Ref<const Array<int, Dynamic, 4> >& tetrahedra)
 {
     // Get the component sizes 
     int num_components = *std::max_element(components.begin(), components.end()) + 1;
@@ -140,7 +224,16 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
     outfile << "NUM_EDGES\t" << boost::num_edges(graph) << std::endl; 
     outfile << "NUM_COMPONENTS\t" << num_components << std::endl;
     if (write_triangles)
-        outfile << "NUM_TRIANGLES\t" << triangles.rows() << std::endl; 
+        outfile << "NUM_TRIANGLES\t" << triangles.rows() << std::endl;
+    if (write_tetrahedra)
+        outfile << "NUM_TETRAHEDRA\t" << tetrahedra.rows() << std::endl;
+
+    // Compute the degree distribution
+    Array<int, Dynamic, 1> degree_dist = Array<int, Dynamic, 1>::Zero(degrees.maxCoeff() + 1);
+    for (int i = 0; i < boost::num_vertices(graph); ++i)
+        degree_dist(degrees(i)) += 1;
+    for (int i = 0; i <= degrees.maxCoeff(); ++i) 
+        outfile << "DEGREE_DIST\t" << i << '\t' << degree_dist(i) << std::endl; 
 
     // Write the vertices to the output file 
     for (int i = 0; i < boost::num_vertices(graph); ++i)
@@ -170,6 +263,18 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
                                     << triangles(i, 1) << '\t'
                                     << triangles(i, 2) << std::endl;
         } 
+    }
+    
+    // Write tetrahedra to the output file, if desired 
+    if (write_tetrahedra)
+    {
+        for (int i = 0; i < tetrahedra.rows(); ++i)
+        {
+            outfile << "TETRAHEDRA\t" << tetrahedra(i, 0) << '\t'
+                                      << tetrahedra(i, 1) << '\t'
+                                      << tetrahedra(i, 2) << '\t'
+                                      << tetrahedra(i, 3) << std::endl; 
+        }
     }
 
     // Close output file 

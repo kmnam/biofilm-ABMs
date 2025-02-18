@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/15/2025
+ *     2/18/2025
  */
 
 #include <iostream>
@@ -67,10 +67,11 @@ int main(int argc, char** argv)
             const T R = static_cast<T>(std::stod(params["R"]));
             const T Ldiv = static_cast<T>(std::stod(params["Ldiv"])); 
 
-            // Define the cell-cell neighbor graph and get its connected
-            // components 
+            // Define the cell-cell neighbor graph and get its degree distribution
+            // and connected components 
             Graph graph = getNeighborGraph<T>(cells, R, Ldiv);
             std::vector<int> components = getConnectedComponents<T>(graph);
+            Array<int, Dynamic, 1> degrees = getDegrees<T>(graph); 
 
             // Get the triangles and/or tetrahedra in the graph, if desired
             Array<int, Dynamic, 3> triangles(0, 3);
@@ -78,12 +79,13 @@ int main(int argc, char** argv)
             if (get_triangles)
                 triangles = getTriangles<T>(graph);
             if (get_tetrahedra)
-            {
-                // TODO Implement this 
-            }        
+                tetrahedra = getTetrahedra<T>(graph); 
 
             // Output the graph 
-            writeGraph<T>(graph, components, outfilename, get_triangles, triangles); 
+            writeGraph<T>(
+                graph, components, degrees, outfilename, get_triangles, triangles,
+                get_tetrahedra, tetrahedra
+            ); 
         }
     }
 
