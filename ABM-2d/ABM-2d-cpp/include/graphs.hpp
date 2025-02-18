@@ -90,14 +90,15 @@ template <typename T>
 Array<int, Dynamic, 1> getDegrees(const Graph& graph)
 {
     Array<int, Dynamic, 1> degrees = Array<int, Dynamic, 1>::Zero(boost::num_vertices(graph));
-    boost::property_map<Graph, boost::vertex_index_t>::type index = boost::get(boost::vertex_index, graph); 
-    boost::graph_traits<Graph>::edge_iterator ei, ei_end;
-    for (boost::tie(ei, ei_end) = boost::edges(graph); ei != ei_end; ++ei)
+    std::pair<boost::graph_traits<Graph>::edge_iterator, 
+              boost::graph_traits<Graph>::edge_iterator> it; 
+    for (it = boost::edges(graph); it.first != it.second; ++it.first)
     {
-        int i = index[boost::target(*ei, graph)]; 
-        int j = index[boost::target(*ei, graph)];
+        boost::graph_traits<Graph>::edge_descriptor edge = *(it.first);
+        int i = boost::source(edge, graph); 
+        int j = boost::target(edge, graph);
         degrees(i) += 1; 
-        degrees(j) += 1;         
+        degrees(j) += 1; 
     }
 
     return degrees; 
