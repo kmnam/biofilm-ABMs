@@ -238,7 +238,7 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
 
     // Write the vertices to the output file 
     for (int i = 0; i < boost::num_vertices(graph); ++i)
-        outfile << "VERTEX\t" << i << '\t' << components[i] << std::endl;
+        outfile << "VERTEX\t" << i << '\t' << components[i] << '\t' << degrees(i) << std::endl;
 
     // Write the edges to the output file
     std::pair<boost::graph_traits<Graph>::edge_iterator, 
