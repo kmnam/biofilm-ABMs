@@ -3,7 +3,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    2/14/2025
+    2/19/2025
 """
 import sys
 import os
@@ -46,16 +46,26 @@ def read_graph(filename):
     component_sizes = []
     triangles = []
     degree_dist = {}
+    cluster_coefs = []
     with open(filename) as f:
         for line in f:
             if line.startswith('DEGREE_DIST'):
                 _, d, n = line.split()
                 degree_dist[int(d)] = int(n)
             elif line.startswith('VERTEX'):
-                _, v, c, d = line.split()
-                graph.add_node(int(v))
-                components.append(int(c))
-                degrees.append(int(d))
+                args = line.split()
+                graph.add_node(int(args[1]))
+                for arg in args[2:]:
+                    if arg.startswith('COMPONENT:'):
+                        components.append(int(arg[10:]))
+                    elif arg.startswith('DEGREE:'):
+                        degrees.append(int(arg[7:]))
+                    else:    # arg.startswith('CLUSTER:')
+                        x = float(arg[8:])
+                        if x == -1:
+                            cluster_coefs.append(0.0)
+                        else:
+                            cluster_coefs.append(x)
             elif line.startswith('EDGE'):
                 _, v, w = line.split()
                 graph.add_edge(int(v), int(w))
@@ -70,7 +80,7 @@ def read_graph(filename):
 
     return (
         graph, np.array(degrees), np.array(components), np.array(component_sizes),
-        np.array(triangles), degree_dist
+        np.array(triangles), degree_dist, np.array(cluster_coefs)
     )
 
 ##########################################################################
@@ -155,7 +165,10 @@ if __name__ == '__main__':
         cells, params = read_cells(cells_filename)
         if cells.shape[0] > 10:
             print('Plotting: {} ...'.format(cells_filename))
-            graph, degrees, components, component_sizes, triangles, degree_dist = read_graph(graph_filename)
+            (
+                graph, degrees, components, component_sizes, triangles,
+                degree_dist, cluster_coefs
+            ) = read_graph(graph_filename)
 
             # Get the fraction of cells in group 1
             n_cells.append(cells.shape[0])
@@ -170,6 +183,9 @@ if __name__ == '__main__':
             degrees_group1 = degrees[cells[:, __colidx_group] == 1]
             avg_degree_group1.append(np.mean(degrees_group1))
 
+            # Get the average local clustering coefficient of all group 1 cells
+            avg_cluster_group1.append(np.mean())
+
             # Get the number of triangles
             n_triangles.append(triangles.shape[0])
 
@@ -183,13 +199,14 @@ if __name__ == '__main__':
                 top_three[2] = 0
             fraction_max_components.append([x / n_group1 for x in top_three])
             
-            # Set up three plots 
-            fig = plt.figure(figsize=(10, 6))
-            gs = GridSpec(3, 2, figure=fig)
+            # Set up five plots 
+            fig = plt.figure(figsize=(10, 7))
+            gs = GridSpec(4, 2, figure=fig)
             ax1 = fig.add_subplot(gs[:, 0])
             ax2 = fig.add_subplot(gs[0, 1])
             ax3 = fig.add_subplot(gs[1, 1])
             ax4 = fig.add_subplot(gs[2, 1])
+            ax5 = fig.add_subplot(gs[3, 1])
 
             # Draw the cell-cell neighbor graph in the left axes 
             plot_graph_2d(cells, graph, components, component_sizes, ax1)
@@ -220,7 +237,7 @@ if __name__ == '__main__':
                     color=sns.color_palette('pastel')[7], linewidth=2, zorder=0
                 )
                 ax2.scatter(
-                    n_cells, [x[i] for x in fraction_max_components], 
+                    n_cells[:-1], [x[i] for x in fraction_max_components[:-1]], 
                     color=sns.color_palette('pastel')[7], s=10, zorder=0
                 )
             crosses = ax2.scatter(
@@ -259,7 +276,7 @@ if __name__ == '__main__':
                 linewidth=2, zorder=0
             )
             ax3.scatter(
-                n_cells, avg_degree, color=sns.color_palette('pastel')[7],
+                n_cells[:-1], avg_degree[:-1], color=sns.color_palette('pastel')[7],
                 s=10, zorder=0
             )
             ax3.scatter(
@@ -271,7 +288,7 @@ if __name__ == '__main__':
                 linewidth=2, zorder=0
             )
             ax3.scatter(
-                n_cells, avg_degree_group1, color=sns.color_palette('pastel')[7],
+                n_cells[:-1], avg_degree_group1[:-1], color=sns.color_palette('pastel')[7],
                 s=10, zorder=0
             )
             ax3.scatter(
@@ -297,24 +314,44 @@ if __name__ == '__main__':
                 fontsize='x-small',
             )
 
-            # Plot the number of triangles in each graph as a function of 
-            # the number of cells
+            # Plot the average local clustering coefficient over all group 1 
+            # cells (with the coefficient set to 0 for degree-0 or degree-1
+            # cells)
             ax4.plot(
-                n_cells, n_triangles, c=sns.color_palette('pastel')[7],
+                n_cells, avg_cluster_group1, c=sns.color_palette('pastel')[7],
                 linewidth=2, zorder=0
             )
             ax4.scatter(
-                n_cells, n_triangles, color=sns.color_palette('pastel')[7],
+                n_cells[:-1], avg_cluster_group1[:-1], color=sns.color_palette('pastel')[7],
                 s=10, zorder=0
             )
             ax4.scatter(
-                [n_cells[-1]], [n_triangles[-1]], color=sns.color_palette()[0],
+                [n_cells[-1]], [avg_cluster_group1[-1]], color=sns.color_palette()[0],
                 marker='X', s=20, zorder=1
             )
             ax4.set_xlim([10, n_total * 1.1])
             ax4.set_xscale('log')
             ax4.set_xlabel('Number of cells')
-            ax4.set_ylabel('Number of triangles')
+            ax4.set_ylabel('Average local\nclustering\ncoefficient')
+
+            # Plot the number of triangles in each graph as a function of 
+            # the number of cells
+            ax5.plot(
+                n_cells, n_triangles, c=sns.color_palette('pastel')[7],
+                linewidth=2, zorder=0
+            )
+            ax5.scatter(
+                n_cells[:-1], n_triangles[:-1], color=sns.color_palette('pastel')[7],
+                s=10, zorder=0
+            )
+            ax5.scatter(
+                [n_cells[-1]], [n_triangles[-1]], color=sns.color_palette()[0],
+                marker='X', s=20, zorder=1
+            )
+            ax5.set_xlim([10, n_total * 1.1])
+            ax5.set_xscale('log')
+            ax5.set_xlabel('Number of cells')
+            ax5.set_ylabel('Number of triangles')
 
             # Save to file 
             plot_filename = graph_filename[:-4] + '_plot.jpg'
