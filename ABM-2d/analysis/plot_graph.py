@@ -156,6 +156,7 @@ if __name__ == '__main__':
     avg_degree = []
     avg_degree_group1 = []
     n_cells = []
+    avg_cluster_group1 = []
     n_triangles = []
     timepoints = []
 
@@ -184,7 +185,7 @@ if __name__ == '__main__':
             avg_degree_group1.append(np.mean(degrees_group1))
 
             # Get the average local clustering coefficient of all group 1 cells
-            avg_cluster_group1.append(np.mean())
+            avg_cluster_group1.append(np.mean(cluster_coefs[cells[:, __colidx_group] == 1]))
 
             # Get the number of triangles
             n_triangles.append(triangles.shape[0])
@@ -248,7 +249,7 @@ if __name__ == '__main__':
             ax2.set_xlim([10, n_total * 1.1])
             ax2.set_ylim([0.0, 1.0])
             ax2.set_xscale('log')
-            ax2.set_xlabel('Number of cells')
+            #ax2.set_xlabel('Number of cells')
             ax2.set_ylabel('High-c-di-GMP fraction\nin top 3 components')
             ax2.legend(
                 handles=[
@@ -297,7 +298,7 @@ if __name__ == '__main__':
             )
             ax3.set_xlim([10, n_total * 1.1])
             ax3.set_xscale('log')
-            ax3.set_xlabel('Number of cells')
+            #ax3.set_xlabel('Number of cells')
             ax3.set_ylabel('Average degree')
             ax3.legend(
                 handles=[
@@ -331,8 +332,8 @@ if __name__ == '__main__':
             )
             ax4.set_xlim([10, n_total * 1.1])
             ax4.set_xscale('log')
-            ax4.set_xlabel('Number of cells')
-            ax4.set_ylabel('Average local\nclustering\ncoefficient')
+            #ax4.set_xlabel('Number of cells')
+            ax4.set_ylabel('Average LCC')
 
             # Plot the number of triangles in each graph as a function of 
             # the number of cells
