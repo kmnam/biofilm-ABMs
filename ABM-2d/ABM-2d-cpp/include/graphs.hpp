@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/18/2025
+ *     2/19/2025
  */
 
 #ifndef CELL_CELL_NEIGHBOR_GRAPH_HPP
@@ -102,6 +102,52 @@ Array<int, Dynamic, 1> getDegrees(const Graph& graph)
     }
 
     return degrees; 
+}
+
+/**
+ * Get the local clustering coefficients for all vertices in the given graph. 
+ *
+ * @param graph
+ * @returns Local clustering coefficients for all vertices in the graph. 
+ */
+template <typename T>
+Array<int, Dynamic, 1> getLocalClusteringCoefficients(const Graph& graph)
+{
+    Array<int, Dynamic, 1> coefs = Array<int, Dynamic, 1>::Zero(boost::num_vertices(graph));
+    std::pair<boost::graph_traits<Graph>::out_edge_iterator, 
+              boost::graph_traits<Graph>::out_edge_iterator> it;
+    for (int i = 0; i < boost::num_vertices(graph); ++i)
+    {
+        // First identify the neighbors of i
+        std::vector<int> neighbors;  
+        for (it = boost::out_edges(i, graph); it.first != it.second; ++it.first)
+        {
+            // Rigorously check which vertex is the neighbor and which is i
+            // (the former should always be the target) 
+            boost::graph_traits<Graph>::edge_descriptor edge = *(it.first);
+            int j = boost::source(edge, graph); 
+            int k = boost::source(edge, graph);
+            if (i == j) 
+                neighbors.push_back(k); 
+            else 
+                neighbors.push_back(j); 
+        }
+        int n_neighbors = neighbors.size();
+
+        // Check, for each pair of neighbors, if they are connected by a third edge
+        double n_cluster = 0.0; 
+        for (int j = 0; j < neighbors.size(); ++j)
+        {
+            for (int k = j + 1; k < neighbors.size(); ++k)
+            {
+                if (boost::edge(j, k, graph).second)
+                    n_cluster += 1; 
+            }
+        } 
+        coefs(i) = 2 * n_cluster / (n_neighbors * (n_neighbors - 1)); 
+    }
+
+    return coefs;
 }
 
 /**
