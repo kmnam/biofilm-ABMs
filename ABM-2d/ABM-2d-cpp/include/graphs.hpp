@@ -134,17 +134,26 @@ Array<int, Dynamic, 1> getLocalClusteringCoefficients(const Graph& graph)
         }
         int n_neighbors = neighbors.size();
 
-        // Check, for each pair of neighbors, if they are connected by a third edge
-        double n_cluster = 0.0; 
-        for (int j = 0; j < neighbors.size(); ++j)
+        // If degree = 0 or 1, then the local clustering coefficient is undefined
+        if (n_neighbors == 0 || n_neighbors == 1)
         {
-            for (int k = j + 1; k < neighbors.size(); ++k)
+            coefs(i) = -1;
+        }
+        // Otherwise, check, for each pair of neighbors, if they are connected
+        // by a third edge
+        else
+        {
+            double n_cluster = 0.0; 
+            for (int j = 0; j < neighbors.size(); ++j)
             {
-                if (boost::edge(j, k, graph).second)
-                    n_cluster += 1; 
-            }
-        } 
-        coefs(i) = 2 * n_cluster / (n_neighbors * (n_neighbors - 1)); 
+                for (int k = j + 1; k < neighbors.size(); ++k)
+                {
+                    if (boost::edge(neighbors[j], neighbors[k], graph).second)
+                        n_cluster += 1; 
+                }
+            } 
+            coefs(i) = 2 * n_cluster / (n_neighbors * (n_neighbors - 1));
+        }    
     }
 
     return coefs;
