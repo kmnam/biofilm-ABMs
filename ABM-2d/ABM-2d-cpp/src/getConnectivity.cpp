@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/18/2025
+ *     2/19/2025
  */
 
 #include <iostream>
@@ -23,7 +23,7 @@ int main(int argc, char** argv)
     std::string dir = argv[1];
     std::string graph_dir = std::filesystem::path(dir) / "graphs";
 
-    // Check if triangles and tetrahedra are to be identified  
+    // Check if triangles and tetrahedra are to be identified 
     bool get_triangles = false; 
     bool get_tetrahedra = false; 
     if (argc > 2)
@@ -71,7 +71,10 @@ int main(int argc, char** argv)
             // and connected components 
             Graph graph = getNeighborGraph<T>(cells, R, Ldiv);
             std::vector<int> components = getConnectedComponents<T>(graph);
-            Array<int, Dynamic, 1> degrees = getDegrees<T>(graph); 
+            Array<int, Dynamic, 1> degrees = getDegrees<T>(graph);
+
+            // Get the clustering coefficients 
+            Array<int, Dynamic, 1> cluster_coefs = getLocalClusteringCoefficients<T>(graph);  
 
             // Get the triangles and/or tetrahedra in the graph, if desired
             Array<int, Dynamic, 3> triangles(0, 3);
@@ -83,8 +86,8 @@ int main(int argc, char** argv)
 
             // Output the graph 
             writeGraph<T>(
-                graph, components, degrees, outfilename, get_triangles, triangles,
-                get_tetrahedra, tetrahedra
+                graph, components, degrees, outfilename, true, cluster_coefs,
+                get_triangles, triangles, get_tetrahedra, tetrahedra
             ); 
         }
     }

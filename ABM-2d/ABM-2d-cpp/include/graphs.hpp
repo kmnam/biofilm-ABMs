@@ -246,6 +246,8 @@ Array<int, Dynamic, 4> getTetrahedra(const Graph& graph)
  * @param components
  * @param degrees
  * @param filename
+ * @param write_cluster_coefs
+ * @param cluster_coefs 
  * @param write_triangles
  * @param triangles
  * @param write_tetrahedra
@@ -253,8 +255,10 @@ Array<int, Dynamic, 4> getTetrahedra(const Graph& graph)
  */
 template <typename T>
 void writeGraph(const Graph& graph, std::vector<int>& components,
-                const Ref<const Array<int, Dynamic, 1> >& degrees, 
-                const std::string filename, const bool write_triangles, 
+                const Ref<const Array<int, Dynamic, 1> >& degrees,
+                const std::string filename, const bool write_cluster_coefs,  
+                const Ref<const Array<int, Dynamic, 1> >& cluster_coefs,         
+                const bool write_triangles, 
                 const Ref<const Array<int, Dynamic, 3> >& triangles,
                 const bool write_tetrahedra,
                 const Ref<const Array<int, Dynamic, 4> >& tetrahedra)
@@ -284,7 +288,15 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
 
     // Write the vertices to the output file 
     for (int i = 0; i < boost::num_vertices(graph); ++i)
-        outfile << "VERTEX\t" << i << '\t' << components[i] << '\t' << degrees(i) << std::endl;
+    {
+        if (write_cluster_coefs)
+            outfile << "VERTEX\t" << i << "\tCOMPONENT:" << components[i]
+                                       << "\tDEGREE:" << degrees(i)
+                                       << "\tCLUSTER:" << cluster_coefs(i) << std::endl;
+        else 
+            outfile << "VERTEX\t" << i << "\tCOMPONENT:" << components[i]
+                                       << "\tDEGREE:" << degrees(i) << std::endl;
+    }        
 
     // Write the edges to the output file
     std::pair<boost::graph_traits<Graph>::edge_iterator, 
