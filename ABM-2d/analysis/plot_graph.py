@@ -3,7 +3,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    2/19/2025
+    2/20/2025
 """
 import sys
 import os
@@ -11,7 +11,6 @@ import glob
 import numpy as np
 import matplotlib
 matplotlib.rcParams['font.family'] = 'Arial Unicode MS'
-matplotlib.rcParams['mathtext.fontset'] = 'custom'
 matplotlib.rcParams['mathtext.rm'] = 'Arial'
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch, Rectangle
@@ -193,6 +192,8 @@ if __name__ == '__main__':
             # Get the fraction of group 1 cells that fall within each of the 
             # top three components 
             top_three = sorted(component_sizes, reverse=True)[:3]
+            while len(top_three) < 3:
+                top_three.append(0)
             if top_three[0] == n_group1:    # All group 1 cells in one component
                 top_three[1] = 0
                 top_three[2] = 0
@@ -331,6 +332,7 @@ if __name__ == '__main__':
                 marker='X', s=20, zorder=1
             )
             ax4.set_xlim([10, n_total * 1.1])
+            ax4.set_ylim([0.0, 1.0])
             ax4.set_xscale('log')
             #ax4.set_xlabel('Number of cells')
             ax4.set_ylabel('Average LCC')
