@@ -3,7 +3,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    2/20/2025
+    2/21/2025
 """
 import sys
 import os
@@ -21,10 +21,15 @@ import seaborn as sns
 import networkx as nx
 from utils import read_cells, parse_dir
 
-__colidx_rx = 1
-__colidx_ry = 2
-__colseq_r = [1, 2]
-__colidx_group = 16
+__2d_colidx_rx = 1
+__2d_colidx_ry = 2
+__2d_colseq_r = [1, 2]
+__2d_colidx_group = 16
+__3d_colidx_rx = 1
+__3d_colidx_ry = 2
+__3d_colidx_rz = 3
+__3d_colseq_r = [1, 2, 3]
+__3d_colidx_group = 20
 
 ##########################################################################
 def read_graph(filename):
@@ -89,7 +94,7 @@ def plot_graph_2d(cells, graph, components, component_sizes, ax):
     by its center in the xy-plane.  
     """
     n = cells.shape[0]
-    n_groups = int(np.max(cells[:, __colidx_group]))
+    n_groups = int(np.max(cells[:, __2d_colidx_group]))
     color_main = sns.color_palette()[0]
     colors_misc = [
         sns.color_palette('pastel')[0],
@@ -102,21 +107,68 @@ def plot_graph_2d(cells, graph, components, component_sizes, ax):
     component_main = np.argmax(component_sizes)
     idx_main = np.where(components == component_main)[0]
     idx_misc = np.where(components != component_main)[0]
-    coords_main = cells[np.ix_(idx_main, __colseq_r)]
+    coords_main = cells[np.ix_(idx_main, __2d_colseq_r)]
     ax.scatter(coords_main[:, 0], coords_main[:, 1], marker='.', s=10, color=color_main)
 
     # Then plot the remaining cells
     cells_misc = cells[idx_misc, :]
     for i in range(n_groups):
-        idx = np.where(cells_misc[:, __colidx_group] == i + 1)[0]
-        coords = cells_misc[np.ix_(idx, __colseq_r)]
+        idx = np.where(cells_misc[:, __2d_colidx_group] == i + 1)[0]
+        coords = cells_misc[np.ix_(idx, __2d_colseq_r)]
         ax.scatter(coords[:, 0], coords[:, 1], marker='.', s=10, color=colors_misc[i])
 
     # Plot the edges 
     for i, j in graph.edges:
         ax.plot(
-            [cells[i, __colidx_rx], cells[j, __colidx_rx]],
-            [cells[i, __colidx_ry], cells[j, __colidx_ry]],
+            [cells[i, __2d_colidx_rx], cells[j, __2d_colidx_rx]],
+            [cells[i, __2d_colidx_ry], cells[j, __2d_colidx_ry]],
+            c=(color_main if i in idx_main else colors_misc[0])
+        )
+
+    return ax
+
+##########################################################################
+def plot_graph_3d(cells, graph, components, component_sizes, ax):
+    """
+    Plot the given cell-cell neighbor graph, with each vertex represented 
+    by its center in three dimensions. 
+    """
+    n = cells.shape[0]
+    n_groups = int(np.max(cells[:, __3d_colidx_group]))
+    color_main = sns.color_palette()[0]
+    colors_misc = [
+        sns.color_palette('pastel')[0],
+        sns.color_palette()[3]
+    ]
+
+    # Plot the vertices, color-coded by group
+    #
+    # First plot the group 1 vertices in the main component
+    component_main = np.argmax(component_sizes)
+    idx_main = np.where(components == component_main)[0]
+    idx_misc = np.where(components != component_main)[0]
+    coords_main = cells[np.ix_(idx_main, __3d_colseq_r)]
+    ax.scatter(
+        coords_main[:, 0], coords_main[:, 1], coords_main[:, 2], marker='.',
+        s=10, color=color_main
+    )
+
+    # Then plot the remaining cells
+    cells_misc = cells[idx_misc, :]
+    for i in range(n_groups):
+        idx = np.where(cells_misc[:, __3d_colidx_group] == i + 1)[0]
+        coords = cells_misc[np.ix_(idx, __3d_colseq_r)]
+        ax.scatter(
+            coords[:, 0], coords[:, 1], coords[:, 2], marker='.', s=10,
+            color=colors_misc[i]
+        )
+
+    # Plot the edges 
+    for i, j in graph.edges:
+        ax.plot(
+            [cells[i, __3d_colidx_rx], cells[j, __3d_colidx_rx]],
+            [cells[i, __3d_colidx_ry], cells[j, __3d_colidx_ry]],
+            [cells[i, __3d_colidx_rz], cells[j, __3d_colidx_rz]],
             c=(color_main if i in idx_main else colors_misc[0])
         )
 
@@ -124,6 +176,7 @@ def plot_graph_2d(cells, graph, components, component_sizes, ax):
 
 ##########################################################################
 if __name__ == '__main__':
+    # TODO Add an interactive feature for 3D? 
     cells_filenames = parse_dir(os.path.join(sys.argv[1], '*'))
     graph_filenames = [
         os.path.join(
@@ -134,13 +187,27 @@ if __name__ == '__main__':
         for cells_filename in cells_filenames
     ]
     plot_filenames = []
+    dim = 2
+    if len(sys.argv) > 2:
+        if sys.argv[2] == '-3':
+            dim = 3
+        else:
+            raise RuntimeError('Invalid input argument specified')
 
     # Set axes limits for the cell-cell neighbor graph 
     cells, params = read_cells(cells_filenames[-1])
-    xmin = cells[:, __colidx_rx].min() * 1.05
-    xmax = cells[:, __colidx_ry].max() * 1.05
-    ymin = cells[:, __colidx_rx].min() * 1.05
-    ymax = cells[:, __colidx_ry].max() * 1.05
+    if dim == 2:
+        xmin = cells[:, __2d_colidx_rx].min() * 1.05
+        xmax = cells[:, __2d_colidx_rx].max() * 1.05
+        ymin = cells[:, __2d_colidx_ry].min() * 1.05
+        ymax = cells[:, __2d_colidx_ry].max() * 1.05
+    else:    # dim == 3
+        xmin = cells[:, __3d_colidx_rx].min() * 1.05
+        xmax = cells[:, __3d_colidx_rx].max() * 1.05
+        ymin = cells[:, __3d_colidx_ry].min() * 1.05
+        ymax = cells[:, __3d_colidx_ry].max() * 1.05
+        zmin = cells[:, __3d_colidx_rz].min() * 1.05
+        zmax = cells[:, __3d_colidx_rz].max() * 1.05
     n_total = cells.shape[0]
     t_final = params['t_curr']
 
@@ -173,18 +240,22 @@ if __name__ == '__main__':
             # Get the fraction of cells in group 1
             n_cells.append(cells.shape[0])
             timepoints.append(params['t_curr'])
-            n_group1 = np.sum(cells[:, __colidx_group] == 1)
+            if dim == 2:
+                in_group1 = (cells[:, __2d_colidx_group] == 1)
+            else:
+                in_group1 = (cells[:, __3d_colidx_group] == 1)
+            n_group1 = np.sum(in_group1)
             fraction_group1.append(n_group1 / cells.shape[0])
 
             # Get the average degree of all cells  
             avg_degree.append(np.sum([i * d for i, d in enumerate(degree_dist)]))
 
-            # Get the average degree of all group 1 cells 
-            degrees_group1 = degrees[cells[:, __colidx_group] == 1]
+            # Get the average degree of all group 1 cells
+            degrees_group1 = degrees[in_group1]
             avg_degree_group1.append(np.mean(degrees_group1))
 
             # Get the average local clustering coefficient of all group 1 cells
-            avg_cluster_group1.append(np.mean(cluster_coefs[cells[:, __colidx_group] == 1]))
+            avg_cluster_group1.append(np.mean(cluster_coefs[in_group1]))
 
             # Get the number of triangles
             n_triangles.append(triangles.shape[0])
@@ -204,33 +275,43 @@ if __name__ == '__main__':
             # Set up five plots 
             fig = plt.figure(figsize=(10, 7))
             gs = GridSpec(4, 2, figure=fig)
-            ax1 = fig.add_subplot(gs[:, 0])
+            if dim == 2:
+                ax1 = fig.add_subplot(gs[:, 0])
+            else:
+                ax1 = fig.add_subplot(gs[:, 0], projection='3d')
             ax2 = fig.add_subplot(gs[0, 1])
             ax3 = fig.add_subplot(gs[1, 1])
             ax4 = fig.add_subplot(gs[2, 1])
             ax5 = fig.add_subplot(gs[3, 1])
 
-            # Draw the cell-cell neighbor graph in the left axes 
-            plot_graph_2d(cells, graph, components, component_sizes, ax1)
-            ax1.set_xlim([xmin, xmax])
-            ax1.set_ylim([ymin, ymax])
+            # Draw the cell-cell neighbor graph in the left axes
+            if dim == 2:
+                plot_graph_2d(cells, graph, components, component_sizes, ax1)
+                ax1.set_xlim([xmin, xmax])
+                ax1.set_ylim([ymin, ymax])
+            else:
+                plot_graph_3d(cells, graph, components, component_sizes, ax1)
+                ax1.set_xlim([xmin, xmax])
+                ax1.set_ylim([ymin, ymax])
+                ax1.set_zlim([zmin, zmax])
             ax1.set_aspect('equal')
 
-            # Annotate with number of cells and timepoint 
-            ax1.annotate(
-                '{} cells'.format(cells.shape[0]),
-                (0.02, 0.98),
-                xycoords='axes fraction',
-                verticalalignment='top',
-                horizontalalignment='left'
-            )
-            ax1.annotate(
-                r'$t = {:.5f}$ h'.format(params['t_curr']),
-                (0.98, 0.98),
-                xycoords='axes fraction',
-                verticalalignment='top',
-                horizontalalignment='right'
-            )
+            # Annotate with number of cells and timepoint
+            if dim == 2:
+                ax1.annotate(
+                    '{} cells'.format(cells.shape[0]),
+                    (0.02, 0.98),
+                    xycoords='axes fraction',
+                    verticalalignment='top',
+                    horizontalalignment='left'
+                )
+                ax1.annotate(
+                    r'$t = {:.5f}$ h'.format(params['t_curr']),
+                    (0.98, 0.98),
+                    xycoords='axes fraction',
+                    verticalalignment='top',
+                    horizontalalignment='right'
+                )
 
             # Plot the top 3 largest connected component sizes over time 
             for i in range(3):
