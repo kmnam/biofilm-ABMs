@@ -111,9 +111,9 @@ Array<int, Dynamic, 1> getDegrees(const Graph& graph)
  * @returns Local clustering coefficients for all vertices in the graph. 
  */
 template <typename T>
-Array<int, Dynamic, 1> getLocalClusteringCoefficients(const Graph& graph)
+Array<T, Dynamic, 1> getLocalClusteringCoefficients(const Graph& graph)
 {
-    Array<int, Dynamic, 1> coefs = Array<int, Dynamic, 1>::Zero(boost::num_vertices(graph));
+    Array<T, Dynamic, 1> coefs = Array<T, Dynamic, 1>::Zero(boost::num_vertices(graph));
     std::pair<boost::graph_traits<Graph>::out_edge_iterator, 
               boost::graph_traits<Graph>::out_edge_iterator> it;
     for (int i = 0; i < boost::num_vertices(graph); ++i)
@@ -126,7 +126,7 @@ Array<int, Dynamic, 1> getLocalClusteringCoefficients(const Graph& graph)
             // (the former should always be the target) 
             boost::graph_traits<Graph>::edge_descriptor edge = *(it.first);
             int j = boost::source(edge, graph); 
-            int k = boost::source(edge, graph);
+            int k = boost::target(edge, graph);
             if (i == j) 
                 neighbors.push_back(k); 
             else 
@@ -143,7 +143,7 @@ Array<int, Dynamic, 1> getLocalClusteringCoefficients(const Graph& graph)
         // by a third edge
         else
         {
-            double n_cluster = 0.0; 
+            T n_cluster = 0.0; 
             for (int j = 0; j < neighbors.size(); ++j)
             {
                 for (int k = j + 1; k < neighbors.size(); ++k)
@@ -266,7 +266,7 @@ template <typename T>
 void writeGraph(const Graph& graph, std::vector<int>& components,
                 const Ref<const Array<int, Dynamic, 1> >& degrees,
                 const std::string filename, const bool write_cluster_coefs,  
-                const Ref<const Array<int, Dynamic, 1> >& cluster_coefs,         
+                const Ref<const Array<T, Dynamic, 1> >& cluster_coefs,         
                 const bool write_triangles, 
                 const Ref<const Array<int, Dynamic, 3> >& triangles,
                 const bool write_tetrahedra,
@@ -280,6 +280,7 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
 
     // Open output file and write header 
     std::ofstream outfile(filename);
+	outfile << std::setprecision(10); 
     outfile << "NUM_VERTICES\t" << boost::num_vertices(graph) << std::endl; 
     outfile << "NUM_EDGES\t" << boost::num_edges(graph) << std::endl; 
     outfile << "NUM_COMPONENTS\t" << num_components << std::endl;
