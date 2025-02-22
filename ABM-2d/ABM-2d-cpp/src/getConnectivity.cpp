@@ -74,7 +74,7 @@ int main(int argc, char** argv)
             Array<int, Dynamic, 1> degrees = getDegrees<T>(graph);
 
             // Get the clustering coefficients 
-            Array<int, Dynamic, 1> cluster_coefs = getLocalClusteringCoefficients<T>(graph);  
+            Array<T, Dynamic, 1> cluster_coefs = getLocalClusteringCoefficients<T>(graph);  
 
             // Get the triangles and/or tetrahedra in the graph, if desired
             Array<int, Dynamic, 3> triangles(0, 3);
