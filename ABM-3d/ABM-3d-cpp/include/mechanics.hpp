@@ -1049,8 +1049,14 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param E0 Elastic modulus of EPS. 
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero.
- * @param noise Vectors of noise components for each generalized force for 
- *              each cell.
+ * @param max_noise Maximum noise to be added to each generalized force used 
+ *                  to compute the velocities.
+ * @param rng Random number generator.
+ * @param uniform_dist Pre-defined instance of standard uniform distribution.
+ * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
+ *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ * @param adhesion_params Parameters required to compute cell-cell adhesion
+ *                        forces.
  * @returns Updated population of cells, along with the array of errors in
  *          the cell positions and orientations.  
  */
@@ -1063,8 +1069,7 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
                            const Ref<const Array<T, Dynamic, 7> >& neighbors, 
                            const T dt, const int iter, const T R, const T Rcell,
                            const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                           const T E0,   // TODO ??
-                           const T nz_threshold, const T max_noise,
+                           const T E0, const T nz_threshold, const T max_noise,
                            boost::random::mt19937& rng,
                            boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode,
