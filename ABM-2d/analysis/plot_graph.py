@@ -176,7 +176,6 @@ def plot_graph_3d(cells, graph, components, component_sizes, ax):
 
 ##########################################################################
 if __name__ == '__main__':
-    # TODO Add an interactive feature for 3D? 
     cells_filenames = parse_dir(os.path.join(sys.argv[1], '*'))
     graph_filenames = [
         os.path.join(
