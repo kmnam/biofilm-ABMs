@@ -490,8 +490,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
             cell_cell_prefactors, surface_contact_density, max_noise, rng,
-            uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-            boundary_idx, confine_params
+            uniform_dist, adhesion_mode, adhesion_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 6> errors = result.second;
@@ -528,8 +527,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                    uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-                    boundary_idx, confine_params
+                    uniform_dist, adhesion_mode, adhesion_params
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -567,8 +565,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, surface_contact_density, max_noise, rng,
-                uniform_dist, adhesion_mode, adhesion_params, confine_mode,
-                boundary_idx, confine_params
+                uniform_dist, adhesion_mode, adhesion_params
             ); 
             cells_new = result.first;
             errors = result.second;
