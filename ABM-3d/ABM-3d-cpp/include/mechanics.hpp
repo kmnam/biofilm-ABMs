@@ -384,6 +384,8 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  * with respect to the cell's z-position and z-orientation.
  *
  * @param cells Existing population of cells.
+ * @param dt Timestep. Only used for debugging output.
+ * @param iter Iteration number. Only used for debugging output. 
  * @param ss Cell-body coordinates at which each cell-surface overlap is zero. 
  * @param R Cell radius.
  * @param E0 Elastic modulus of EPS. 
@@ -394,6 +396,7 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  */
 template <typename T>
 Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                                const T dt, const int iter,
                                                 const Ref<const Array<T, Dynamic, 1> >& ss,
                                                 const T R, const T E0,
                                                 const T nz_threshold)
@@ -457,6 +460,8 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
         }
     }
 
+    // TODO Add debug
+
     return dEdq;
 }
 
@@ -465,6 +470,8 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
  * with respect to the cell's z-position and z-orientation. 
  *
  * @param cells Existing population of cells.
+ * @param dt Timestep. Only used for debugging output.
+ * @param iter Iteration number. Only used for debugging output. 
  * @param ss Cell-body coordinates at which each cell-surface overlap is zero. 
  * @param R Cell radius.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
@@ -474,6 +481,7 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
  */
 template <typename T>
 Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                               const T dt, const int iter,
                                                const Ref<const Array<T, Dynamic, 1> >& ss,
                                                const T R,
                                                const T nz_threshold)
@@ -523,7 +531,6 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
                 cells(i, __colidx_half_l), -0.5, ss(i)
             );
             T int4 = integral4<T>(    // Integral of \Theta(\delta_i(s))
-                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
                 cells(i, __colidx_half_l), ss(i)
             );
             T term4 = 0;
@@ -536,6 +543,8 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             dEdq(i, 1) *= cells(i, __colidx_sigma0);
         }
     }
+
+    // TODO Add debug
 
     return dEdq;
 }
@@ -1021,7 +1030,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
         // Compute the derivatives of the dissipation with respect to the 
         // cell's translational and orientational velocities 
         A(Eigen::seq(0, 5), Eigen::seq(0, 5)) = compositeViscosityForceMatrix<T>(
-            cells(i, __colidx_rz), cells(i, __colidz_nz), cells(i, __colidx_l),
+            cells(i, __colidx_rz), cells(i, __colidx_nz), cells(i, __colidx_l),
             cells(i, __colidx_half_l), ss(i), cells(i, __colidx_eta0),
             cells(i, __colidx_eta1), R, nz_threshold
         );
@@ -1035,7 +1044,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
         // Extract the derivatives of the cell-cell repulsion energy,
         // cell-cell adhesion energy, cell-surface repulsion energy, and
         // cell-surface adhesion energy
-        b(Eigen::seq(0, 5)) = -dEdq_repulsion - dEdq_adhesion;
+        b(Eigen::seq(0, 5)) = -dEdq_repulsion.row(i).transpose() - dEdq_adhesion.row(i).transpose();
         b(2) -= (dEdq_surface_repulsion(i, 0) + dEdq_surface_adhesion(i, 0));
         b(5) -= (dEdq_surface_repulsion(i, 1) + dEdq_surface_adhesion(i, 1));  
 
@@ -1071,7 +1080,8 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param bs Error weights of Butcher tableau. Entries should sum to one. 
  * @param cells Existing population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the 
- *                  population. 
+ *                  population.
+ * @param to_adhere 
  * @param dt Timestep. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
@@ -1092,12 +1102,13 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  *          the cell positions and orientations.  
  */
 template <typename T>
-std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6> >
+std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
     stepRungeKuttaAdaptive(const Ref<const Array<T, Dynamic, Dynamic> >& A,
                            const Ref<const Array<T, Dynamic, 1> >& b,
                            const Ref<const Array<T, Dynamic, 1> >& bs, 
                            const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
-                           const Ref<const Array<T, Dynamic, 7> >& neighbors, 
+                           const Ref<const Array<T, Dynamic, 7> >& neighbors,
+                           const Ref<const Array<int, Dynamic, 1> >& to_adhere, 
                            const T dt, const int iter, const T R, const T Rcell,
                            const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
                            const T E0, const T nz_threshold, const T max_noise,

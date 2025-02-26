@@ -433,19 +433,23 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                       << "(iteration " << iter << ")" << std::endl;
         if (track_poles)    // Track poles if desired 
         {
+            // TODO Implement this
+            throw std::runtime_error("Not implemented"); 
+            /*
             auto div_result = divideCellsWithPoles<T>(
                 cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
                 daughter_length_dist, daughter_angle_dist, colidx_negpole_t0,
                 colidx_pospole_t0
             );
             cells = div_result.first;
-            daughter_pairs = div_result.second; 
+            daughter_pairs = div_result.second;
+            */ 
         }
         else                // Otherwise, simply divide 
         {
             auto div_result = divideCells<T>(
                 cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
-                daughter_length_dist, daughter_angle_dist
+                daughter_length_dist, daughter_angle_xy_dist, daughter_angle_z_dist
             );
             cells = div_result.first; 
             daughter_pairs = div_result.second; 
@@ -459,7 +463,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             if (switch_mode == SwitchMode::INHERIT)
             {
                 switchGroupsInherit<T>(
-                    cells, daughter_pairs, group_attributes, n_groups, dt,
+                    cells, daughter_pairs, group_attributes, n_groups,
                     switch_rates, growth_dists, attribute_dists, rng, uniform_dist
                 );
             }
@@ -489,7 +493,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Update cell positions and orientations
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-            cell_cell_prefactors, surface_contact_density, max_noise, rng,
+            cell_cell_prefactors, E0, nz_threshold, max_noise, rng,
             uniform_dist, adhesion_mode, adhesion_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
@@ -526,7 +530,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
-                    cell_cell_prefactors, surface_contact_density, max_noise, rng,
+                    cell_cell_prefactors, E0, nz_threshold, max_noise, rng,
                     uniform_dist, adhesion_mode, adhesion_params
                 ); 
                 cells_new = result.first;
@@ -564,7 +568,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-                cell_cell_prefactors, surface_contact_density, max_noise, rng,
+                cell_cell_prefactors, E0, nz_threshold, max_noise, rng,
                 uniform_dist, adhesion_mode, adhesion_params
             ); 
             cells_new = result.first;
@@ -676,19 +680,16 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     dist > R + Rcell && dist < 2 * R
                 ); 
             }
-            // Correct growth rates for cells within the growth void that have 
-            // just switched 
-            for (int i = 0; i < n; ++i)
-            {
-                if (in_void(i) && cells(i, __colidx_growth) > 0)
-                    cells(i, __colidx_growth) = 0.0;
-            }
             // Truncate cell-surface friction coefficients according to Coulomb's law
             if (truncate_surface_friction)
             {
+                // TODO Implement this
+                throw std::runtime_error("Not implemented");
+                /*
                 truncateSurfaceFrictionCoeffsCoulomb<T>(
                     cells, R, E0, surface_contact_density, surface_coulomb_coeff
                 );
+                */
             }
             else    // Otherwise, ensure that friction coefficients are correct after switching 
             {
@@ -725,7 +726,15 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         writeCells<T>(cells, params, filename_final, write_other_cols);
     }
 
-    return cells;
+    // Write complete lineage to file 
+    if (write)
+    {
+        std::stringstream ss_lineage; 
+        ss_lineage << outprefix << "_lineage.txt"; 
+        writeLineage<T>(parents, ss_lineage.str());
+    }
+
+    return std::make_pair(cells, parents);
 }
 
 #endif
