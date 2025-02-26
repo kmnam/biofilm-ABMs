@@ -233,6 +233,153 @@ void pairNewtonianForceSummary(const Ref<const Array<T, 3, 1> >& r1,
 }
 
 /**
+ * Get all pairs of cells whose distances are within the given threshold.
+ *
+ * The returned array is given in row-major format.  
+ *
+ * @param cells Existing population of cells.
+ * @param neighbor_threshold Threshold for distinguishing between neighboring
+ *                           and non-neighboring cells.
+ * @param R Cell radius. 
+ * @param Ldiv Cell division length.
+ * @returns Array of indices of pairs of neighboring cells.
+ */
+template <typename T>
+Array<T, Dynamic, 7> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                      const T neighbor_threshold, const T R, const T Ldiv)
+{
+    int n = cells.rows();   // Number of cells
+
+    // If there is only one cell, return an empty array
+    if (n == 1)
+        return Array<T, Dynamic, 7>::Zero(0, 7);
+
+    // Generate Segment_3 instances for each cell 
+    std::vector<Segment_3> segments = generateSegments(cells);
+
+    // Instantiate kernel to be passed into distBetweenCells()
+    K kernel;
+
+    // Maintain array of neighboring cells 
+    //
+    // Each row contains the following information about each pair of 
+    // neighboring cells:
+    // 0) Index i of first cell in neighboring pair
+    // 1) Index j of second cell in neighboring pair
+    // 2) x-coordinate of distance vector from cell i to cell j
+    // 3) y-coordinate of distance vector from cell i to cell j
+    // 4) z-coordinate of distance vector from cell i to cell j 
+    // 5) Cell-body coordinate of contact point along centerline of cell i
+    // 6) Cell-body coordinate of contact point along centerline of cell j
+    int npairs = n * (n - 1) / 2;
+    Array<T, Dynamic, 7> neighbors(npairs, 7);
+    int idx = 0; 
+
+    // For each pair of cells in the population ... 
+    for (int i = 0; i < n; ++i)
+    {
+        for (int j = 0; j < i; ++j)   // Note that j < i
+        {
+            // For two cells to be within neighbor_threshold of each other,
+            // their centers must be within neighbor_threshold + Ldiv + 2 * R
+            T dist_rij = (cells(i, __colseq_r) - cells(j, __colseq_r)).matrix().norm();  
+            if (dist_rij < neighbor_threshold + Ldiv + 2 * R)
+            {
+                // In this case, compute their actual distance and check that 
+                // they lie within neighbor_threshold of each other
+                auto result = distBetweenCells<T>(
+                    segments[i], segments[j],
+                    static_cast<int>(cells(i, __colidx_id)),
+                    cells(i, __colseq_r).matrix(),
+                    cells(i, __colseq_n).matrix(),
+                    cells(i, __colidx_half_l),
+                    static_cast<int>(cells(j, __colidx_id)),
+                    cells(j, __colseq_r).matrix(),
+                    cells(j, __colseq_n).matrix(),
+                    cells(j, __colidx_half_l),
+                    kernel
+                );
+                Matrix<T, 3, 1> dist_ij = std::get<0>(result); 
+                T si = std::get<1>(result);
+                T sj = std::get<2>(result);
+                if (dist_ij.norm() < neighbor_threshold)
+                {
+                    neighbors(idx, 0) = i; 
+                    neighbors(idx, 1) = j; 
+                    neighbors(idx, Eigen::seq(2, 4)) = dist_ij.array();
+                    neighbors(idx, 5) = si; 
+                    neighbors(idx, 6) = sj;
+                    idx++;  
+                }
+            }
+        }
+    }
+
+    // Discard remaining rows and return
+    return neighbors(Eigen::seq(0, idx - 1), Eigen::all);
+}
+
+/**
+ * Update the cell-cell distances in the given array of neighboring pairs
+ * of cells.
+ *
+ * The given array of neighboring pairs of cells is updated in place.  
+ *
+ * @param cells Existing population of cells. 
+ * @param neighbors Array of neighboring pairs of cells.
+ */
+template <typename T>
+void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                             Ref<Array<T, Dynamic, 7> > neighbors)
+{ 
+    // Generate Segment_3 instances for each cell 
+    std::vector<Segment_3> segments = generateSegments(cells);
+
+    // Instantiate kernel to be passed into distBetweenCells()
+    K kernel;
+
+    // Each row contains the following information about each pair of 
+    // neighboring cells:
+    // 0) Index i of first cell in neighboring pair
+    // 1) Index j of second cell in neighboring pair
+    // 2) x-coordinate of distance vector from cell i to cell j
+    // 3) y-coordinate of distance vector from cell i to cell j
+    // 4) z-coordinate of distance vector from cell i to cell j
+    // 5) Cell-body coordinate of contact point along centerline of cell i
+    // 6) Cell-body coordinate of contact point along centerline of cell j
+    //
+    // Columns 2, 3, 4, 5, 6 are updated here
+    #pragma omp parallel for
+    for (int k = 0; k < neighbors.rows(); ++k)
+    {
+        int i = static_cast<int>(neighbors(k, 0)); 
+        int j = static_cast<int>(neighbors(k, 1));
+        auto result = distBetweenCells<T>(
+            segments[i], segments[j],
+            static_cast<int>(cells(i, __colidx_id)),
+            cells(i, __colseq_r).matrix(),
+            cells(i, __colseq_n).matrix(),
+            cells(i, __colidx_half_l),
+            static_cast<int>(cells(j, __colidx_id)),
+            cells(j, __colseq_r).matrix(),
+            cells(j, __colseq_n).matrix(),
+            cells(j, __colidx_half_l),
+            kernel
+        ); 
+        Matrix<T, 3, 1> dist_ij = std::get<0>(result); 
+        T si = std::get<1>(result);
+        T sj = std::get<2>(result);
+        neighbors(k, Eigen::seq(2, 4)) = dist_ij.array(); 
+        neighbors(k, 5) = si; 
+        neighbors(k, 6) = sj;
+    }
+}
+
+/* -------------------------------------------------------------------- // 
+//                    LAGRANGIAN GENERALIZED FORCES                     // 
+// -------------------------------------------------------------------- */ 
+
+/**
  * Compute the derivatives of the cell-surface repulsion energy for each cell
  * with respect to the cell's z-position and z-orientation.
  *
@@ -443,151 +590,6 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
 }
 
 /**
- * Get all pairs of cells whose distances are within the given threshold.
- *
- * The returned array is given in row-major format.  
- *
- * @param cells Existing population of cells.
- * @param neighbor_threshold Threshold for distinguishing between neighboring
- *                           and non-neighboring cells.
- * @param R Cell radius. 
- * @param Ldiv Cell division length.
- * @returns Array of indices of pairs of neighboring cells.
- */
-template <typename T>
-Array<T, Dynamic, 7> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                      const T neighbor_threshold, const T R, const T Ldiv)
-{
-    int n = cells.rows();   // Number of cells
-
-    // If there is only one cell, return an empty array
-    if (n == 1)
-        return Array<T, Dynamic, 7>::Zero(0, 7);
-
-    // Generate Segment_3 instances for each cell 
-    std::vector<Segment_3> segments = generateSegments(cells);
-
-    // Instantiate kernel to be passed into distBetweenCells()
-    K kernel;
-
-    // Maintain array of neighboring cells 
-    //
-    // Each row contains the following information about each pair of 
-    // neighboring cells:
-    // 0) Index i of first cell in neighboring pair
-    // 1) Index j of second cell in neighboring pair
-    // 2) x-coordinate of distance vector from cell i to cell j
-    // 3) y-coordinate of distance vector from cell i to cell j
-    // 4) z-coordinate of distance vector from cell i to cell j 
-    // 5) Cell-body coordinate of contact point along centerline of cell i
-    // 6) Cell-body coordinate of contact point along centerline of cell j
-    int npairs = n * (n - 1) / 2;
-    Array<T, Dynamic, 7> neighbors(npairs, 7);
-    int idx = 0; 
-
-    // For each pair of cells in the population ... 
-    for (int i = 0; i < n; ++i)
-    {
-        for (int j = 0; j < i; ++j)   // Note that j < i
-        {
-            // For two cells to be within neighbor_threshold of each other,
-            // their centers must be within neighbor_threshold + Ldiv + 2 * R
-            T dist_rij = (cells(i, __colseq_r) - cells(j, __colseq_r)).matrix().norm();  
-            if (dist_rij < neighbor_threshold + Ldiv + 2 * R)
-            {
-                // In this case, compute their actual distance and check that 
-                // they lie within neighbor_threshold of each other
-                auto result = distBetweenCells<T>(
-                    segments[i], segments[j],
-                    cells(i, __colidx_id),
-                    cells(i, __colseq_r).matrix(),
-                    cells(i, __colseq_n).matrix(),
-                    cells(i, __colidx_half_l),
-                    cells(j, __colidx_id),
-                    cells(j, __colseq_r).matrix(),
-                    cells(j, __colseq_n).matrix(),
-                    cells(j, __colidx_half_l),
-                    kernel
-                );
-                Matrix<T, 3, 1> dist_ij = std::get<0>(result); 
-                T si = std::get<1>(result);
-                T sj = std::get<2>(result);
-                if (dist_ij.norm() < neighbor_threshold)
-                {
-                    neighbors(idx, 0) = i; 
-                    neighbors(idx, 1) = j; 
-                    neighbors(idx, Eigen::seq(2, 4)) = dist_ij.array();
-                    neighbors(idx, 5) = si; 
-                    neighbors(idx, 6) = sj;
-                    idx++;  
-                }
-            }
-        }
-    }
-
-    // Discard remaining rows and return
-    return neighbors(Eigen::seq(0, idx - 1), Eigen::all);
-}
-
-/**
- * Update the cell-cell distances in the given array of neighboring pairs
- * of cells.
- *
- * The given array of neighboring pairs of cells is updated in place.  
- *
- * @param cells Existing population of cells. 
- * @param neighbors Array of neighboring pairs of cells.
- */
-template <typename T>
-void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                             Ref<Array<T, Dynamic, 7> > neighbors)
-{ 
-    // Generate Segment_3 instances for each cell 
-    std::vector<Segment_3> segments = generateSegments(cells);
-
-    // Instantiate kernel to be passed into distBetweenCells()
-    K kernel;
-
-    // Each row contains the following information about each pair of 
-    // neighboring cells:
-    // 0) Index i of first cell in neighboring pair
-    // 1) Index j of second cell in neighboring pair
-    // 2) x-coordinate of distance vector from cell i to cell j
-    // 3) y-coordinate of distance vector from cell i to cell j
-    // 4) z-coordinate of distance vector from cell i to cell j
-    // 5) Cell-body coordinate of contact point along centerline of cell i
-    // 6) Cell-body coordinate of contact point along centerline of cell j
-    //
-    // Columns 2, 3, 4, 5, 6 are updated here
-    #pragma omp parallel for
-    for (int k = 0; k < neighbors.rows(); ++k)
-    {
-        int i = static_cast<int>(neighbors(k, 0)); 
-        int j = static_cast<int>(neighbors(k, 1));
-        //auto result = distBetweenCells<T>(
-        //    segments[i], segments[j], cells(i, Eigen::seq(0, 2)).matrix(),
-        //    cells(i, Eigen::seq(3, 5)).matrix(), cells(i, 7),
-        //    cells(j, Eigen::seq(0, 2)).matrix(),
-        //    cells(j, Eigen::seq(3, 5)).matrix(), cells(j, 7), kernel
-        //);
-        Array<T, 3, 1> ri(cells(i, Eigen::seq(0, 2)));
-        Array<T, 3, 1> ni(cells(i, Eigen::seq(3, 5)));
-        Array<T, 3, 1> rj(cells(j, Eigen::seq(0, 2)));
-        Array<T, 3, 1> nj(cells(j, Eigen::seq(3, 5)));
-        auto result = distBetweenCells<T>(
-            segments[i], segments[j], ri.matrix(), ni.matrix(), cells(i, 7),
-            rj.matrix(), nj.matrix(), cells(j, 7), kernel
-        );
-        Matrix<T, 3, 1> dist_ij = std::get<0>(result); 
-        T si = std::get<1>(result);
-        T sj = std::get<2>(result);
-        neighbors(k, Eigen::seq(2, 4)) = dist_ij.array(); 
-        neighbors(k, 5) = si; 
-        neighbors(k, 6) = sj;
-    }
-} 
-
-/**
  * Compute the derivatives of the cell-cell interaction energies for each 
  * cell with respect to the cell's position and orientation coordinates.
  *
@@ -597,18 +599,22 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  * @param cells Existing population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
+ * @param dt Timestep. Only used for debugging output.
+ * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS. 
  * @param Rcell Cell radius, excluding the EPS.
+ * @param E0 Elastic modulus of EPS. 
  * @param prefactors Array of four pre-computed prefactors, namely `2.5 * sqrt(R)`,
  *                   `2.5 * E0 * sqrt(R)`, `E0 * pow(R - Rcell, 1.5)`, and `Ecell`.
  * @returns Derivatives of the cell-cell interaction energies with respect 
  *          to cell positions and orientations.   
  */
 template <typename T>
-Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                                 const Ref<const Array<T, Dynamic, 7> >& neighbors,
-                                                 const T R, const T Rcell,
-                                                 const Ref<const Array<T, 4, 1> >& prefactors)
+Array<T, Dynamic, 6> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                             const Ref<const Array<T, Dynamic, 7> >& neighbors,
+                                             const T dt, const int iter,
+                                             const T R, const T Rcell,
+                                             const Ref<const Array<T, 4, 1> >& prefactors)
 {
     int n = cells.rows();   // Number of cells
 
@@ -665,18 +671,220 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
         {
             // Derivative of cell-cell interaction energy w.r.t position of cell i
             Array<T, 3, 1> vij = prefactor * dir_ij;
-            dEdq(i, Eigen::seq(0, 2)) += vij; 
-            // Derivative of cell-cell interaction energy w.r.t orientation of cell i
-            dEdq(i, Eigen::seq(3, 5)) += vij * si; 
-            // Derivative of cell-cell interaction energy w.r.t position of cell j
-            dEdq(j, Eigen::seq(0, 2)) -= vij; 
-            // Derivative of cell-cell interaction energy w.r.t orientation of cell j
-            dEdq(j, Eigen::seq(3, 5)) -= vij * sj;
+            Array<T, 2, 6> forces;
+            forces(0, Eigen::seq(0, 2)) = vij; 
+            forces(0, Eigen::seq(3, 5)) = si * vij;
+            forces(1, Eigen::seq(0, 2)) = -vij; 
+            forces(1, Eigen::seq(3, 5)) = -sj * vij;  
+            #ifdef DEBUG_CHECK_REPULSIVE_FORCES_NAN
+                if (forces.isNaN().any() || forces.isInf().any())
+                {
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in repulsive forces between cells " 
+                              << i << " and " << j << std::endl;
+                    std::cerr << "Timestep: " << dt << std::endl; 
+                    pairLagrangianForcesSummary<T>(
+                        cells(i, __colseq_r), cells(i, __colseq_n),
+                        cells(i, __colseq_dr), cells(i, __colseq_dn), 
+                        cells(i, __colidx_half_l),
+                        cells(j, __colseq_r), cells(j, __colseq_n),
+                        cells(j, __colseq_dr), cells(j, __colseq_dn), 
+                        cells(j, __colidx_half_l),
+                        neighbors(k, Eigen::seq(2, 4)), si, sj, 
+                        forces
+                    );
+                    throw std::runtime_error("Found nan in repulsive forces"); 
+                }
+            #endif
+            dEdq.row(i) += forces.row(0); 
+            dEdq.row(j) += forces.row(1); 
         }
     }
 
     return dEdq;  
 }
+
+/**
+ * Compute the derivatives of the cell-cell adhesion potential energy for
+ * each pair of neighboring cells, with respect to each cell's position and
+ * orientation coordinates.
+ *
+ * In this function, the pairs of neighboring cells in the population have
+ * been pre-computed. 
+ *
+ * @param cells Current population of cells.
+ * @param neighbors Array specifying pairs of neighboring cells in the
+ *                  population.
+ * @param to_adhere Boolean array specifying whether, for each pair of 
+ *                  neighboring cells, the adhesive force is nonzero.
+ * @param dt Timestep. Only used for debugging output.
+ * @param iter Iteration number. Only used for debugging output. 
+ * @param R Cell radius, including the EPS.
+ * @param Rcell Cell radius, excluding the EPS.
+ * @param mode Choice of potential used to model cell-cell adhesion. Can be
+ *             NONE (0), KIHARA (1), or GBK (2).
+ * @param params Parameters required to compute cell-cell adhesion forces. 
+ * @returns Derivatives of the cell-cell adhesion energies with respect to  
+ *          cell positions and orientations.   
+ */
+template <typename T>
+Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                            const Ref<const Array<T, Dynamic, 7> >& neighbors,
+                                            const Ref<const Array<int, Dynamic, 1> >& to_adhere,
+                                            const T dt, const int iter,
+                                            const T R, const T Rcell, 
+                                            const AdhesionMode mode, 
+                                            std::unordered_map<std::string, T>& params)
+{
+    int n = cells.rows();   // Number of cells
+
+    // If there is only one cell, return zero
+    if (n == 1)
+        return Array<T, Dynamic, 6>::Zero(n, 6); 
+
+    // Maintain array of partial derivatives of the interaction energies 
+    // with respect to x-position, y-position, z-position, x-orientation,
+    // y-orientation, z-orientation
+    Array<T, Dynamic, 6> dEdq = Array<T, Dynamic, 6>::Zero(n, 6);
+
+    // Compute distance vector magnitude, direction, and corresponding
+    // cell-cell overlap for every pair of neighboring cells
+    Array<T, Dynamic, 1> magnitudes = neighbors(Eigen::all, Eigen::seq(2, 4)).matrix().rowwise().norm().array(); 
+    Array<T, Dynamic, 1> overlaps = 2 * R - magnitudes;  
+
+    // For each pair of neighboring cells ...
+    for (int k = 0; k < neighbors.rows(); ++k)
+    {
+        int i = static_cast<int>(neighbors(k, 0)); 
+        int j = static_cast<int>(neighbors(k, 1));
+
+        // Check that the two cells adhere and their overlap is nonzero 
+        if (to_adhere(k) && overlaps(k) > 0)
+        {
+            // Extract the cell position and orientation vectors 
+            Matrix<T, 3, 1> ri = cells(i, __colseq_r).matrix();
+            Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix();
+            Matrix<T, 3, 1> rj = cells(j, __colseq_r).matrix();
+            Matrix<T, 3, 1> nj = cells(j, __colseq_n).matrix();
+            T half_li = cells(i, __colidx_half_l);
+            T half_lj = cells(j, __colidx_half_l);
+            Matrix<T, 3, 1> dij = neighbors(k, Eigen::seq(2, 4)).matrix();
+            T si = neighbors(k, 5); 
+            T sj = neighbors(k, 6); 
+
+            // Get the corresponding forces
+            Array<T, 2, 6> forces; 
+            if (mode == AdhesionMode::KIHARA) 
+            {
+                const T strength = params["strength"];
+                const T expd = params["distance_exp"]; 
+                const T dmin = params["mindist"];
+                // Enforce orientation vector norm constraint 
+                forces = strength * forcesKiharaLagrange<T, 3>(
+                    ni, nj, dij, R, si, sj, expd, dmin, true
+                );
+            }
+            else if (mode == AdhesionMode::GBK)
+            {
+                const T strength = params["strength"];
+                const T exp1 = params["anisotropy_exp1"];
+                const T expd = params["distance_exp"]; 
+                const T dmin = params["mindist"];
+                // Enforce orientation vector norm constraint 
+                forces = strength * forcesGBKLagrange<T, 3>(
+                    ri, ni, half_li, rj, nj, half_lj, R, Rcell, dij, si, sj,
+                    expd, exp1, dmin, true
+                ); 
+            }
+            #ifdef DEBUG_CHECK_ADHESIVE_FORCES_NAN
+                if (forces.isNaN().any() || forces.isInf().any())
+                {
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in adhesive forces between cells " 
+                              << i << " and " << j << std::endl;
+                    std::cerr << "Timestep: " << dt << std::endl; 
+                    pairLagrangianForcesSummary<T>(
+                        ri.array(), ni.array(), cells(i, __colseq_dr), cells(i, __colseq_dn), half_li,
+                        rj.array(), nj.array(), cells(j, __colseq_dr), cells(j, __colseq_dn), half_lj,  
+                        dij.array(), si, sj, forces
+                    );
+                    throw std::runtime_error("Found nan in adhesive forces"); 
+                }
+            #endif
+            dEdq.row(i) += forces.row(0); 
+            dEdq.row(j) += forces.row(1);
+        }
+    }
+
+    return dEdq;
+}
+
+
+
+/* -------------------------------------------------------------------- // 
+//                     NEWTONIAN FORCES AND TORQUES                     // 
+// -------------------------------------------------------------------- */
+// TODO Implement this 
+
+/* -------------------------------------------------------------------- // 
+//                      ADDITIONAL UTILITY FUNCTIONS                    //
+// -------------------------------------------------------------------- */
+
+/**
+ * Truncate the cell-surface friction coefficients so that the cell velocities
+ * in the next timestep (which should be similar to the given array of cell
+ * velocities for the current timestep) obey Coulomb's law of friction.
+ *
+ * The given array of cell data is updated in place. 
+ *
+ * @param cells Current population of cells.
+ * @param R Cell radius, including the EPS.
+ * @param E0 Elastic modulus of EPS. 
+ * @param surface_coulomb_coeff Friction coefficient that relates the velocity
+ *                              of each cell to the normal force due to cell-
+ *                              surface repulsion. 
+ */
+template <typename T>
+void truncateSurfaceFrictionCoeffsCoulomb(Ref<Array<T, Dynamic, Dynamic> > cells,
+                                          const T R, const T E0,
+                                          const T surface_coulomb_coeff)
+{
+    // TODO Implement this 
+}
+
+/**
+ * Normalize the orientation vectors of all cells in the given population,
+ * and redirect all orientation vectors so that they always have positive
+ * z-coordinates.
+ *
+ * The given array of cell data is updated in place.  
+ *
+ * @param cells Existing population of cells. 
+ */
+template <typename T>
+void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
+{
+    Array<T, Dynamic, 1> norms = cells(Eigen::all, __colseq_n).matrix().rowwise().norm().array();
+    assert((norms > 0).all() && "Zero norms encountered during orientation normalization");
+    cells.col(__colidx_nx) /= norms; 
+    cells.col(__colidx_ny) /= norms;
+    cells.col(__colidx_nz) /= norms;
+
+    // Ensure that all z-orientations are positive 
+    for (int i = 0; i < cells.rows(); ++i)
+    {
+        if (cells(i, __colidx_nz) < 0)
+        {
+            cells(i, __colidx_nx) *= -1;
+            cells(i, __colidx_ny) *= -1;
+            cells(i, __colidx_nz) *= -1;
+        }
+    }
+}
+
+/* -------------------------------------------------------------------- // 
+//             VELOCITY UPDATES IN THE LAGRANGIAN FRAMEWORK             //
+// -------------------------------------------------------------------- */
 
 /**
  * Given the current positions, orientations, lengths, viscosity coefficients,
@@ -688,7 +896,11 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  *
  * @param cells Existing population of cells. 
  * @param neighbors Array specifying pairs of neighboring cells in the
- *                  population. 
+ *                  population.
+ * @param to_adhere Boolean array specifying whether, for each pair of 
+ *                  neighboring cells, the adhesive force is nonzero.
+ * @param dt Timestep. Only used for debugging output.
+ * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param cell_cell_prefactors Array of four pre-computed prefactors for
@@ -696,17 +908,24 @@ Array<T, Dynamic, 6> cellCellForcesFromNeighbors(const Ref<const Array<T, Dynami
  * @param E0 Elastic modulus of EPS.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero.
- * @param noise Vectors of noise components for each generalized force for 
- *              each cell.
+ * @param noise Noise to be added to each generalized force used to compute
+ *              the velocities.
+ * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
+ *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ * @param adhesion_params Parameters required to compute cell-cell adhesion
+ *                        forces.
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
-Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                                const Ref<const Array<T, Dynamic, 7> >& neighbors,
-                                                const T R, const T Rcell,
-                                                const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                                                const T E0, const T nz_threshold,
-                                                const Ref<const Array<T, Dynamic, 6> >& noise) 
+Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                   const Ref<const Array<T, Dynamic, 7> >& neighbors,
+                                   const Ref<const Array<int, Dynamic, 1> >& to_adhere,
+                                   const T dt, const int iter, const T R, const T Rcell,
+                                   const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                                   const T E0, const T nz_threshold,
+                                   const Ref<const Array<T, Dynamic, 6> >& noise,
+                                   const AdhesionMode adhesion_mode,
+                                   std::unordered_map<std::string, T>& adhesion_params)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -728,26 +947,38 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
 
     // Get cell-body coordinates at which cell-surface overlap is zero for 
     // each cell
-    Array<T, Dynamic, 1> abs_nz = cells(Eigen::all, 5).abs();
     Array<T, Dynamic, 1> ss(n); 
     for (int i = 0; i < n; ++i)
     {
-        if (abs_nz(i) < nz_threshold)
+        if (cells(i, __colidx_nz) < nz_threshold)
             ss(i) = std::numeric_limits<T>::quiet_NaN();
         else
-            ss(i) = sstar(cells(i, 2), cells(i, 5), R); 
+            ss(i) = sstar(cells(i, __colidx_rz), cells(i, __colidx_nz), R); 
     }
     
-    // Get the derivatives of the cell-cell interaction energy, cell-surface
-    // repulsion energy, and cell-surface adhesion energy for each cell 
-    Array<T, Dynamic, 6> dEdq_cell = cellCellForcesFromNeighbors<T>(
-        cells, neighbors, R, Rcell, cell_cell_prefactors 
+    // Compute the cell-cell repulsive forces 
+    Array<T, Dynamic, 6> dEdq_repulsion = cellCellRepulsiveForces<T>(
+        cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors 
     );
+
+    // Compute the cell-cell adhesive forces (if present) 
+    Array<T, Dynamic, 6> dEdq_adhesion = Array<T, Dynamic, 6>::Zero(n, 6); 
+    if (adhesion_mode != AdhesionMode::NONE)
+    {
+        dEdq_adhesion = cellCellAdhesiveForces<T>(
+            cells, neighbors, to_adhere, dt, iter, R, Rcell, adhesion_mode,
+            adhesion_params
+        ); 
+    }
+
+    // Compute the cell-surface repulsive forces 
     Array<T, Dynamic, 2> dEdq_surface_repulsion = cellSurfaceRepulsionForces<T>(
-        cells, ss, R, E0, nz_threshold
+        cells, dt, iter, ss, R, E0, nz_threshold
     );
+
+    // Compute the cell-surface adhesive forces 
     Array<T, Dynamic, 2> dEdq_surface_adhesion = cellSurfaceAdhesionForces<T>(
-        cells, ss, R, nz_threshold
+        cells, dt, iter, ss, R, nz_threshold
     );
 
     // For each cell ...
@@ -760,24 +991,22 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
         // Compute the derivatives of the dissipation with respect to the 
         // cell's translational and orientational velocities 
         A(Eigen::seq(0, 5), Eigen::seq(0, 5)) = compositeViscosityForceMatrix<T>(
-            cells(i, 2), cells(i, 5), cells(i, 6), cells(i, 7), ss(i),
-            cells(i, 10), cells(i, 11), R, nz_threshold
+            cells(i, __colidx_rz), cells(i, __colidz_nz), cells(i, __colidx_l),
+            cells(i, __colidx_half_l), ss(i), cells(i, __colidx_eta0),
+            cells(i, __colidx_eta1), R, nz_threshold
         );
-        A(3, 6) = -2 * cells(i, 3); 
-        A(4, 6) = -2 * cells(i, 4);
-        A(5, 6) = -2 * cells(i, 5);
-        A(6, 3) = cells(i, 3); 
-        A(6, 4) = cells(i, 4);
-        A(6, 5) = cells(i, 5);
+        A(3, 6) = -2 * cells(i, __colidx_nx); 
+        A(4, 6) = -2 * cells(i, __colidx_ny);
+        A(5, 6) = -2 * cells(i, __colidx_nz);
+        A(6, 3) = cells(i, __colidx_nx); 
+        A(6, 4) = cells(i, __colidx_ny);
+        A(6, 5) = cells(i, __colidx_nz);
 
         // Extract the derivatives of the cell-cell interaction energy, 
         // cell-surface repulsion energy, and cell-surface adhesion energy
-        b(0) = -dEdq_cell(i, 0);
-        b(1) = -dEdq_cell(i, 1);
-        b(2) = -dEdq_cell(i, 2) - dEdq_surface_repulsion(i, 0) - dEdq_surface_adhesion(i, 0);
-        b(3) = -dEdq_cell(i, 3);
-        b(4) = -dEdq_cell(i, 4);
-        b(5) = -dEdq_cell(i, 5) - dEdq_surface_repulsion(i, 1) - dEdq_surface_adhesion(i, 1);
+        b(Eigen::seq(0, 5)) = -dEdq_repulsion - dEdq_adhesion;
+        b(2) -= (dEdq_surface_repulsion(i, 0) + dEdq_surface_adhesion(i, 0));
+        b(5) -= (dEdq_surface_repulsion(i, 1) + dEdq_surface_adhesion(i, 1));  
 
         // Add noise component to forces
         b.head(6) += noise.row(i).transpose();
@@ -793,34 +1022,6 @@ Array<T, Dynamic, 6> getVelocitiesFromNeighbors(const Ref<const Array<T, Dynamic
     }
 
     return velocities;  
-}
-
-/**
- * Normalize the orientation vectors of all cells in the given population,
- * and redirect all orientation vectors with positive z-coordinate.
- *
- * The given array of cell data is updated in place.  
- *
- * @param cells Existing population of cells. 
- */
-template <typename T>
-void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
-{
-    Array<T, Dynamic, 1> norms = cells(Eigen::all, Eigen::seq(3, 5)).matrix().rowwise().norm().array();
-    assert((norms > 0).all() && "Zero norms encountered during orientation normalization");
-    cells.col(3) /= norms; 
-    cells.col(4) /= norms;
-    cells.col(5) /= norms;
-
-    for (int i = 0; i < cells.rows(); ++i)
-    {
-        if (cells(i, 5) > 0)
-        {
-            cells(i, 3) *= -1;
-            cells(i, 4) *= -1;
-            cells(i, 5) *= -1;
-        }
-    }
 }
 
 /**
@@ -855,40 +1056,83 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  */
 template <typename T>
 std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6> >
-    stepRungeKuttaAdaptiveFromNeighbors(const Ref<const Array<T, Dynamic, Dynamic> >& A,
-                                        const Ref<const Array<T, Dynamic, 1> >& b,
-                                        const Ref<const Array<T, Dynamic, 1> >& bs, 
-                                        const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
-                                        const Ref<const Array<T, Dynamic, 7> >& neighbors, 
-                                        const T dt, const T R, const T Rcell,
-                                        const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                                        const T E0, const T nz_threshold,
-                                        const Ref<const Array<T, Dynamic, 6> >& noise)
+    stepRungeKuttaAdaptive(const Ref<const Array<T, Dynamic, Dynamic> >& A,
+                           const Ref<const Array<T, Dynamic, 1> >& b,
+                           const Ref<const Array<T, Dynamic, 1> >& bs, 
+                           const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
+                           const Ref<const Array<T, Dynamic, 7> >& neighbors, 
+                           const T dt, const int iter, const T R, const T Rcell,
+                           const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                           const T E0,   // TODO ??
+                           const T nz_threshold, const T max_noise,
+                           boost::random::mt19937& rng,
+                           boost::random::uniform_01<>& uniform_dist,
+                           const AdhesionMode adhesion_mode,
+                           std::unordered_map<std::string, T>& adhesion_params)
 {
+    #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
+        for (int k = 0; k < neighbors.rows(); ++k)
+        {
+            if (neighbors(k, Eigen::seq(2, 4)).matrix().norm() < 1e-8)
+            {
+                int i = neighbors(k, 0); 
+                int j = neighbors(k, 1); 
+                std::cerr << "Iteration " << iter
+                          << ": Found near-zero distance between cells "
+                          << i << " and " << j << std::endl;
+                std::cerr << "Timestep: " << dt << std::endl; 
+                pairConfigSummaryWithVelocities<T>(
+                    static_cast<int>(cells(i, __colidx_id)),
+                    cells(i, __colseq_r).matrix(),
+                    cells(i, __colseq_n).matrix(), cells(i, __colidx_half_l),
+                    cells(i, __colseq_dr).matrix(),
+                    static_cast<int>(cells(j, __colidx_id)),
+                    cells(j, __colseq_r).matrix(),
+                    cells(j, __colseq_n).matrix(), cells(j, __colidx_half_l),
+                    cells(j, __colseq_dr).matrix()
+                );
+                throw std::runtime_error("Found near-zero distance");
+            }
+        }
+    #endif
+
     // Compute velocities at given partial timesteps 
+    //
+    // Sample noise components prior to velocity calculations, so that they 
+    // are the same in each calculation 
     int n = cells.rows(); 
+    Array<T, Dynamic, 6> noise = Array<T, Dynamic, 6>::Zero(n, 6);  
+    if (max_noise > 0)
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            for (int j = 0; j < 6; ++j)
+            {
+                T r = uniform_dist(rng); 
+                noise(i, j) = -max_noise + 2 * max_noise * r; 
+            }
+        }
+    }
     int s = b.size(); 
-    std::vector<Array<T, Dynamic, 6> > velocities; 
-    velocities.push_back(
-        getVelocitiesFromNeighbors<T>(
-            cells, neighbors, R, Rcell, cell_cell_prefactors, E0, nz_threshold,
-            noise
-        )
+    std::vector<Array<T, Dynamic, 6> > velocities;
+    Array<T, Dynamic, 6> v0 = getVelocities<T>(
+        cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
+        E0, nz_threshold, noise, adhesion_mode, adhesion_params
     );
+    velocities.push_back(v0); 
     for (int i = 1; i < s; ++i)
     {
         Array<T, Dynamic, 6> multipliers = Array<T, Dynamic, 6>::Zero(n, 6);
         for (int j = 0; j < i; ++j)
             multipliers += velocities[j] * A(i, j);
         Array<T, Dynamic, Dynamic> cells_i(cells); 
-        cells_i(Eigen::all, Eigen::seq(0, 5)) += multipliers * dt;
+        cells_i(Eigen::all, __colseq_coords) += multipliers * dt;
         normalizeOrientations<T>(cells_i);    // Renormalize orientations after each modification
-        velocities.push_back(
-            getVelocitiesFromNeighbors<T>(
-                cells_i, neighbors, R, Rcell, cell_cell_prefactors, E0, nz_threshold,
-                noise
-            )
+        Array<T, Dynamic, 6> vi = getVelocities<T>(
+            cells_i, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
+            E0, nz_threshold, noise, adhesion_mode, adhesion_params
         );
+        velocities.push_back(vi);
     }
 
     // Compute Runge-Kutta update from computed velocities
@@ -902,13 +1146,21 @@ std::tuple<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6>, Array<T, Dynamic, 6
     }
     Array<T, Dynamic, 6> delta1 = velocities_final1 * dt; 
     Array<T, Dynamic, 6> delta2 = velocities_final2 * dt; 
-    cells_new(Eigen::all, Eigen::seq(0, 5)) += delta1;
-    Array<T, Dynamic, 6> errors = delta1 - delta2; 
+    cells_new(Eigen::all, __colseq_coords) += delta1;
+    Array<T, Dynamic, 6> errors = delta1 - delta2;
+
+    // Store computed velocities 
+    cells_new(Eigen::all, __colseq_velocities) = velocities_final1; 
     
     // Renormalize orientations 
     normalizeOrientations<T>(cells_new); 
 
-    return std::make_tuple(cells_new, errors, velocities_final1); 
+    return std::make_pair(cells_new, errors);
 }
+
+/* -------------------------------------------------------------------- // 
+//              VELOCITY UPDATES IN THE NEWTONIAN FRAMEWORK             //
+// -------------------------------------------------------------------- */
+// TODO To be implemented 
 
 #endif
