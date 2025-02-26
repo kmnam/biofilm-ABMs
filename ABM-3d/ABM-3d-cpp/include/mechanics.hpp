@@ -580,11 +580,10 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
 {
     Array<T, 6, 6> M = Array<T, 6, 6>::Zero(6, 6);
     
-    T abs_nz = abs(nz);
     T term1 = eta0 * l;
     T term2 = eta0 * l * l * l / 12;
     T term3, term4, term5;
-    if (abs_nz < nz_threshold)
+    if (nz < nz_threshold)
     {
         T phi = R - rz; 
         if (phi > R - rz)
