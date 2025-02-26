@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/20/2023
+ *     2/26/2025
  */
 
 #ifndef BIOFILM_3D_AUXILIARY_INTEGRALS_HPP
@@ -33,6 +33,12 @@ using boost::multiprecision::pow;
 template <typename T>
 T sstar(const T rz, const T nz, const T R)
 {
+    #ifdef CHECK_CELL_ORIENTATION_ZCOORD_NONZERO
+        if (nz == 0)
+            throw std::invalid_argument(
+                "Cell z-orientation cannot be nonzero when calculating `sstar()`"
+            ); 
+    #endif
     return (R - rz) / nz;
 }
 
@@ -95,7 +101,7 @@ T overlapGamma(const T rz, const T nz, const T R, const T s, const T gamma)
  * Compute the integral of \delta_i^\gamma(s), where \gamma is a real exponent,
  * from s = -l_i/2 to s = +l_i/2, where l_i is the length of the cell.
  *
- * The z-coordinate of the cell's orientation vector is assumed to be negative.
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
  * @param rz z-coordinate of cell center.
  * @param nz z-coordinate of cell orientation.
@@ -109,19 +115,26 @@ template <typename T>
 T integral1(const T rz, const T nz, const T R, const T half_l, const T gamma,
             const T ss)
 {
-    if (ss < -half_l)
+    #ifdef CHECK_CELL_ORIENTATION_ZCOORD_POSITIVE
+        if (nz <= 0)
+            throw std::invalid_argument(
+                "Cell z-orientation must be positive when calculating auxiliary integral"
+            ); 
+    #endif
+
+    if (ss > half_l)
     {
         T overlap1 = pow(phi<T>(rz, nz, R, -half_l), gamma + 1);
         T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
-        return -(overlap2 - overlap1) / (nz * (gamma + 1));
+        return (overlap1 - overlap2) / (nz * (gamma + 1));
     }
-    else if (ss < half_l)
+    else if (ss > -half_l)   // -half_l < ss <= half_l
     {
-        // overlap1 = 0
-        T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
-        return -overlap2 / (nz * (gamma + 1));
+        // overlap2 = 0
+        T overlap1 = pow(phi<T>(rz, nz, R, -half_l), gamma + 1);
+        return overlap1 / (nz * (gamma + 1));
     }
-    else 
+    else                     // ss <= -half_l
     {
         return 0;
     }
@@ -132,7 +145,7 @@ T integral1(const T rz, const T nz, const T R, const T half_l, const T gamma,
  * exponent, from s = -l_i/2 to s = +l_i/2, where l_i is the length of the
  * cell.
  *
- * The z-coordinate of the cell's orientation vector is assumed to be negative.
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
  * @param rz z-coordinate of cell center.
  * @param nz z-coordinate of cell orientation.
@@ -146,21 +159,28 @@ template <typename T>
 T integral2(const T rz, const T nz, const T R, const T half_l, const T gamma,
             const T ss)
 {
+    #ifdef CHECK_CELL_ORIENTATION_ZCOORD_POSITIVE
+        if (nz <= 0)
+            throw std::invalid_argument(
+                "Cell z-orientation must be positive when calculating auxiliary integral"
+            ); 
+    #endif
+
     T term1 = integral1<T>(rz, nz, R, half_l, gamma + 1, ss);
     T term2 = 0; 
-    if (ss < -half_l)
+    if (ss > half_l)
     {
         T overlap1 = pow(phi<T>(rz, nz, R, -half_l), gamma + 1);
         T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
-        term2 = half_l * overlap2 + half_l * overlap1;    // = ... - (-half_l) * overlap1
+        term2 = -half_l * (overlap1 + overlap2); 
     }
-    else if (ss < half_l)
+    else if (ss > -half_l)    // -half_l < ss <= half_l
     {
         // Overlap at s = ss is zero 
-        T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
-        term2 = half_l * overlap2;
+        T overlap1 = pow(phi<T>(rz, nz, R, -half_l), gamma + 1);
+        term2 = -half_l * overlap1;
     }
-    return (term1 - term2) / (nz * (gamma + 1)); 
+    return (term1 + term2) / (nz * (gamma + 1)); 
 }
 
 /**
@@ -168,7 +188,7 @@ T integral2(const T rz, const T nz, const T R, const T half_l, const T gamma,
  * exponent, from s = -l_i/2 to s = +l_i/2, where l_i is the length of the
  * cell.
  *
- * The z-coordinate of the cell's orientation vector is assumed to be negative.
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
  * @param rz z-coordinate of cell center.
  * @param nz z-coordinate of cell orientation.
@@ -182,21 +202,28 @@ template <typename T>
 T integral3(const T rz, const T nz, const T R, const T half_l, const T gamma,
             const T ss)
 {
+    #ifdef CHECK_CELL_ORIENTATION_ZCOORD_POSITIVE
+        if (nz <= 0)
+            throw std::invalid_argument(
+                "Cell z-orientation must be positive when calculating auxiliary integral"
+            ); 
+    #endif
+
     T term1 = 2 * integral2<T>(rz, nz, R, half_l, gamma + 1, ss);
     T term2 = 0;
-    if (ss < -half_l)
+    if (ss > half_l)
     {
         T overlap1 = pow(phi<T>(rz, nz, R, -half_l), gamma + 1);
         T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
-        term2 = half_l * half_l * (overlap2 - overlap1);
+        term2 = half_l * half_l * (overlap1 - overlap2);
     }
-    else if (ss < half_l)
+    else if (ss > -half_l)    // -half_l < ss <= half_l
     {
         // Overlap at s = ss is zero 
-        T overlap2 = pow(phi<T>(rz, nz, R, half_l), gamma + 1);
-        term2 = half_l * half_l * overlap2;
+        T overlap1 = pow(phi<T>(rz, nz, R, -half_l), gamma + 1);
+        term2 = half_l * half_l * overlap1;
     }
-    return (term1 - term2) / (nz * (gamma + 1));
+    return (term1 + term2) / (nz * (gamma + 1));
 }
 
 /**
@@ -204,24 +231,27 @@ T integral3(const T rz, const T nz, const T R, const T half_l, const T gamma,
  * step function, from s = -l_i/2 to s = +l_i/2, where l_i is the length of
  * the cell.
  *
- * The z-coordinate of the cell's orientation vector is assumed to be negative.
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
- * TODO Fix arguments here
- *
- * @param rz z-coordinate of cell center.
- * @param nz z-coordinate of cell orientation.
- * @param R Cell radius.
  * @param half_l Half of cell length.
- * @param ss Pre-computed value of `sstar(rz, nz, R)`.
+ * @param ss Pre-computed value of `sstar(rz, nz, R)`, whose input values are
+ *           defined elsewhere and not passed into this function.
  * @returns Desired integral.  
  */
 template <typename T>
-T integral4(const T rz, const T nz, const T R, const T half_l, const T ss)
+T integral4(const T half_l, const T ss)
 {
-    if (ss < -half_l)
-        return 2 * half_l;
-    else if (ss < half_l)
-        return half_l - ss;
+    #ifdef CHECK_CELL_ORIENTATION_ZCOORD_POSITIVE
+        if (nz <= 0)
+            throw std::invalid_argument(
+                "Cell z-orientation must be positive when calculating auxiliary integral"
+            ); 
+    #endif
+
+    if (ss > half_l)
+        return 2 * half_l;    // = half_l - (-half_l)
+    else if (ss > -half_l)    // -half_l < ss <= half_l
+        return ss + half_l;   // = ss - (-half_l)
     else
         return 0;
 }
@@ -231,7 +261,7 @@ T integral4(const T rz, const T nz, const T R, const T half_l, const T ss)
  * Heaviside step function, from s = -l_i/2 to s = +l_i/2, where l_i is the
  * length of the cell.
  *
- * The z-coordinate of the cell's orientation vector is assumed to be negative.
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
  * @param rz z-coordinate of cell center.
  * @param nz z-coordinate of cell orientation.
@@ -243,21 +273,28 @@ T integral4(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T integral5(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
+    #ifdef CHECK_CELL_ORIENTATION_ZCOORD_POSITIVE
+        if (nz <= 0)
+            throw std::invalid_argument(
+                "Cell z-orientation must be positive when calculating auxiliary integral"
+            ); 
+    #endif
+
     T term1 = integral1<T>(rz, nz, R, half_l, 1.0, ss);
     T term2 = 0;
-    if (ss < -half_l)
+    if (ss > half_l)
     {
         T overlap1 = phi<T>(rz, nz, R, -half_l);
         T overlap2 = phi<T>(rz, nz, R, half_l);
-        term2 = half_l * overlap2 + half_l * overlap1;   // = ... - (-half_l) * overlap1
+        term2 = -half_l * (overlap1 + overlap2);
     }
-    else if (ss < half_l)
+    else if (ss > -half_l)    // -half_l < ss <= half_l
     {
         // Overlap at s = ss is zero 
-        T overlap2 = phi<T>(rz, nz, R, half_l);
-        term2 = half_l * overlap2;
+        T overlap1 = phi<T>(rz, nz, R, -half_l);
+        term2 = -half_l * overlap1;
     }
-    return (term1 - term2) / nz;
+    return (term1 + term2) / nz;
 }
 
 /**
@@ -265,7 +302,7 @@ T integral5(const T rz, const T nz, const T R, const T half_l, const T ss)
  * Heaviside step function, from s = -l_i/2 to s = +l_i/2, where l_i is the
  * length of the cell.
  *
- * The z-coordinate of the cell's orientation vector is assumed to be negative.
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
  * @param rz z-coordinate of cell center.
  * @param nz z-coordinate of cell orientation.
@@ -277,28 +314,35 @@ T integral5(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T integral6(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
+    #ifdef CHECK_CELL_ORIENTATION_ZCOORD_POSITIVE
+        if (nz <= 0)
+            throw std::invalid_argument(
+                "Cell z-orientation must be positive when calculating auxiliary integral"
+            ); 
+    #endif
+
     T term1 = 2 * integral2<T>(rz, nz, R, half_l, 1.0, ss);
     T term2 = 0;
-    if (ss < -half_l)
+    if (ss > half_l)
     {
         T overlap1 = phi<T>(rz, nz, R, -half_l);
         T overlap2 = phi<T>(rz, nz, R, half_l);
-        term2 = half_l * half_l * (overlap2 - overlap1);
+        term2 = half_l * half_l * (overlap1 - overlap2);
     }
-    else if (ss < half_l)
+    else if (ss > -half_l)    // -half_l < ss <= half_l
     {
         // Overlap at s = ss is zero 
-        T overlap2 = phi<T>(rz, nz, R, half_l);
-        term2 = half_l * half_l * overlap2;
+        T overlap1 = phi<T>(rz, nz, R, -half_l);
+        term2 = half_l * half_l * overlap1;
     }
-    return (term1 - term2) / nz;
+    return (term1 + term2) / nz;
 }
 
 /**
  * Compute the integral of the cell-surface contact area density a_i(s) from
  * s = -l_i/2 to s = +l_i/2, where l_i is the length of the cell.
  *
- * The z-coordinate of the cell's orientation vector is assumed to be negative.
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
  * @param rz z-coordinate of cell center.
  * @param nz z-coordinate of cell orientation.
@@ -311,7 +355,7 @@ template <typename T>
 T areaIntegral1(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
     T term1 = pow(R, 0.5) * (1 - nz * nz) * integral1<T>(rz, nz, R, half_l, 0.5, ss);
-    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral4<T>(rz, nz, R, half_l, ss);
+    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral4<T>(half_l, ss);
     return term1 + term2;
 }
 
@@ -320,7 +364,7 @@ T areaIntegral1(const T rz, const T nz, const T R, const T half_l, const T ss)
  * contact area density, from s = -l_i/2 to s = +l_i/2, where l_i is the 
  * length of the cell.
  *
- * The z-coordinate of the cell's orientation vector is assumed to be negative.
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
  * @param rz z-coordinate of cell center.
  * @param nz z-coordinate of cell orientation.
@@ -342,7 +386,7 @@ T areaIntegral2(const T rz, const T nz, const T R, const T half_l, const T ss)
  * contact area density, from s = -l_i/2 to s = +l_i/2, where l_i is the 
  * length of the cell.
  *
- * The z-coordinate of the cell's orientation vector is assumed to be negative.
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
  * @param rz z-coordinate of cell center.
  * @param nz z-coordinate of cell orientation.
