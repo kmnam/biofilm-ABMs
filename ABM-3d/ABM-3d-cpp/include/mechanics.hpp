@@ -23,7 +23,7 @@
 #include <utility>
 #include <tuple>
 #include <iomanip>
-//#include <omp.h>   // TODO 
+#include <omp.h>
 #include <Eigen/Dense>
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
@@ -388,7 +388,9 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  * @param R Cell radius.
  * @param E0 Elastic modulus of EPS. 
  * @param nz_threshold Threshold for determining whether the z-orientation of 
- *                     each cell is zero. 
+ *                     each cell is zero.
+ * @returns Derivatives of the cell-surface repulsion energies with respect to
+ *          cell z-positions and z-orientations.   
  */
 template <typename T>
 Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
@@ -396,7 +398,6 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
                                                 const T R, const T E0,
                                                 const T nz_threshold)
 {
-    Array<T, Dynamic, 1> abs_nz = cells(Eigen::all, 5).abs();
     Array<T, Dynamic, 2> dEdq = Array<T, Dynamic, 2>::Zero(cells.rows(), 2); 
 
     // For each cell ...
@@ -407,33 +408,51 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
     for (int i = 0; i < cells.rows(); ++i)
     {
         // If the z-coordinate of the cell's orientation is zero ... 
-        if (abs_nz(i) < nz_threshold)
+        if (cells(i, __colidx_nz) < nz_threshold)
         {
-            T phi = R - cells(i, 2);
-            // dEdq(i, 0) is nonzero if phi > 0
+            // In this case, dEdq(i, 1) is always zero and dEdq(i, 0) is
+            // nonzero only if phi > 0
+            T phi = R - cells(i, __colidx_rz);
             if (phi > 0)
-                dEdq(i, 0) = -prefactor0 * phi * cells(i, 6);
-            // dEdq(i, 1) is zero 
+                dEdq(i, 0) = -prefactor0 * phi * cells(i, __colidx_l);
         }
         // Otherwise ...
         else
         {
             // Compute the derivative of the cell-surface repulsion energy 
             // with respect to z-position
-            T nz2 = cells(i, 5) * cells(i, 5);
-            T int1 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
-            T int2 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
+            T nz2 = cells(i, __colidx_nz) * cells(i, __colidx_nz);
+            T int1 = integral1<T>(    // Integral of \delta_i(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 1.0, ss(i)
+            );
+            T int2 = integral1<T>(    // Integral of \sqrt{\delta_i(s)}
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 0.5, ss(i)
+            );
             dEdq(i, 0) = -prefactor0 * ((1 - nz2) * int1 + pow(R, 0.5) * nz2 * int2);
 
             // Compute the derivative of the cell-surface repulsion energy 
             // with respect to z-orientation
-            T int3 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 2.0, ss(i));
-            T int4 = integral2<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.0, ss(i));
-            T int5 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 1.5, ss(i));
-            T int6 = integral2<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
-            dEdq(i, 1) -= prefactor0 * (-cells(i, 5)) * int3;
+            T int3 = integral1<T>(    // Integral of \delta_i^2(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 2.0, ss(i)
+            );
+            T int4 = integral2<T>(    // Integral of s * \delta_i(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 1.0, ss(i)
+            );
+            T int5 = integral1<T>(    // Integral of \delta_i^{3/2}(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 1.5, ss(i)
+            );
+            T int6 = integral2<T>(    // Integral of s * \sqrt{\delta_i(s)}
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 0.5, ss(i)
+            );
+            dEdq(i, 1) -= prefactor0 * cells(i, __colidx_nz) * int3;
             dEdq(i, 1) -= prefactor0 * (1 - nz2) * int4;
-            dEdq(i, 1) += prefactor1 * (-cells(i, 5)) * int5;
+            dEdq(i, 1) += prefactor1 * cells(i, __colidx_nz) * int5;
             dEdq(i, 1) -= prefactor2 * nz2 * int6; 
         }
     }
@@ -449,7 +468,9 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
  * @param ss Cell-body coordinates at which each cell-surface overlap is zero. 
  * @param R Cell radius.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
- *                     each cell is zero. 
+ *                     each cell is zero.
+ * @returns Derivatives of the cell-surface adhesion energies with respect to
+ *          cell z-positions and z-orientations.   
  */
 template <typename T>
 Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
@@ -457,7 +478,6 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
                                                const T R,
                                                const T nz_threshold)
 {
-    Array<T, Dynamic, 1> abs_nz = cells(Eigen::all, 5).abs(); 
     Array<T, Dynamic, 2> dEdq = Array<T, Dynamic, 2>::Zero(cells.rows(), 2);
 
     // For each cell ...
@@ -468,40 +488,52 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
     for (int i = 0; i < cells.rows(); ++i)
     {
         // If the z-coordinate of the cell's orientation is zero ... 
-        if (abs_nz(i) < nz_threshold)
+        if (cells(i, __colidx_nz) < nz_threshold)
         {
-            T phi = R - cells(i, 2);
-            // dEdq(i, 0) is nonzero if phi > 0
+            // In this case, dEdq(i, 1) is always zero and dEdq(i, 0) is
+            // nonzero only if phi > 0
+            T phi = R - cells(i, __colidx_rz);
             if (phi > 0)
-                dEdq(i, 0) = cells(i, 12) * prefactor0 * cells(i, 6) / pow(phi, 0.5);
-            // dEdq(i, 1) is zero 
+                dEdq(i, 0) = cells(i, __colidx_sigma0) * prefactor0 * cells(i, __colidx_l) / pow(phi, 0.5);
         }
         // Otherwise ... 
         else
         {
             // Compute the derivative of the cell-surface adhesion energy 
             // with respect to z-position
-            T nz2 = cells(i, 5) * cells(i, 5);
-            T int1 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
+            T nz2 = cells(i, __colidx_nz) * cells(i, __colidx_nz);
+            T int1 = integral1<T>(    // Integral of \delta_i^{-1/2}(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), -0.5, ss(i)
+            );
             T term2 = 0;
-            if (ss(i) >= -cells(i, 7) && ss(i) < cells(i, 7)) 
-                term2 = (prefactor1 / 2) * cells(i, 5);
-            dEdq(i, 0) = prefactor0 * (1 - nz2) * int1 - term2;
-            dEdq(i, 0) *= cells(i, 12);
+            if (abs(ss(i)) < cells(i, __colidx_half_l))
+                term2 = (prefactor1 / 2) * cells(i, __colidx_nz);
+            dEdq(i, 0) = prefactor0 * (1 - nz2) * int1 + term2;
+            dEdq(i, 0) *= cells(i, __colidx_sigma0);
 
             // Compute the derivative of the cell-surface adhesion energy
             // with respect to z-orientation
-            T int2 = integral1<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), 0.5, ss(i));
-            T int3 = integral2<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), -0.5, ss(i));
-            T int4 = integral4<T>(cells(i, 2), cells(i, 5), R, cells(i, 7), ss(i));
+            T int2 = integral1<T>(    // Integral of \delta_i^{1/2}(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 0.5, ss(i)
+            );
+            T int3 = integral2<T>(    // Integral of s * \delta_i^{-1/2}(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), -0.5, ss(i)
+            );
+            T int4 = integral4<T>(    // Integral of \Theta(\delta_i(s))
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), ss(i)
+            );
             T term4 = 0;
-            if (ss(i) >= -cells(i, 7) && ss(i) < cells(i, 7))
-                term4 = (prefactor1 / 2) * (R - cells(i, 2));
-            dEdq(i, 1) += prefactor2 * (-cells(i, 5)) * int2; 
+            if (abs(ss(i)) < cells(i, __colidx_half_l))
+                term4 = (prefactor1 / 2) * (R - cells(i, __colidx_rz));
+            dEdq(i, 1) += prefactor2 * cells(i, __colidx_nz) * int2; 
             dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
-            dEdq(i, 1) -= prefactor1 * (-cells(i, 5)) * int4;
-            dEdq(i, 1) -= term4;
-            dEdq(i, 1) *= cells(i, 12);
+            dEdq(i, 1) -= prefactor1 * cells(i, __colidx_nz) * int4;
+            dEdq(i, 1) += term4;
+            dEdq(i, 1) *= cells(i, __colidx_sigma0);
         }
     }
 
@@ -590,7 +622,7 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
 }
 
 /**
- * Compute the derivatives of the cell-cell interaction energies for each 
+ * Compute the derivatives of the cell-cell repulsion energies for each 
  * cell with respect to the cell's position and orientation coordinates.
  *
  * In this function, the pairs of neighboring cells in the population have
@@ -606,8 +638,8 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
  * @param E0 Elastic modulus of EPS. 
  * @param prefactors Array of four pre-computed prefactors, namely `2.5 * sqrt(R)`,
  *                   `2.5 * E0 * sqrt(R)`, `E0 * pow(R - Rcell, 1.5)`, and `Ecell`.
- * @returns Derivatives of the cell-cell interaction energies with respect 
- *          to cell positions and orientations.   
+ * @returns Derivatives of the cell-cell repulsion energies with respect to
+ *          cell positions and orientations.   
  */
 template <typename T>
 Array<T, Dynamic, 6> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
@@ -669,7 +701,8 @@ Array<T, Dynamic, 6> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
 
         if (overlap > 0)
         {
-            // Derivative of cell-cell interaction energy w.r.t position of cell i
+            // Compute the derivatives of the cell-cell repulsion energy
+            // between cells i and j
             Array<T, 3, 1> vij = prefactor * dir_ij;
             Array<T, 2, 6> forces;
             forces(0, Eigen::seq(0, 2)) = vij; 
@@ -819,8 +852,6 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
     return dEdq;
 }
 
-
-
 /* -------------------------------------------------------------------- // 
 //                     NEWTONIAN FORCES AND TORQUES                     // 
 // -------------------------------------------------------------------- */
@@ -904,7 +935,7 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param cell_cell_prefactors Array of four pre-computed prefactors for
- *                             cell-cell interaction forces.
+ *                             cell-cell repulsion forces.
  * @param E0 Elastic modulus of EPS.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero.
@@ -1002,8 +1033,9 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
         A(6, 4) = cells(i, __colidx_ny);
         A(6, 5) = cells(i, __colidx_nz);
 
-        // Extract the derivatives of the cell-cell interaction energy, 
-        // cell-surface repulsion energy, and cell-surface adhesion energy
+        // Extract the derivatives of the cell-cell repulsion energy,
+        // cell-cell adhesion energy, cell-surface repulsion energy, and
+        // cell-surface adhesion energy
         b(Eigen::seq(0, 5)) = -dEdq_repulsion - dEdq_adhesion;
         b(2) -= (dEdq_surface_repulsion(i, 0) + dEdq_surface_adhesion(i, 0));
         b(5) -= (dEdq_surface_repulsion(i, 1) + dEdq_surface_adhesion(i, 1));  
@@ -1045,7 +1077,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param cell_cell_prefactors Array of four pre-computed prefactors for
- *                             cell-cell interaction forces.
+ *                             cell-cell repulsion forces.
  * @param E0 Elastic modulus of EPS. 
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero.
