@@ -432,6 +432,7 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  * @param cells Current population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
+ * @param dt Timestep. Only used for debugging output.
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS. 
  * @param Rcell Cell radius, excluding the EPS.
@@ -553,6 +554,7 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
  *                  population.
  * @param to_adhere Boolean array specifying whether, for each pair of 
  *                  neighboring cells, the adhesive force is nonzero.
+ * @param dt Timestep. Only used for debugging output.
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
@@ -668,6 +670,7 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  * @param cells Current population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
+ * @param dt Timestep. Only used for debugging output.
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param eta Array of cell-cell friction coefficients between cells of 
@@ -897,6 +900,7 @@ Array<T, Dynamic, 1> getTorques(const Ref<const Array<T, Dynamic, Dynamic> >& ce
  * @param cells Current population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
+ * @param dt Timestep. Only used for debugging output.
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS. 
  * @param Rcell Cell radius, excluding the EPS.
@@ -1035,6 +1039,7 @@ Array<T, Dynamic, 3> cellCellRepulsiveForcesNewton(const Ref<const Array<T, Dyna
  *                  population.
  * @param to_adhere Boolean array specifying whether, for each pair of 
  *                  neighboring cells, the adhesive force is nonzero.
+ * @param dt Timestep. Only used for debugging output.
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
@@ -1457,7 +1462,8 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  *                  population.
  * @param to_adhere Boolean array specifying whether, for each pair of 
  *                  neighboring cells, the adhesive force is nonzero.
- * @param iter Iteration number. Only used for debugging output. 
+ * @param dt Timestep. Only used for debugging output.
+ * @param iter Iteration number. Only used for debugging output.
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param cell_cell_prefactors Array of four pre-computed prefactors for 
@@ -1808,6 +1814,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
  *                  population.
  * @param to_adhere Boolean array specifying whether, for each pair of 
  *                  neighboring cells, the adhesive force is nonzero.
+ * @param dt Timestep. 
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
