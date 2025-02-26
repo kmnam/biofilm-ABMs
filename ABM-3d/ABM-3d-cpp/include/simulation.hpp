@@ -36,16 +36,8 @@ using std::pow;
 using boost::multiprecision::pow;
 using std::sqrt;
 using boost::multiprecision::sqrt;
-using std::min;
-using boost::multiprecision::min;
 using std::max;
 using boost::multiprecision::max;
-using std::abs;
-using boost::multiprecision::abs;
-using std::cos; 
-using boost::multiprecision::cos;
-using std::log10; 
-using boost::multiprecision::log10; 
 
 /**
  * Return a string containing a floating-point number, specified to the 
