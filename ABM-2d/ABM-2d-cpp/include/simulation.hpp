@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/21/2025
+ *     2/26/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -361,10 +361,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     {
         std::stringstream ss; 
         ss << "growth_mean" << i + 1;
-        params[ss.str()] = floatToString<double>(growth_means(i), precision);
+        params[ss.str()] = floatToString<T>(growth_means(i), precision);
         ss.str(std::string());
         ss << "growth_std" << i + 1;
-        params[ss.str()] = floatToString<double>(growth_stds(i), precision);
+        params[ss.str()] = floatToString<T>(growth_stds(i), precision);
         ss.str(std::string());
         for (int j = 0; j < n_attributes; ++j)
         {
@@ -584,7 +584,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             if (switch_mode == SwitchMode::INHERIT)
             {
                 switchGroupsInherit<T>(
-                    cells, daughter_pairs, group_attributes, n_groups, dt,
+                    cells, daughter_pairs, group_attributes, n_groups,
                     switch_rates, growth_dists, attribute_dists, rng, uniform_dist
                 );
             }
@@ -1377,7 +1377,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             if (switch_mode == SwitchMode::INHERIT)
             {
                 switchGroupsInherit<T>(
-                    cells, daughter_pairs, group_attributes, n_groups, dt,
+                    cells, daughter_pairs, group_attributes, n_groups,
                     switch_rates, growth_dists, attribute_dists, rng, uniform_dist
                 );
             }
