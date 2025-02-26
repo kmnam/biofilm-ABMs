@@ -1,23 +1,8 @@
 /**
  * Implementations of cell-cell and cell-surface interaction forces.
  *
- * In what follows, a population of N cells is represented as a 2-D array of
- * size (N, 13+), where each row represents a cell and stores the following 
- * data: 
- *
- * 0) x-coordinate of cell center
- * 1) y-coordinate of cell center
- * 2) z-coordinate of cell center
- * 3) x-coordinate of cell orientation vector
- * 4) y-coordinate of cell orientation vector
- * 5) z-coordinate of cell orientation vector
- * 6) cell length (excluding caps)
- * 7) half of cell length (excluding caps)
- * 8) timepoint at which cell was formed
- * 9) cell growth rate
- * 10) cell's ambient viscosity with respect to surrounding fluid
- * 11) cell-surface friction coefficient
- * 12) cell-surface adhesion energy density
+ * In what follows, a population of N cells is represented as a 2-D array
+ * of N rows, whose columns are as specified in `indices.hpp`.
  *
  * Additional features may be included in the array but these are not
  * relevant for the computations implemented here. 
@@ -26,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/7/2024
+ *     2/26/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -37,14 +22,17 @@
 #include <vector>
 #include <utility>
 #include <tuple>
-#include <omp.h>
+#include <iomanip>
+//#include <omp.h>   // TODO 
 #include <Eigen/Dense>
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Segment_3.h>
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Segment_3.h>
+#include "indices.hpp"
 #include "integrals.hpp"
 #include "distances.hpp"
+#include "kiharaGBK.hpp"
 
 using namespace Eigen;
 
@@ -56,6 +44,193 @@ using boost::multiprecision::abs;
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Segment_3 Segment_3;
+
+/**
+ * An enum that enumerates the different adhesion force types. 
+ */
+enum class AdhesionMode
+{
+    NONE = 0,
+    KIHARA = 1,
+    GBK = 2
+};
+
+/**
+ * Output an error message pertaining to the given cell and the generalized 
+ * forces exerted upon it. 
+ *
+ * The input forces here are assumed to be an array of generalized forces in 
+ * the Lagrangian framework. 
+ *
+ * @param r Cell center.
+ * @param n Cell orientation.
+ * @param half_l Cell half-length.
+ * @param dEdq Array of generalized forces. 
+ */
+template <typename T>
+void cellLagrangianForcesSummary(const Ref<const Array<T, 3, 1> >& r,
+                                 const Ref<const Array<T, 3, 1> >& n,
+                                 const T half_l,
+                                 const Ref<const Array<T, 6, 1> >& dEdq)
+{
+    std::cerr << std::setprecision(10)
+              << "Cell center = (" << r(0) << ", " << r(1) << ", " << r(2) << ")" << std::endl
+              << "Cell orientation = (" << n(0) << ", " << n(1) << ", " << n(2) << ")" << std::endl
+              << "Cell half-length = " << half_l << std::endl
+              << "Generalized forces: " << std::endl
+              << " - w.r.t r(0) = " << dEdq(0) << std::endl
+              << " - w.r.t r(1) = " << dEdq(1) << std::endl
+              << " - w.r.t r(2) = " << dEdq(2) << std::endl  
+              << " - w.r.t n(0) = " << dEdq(3) << std::endl
+              << " - w.r.t n(1) = " << dEdq(4) << std::endl
+              << " - w.r.t n(2) = " << dEdq(5) << std::endl;
+}
+
+/**
+ * Output an error message pertaining to the given cell-cell configuration
+ * and the generalized forces between them.
+ *
+ * The input forces here are assumed to be an array of generalized forces in 
+ * the Lagrangian framework. 
+ *
+ * @param r1 Center of cell 1.
+ * @param n1 Orientation of cell 1.
+ * @param dr1 Translational velocity of cell 1. 
+ * @param dn1 Orientational velocity of cell 1. 
+ * @param half_l1 Half of length of cell 1.
+ * @param r2 Center of cell 2.
+ * @param n2 Orientation of cell 2.
+ * @param dr2 Translational velocity of cell 2. 
+ * @param dn2 Orientational velocity of cell 2. 
+ * @param half_l2 Half of length of cell 2.
+ * @param d12 Distance vector from cell 1 to cell 2. 
+ * @param s Cell-body coordinate of contact point along cell 1.
+ * @param t Cell-body coordinate of contact point along cell 2.
+ * @param dEdq Array of generalized forces. 
+ */
+template <typename T>
+void pairLagrangianForcesSummary(const Ref<const Array<T, 3, 1> >& r1,
+                                 const Ref<const Array<T, 3, 1> >& n1,
+                                 const Ref<const Array<T, 3, 1> >& dr1, 
+                                 const Ref<const Array<T, 3, 1> >& dn1,
+                                 const T half_l1, 
+                                 const Ref<const Array<T, 3, 1> >& r2,
+                                 const Ref<const Array<T, 3, 1> >& n2,
+                                 const Ref<const Array<T, 3, 1> >& dr2, 
+                                 const Ref<const Array<T, 3, 1> >& dn2,
+                                 const T half_l2,  
+                                 const Ref<const Array<T, 3, 1> >& d12,
+                                 const T s, const T t,
+                                 const Ref<const Array<T, 2, 6> >& dEdq)
+{
+    std::cerr << std::setprecision(10)
+              << "Cell 1 center = (" << r1(0) << ", " << r1(1) << ", " << r1(2) << ")" << std::endl
+              << "Cell 1 orientation = (" << n1(0) << ", " << n1(1) << ", " << n1(2) << ")" << std::endl
+              << "Cell 1 translational velocity = (" << dr1(0) << ", " << dr1(1) << ", " << dr1(2) << ")" << std::endl
+              << "Cell 1 orientational velocity = (" << dn1(0) << ", " << dn1(1) << ", " << dn1(2) << ")" << std::endl
+              << "Cell 1 half-length = " << half_l1 << std::endl
+              << "Cell 2 center = (" << r2(0) << ", " << r2(1) << ", " << r2(2) << ")" << std::endl
+              << "Cell 2 orientation = (" << n2(0) << ", " << n2(1) << ", " << n2(2) << ")" << std::endl
+              << "Cell 2 translational velocity = (" << dr2(0) << ", " << dr2(1) << ", " << dr2(2) << ")" << std::endl
+              << "Cell 2 orientational velocity = (" << dn2(0) << ", " << dn2(1) << ", " << dn2(2) << ")" << std::endl
+              << "Cell 2 half-length = " << half_l2 << std::endl
+              << "Distance vector = (" << d12(0) << ", " << d12(1) << ", " << d12(2) << ")" << std::endl 
+              << "Cell-body coordinate of contact point along cell 1 = " << s << std::endl
+              << "Cell-body coordinate of contact point along cell 2 = " << t << std::endl 
+              << "Generalized forces: " << std::endl
+              << " - w.r.t r1(0) = " << dEdq(0, 0) << std::endl
+              << " - w.r.t r1(1) = " << dEdq(0, 1) << std::endl
+              << " - w.r.t r1(2) = " << dEdq(0, 2) << std::endl 
+              << " - w.r.t n1(0) = " << dEdq(0, 3) << std::endl
+              << " - w.r.t n1(1) = " << dEdq(0, 4) << std::endl
+              << " - w.r.t n1(2) = " << dEdq(0, 5) << std::endl
+              << " - w.r.t r2(0) = " << dEdq(1, 0) << std::endl
+              << " - w.r.t r2(1) = " << dEdq(1, 1) << std::endl
+              << " - w.r.t r2(2) = " << dEdq(1, 2) << std::endl 
+              << " - w.r.t n2(0) = " << dEdq(1, 3) << std::endl
+              << " - w.r.t n2(1) = " << dEdq(1, 4) << std::endl
+              << " - w.r.t n2(2) = " << dEdq(1, 5) << std::endl;
+}
+
+/**
+ * Output an error message pertaining to the given cell and force exerted 
+ * upon it. 
+ *
+ * @param r Cell center.
+ * @param n Cell orientation.
+ * @param half_l Cell half-length.
+ * @param force Force on input cell. 
+ * @param torque Torque on input cell. 
+ */
+template <typename T>
+void cellNewtonianForceSummary(const Ref<const Array<T, 3, 1> >& r,
+                               const Ref<const Array<T, 3, 1> >& n,
+                               const Ref<const Array<T, 3, 1> >& dr, 
+                               const Ref<const Array<T, 3, 1> >& dn,
+                               const T half_l,
+                               const Ref<const Array<T, 3, 1> >& force,
+                               const Ref<const Array<T, 3, 1> >& torque)
+{
+    std::cerr << std::setprecision(10)
+              << "Cell center = (" << r(0) << ", " << r(1) << ", " << r(2) << ")" << std::endl
+              << "Cell orientation = (" << n(0) << ", " << n(1) << ", " << n(2) << ")" << std::endl
+              << "Cell translational velocity = (" << dr(0) << ", " << dr(1) << ", " << dr(2) << ")" << std::endl
+              << "Cell orientational velocity = (" << dn(0) << ", " << dn(1) << ", " << dn(2) << ")" << std::endl
+              << "Cell half-length = " << half_l << std::endl
+              << "Force = (" << force(0) << ", " << force(1) << ", " << force(2) << ")" << std::endl
+              << "Torque = (" << torque(0) << ", " << torque(1) << ", " << torque(2) << ")" << std::endl;
+}
+
+/**
+ * Output an error message pertaining to the given cell-cell configuration
+ * and the force on cell 2 due to cell 1.
+ *
+ * @param r1 Center of cell 1.
+ * @param n1 Orientation of cell 1.
+ * @param dr1 Translational velocity of cell 1. 
+ * @param dn1 Orientational velocity of cell 1. 
+ * @param half_l1 Half of length of cell 1.
+ * @param r2 Center of cell 2.
+ * @param n2 Orientation of cell 2.
+ * @param dr2 Translational velocity of cell 2. 
+ * @param dn2 Orientational velocity of cell 2. 
+ * @param half_l2 Half of length of cell 2.
+ * @param d12 Distance vector from cell 1 to cell 2. 
+ * @param s Cell-body coordinate of contact point along cell 1.
+ * @param t Cell-body coordinate of contact point along cell 2.
+ * @param force Force vector from cell 1 to cell 2. 
+ */
+template <typename T>
+void pairNewtonianForceSummary(const Ref<const Array<T, 3, 1> >& r1,
+                               const Ref<const Array<T, 3, 1> >& n1,
+                               const Ref<const Array<T, 3, 1> >& dr1, 
+                               const Ref<const Array<T, 3, 1> >& dn1,
+                               const T half_l1, 
+                               const Ref<const Array<T, 3, 1> >& r2,
+                               const Ref<const Array<T, 3, 1> >& n2,
+                               const Ref<const Array<T, 3, 1> >& dr2, 
+                               const Ref<const Array<T, 3, 1> >& dn2,
+                               const T half_l2,  
+                               const Ref<const Array<T, 3, 1> >& d12,
+                               const T s, const T t,
+                               const Ref<const Array<T, 3, 1> >& force)
+{
+    std::cerr << std::setprecision(10)
+              << "Cell 1 center = (" << r1(0) << ", " << r1(1) << ", " << r1(2) << ")" << std::endl
+              << "Cell 1 orientation = (" << n1(0) << ", " << n1(1) << ", " << n1(2) << ")" << std::endl
+              << "Cell 1 translational velocity = (" << dr1(0) << ", " << dr1(1) << ", " << dr1(2) << ")" << std::endl
+              << "Cell 1 orientational velocity = (" << dn1(0) << ", " << dn1(1) << ", " << dn1(2) << ")" << std::endl
+              << "Cell 1 half-length = " << half_l1 << std::endl
+              << "Cell 2 center = (" << r2(0) << ", " << r2(1) << ", " << r2(2) << ")" << std::endl
+              << "Cell 2 orientation = (" << n2(0) << ", " << n2(1) << ", " << n2(2) << ")" << std::endl
+              << "Cell 2 translational velocity = (" << dr2(0) << ", " << dr2(1) << ", " << dr2(2) << ")" << std::endl
+              << "Cell 2 orientational velocity = (" << dn2(0) << ", " << dn2(1) << ", " << dn2(2) << ")" << std::endl
+              << "Cell 2 half-length = " << half_l2 << std::endl
+              << "Distance vector = (" << d12(0) << ", " << d12(1) << ", " << d12(2) << ")" << std::endl 
+              << "Cell-body coordinate of contact point along cell 1 = " << s << std::endl
+              << "Cell-body coordinate of contact point along cell 2 = " << t << std::endl 
+              << "Force = (" << force(0) << ", " << force(1) << ", " << force(2) << ")" << std::endl; 
+}
 
 /**
  * Compute the derivatives of the cell-surface repulsion energy for each cell
@@ -317,16 +492,22 @@ Array<T, Dynamic, 7> getCellNeighbors(const Ref<const Array<T, Dynamic, Dynamic>
         {
             // For two cells to be within neighbor_threshold of each other,
             // their centers must be within neighbor_threshold + Ldiv + 2 * R
-            T dist_rij = (cells(i, Eigen::seq(0, 2)) - cells(j, Eigen::seq(0, 2))).matrix().norm();  
+            T dist_rij = (cells(i, __colseq_r) - cells(j, __colseq_r)).matrix().norm();  
             if (dist_rij < neighbor_threshold + Ldiv + 2 * R)
             {
                 // In this case, compute their actual distance and check that 
                 // they lie within neighbor_threshold of each other
                 auto result = distBetweenCells<T>(
-                    segments[i], segments[j], cells(i, Eigen::seq(0, 2)).matrix(),
-                    cells(i, Eigen::seq(3, 5)).matrix(), cells(i, 7),
-                    cells(j, Eigen::seq(0, 2)).matrix(),
-                    cells(j, Eigen::seq(3, 5)).matrix(), cells(j, 7), kernel
+                    segments[i], segments[j],
+                    cells(i, __colidx_id),
+                    cells(i, __colseq_r).matrix(),
+                    cells(i, __colseq_n).matrix(),
+                    cells(i, __colidx_half_l),
+                    cells(j, __colidx_id),
+                    cells(j, __colseq_r).matrix(),
+                    cells(j, __colseq_n).matrix(),
+                    cells(j, __colidx_half_l),
+                    kernel
                 );
                 Matrix<T, 3, 1> dist_ij = std::get<0>(result); 
                 T si = std::get<1>(result);
