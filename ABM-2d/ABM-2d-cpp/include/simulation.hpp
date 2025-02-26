@@ -79,7 +79,7 @@ std::string floatToString(T x, const int precision = 10)
 /**
  * Run a simulation with the given initial population of cells.
  *
- * This function runs simulations in which the cells switch between two 
+ * This function runs simulations in which the cells switch between multiple
  * groups that differ by growth rate and one or more additional physical
  * attributes. The growth rate and chosen attributes are taken to be normally
  * distributed variables that exhibit a specified mean and standard deviation.
