@@ -268,20 +268,26 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
 
             // Update cell lengths and positions ... 
             //
-            // If cell division is symmetric, then the daughter cells both have
-            // length L / 2 - R, where L is the length of the dividing cell, 
-            // the point of division occurs at the center of the dividing cell,
-            // and their x- and y-coordinates are perturbed by L / 4 + R / 2
-            // along the daughter cells' orientation vectors 
+            // If cell division is symmetric, then:
+            // - the daughter cells both have length L / 2 - R, where L is the
+            //   length of the dividing cell; 
+            // - the point of division occurs at the center of the dividing cell;
+            // - their x- and y-coordinates are perturbed by L / 4 + R / 2 
+            //   along the daughter cells' orientation vectors 
             //
-            // If not, then the daughter cells have lengths L1 = M * (L - 2 * R)
-            // and L2 = (1 - M) * (L - 2 * R), where M is a random variable between
-            // 0 and 1. The point of division occurs at cell body coordinate
-            // L1 + R - Lh with Lh = L / 2, which has x- and y-coordinates given
-            // by rx + (L1 + R - Lh) * nx and ry + (L1 + R - Lh) * ny, where
-            // (rx, ry) and (nx, ny) are the position and orientation of the
-            // dividing cell. The corresponding perturbations of the cell centers
-            // from the point of division are given by R + L1 / 2 and R + L2 / 2
+            // If not, then:
+            // - the daughter cells have lengths L1 = M * (L - 2 * R) and
+            //   L2 = (1 - M) * (L - 2 * R), where M is a random variable
+            //   between 0 and 1;
+            // - the point of division occurs at cell body coordinate
+            //   L1 + R - Lh with Lh = L / 2, which has x- and y-coordinates
+            //   given by:
+            //   - rx + (L1 + R - Lh) * nx
+            //   - ry + (L1 + R - Lh) * ny,
+            //   where (rx, ry) and (nx, ny) are the position and orientation
+            //   of the dividing cell;
+            // - the corresponding perturbations of the cell centers from the
+            //   point of division are given by R + L1 / 2 and R + L2 / 2
             //
             // Sample a normally distributed daughter cell length for each cell
             // to be divided 
@@ -537,20 +543,26 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
 
             // Update cell lengths and positions ... 
             //
-            // If cell division is symmetric, then the daughter cells both have
-            // length L / 2 - R, where L is the length of the dividing cell, 
-            // the point of division occurs at the center of the dividing cell,
-            // and their x- and y-coordinates are perturbed by L / 4 + R / 2
-            // along the daughter cells' orientation vectors 
+            // If cell division is symmetric, then:
+            // - the daughter cells both have length L / 2 - R, where L is the
+            //   length of the dividing cell; 
+            // - the point of division occurs at the center of the dividing cell;
+            // - their x- and y-coordinates are perturbed by L / 4 + R / 2 
+            //   along the daughter cells' orientation vectors 
             //
-            // If not, then the daughter cells have lengths L1 = M * (L - 2 * R)
-            // and L2 = (1 - M) * (L - 2 * R), where M is a random variable between
-            // 0 and 1. The point of division occurs at cell body coordinate
-            // L1 + R - Lh with Lh = L / 2, which has x- and y-coordinates given
-            // by rx + (L1 + R - Lh) * nx and ry + (L1 + R - Lh) * ny, where
-            // (rx, ry) and (nx, ny) are the position and orientation of the
-            // dividing cell. The corresponding perturbations of the cell centers
-            // from the point of division are given by R + L1 / 2 and R + L2 / 2
+            // If not, then:
+            // - the daughter cells have lengths L1 = M * (L - 2 * R) and
+            //   L2 = (1 - M) * (L - 2 * R), where M is a random variable
+            //   between 0 and 1;
+            // - the point of division occurs at cell body coordinate
+            //   L1 + R - Lh with Lh = L / 2, which has x- and y-coordinates
+            //   given by:
+            //   - rx + (L1 + R - Lh) * nx
+            //   - ry + (L1 + R - Lh) * ny,
+            //   where (rx, ry) and (nx, ny) are the position and orientation
+            //   of the dividing cell;
+            // - the corresponding perturbations of the cell centers from the
+            //   point of division are given by R + L1 / 2 and R + L2 / 2
             //
             // Sample a normally distributed daughter cell length for each cell
             // to be divided 
