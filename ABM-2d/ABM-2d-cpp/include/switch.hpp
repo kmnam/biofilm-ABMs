@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/21/2025
+ *     2/26/2025
  */
 
 #ifndef BIOFILM_SWITCH_HPP
@@ -101,7 +101,6 @@ void switchGroupsMarkov(Ref<Array<T, Dynamic, Dynamic> > cells,
  *                       divided. 
  * @param group_attributes Indices of attributes that differ between groups.
  * @param n_groups Number of distinct groups.
- * @param dt Timestep.
  * @param switch_probs Matrix of switching probabilities between groups. 
  * @param growth_dists Vector of growth rate distributions, one for each
  *                     group.
@@ -114,7 +113,7 @@ template <typename T>
 void switchGroupsInherit(Ref<Array<T, Dynamic, Dynamic> > cells,
                          std::vector<std::pair<int, int> >& daughter_pairs,
 	                 std::vector<int>& group_attributes,
-		         const int n_groups, const T dt,
+		         const int n_groups, 
 		         const Ref<const Array<T, Dynamic, Dynamic> >& switch_probs,
 		         std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
 		         std::map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> >& attribute_dists,
