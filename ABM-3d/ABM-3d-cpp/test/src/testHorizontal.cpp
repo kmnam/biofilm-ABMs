@@ -1,87 +1,242 @@
 /**
- * In what follows, a population of N cells is represented as a 2-D array of 
- * size (N, 13), where each row represents a cell and stores the following data:
+ * Test simulations with one horizontal non-growing cell. 
  * 
- * 0) x-coordinate of cell center
- * 1) y-coordinate of cell center
- * 2) z-coordinate of cell center
- * 3) x-coordinate of cell orientation vector
- * 4) y-coordinate of cell orientation vector
- * 5) z-coordinate of cell orientation vector
- * 6) cell length (excluding caps)
- * 7) half of cell length (excluding caps)
- * 8) timepoint at which the cell was formed
- * 9) cell growth rate
- * 10) cell's ambient viscosity with respect to surrounding fluid
- * 11) cell-surface friction coefficient
- * 12) cell-surface adhesion energy density
- *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/4/2024
+ *     2/27/2025
  */
-
 #include <iostream>
+#include <cmath>
+#include <functional>
 #include <Eigen/Dense>
 #include <boost/math/constants/constants.hpp>
+#include <boost/multiprecision/mpfr.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include "../../include/indices.hpp"
 #include "../../include/simulation.hpp"
+#include "../../include/switch.hpp"
 
-int main()
+using namespace Eigen;
+
+typedef double T; 
+
+using std::sin; 
+using boost::multiprecision::sin; 
+using std::sqrt; 
+using boost::multiprecision::sqrt;
+using std::pow; 
+using boost::multiprecision::pow;
+
+/* ------------------------------------------------------------------- //
+ *                             TEST MODULES                            //
+ * ------------------------------------------------------------------- */
+TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagrangian()]")
 {
-    // Define system and simulation parameters
-    const double half_l = 0.5;
-    const double L0 = 2 * half_l;
-    const double R = 0.8;
-    const double Rcell = 0.35;
-    const double E0 = 3900.0;
-    const double Ecell = 390000.0;
-    const double eta_ambient = 0.072;
-    const double eta_surface = 720.0;
-    const double sigma0 = 100.0;
-    const double Ldiv = 2 * (R + L0);
-    const double neighbor_threshold = 2 * (2 * R + L0);
+    // Define common simulation parameters
+    const T R = 0.8;
+    const T half_l = 0.5;
+    const T L0 = 2 * half_l;
+    const T Rcell = 0.5;
+    const T E0 = 3900.0;
+    const T Ecell = 3900000.0;
+    const T eta_ambient = 0.072;
+    const T eta_surface = 720.0;
+    const T sigma0 = 100.0;
+    const T Ldiv = 2 * (R + L0);
+    const T neighbor_threshold = 2 * (2 * R + L0);
     const int max_iter = 10000;
-    const double max_stepsize = 1e-6;
+    const T max_stepsize = 1e-6;
+    const T min_stepsize = 1e-8;
     const bool write = false;
     const std::string outprefix = "";
-    const int iter_write = 10 * max_iter;
-    const int iter_update_neighbors = 10 * max_iter;
-    const int iter_update_stepsize = 5;
-    const double max_error_allowed = 1e-10;
-    const double min_error = 1e-30;
-    const double max_tries_update_stepsize = 3;
-    const double nz_threshold = 1e-10;
-    const int rng_seed = 1234567890;
-    const double growth_mean = 0.0;
-    const double growth_std = 0.0;
-    const double daughter_length_std = 0.0; 
-    const double daughter_angle_xy_bound = 0.0;
-    const double daughter_angle_z_bound = 0.0;
+    const T dt_write = 0.01;
+    const int iter_update_neighbors = 100;
+    const int iter_update_stepsize = 1;
+    const T max_error_allowed = 1e-10;
+    const T min_error = 1e-30;
+    const T max_tries_update_stepsize = 3;
+    const T nz_threshold = 1e-20;
+    const int rng_seed = 42;
+    const T growth_mean = 0.0;
+    const T growth_std = 0.0;
+    const int n_groups = 1; 
+    std::vector<int> group_attributes; 
+    Array<T, Dynamic, 1> growth_means(n_groups), growth_stds(n_groups); 
+    growth_means << growth_mean; 
+    growth_stds << growth_std;
+    Array<T, Dynamic, Dynamic> attribute_means(n_groups, 0), attribute_stds(n_groups, 0);
+    Array<T, Dynamic, Dynamic> switch_rates = Array<T, Dynamic, Dynamic>::Zero(1, 1); 
+    const T daughter_length_std = 0.0; 
+    const T daughter_angle_xy_bound = 0.0;
+    const T daughter_angle_z_bound = 0.0;
+    const bool truncate_surface_friction = false; 
+    const T surface_coulomb_coeff = 0.0;
+    const T max_noise = 0.0;
+    const bool basal_only = false; 
+    const T basal_min_overlap = 0.0; 
+    std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map; 
+    std::unordered_map<std::string, T> adhesion_params;  
 
-    // Define a horizontal cell in which the cell is just touching the surface
-    Array<double, 3, 1> r, n;
-    r << 0.0, 0.0, 0.95 * R;
+    // Case 1: A horizontal cell in which the cell is just touching the surface
+    Array<T, 3, 1> r, n;
+    r << 0.0, 0.0, 0.999 * R;
     n << 1.0, 0.0, 0.0;
-    Array<double, Dynamic, Dynamic> cells(1, 13);
-    cells << r(0), r(1), r(2), n(0), n(1), n(2),
-             L0, half_l, 0.0, growth_mean, eta_ambient, eta_surface, sigma0;
-    std::cout << cells << std::endl;
+    Array<T, Dynamic, Dynamic> cells(1, __ncols_required);
+    cells << 0, r(0), r(1), r(2), n(0), n(1), n(2), 0, 0, 0, 0, 0, 0,
+             2 * half_l, half_l, 0.0, growth_mean, eta_ambient, eta_surface,
+             eta_surface, sigma0, 1;
+    std::vector<int> parents; 
 
     // Run simulation
-    cells = runSimulation<double>(
-        cells, max_iter, -1, R, Rcell, L0, Ldiv, E0, Ecell, max_stepsize,
-        write, outprefix, iter_write, iter_update_neighbors,
-        iter_update_stepsize, max_error_allowed, min_error,
-        max_tries_update_stepsize, neighbor_threshold, nz_threshold, rng_seed,
-        growth_mean, growth_std, daughter_length_std, daughter_angle_xy_bound,
-        daughter_angle_z_bound
-    ); 
+    auto result = runSimulationAdaptiveLagrangian<T>(
+        cells, parents, max_iter, -1, R, Rcell, L0, Ldiv, E0, Ecell,
+        max_stepsize, min_stepsize, write, outprefix, dt_write,
+        iter_update_neighbors, iter_update_stepsize, max_error_allowed,
+        min_error, max_tries_update_stepsize, neighbor_threshold, nz_threshold,
+        rng_seed, n_groups, group_attributes, growth_means, growth_stds,
+        attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
+        daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
+        truncate_surface_friction, surface_coulomb_coeff, max_noise,
+        basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
+        adhesion_params
+    );
+    cells = result.first;  
 
-    std::cout << cells << std::endl;
-    std::cout << "Final z-coordinate of cell center: " << cells(0, 2) << std::endl;
-    double adhesion = sigma0 / (R * E0);
-    double theoretical = R * (1 - std::pow(0.25 * adhesion, 2./3.));
-    std::cout << "Theoretical value: " << theoretical << std::endl;
+    // Test that the cell has not grown and every attribute other than its 
+    // z-coordinate has remained as it was 
+    const T delta = 1e-8;  
+    REQUIRE(static_cast<int>(cells(0, __colidx_id)) == 0); 
+    REQUIRE_THAT(cells(0, __colidx_rx), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_ry), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_nx), Catch::Matchers::WithinAbs(1, delta));
+    REQUIRE_THAT(cells(0, __colidx_ny), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_nz), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_l), Catch::Matchers::WithinAbs(2 * half_l, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_half_l), Catch::Matchers::WithinAbs(half_l, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_t0), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_growth), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_eta0), Catch::Matchers::WithinAbs(eta_ambient, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_eta1), Catch::Matchers::WithinAbs(eta_surface, delta));
+    REQUIRE_THAT(cells(0, __colidx_maxeta1), Catch::Matchers::WithinAbs(eta_surface, delta));
+    REQUIRE_THAT(cells(0, __colidx_sigma0), Catch::Matchers::WithinAbs(sigma0, delta));
+    REQUIRE(static_cast<int>(cells(0, __colidx_group)) == 1);
+
+    // Test that the cell's z-coordinate matches the theoretical value 
+    T adhesion = sigma0 / (R * E0);
+    T target = R * (1 - std::pow(0.25 * adhesion, 2./3.));
+    REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(target, delta));
+
+    // Test that the cell has reached a steady-state position 
+    REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, delta)); 
+
+    // Case 2: A horizontal cell within a larger initial contact with the 
+    // surface
+    r(2) = 0.8 * R;
+    cells << 0, r(0), r(1), r(2), n(0), n(1), n(2), 0, 0, 0, 0, 0, 0,
+             2 * half_l, half_l, 0.0, growth_mean, eta_ambient, eta_surface,
+             eta_surface, sigma0, 1;
+
+    // Run simulation
+    result = runSimulationAdaptiveLagrangian<T>(
+        cells, parents, max_iter, -1, R, Rcell, L0, Ldiv, E0, Ecell,
+        max_stepsize, min_stepsize, write, outprefix, dt_write,
+        iter_update_neighbors, iter_update_stepsize, max_error_allowed,
+        min_error, max_tries_update_stepsize, neighbor_threshold, nz_threshold,
+        rng_seed, n_groups, group_attributes, growth_means, growth_stds,
+        attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
+        daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
+        truncate_surface_friction, surface_coulomb_coeff, max_noise,
+        basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
+        adhesion_params
+    );
+    cells = result.first;  
+
+    // Test that the cell has not grown and every attribute other than its 
+    // z-coordinate has remained as it was 
+    REQUIRE(static_cast<int>(cells(0, __colidx_id)) == 0); 
+    REQUIRE_THAT(cells(0, __colidx_rx), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_ry), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_nx), Catch::Matchers::WithinAbs(1, delta));
+    REQUIRE_THAT(cells(0, __colidx_ny), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_nz), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_l), Catch::Matchers::WithinAbs(2 * half_l, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_half_l), Catch::Matchers::WithinAbs(half_l, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_t0), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_growth), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_eta0), Catch::Matchers::WithinAbs(eta_ambient, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_eta1), Catch::Matchers::WithinAbs(eta_surface, delta));
+    REQUIRE_THAT(cells(0, __colidx_maxeta1), Catch::Matchers::WithinAbs(eta_surface, delta));
+    REQUIRE_THAT(cells(0, __colidx_sigma0), Catch::Matchers::WithinAbs(sigma0, delta));
+    REQUIRE(static_cast<int>(cells(0, __colidx_group)) == 1);
+
+    // Test that the cell's z-coordinate matches the theoretical value 
+    REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(target, delta));
+
+    // Test that the cell has reached a steady-state position 
+    REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, delta));
+
+    // Case 3: A horizontal cell that is not in contact with the surface 
+    r(2) = 1.1 * R; 
+    cells << 0, r(0), r(1), r(2), n(0), n(1), n(2), 0, 0, 0, 0, 0, 0,
+             2 * half_l, half_l, 0.0, growth_mean, eta_ambient, eta_surface,
+             eta_surface, sigma0, 1;
+
+    // Run simulation
+    result = runSimulationAdaptiveLagrangian<T>(
+        cells, parents, max_iter, -1, R, Rcell, L0, Ldiv, E0, Ecell,
+        max_stepsize, min_stepsize, write, outprefix, dt_write,
+        iter_update_neighbors, iter_update_stepsize, max_error_allowed,
+        min_error, max_tries_update_stepsize, neighbor_threshold, nz_threshold,
+        rng_seed, n_groups, group_attributes, growth_means, growth_stds,
+        attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
+        daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
+        truncate_surface_friction, surface_coulomb_coeff, max_noise,
+        basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
+        adhesion_params
+    );
+    cells = result.first;  
+
+    // Test that the cell has not grown and every attribute other than its 
+    // z-coordinate has remained as it was 
+    REQUIRE(static_cast<int>(cells(0, __colidx_id)) == 0); 
+    REQUIRE_THAT(cells(0, __colidx_rx), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_ry), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_nx), Catch::Matchers::WithinAbs(1, delta));
+    REQUIRE_THAT(cells(0, __colidx_ny), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_nz), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_l), Catch::Matchers::WithinAbs(2 * half_l, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_half_l), Catch::Matchers::WithinAbs(half_l, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_t0), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_growth), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_eta0), Catch::Matchers::WithinAbs(eta_ambient, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_eta1), Catch::Matchers::WithinAbs(eta_surface, delta));
+    REQUIRE_THAT(cells(0, __colidx_maxeta1), Catch::Matchers::WithinAbs(eta_surface, delta));
+    REQUIRE_THAT(cells(0, __colidx_sigma0), Catch::Matchers::WithinAbs(sigma0, delta));
+    REQUIRE(static_cast<int>(cells(0, __colidx_group)) == 1);
+
+    // Test that the cell's z-coordinate matches the theoretical value, which 
+    // should match the original value 
+    REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(1.1 * R, delta));
+
+    // Test that the cell has reached a steady-state position 
+    REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, delta)); 
+
 }
