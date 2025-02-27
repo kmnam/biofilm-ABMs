@@ -71,11 +71,9 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceAdhesionForces
     const T delta = 1e-8;
     const T tol = 1e-5;   // Since sigma0 is on the order of 100
     T rz, nz; 
-    Array<T, 4, 1> angles;
-    angles << boost::math::constants::sixth_pi<T>(),
-              boost::math::constants::quarter_pi<T>(),
-              boost::math::constants::third_pi<T>(), 
-              boost::math::constants::half_pi<T>();
+    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
+    for (int i = 0; i < angles.size(); ++i)
+        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)

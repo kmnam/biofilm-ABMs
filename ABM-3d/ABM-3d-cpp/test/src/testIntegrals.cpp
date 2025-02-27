@@ -72,11 +72,9 @@ TEST_CASE("Tests for auxiliary integral 1", "[integral1()]")
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
-    Array<T, 4, 1> angles;
-    angles << boost::math::constants::sixth_pi<T>(),
-              boost::math::constants::quarter_pi<T>(),
-              boost::math::constants::third_pi<T>(), 
-              boost::math::constants::half_pi<T>();
+    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
+    for (int i = 0; i < angles.size(); ++i)
+        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
                         const T gamma, const T delta,
@@ -131,11 +129,9 @@ TEST_CASE("Tests for auxiliary integral 2", "[integral2()]")
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
-    Array<T, 4, 1> angles;
-    angles << boost::math::constants::sixth_pi<T>(),
-              boost::math::constants::quarter_pi<T>(),
-              boost::math::constants::third_pi<T>(), 
-              boost::math::constants::half_pi<T>();
+    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
+    for (int i = 0; i < angles.size(); ++i)
+        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
                         const T gamma, const T delta,
@@ -190,11 +186,9 @@ TEST_CASE("Tests for auxiliary integral 3", "[integral3()]")
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
-    Array<T, 4, 1> angles;
-    angles << boost::math::constants::sixth_pi<T>(),
-              boost::math::constants::quarter_pi<T>(),
-              boost::math::constants::third_pi<T>(), 
-              boost::math::constants::half_pi<T>();
+    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
+    for (int i = 0; i < angles.size(); ++i)
+        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
                         const T gamma, const T delta,
@@ -249,11 +243,9 @@ TEST_CASE("Tests for auxiliary integral 4", "[integral4()]")
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
-    Array<T, 4, 1> angles;
-    angles << boost::math::constants::sixth_pi<T>(),
-              boost::math::constants::quarter_pi<T>(),
-              boost::math::constants::third_pi<T>(), 
-              boost::math::constants::half_pi<T>();
+    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
+    for (int i = 0; i < angles.size(); ++i)
+        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
                         const T delta,
@@ -303,11 +295,9 @@ TEST_CASE("Tests for auxiliary integral 5", "[integral5()]")
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
-    Array<T, 4, 1> angles;
-    angles << boost::math::constants::sixth_pi<T>(),
-              boost::math::constants::quarter_pi<T>(),
-              boost::math::constants::third_pi<T>(), 
-              boost::math::constants::half_pi<T>();
+    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
+    for (int i = 0; i < angles.size(); ++i)
+        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
                         const T delta,
@@ -357,11 +347,9 @@ TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
-    Array<T, 4, 1> angles;
-    angles << boost::math::constants::sixth_pi<T>(),
-              boost::math::constants::quarter_pi<T>(),
-              boost::math::constants::third_pi<T>(), 
-              boost::math::constants::half_pi<T>();
+    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
+    for (int i = 0; i < angles.size(); ++i)
+        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
                         const T delta,
@@ -412,11 +400,9 @@ TEST_CASE("Tests for area integral 1", "[areaIntegral1()]")
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
-    Array<T, 4, 1> angles;
-    angles << boost::math::constants::sixth_pi<T>(),
-              boost::math::constants::quarter_pi<T>(),
-              boost::math::constants::third_pi<T>(), 
-              boost::math::constants::half_pi<T>();
+    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
+    for (int i = 0; i < angles.size(); ++i)
+        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
                         const T delta,
@@ -469,11 +455,9 @@ TEST_CASE("Tests for area integral 2", "[areaIntegral2()]")
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
-    Array<T, 4, 1> angles;
-    angles << boost::math::constants::sixth_pi<T>(),
-              boost::math::constants::quarter_pi<T>(),
-              boost::math::constants::third_pi<T>(), 
-              boost::math::constants::half_pi<T>();
+    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
+    for (int i = 0; i < angles.size(); ++i)
+        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
                         const T delta,
@@ -526,11 +510,9 @@ TEST_CASE("Tests for area integral 3", "[areaIntegral3()]")
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
-    Array<T, 4, 1> angles;
-    angles << boost::math::constants::sixth_pi<T>(),
-              boost::math::constants::quarter_pi<T>(),
-              boost::math::constants::third_pi<T>(), 
-              boost::math::constants::half_pi<T>();
+    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
+    for (int i = 0; i < angles.size(); ++i)
+        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
                         const T delta,
