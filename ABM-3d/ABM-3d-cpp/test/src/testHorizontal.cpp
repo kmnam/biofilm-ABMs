@@ -23,10 +23,6 @@ using namespace Eigen;
 
 typedef double T; 
 
-using std::sin; 
-using boost::multiprecision::sin; 
-using std::sqrt; 
-using boost::multiprecision::sqrt;
 using std::pow; 
 using boost::multiprecision::pow;
 
@@ -131,7 +127,7 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
 
     // Test that the cell's z-coordinate matches the theoretical value 
     T adhesion = sigma0 / (R * E0);
-    T target = R * (1 - std::pow(0.25 * adhesion, 2./3.));
+    T target = R * (1 - pow(0.25 * adhesion, 2./3.));
     REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(target, delta));
 
     // Test that the cell has reached a steady-state position 
@@ -238,5 +234,4 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
 
     // Test that the cell has reached a steady-state position 
     REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, delta)); 
-
 }
