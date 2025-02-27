@@ -110,11 +110,6 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
     REQUIRE_THAT(cells(0, __colidx_nx), Catch::Matchers::WithinAbs(1, delta));
     REQUIRE_THAT(cells(0, __colidx_ny), Catch::Matchers::WithinAbs(0, delta)); 
     REQUIRE_THAT(cells(0, __colidx_nz), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, delta));
     REQUIRE_THAT(cells(0, __colidx_l), Catch::Matchers::WithinAbs(2 * half_l, delta)); 
     REQUIRE_THAT(cells(0, __colidx_half_l), Catch::Matchers::WithinAbs(half_l, delta)); 
     REQUIRE_THAT(cells(0, __colidx_t0), Catch::Matchers::WithinAbs(0, delta));
@@ -131,7 +126,12 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
     REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(target, delta));
 
     // Test that the cell has reached a steady-state position 
+    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, delta));
     REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, delta));
 
     // Case 2: A horizontal cell within a larger initial contact with the 
     // surface
@@ -163,11 +163,6 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
     REQUIRE_THAT(cells(0, __colidx_nx), Catch::Matchers::WithinAbs(1, delta));
     REQUIRE_THAT(cells(0, __colidx_ny), Catch::Matchers::WithinAbs(0, delta)); 
     REQUIRE_THAT(cells(0, __colidx_nz), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, delta));
     REQUIRE_THAT(cells(0, __colidx_l), Catch::Matchers::WithinAbs(2 * half_l, delta)); 
     REQUIRE_THAT(cells(0, __colidx_half_l), Catch::Matchers::WithinAbs(half_l, delta)); 
     REQUIRE_THAT(cells(0, __colidx_t0), Catch::Matchers::WithinAbs(0, delta));
@@ -233,5 +228,10 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
     REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(1.1 * R, delta));
 
     // Test that the cell has reached a steady-state position 
+    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, delta));
     REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, delta)); 
+    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, delta));
 }
