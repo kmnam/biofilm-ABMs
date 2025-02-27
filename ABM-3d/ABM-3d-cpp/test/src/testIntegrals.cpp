@@ -23,8 +23,8 @@ typedef double T;
 
 using std::sin; 
 using boost::multiprecision::sin; 
-using std::cos; 
-using boost::multiprecision::cos; 
+using std::sqrt; 
+using boost::multiprecision::sqrt; 
 
 /* ------------------------------------------------------------------- //
  *                           HELPER FUNCTIONS                          //
@@ -376,6 +376,177 @@ TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
         T target = integrate(func, -half_l, half_l, 1000000);
         REQUIRE_THAT(
             integral6<T>(rz, nz, R, half_l, ss),
+            Catch::Matchers::WithinAbs(target, delta)
+        );
+        if (!std::isnan(check_value))
+            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+    }; 
+    
+    // For each angle ... 
+    for (int j = 0; j < angles.size(); ++j)
+    {
+        // Define the z-orientation
+        nz = sin(angles(j));
+
+        // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+        T half_l = 0.5;
+        T max_overlap = 0.2 * R;
+        rz = R + half_l * nz - max_overlap;
+        run_tests(rz, nz, R, half_l, delta);
+
+        // Case 2: Assume the cell does not contact the surface
+        max_overlap = -0.1 * R; 
+        rz = R + half_l * nz - max_overlap;
+        run_tests(rz, nz, R, half_l, delta, 0.0);
+    }
+}
+
+/**
+ * A series of tests for areaIntegral1(), which integrates the cell-surface 
+ * contact area density. 
+ */
+TEST_CASE("Tests for area integral 1", "[areaIntegral1()]")
+{
+    const T R = 0.8;
+    const T delta = 1e-6;
+    T rz, nz; 
+    Array<T, 4, 1> exponents;  
+    exponents << 0.5, 1.0, 1.5, 2.0;
+    Array<T, 4, 1> angles;
+    angles << boost::math::constants::sixth_pi<T>(),
+              boost::math::constants::quarter_pi<T>(),
+              boost::math::constants::third_pi<T>(), 
+              boost::math::constants::half_pi<T>();
+
+    auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
+                        const T delta,
+                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+    {
+        T ss = (R - rz) / nz;
+        std::function<T(const T)> func = [rz, nz, R](const T s)
+        {
+            T d = overlap<T>(rz, nz, R, s); 
+            T sqrt_d = overlapGamma<T>(rz, nz, R, s, 0.5);
+            T step = (d > 0 ? 1.0 : 0.0); 
+            return sqrt(R) * (1 - nz * nz) * sqrt_d + boost::math::constants::pi<T>() * R * nz * nz * step;  
+        };
+        T target = integrate(func, -half_l, half_l, 1000000);
+        REQUIRE_THAT(
+            areaIntegral1<T>(rz, nz, R, half_l, ss),
+            Catch::Matchers::WithinAbs(target, delta)
+        );
+        if (!std::isnan(check_value))
+            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+    }; 
+    
+    // For each angle ... 
+    for (int j = 0; j < angles.size(); ++j)
+    {
+        // Define the z-orientation
+        nz = sin(angles(j));
+
+        // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+        T half_l = 0.5;
+        T max_overlap = 0.2 * R;
+        rz = R + half_l * nz - max_overlap;
+        run_tests(rz, nz, R, half_l, delta);
+
+        // Case 2: Assume the cell does not contact the surface
+        max_overlap = -0.1 * R; 
+        rz = R + half_l * nz - max_overlap;
+        run_tests(rz, nz, R, half_l, delta, 0.0);
+    }
+}
+
+/**
+ * A series of tests for areaIntegral2(), which integrates s times the 
+ * cell-surface contact area density. 
+ */
+TEST_CASE("Tests for area integral 2", "[areaIntegral2()]")
+{
+    const T R = 0.8;
+    const T delta = 1e-6;
+    T rz, nz; 
+    Array<T, 4, 1> exponents;  
+    exponents << 0.5, 1.0, 1.5, 2.0;
+    Array<T, 4, 1> angles;
+    angles << boost::math::constants::sixth_pi<T>(),
+              boost::math::constants::quarter_pi<T>(),
+              boost::math::constants::third_pi<T>(), 
+              boost::math::constants::half_pi<T>();
+
+    auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
+                        const T delta,
+                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+    {
+        T ss = (R - rz) / nz;
+        std::function<T(const T)> func = [rz, nz, R](const T s)
+        {
+            T d = overlap<T>(rz, nz, R, s); 
+            T sqrt_d = overlapGamma<T>(rz, nz, R, s, 0.5);
+            T step = (d > 0 ? 1.0 : 0.0); 
+            return s * (sqrt(R) * (1 - nz * nz) * sqrt_d + boost::math::constants::pi<T>() * R * nz * nz * step);  
+        };
+        T target = integrate(func, -half_l, half_l, 1000000);
+        REQUIRE_THAT(
+            areaIntegral2<T>(rz, nz, R, half_l, ss),
+            Catch::Matchers::WithinAbs(target, delta)
+        );
+        if (!std::isnan(check_value))
+            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+    }; 
+    
+    // For each angle ... 
+    for (int j = 0; j < angles.size(); ++j)
+    {
+        // Define the z-orientation
+        nz = sin(angles(j));
+
+        // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+        T half_l = 0.5;
+        T max_overlap = 0.2 * R;
+        rz = R + half_l * nz - max_overlap;
+        run_tests(rz, nz, R, half_l, delta);
+
+        // Case 2: Assume the cell does not contact the surface
+        max_overlap = -0.1 * R; 
+        rz = R + half_l * nz - max_overlap;
+        run_tests(rz, nz, R, half_l, delta, 0.0);
+    }
+}
+
+/**
+ * A series of tests for areaIntegral3(), which integrates s^2 times the 
+ * cell-surface contact area density. 
+ */
+TEST_CASE("Tests for area integral 3", "[areaIntegral3()]")
+{
+    const T R = 0.8;
+    const T delta = 1e-6;
+    T rz, nz; 
+    Array<T, 4, 1> exponents;  
+    exponents << 0.5, 1.0, 1.5, 2.0;
+    Array<T, 4, 1> angles;
+    angles << boost::math::constants::sixth_pi<T>(),
+              boost::math::constants::quarter_pi<T>(),
+              boost::math::constants::third_pi<T>(), 
+              boost::math::constants::half_pi<T>();
+
+    auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
+                        const T delta,
+                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+    {
+        T ss = (R - rz) / nz;
+        std::function<T(const T)> func = [rz, nz, R](const T s)
+        {
+            T d = overlap<T>(rz, nz, R, s); 
+            T sqrt_d = overlapGamma<T>(rz, nz, R, s, 0.5);
+            T step = (d > 0 ? 1.0 : 0.0); 
+            return s * s * (sqrt(R) * (1 - nz * nz) * sqrt_d + boost::math::constants::pi<T>() * R * nz * nz * step);  
+        };
+        T target = integrate(func, -half_l, half_l, 1000000);
+        REQUIRE_THAT(
+            areaIntegral3<T>(rz, nz, R, half_l, ss),
             Catch::Matchers::WithinAbs(target, delta)
         );
         if (!std::isnan(check_value))
