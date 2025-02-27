@@ -39,31 +39,30 @@ using boost::multiprecision::pow;
  */
 Array<T, 2, 1> cellSurfaceRepulsionForcesFiniteDiff(const T rz, const T nz,
                                                     const T half_l, const T R,
-                                                    const T E0, const T ss,
-                                                    const T delta = 1e-8)
+                                                    const T E0, const T delta = 1e-8)
 {
-    // Calculate derivative with respect to rz  
-    T int1_prz = integral1<T>(rz + delta, nz, R, half_l, 2.0, ss); 
-    T int2_prz = integral1<T>(rz + delta, nz, R, half_l, 1.5, ss);
+    // Calculate derivative with respect to rz
+    T int1_prz = integral1<T>(rz + delta, nz, R, half_l, 2.0, (R - rz - delta) / nz);
+    T int2_prz = integral1<T>(rz + delta, nz, R, half_l, 1.5, (R - rz - delta) / nz);
     T total_prz = E0 * sqrt(R) * (
         pow(R, -0.5) * (1 - nz * nz) * int1_prz + (4.0 / 3.0) * nz * nz * int2_prz
-    ); 
-    T int1_mrz = integral1<T>(rz - delta, nz, R, half_l, 2.0, ss); 
-    T int2_mrz = integral1<T>(rz - delta, nz, R, half_l, 1.5, ss);
+    );
+    T int1_mrz = integral1<T>(rz - delta, nz, R, half_l, 2.0, (R - rz + delta) / nz); 
+    T int2_mrz = integral1<T>(rz - delta, nz, R, half_l, 1.5, (R - rz + delta) / nz);
     T total_mrz = E0 * sqrt(R) * (
         pow(R, -0.5) * (1 - nz * nz) * int1_mrz + (4.0 / 3.0) * nz * nz * int2_mrz
     );
     T force_rz = (total_prz - total_mrz) / (2 * delta);
 
     // Calculate derivative with respect to nz
-    T int1_pnz = integral1<T>(rz, nz + delta, R, half_l, 2.0, ss); 
-    T int2_pnz = integral1<T>(rz, nz + delta, R, half_l, 1.5, ss); 
+    T int1_pnz = integral1<T>(rz, nz + delta, R, half_l, 2.0, (R - rz) / (nz + delta)); 
+    T int2_pnz = integral1<T>(rz, nz + delta, R, half_l, 1.5, (R - rz) / (nz + delta)); 
     T total_pnz = E0 * sqrt(R) * (
         pow(R, -0.5) * (1 - (nz + delta) * (nz + delta)) * int1_pnz +
         (4.0 / 3.0) * (nz + delta) * (nz + delta) * int2_pnz
     );
-    T int1_mnz = integral1<T>(rz, nz - delta, R, half_l, 2.0, ss); 
-    T int2_mnz = integral1<T>(rz, nz - delta, R, half_l, 1.5, ss); 
+    T int1_mnz = integral1<T>(rz, nz - delta, R, half_l, 2.0, (R - rz) / (nz - delta)); 
+    T int2_mnz = integral1<T>(rz, nz - delta, R, half_l, 1.5, (R - rz) / (nz - delta)); 
     T total_mnz = E0 * sqrt(R) * (
         pow(R, -0.5) * (1 - (nz - delta) * (nz - delta)) * int1_mnz +
         (4.0 / 3.0) * (nz - delta) * (nz - delta) * int2_mnz
@@ -118,7 +117,7 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceRepulsionForce
 
         // Compute forces via finite differences 
         Array<T, 2, 1> forces2 = cellSurfaceRepulsionForcesFiniteDiff(
-            rz, nz, half_l, R, E0, ss(0), delta 
+            rz, nz, half_l, R, E0, delta 
         ); 
         REQUIRE_THAT(forces1(0, 0), Catch::Matchers::WithinAbs(forces2(0), tol));
         REQUIRE_THAT(forces1(0, 1), Catch::Matchers::WithinAbs(forces2(1), tol)); 
@@ -134,7 +133,7 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceRepulsionForce
         forces1 = cellSurfaceRepulsionForces<T>(cells, 1e-6, 0, ss, R, E0, nz_threshold);
 
         // Compute forces via finite differences 
-        forces2 = cellSurfaceRepulsionForcesFiniteDiff(rz, nz, half_l, R, E0, ss(0), delta); 
+        forces2 = cellSurfaceRepulsionForcesFiniteDiff(rz, nz, half_l, R, E0, delta); 
         REQUIRE_THAT(forces1(0, 0), Catch::Matchers::WithinAbs(forces2(0), delta));
         REQUIRE_THAT(forces1(0, 1), Catch::Matchers::WithinAbs(forces2(1), delta));
         REQUIRE_THAT(forces1(0, 0), Catch::Matchers::WithinAbs(0.0, delta)); 
