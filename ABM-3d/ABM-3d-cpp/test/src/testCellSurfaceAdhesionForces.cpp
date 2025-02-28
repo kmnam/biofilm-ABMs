@@ -21,7 +21,8 @@
 
 using namespace Eigen; 
 
-typedef double T; 
+// Use high-precision type for testing 
+typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<100> > T; 
 
 using std::sin; 
 using boost::multiprecision::sin; 
@@ -68,8 +69,8 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceAdhesionForces
     const T R = 0.8;
     const T sigma0 = 100.0;
     const T nz_threshold = 1e-8;
-    const T delta = 1e-8;
-    const T tol = 1e-5;   // Since sigma0 is on the order of 100
+    const T delta = 1e-50;
+    const double tol = 1e-45;   // Since sigma0 is on the order of 100
     T rz, nz; 
     Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
     for (int i = 0; i < angles.size(); ++i)
@@ -100,8 +101,14 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceAdhesionForces
         Array<T, 2, 1> forces2 = cellSurfaceAdhesionForcesFiniteDiff(
             rz, nz, half_l, R, sigma0, delta 
         ); 
-        REQUIRE_THAT(forces1(0, 0), Catch::Matchers::WithinAbs(forces2(0), tol));
-        REQUIRE_THAT(forces1(0, 1), Catch::Matchers::WithinAbs(forces2(1), tol)); 
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 0)),
+            Catch::Matchers::WithinAbs(static_cast<double>(forces2(0)), tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 1)),
+            Catch::Matchers::WithinAbs(static_cast<double>(forces2(1)), tol)
+        ); 
 
         // Case 2: Assume the cell does not contact the surface
         max_overlap = -0.1 * R; 
@@ -115,10 +122,20 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceAdhesionForces
 
         // Compute forces via finite differences 
         forces2 = cellSurfaceAdhesionForcesFiniteDiff(rz, nz, half_l, R, sigma0, delta); 
-        REQUIRE_THAT(forces1(0, 0), Catch::Matchers::WithinAbs(forces2(0), delta));
-        REQUIRE_THAT(forces1(0, 1), Catch::Matchers::WithinAbs(forces2(1), delta));
-        REQUIRE_THAT(forces1(0, 0), Catch::Matchers::WithinAbs(0.0, delta)); 
-        REQUIRE_THAT(forces1(0, 1), Catch::Matchers::WithinAbs(0.0, delta));  
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 0)),
+            Catch::Matchers::WithinAbs(static_cast<double>(forces2(0)), tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 1)),
+            Catch::Matchers::WithinAbs(static_cast<double>(forces2(1)), tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 0)), Catch::Matchers::WithinAbs(0.0, tol)
+        ); 
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 1)), Catch::Matchers::WithinAbs(0.0, tol)
+        );  
     }
 }
 
