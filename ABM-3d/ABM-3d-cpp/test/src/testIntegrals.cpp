@@ -104,7 +104,7 @@ TEST_CASE("Tests for auxiliary integral 1", "[integral1()]")
         // For each angle ... 
         for (int j = 0; j < angles.size(); ++j)
         {
-            std::cout << "Running tests for exponent = " << gamma
+            std::cout << "Running tests for integral1(), exponent = " << gamma
                       << ", nz = " << sin(angles(j)) << std::endl; 
 
             // Define the z-orientation
@@ -185,7 +185,7 @@ TEST_CASE("Tests for auxiliary integral 2", "[integral2()]")
         // For each angle ... 
         for (int j = 0; j < angles.size(); ++j)
         {
-            std::cout << "Running tests for exponent = " << gamma
+            std::cout << "Running tests for integral2(), exponent = " << gamma
                       << ", nz = " << sin(angles(j)) << std::endl; 
 
             // Define the z-orientation
@@ -266,7 +266,7 @@ TEST_CASE("Tests for auxiliary integral 3", "[integral3()]")
         // For each angle ... 
         for (int j = 0; j < angles.size(); ++j)
         {
-            std::cout << "Running tests for exponent = " << gamma
+            std::cout << "Running tests for integral3(), exponent = " << gamma
                       << ", nz = " << sin(angles(j)) << std::endl; 
 
             // Define the z-orientation
@@ -313,7 +313,7 @@ TEST_CASE("Tests for auxiliary integral 4", "[integral4()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 10000; 
+    int meshsize = 1e+7; 
     const int max_meshsize = 1e+8;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
@@ -343,13 +343,13 @@ TEST_CASE("Tests for auxiliary integral 4", "[integral4()]")
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
-        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+        std::cout << "Running tests for integral4(), nz = " << sin(angles(j)) << std::endl; 
 
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 10000; 
+        meshsize = 1e+7;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -365,7 +365,7 @@ TEST_CASE("Tests for auxiliary integral 4", "[integral4()]")
         REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 10000;
+        meshsize = 1e+7;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
@@ -388,7 +388,7 @@ TEST_CASE("Tests for auxiliary integral 5", "[integral5()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 10000; 
+    int meshsize = 1e+7;
     const int max_meshsize = 1e+8;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
@@ -418,13 +418,13 @@ TEST_CASE("Tests for auxiliary integral 5", "[integral5()]")
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
-        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+        std::cout << "Running tests for integral5(), nz = " << sin(angles(j)) << std::endl; 
 
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 10000; 
+        meshsize = 1e+7;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -440,7 +440,7 @@ TEST_CASE("Tests for auxiliary integral 5", "[integral5()]")
         REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 10000;
+        meshsize = 1e+7;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
@@ -463,7 +463,7 @@ TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 10000; 
+    int meshsize = 1e+7;
     const int max_meshsize = 1e+8;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
@@ -496,13 +496,13 @@ TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
-        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+        std::cout << "Running tests for integral6(), nz = " << sin(angles(j)) << std::endl; 
 
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 10000; 
+        meshsize = 1e+7;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -518,7 +518,7 @@ TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
         REQUIRE(res.second < tol); 
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 10000;
+        meshsize = 1e+7;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
@@ -542,8 +542,8 @@ TEST_CASE("Tests for area integral 1", "[areaIntegral1()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 10000; 
-    const int max_meshsize = 1e+7;
+    int meshsize = 1e+7; 
+    const int max_meshsize = 1e+8;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -574,13 +574,13 @@ TEST_CASE("Tests for area integral 1", "[areaIntegral1()]")
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
-        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+        std::cout << "Running tests for areaIntegral1(), nz = " << sin(angles(j)) << std::endl; 
 
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 10000; 
+        meshsize = 1e+7; 
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -596,7 +596,7 @@ TEST_CASE("Tests for area integral 1", "[areaIntegral1()]")
         REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 10000;
+        meshsize = 1e+7;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
@@ -620,8 +620,8 @@ TEST_CASE("Tests for area integral 2", "[areaIntegral2()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 10000; 
-    const int max_meshsize = 1e+7;
+    int meshsize = 1e+7; 
+    const int max_meshsize = 1e+8;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -652,13 +652,13 @@ TEST_CASE("Tests for area integral 2", "[areaIntegral2()]")
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
-        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+        std::cout << "Running tests for areaIntegral2(), nz = " << sin(angles(j)) << std::endl; 
 
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 10000;
+        meshsize = 1e+7;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -674,7 +674,7 @@ TEST_CASE("Tests for area integral 2", "[areaIntegral2()]")
         REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 10000;
+        meshsize = 1e+7;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
@@ -698,8 +698,8 @@ TEST_CASE("Tests for area integral 3", "[areaIntegral3()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 10000; 
-    const int max_meshsize = 1e+7;
+    int meshsize = 1e+7; 
+    const int max_meshsize = 1e+8;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -730,13 +730,13 @@ TEST_CASE("Tests for area integral 3", "[areaIntegral3()]")
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
-        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+        std::cout << "Running tests for areaIntegral3(), nz = " << sin(angles(j)) << std::endl; 
 
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 10000;
+        meshsize = 1e+7;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -752,7 +752,7 @@ TEST_CASE("Tests for area integral 3", "[areaIntegral3()]")
         REQUIRE(res.second < tol); 
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 10000;
+        meshsize = 1e+7;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
