@@ -21,7 +21,8 @@
 
 using namespace Eigen; 
 
-typedef double T; 
+// Use high-precision type for testing 
+typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<100> > T; 
 
 using std::sin; 
 using boost::multiprecision::sin; 
@@ -41,16 +42,19 @@ Array<T, 2, 1> cellSurfaceRepulsionForcesFiniteDiff(const T rz, const T nz,
                                                     const T half_l, const T R,
                                                     const T E0, const T delta = 1e-8)
 {
+    T four("4"), three("3"); 
+    T four_thirds = four / three; 
+
     // Calculate derivative with respect to rz
     T int1_prz = integral1<T>(rz + delta, nz, R, half_l, 2.0, (R - rz - delta) / nz);
     T int2_prz = integral1<T>(rz + delta, nz, R, half_l, 1.5, (R - rz - delta) / nz);
     T total_prz = E0 * sqrt(R) * (
-        pow(R, -0.5) * (1 - nz * nz) * int1_prz + (4.0 / 3.0) * nz * nz * int2_prz
+        pow(R, -0.5) * (1 - nz * nz) * int1_prz + four_thirds * nz * nz * int2_prz
     );
     T int1_mrz = integral1<T>(rz - delta, nz, R, half_l, 2.0, (R - rz + delta) / nz); 
     T int2_mrz = integral1<T>(rz - delta, nz, R, half_l, 1.5, (R - rz + delta) / nz);
     T total_mrz = E0 * sqrt(R) * (
-        pow(R, -0.5) * (1 - nz * nz) * int1_mrz + (4.0 / 3.0) * nz * nz * int2_mrz
+        pow(R, -0.5) * (1 - nz * nz) * int1_mrz + four_thirds * nz * nz * int2_mrz
     );
     T force_rz = (total_prz - total_mrz) / (2 * delta);
 
@@ -59,13 +63,13 @@ Array<T, 2, 1> cellSurfaceRepulsionForcesFiniteDiff(const T rz, const T nz,
     T int2_pnz = integral1<T>(rz, nz + delta, R, half_l, 1.5, (R - rz) / (nz + delta)); 
     T total_pnz = E0 * sqrt(R) * (
         pow(R, -0.5) * (1 - (nz + delta) * (nz + delta)) * int1_pnz +
-        (4.0 / 3.0) * (nz + delta) * (nz + delta) * int2_pnz
+        four_thirds * (nz + delta) * (nz + delta) * int2_pnz
     );
     T int1_mnz = integral1<T>(rz, nz - delta, R, half_l, 2.0, (R - rz) / (nz - delta)); 
     T int2_mnz = integral1<T>(rz, nz - delta, R, half_l, 1.5, (R - rz) / (nz - delta)); 
     T total_mnz = E0 * sqrt(R) * (
         pow(R, -0.5) * (1 - (nz - delta) * (nz - delta)) * int1_mnz +
-        (4.0 / 3.0) * (nz - delta) * (nz - delta) * int2_mnz
+        four_thirds * (nz - delta) * (nz - delta) * int2_mnz
     );
     T force_nz = (total_pnz - total_mnz) / (2 * delta); 
 
@@ -85,8 +89,8 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceRepulsionForce
     const T R = 0.8;
     const T E0 = 3900.0;
     const T nz_threshold = 1e-8;
-    const T delta = 1e-8;
-    const T tol = 1e-5;   // Since E0 is on the order of 1e+3 
+    const T delta = 1e-50;
+    const double tol = 1e-45;   // Since E0 is on the order of 1e+3 
     T rz, nz; 
     Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
     for (int i = 0; i < angles.size(); ++i)
@@ -117,8 +121,14 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceRepulsionForce
         Array<T, 2, 1> forces2 = cellSurfaceRepulsionForcesFiniteDiff(
             rz, nz, half_l, R, E0, delta 
         ); 
-        REQUIRE_THAT(forces1(0, 0), Catch::Matchers::WithinAbs(forces2(0), tol));
-        REQUIRE_THAT(forces1(0, 1), Catch::Matchers::WithinAbs(forces2(1), tol)); 
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 0)),
+            Catch::Matchers::WithinAbs(static_cast<double>(forces2(0)), tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 1)),
+            Catch::Matchers::WithinAbs(static_cast<double>(forces2(1)), tol)
+        ); 
 
         // Case 2: Assume the cell does not contact the surface
         max_overlap = -0.1 * R; 
@@ -132,10 +142,20 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceRepulsionForce
 
         // Compute forces via finite differences 
         forces2 = cellSurfaceRepulsionForcesFiniteDiff(rz, nz, half_l, R, E0, delta); 
-        REQUIRE_THAT(forces1(0, 0), Catch::Matchers::WithinAbs(forces2(0), delta));
-        REQUIRE_THAT(forces1(0, 1), Catch::Matchers::WithinAbs(forces2(1), delta));
-        REQUIRE_THAT(forces1(0, 0), Catch::Matchers::WithinAbs(0.0, delta)); 
-        REQUIRE_THAT(forces1(0, 1), Catch::Matchers::WithinAbs(0.0, delta));  
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 0)),
+            Catch::Matchers::WithinAbs(static_cast<double>(forces2(0)), tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 1)),
+            Catch::Matchers::WithinAbs(static_cast<double>(forces2(1)), tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 0)), Catch::Matchers::WithinAbs(0.0, tol)
+        ); 
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 1)), Catch::Matchers::WithinAbs(0.0, tol)
+        );  
     }
 }
 
