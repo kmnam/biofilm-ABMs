@@ -19,7 +19,8 @@
 
 using namespace Eigen; 
 
-typedef double T; 
+// Use high-precision type for testing 
+typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<100> > T; 
 
 using std::sin; 
 using boost::multiprecision::sin; 
@@ -68,7 +69,9 @@ T integrate(std::function<T(const T)>& func, const T xmin, const T xmax,
 TEST_CASE("Tests for auxiliary integral 1", "[integral1()]")
 {
     const T R = 0.8;
-    const T delta = 1e-6;
+    const double tol = 1e-8;
+    int meshsize = 10000;
+    const int max_meshsize = 1e+7;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -77,21 +80,20 @@ TEST_CASE("Tests for auxiliary integral 1", "[integral1()]")
         angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
-                        const T gamma, const T delta,
-                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+                        const T gamma, const double tol, const int meshsize,
+                        const double check_value = std::numeric_limits<double>::quiet_NaN()) -> std::pair<T, T>
     {
         T ss = (R - rz) / nz;
-        std::function<T(const T)> func = [rz, nz, R, gamma](const T s)
+        std::function<T(const T)> func = [rz, nz, R, gamma](const T s) -> T
         {
             return overlapGamma<T>(rz, nz, R, s, gamma); 
         };
-        T target = integrate(func, -half_l, half_l, 10000);
-        REQUIRE_THAT(
-            integral1<T>(rz, nz, R, half_l, gamma, ss),
-            Catch::Matchers::WithinAbs(target, delta)
-        );
+        T target = integrate(func, -half_l, half_l, meshsize);
+        T integral = integral1<T>(rz, nz, R, half_l, gamma, ss);
         if (!std::isnan(check_value))
-            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+            return std::make_pair(abs(integral - target), abs(target - check_value));
+        else 
+            return std::make_pair(abs(integral - target), 0.0);
     }; 
     
     // For each exponent ... 
@@ -102,19 +104,42 @@ TEST_CASE("Tests for auxiliary integral 1", "[integral1()]")
         // For each angle ... 
         for (int j = 0; j < angles.size(); ++j)
         {
+            std::cout << "Running tests for exponent = " << gamma
+                      << ", nz = " << sin(angles(j)) << std::endl; 
+
             // Define the z-orientation
             nz = sin(angles(j));
 
             // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+            meshsize = 10000; 
             T half_l = 0.5;
             T max_overlap = 0.2 * R;
             rz = R + half_l * nz - max_overlap;
-            run_tests(rz, nz, R, half_l, gamma, delta);
+            std::pair<T, T> res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize);
+            while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+            {
+                meshsize *= 10;
+                std::cout << "- Rerunning tests with increased meshsize = "
+                          << meshsize << std::endl; 
+                res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize);  
+            }
+            REQUIRE(res.first < tol);
+            REQUIRE(res.second < tol);  
 
             // Case 2: Assume the cell does not contact the surface
+            meshsize = 10000; 
             max_overlap = -0.1 * R; 
             rz = R + half_l * nz - max_overlap;
-            run_tests(rz, nz, R, half_l, gamma, delta, 0.0);
+            res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize, 0.0);
+            while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+            {
+                meshsize *= 10;
+                std::cout << "- Rerunning tests with increased meshsize = "
+                          << meshsize << std::endl; 
+                res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize, 0.0);  
+            }
+            REQUIRE(res.first < tol);
+            REQUIRE(res.second < tol);  
         }
     }
 }
@@ -125,7 +150,9 @@ TEST_CASE("Tests for auxiliary integral 1", "[integral1()]")
 TEST_CASE("Tests for auxiliary integral 2", "[integral2()]")
 {
     const T R = 0.8;
-    const T delta = 1e-6;
+    const double tol = 1e-8;
+    int meshsize = 10000; 
+    const int max_meshsize = 1e+7;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -134,21 +161,20 @@ TEST_CASE("Tests for auxiliary integral 2", "[integral2()]")
         angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
-                        const T gamma, const T delta,
-                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+                        const T gamma, const double tol, const int meshsize,  
+                        const double check_value = std::numeric_limits<double>::quiet_NaN()) -> std::pair<T, T>
     {
         T ss = (R - rz) / nz;
-        std::function<T(const T)> func = [rz, nz, R, gamma](const T s)
+        std::function<T(const T)> func = [rz, nz, R, gamma](const T s) -> T
         {
             return s * overlapGamma<T>(rz, nz, R, s, gamma); 
         };
-        T target = integrate(func, -half_l, half_l, 10000);
-        REQUIRE_THAT(
-            integral2<T>(rz, nz, R, half_l, gamma, ss),
-            Catch::Matchers::WithinAbs(target, delta)
-        );
+        T target = integrate(func, -half_l, half_l, meshsize);
+        T integral = integral2<T>(rz, nz, R, half_l, gamma, ss); 
         if (!std::isnan(check_value))
-            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+            return std::make_pair(abs(integral - target), abs(target - check_value)); 
+        else 
+            return std::make_pair(abs(integral - target), 0.0); 
     }; 
     
     // For each exponent ... 
@@ -159,19 +185,42 @@ TEST_CASE("Tests for auxiliary integral 2", "[integral2()]")
         // For each angle ... 
         for (int j = 0; j < angles.size(); ++j)
         {
+            std::cout << "Running tests for exponent = " << gamma
+                      << ", nz = " << sin(angles(j)) << std::endl; 
+
             // Define the z-orientation
             nz = sin(angles(j));
 
             // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+            meshsize = 10000; 
             T half_l = 0.5;
             T max_overlap = 0.2 * R;
             rz = R + half_l * nz - max_overlap;
-            run_tests(rz, nz, R, half_l, gamma, delta);
+            std::pair<T, T> res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize);
+            while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+            {
+                meshsize *= 10;
+                std::cout << "- Rerunning tests with increased meshsize = "
+                          << meshsize << std::endl; 
+                res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize);  
+            }
+            REQUIRE(res.first < tol);
+            REQUIRE(res.second < tol);  
 
             // Case 2: Assume the cell does not contact the surface
+            meshsize = 10000; 
             max_overlap = -0.1 * R; 
             rz = R + half_l * nz - max_overlap;
-            run_tests(rz, nz, R, half_l, gamma, delta, 0.0);
+            res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize, 0.0);
+            while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+            {
+                meshsize *= 10;
+                std::cout << "- Rerunning tests with increased meshsize = "
+                          << meshsize << std::endl; 
+                res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize, 0.0);  
+            }
+            REQUIRE(res.first < tol);
+            REQUIRE(res.second < tol);  
         }
     }
 }
@@ -182,7 +231,9 @@ TEST_CASE("Tests for auxiliary integral 2", "[integral2()]")
 TEST_CASE("Tests for auxiliary integral 3", "[integral3()]")
 {
     const T R = 0.8;
-    const T delta = 1e-6;
+    const double tol = 1e-8;
+    int meshsize = 10000;
+    const int max_meshsize = 1e+7;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -191,21 +242,20 @@ TEST_CASE("Tests for auxiliary integral 3", "[integral3()]")
         angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
-                        const T gamma, const T delta,
-                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+                        const T gamma, const double tol, const int meshsize, 
+                        const double check_value = std::numeric_limits<double>::quiet_NaN()) -> std::pair<T, T>
     {
         T ss = (R - rz) / nz;
-        std::function<T(const T)> func = [rz, nz, R, gamma](const T s)
+        std::function<T(const T)> func = [rz, nz, R, gamma](const T s) -> T
         {
             return s * s * overlapGamma<T>(rz, nz, R, s, gamma); 
         };
-        T target = integrate(func, -half_l, half_l, 10000);
-        REQUIRE_THAT(
-            integral3<T>(rz, nz, R, half_l, gamma, ss),
-            Catch::Matchers::WithinAbs(target, delta)
-        );
+        T target = integrate(func, -half_l, half_l, meshsize);
+        T integral = integral3<T>(rz, nz, R, half_l, gamma, ss);
         if (!std::isnan(check_value))
-            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+            return std::make_pair(abs(integral - target), abs(target - check_value));
+        else 
+            return std::make_pair(abs(integral - target), 0.0); 
     }; 
     
     // For each exponent ... 
@@ -216,19 +266,42 @@ TEST_CASE("Tests for auxiliary integral 3", "[integral3()]")
         // For each angle ... 
         for (int j = 0; j < angles.size(); ++j)
         {
+            std::cout << "Running tests for exponent = " << gamma
+                      << ", nz = " << sin(angles(j)) << std::endl; 
+
             // Define the z-orientation
             nz = sin(angles(j));
 
             // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+            meshsize = 10000; 
             T half_l = 0.5;
             T max_overlap = 0.2 * R;
             rz = R + half_l * nz - max_overlap;
-            run_tests(rz, nz, R, half_l, gamma, delta);
+            std::pair<T, T> res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize);
+            while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+            {
+                meshsize *= 10;
+                std::cout << "- Rerunning tests with increased meshsize = "
+                          << meshsize << std::endl; 
+                res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize);  
+            }
+            REQUIRE(res.first < tol);
+            REQUIRE(res.second < tol);  
 
             // Case 2: Assume the cell does not contact the surface
+            meshsize = 10000; 
             max_overlap = -0.1 * R; 
             rz = R + half_l * nz - max_overlap;
-            run_tests(rz, nz, R, half_l, gamma, delta, 0.0);
+            res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize, 0.0);
+            while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+            {
+                meshsize *= 10;
+                std::cout << "- Rerunning tests with increased meshsize = "
+                          << meshsize << std::endl; 
+                res = run_tests(rz, nz, R, half_l, gamma, tol, meshsize, 0.0);  
+            }
+            REQUIRE(res.first < tol);
+            REQUIRE(res.second < tol);  
         }
     }
 }
@@ -239,7 +312,9 @@ TEST_CASE("Tests for auxiliary integral 3", "[integral3()]")
 TEST_CASE("Tests for auxiliary integral 4", "[integral4()]")
 {
     const T R = 0.8;
-    const T delta = 1e-6;
+    const double tol = 1e-8;
+    int meshsize = 10000; 
+    const int max_meshsize = 1e+8;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -248,40 +323,61 @@ TEST_CASE("Tests for auxiliary integral 4", "[integral4()]")
         angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
-                        const T delta,
-                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+                        const double tol, const int meshsize,
+                        const double check_value = std::numeric_limits<double>::quiet_NaN()) -> std::pair<T, T>
     {
         T ss = (R - rz) / nz;
-        std::function<T(const T)> func = [rz, nz, R](const T s)
+        std::function<T(const T)> func = [rz, nz, R](const T s) -> T
         {
             T value = overlap<T>(rz, nz, R, s);
             return (value > 0 ? 1.0 : 0.0); 
         };
-        T target = integrate(func, -half_l, half_l, 1000000);
-        REQUIRE_THAT(
-            integral4<T>(half_l, ss),
-            Catch::Matchers::WithinAbs(target, delta)
-        );
+        T target = integrate(func, -half_l, half_l, meshsize); 
+        T integral = integral4<T>(half_l, ss);
         if (!std::isnan(check_value))
-            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+            return std::make_pair(abs(integral - target), abs(target - check_value)); 
+        else 
+            return std::make_pair(abs(integral - target), 0.0); 
     }; 
     
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
+        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+        meshsize = 10000; 
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta);
+        std::pair<T, T> res = run_tests(rz, nz, R, half_l, tol, meshsize);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
+        meshsize = 10000;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta, 0.0);
+        res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol);  
     }
 }
 
@@ -291,7 +387,9 @@ TEST_CASE("Tests for auxiliary integral 4", "[integral4()]")
 TEST_CASE("Tests for auxiliary integral 5", "[integral5()]")
 {
     const T R = 0.8;
-    const T delta = 1e-6;
+    const double tol = 1e-8;
+    int meshsize = 10000; 
+    const int max_meshsize = 1e+8;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -300,40 +398,61 @@ TEST_CASE("Tests for auxiliary integral 5", "[integral5()]")
         angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
-                        const T delta,
-                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+                        const double tol, const int meshsize,
+                        const double check_value = std::numeric_limits<double>::quiet_NaN()) -> std::pair<T, T>
     {
         T ss = (R - rz) / nz;
-        std::function<T(const T)> func = [rz, nz, R](const T s)
+        std::function<T(const T)> func = [rz, nz, R](const T s) -> T
         {
             T value = overlap<T>(rz, nz, R, s);
             return (value > 0 ? s : 0.0); 
         };
-        T target = integrate(func, -half_l, half_l, 1000000);
-        REQUIRE_THAT(
-            integral5<T>(rz, nz, R, half_l, ss),
-            Catch::Matchers::WithinAbs(target, delta)
-        );
+        T target = integrate(func, -half_l, half_l, meshsize);
+        T integral = integral5<T>(rz, nz, R, half_l, ss);
         if (!std::isnan(check_value))
-            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+            return std::make_pair(abs(integral - target), abs(target - check_value)); 
+        else 
+            return std::make_pair(abs(integral - target), 0.0); 
     }; 
     
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
+        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+        meshsize = 10000; 
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta);
+        std::pair<T, T> res = run_tests(rz, nz, R, half_l, tol, meshsize);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
+        meshsize = 10000;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta, 0.0);
+        res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol);  
     }
 }
 
@@ -343,7 +462,9 @@ TEST_CASE("Tests for auxiliary integral 5", "[integral5()]")
 TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
 {
     const T R = 0.8;
-    const T delta = 1e-6;
+    const double tol = 1e-8;
+    int meshsize = 10000; 
+    const int max_meshsize = 1e+8;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -352,40 +473,64 @@ TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
         angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
-                        const T delta,
-                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+                        const double tol, const int meshsize, 
+                        const double check_value = std::numeric_limits<double>::quiet_NaN()) -> std::pair<T, T>
     {
         T ss = (R - rz) / nz;
-        std::function<T(const T)> func = [rz, nz, R](const T s)
+        std::function<T(const T)> func = [rz, nz, R](const T s) -> T
         {
             T value = overlap<T>(rz, nz, R, s);
-            return (value > 0 ? s * s : 0.0); 
+            if (value > 0)
+                return s * s; 
+            else 
+                return 0.0;
         };
-        T target = integrate(func, -half_l, half_l, 1000000);
-        REQUIRE_THAT(
-            integral6<T>(rz, nz, R, half_l, ss),
-            Catch::Matchers::WithinAbs(target, delta)
-        );
+        T target = integrate(func, -half_l, half_l, meshsize);
+        T integral = integral6<T>(rz, nz, R, half_l, ss);
         if (!std::isnan(check_value))
-            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+            return std::make_pair(abs(integral - target), abs(target - check_value));
+        else 
+            return std::make_pair(abs(integral - target), 0.0); 
     }; 
     
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
+        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+        meshsize = 10000; 
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta);
+        std::pair<T, T> res = run_tests(rz, nz, R, half_l, tol, meshsize);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol); 
 
         // Case 2: Assume the cell does not contact the surface
+        meshsize = 10000;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta, 0.0);
+        res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol); 
     }
 }
 
@@ -396,7 +541,9 @@ TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
 TEST_CASE("Tests for area integral 1", "[areaIntegral1()]")
 {
     const T R = 0.8;
-    const T delta = 1e-6;
+    const double tol = 1e-8;
+    int meshsize = 10000; 
+    const int max_meshsize = 1e+7;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -405,42 +552,63 @@ TEST_CASE("Tests for area integral 1", "[areaIntegral1()]")
         angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
-                        const T delta,
-                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+                        const double tol, const int meshsize, 
+                        const double check_value = std::numeric_limits<double>::quiet_NaN()) -> std::pair<T, T>
     {
         T ss = (R - rz) / nz;
-        std::function<T(const T)> func = [rz, nz, R](const T s)
+        std::function<T(const T)> func = [rz, nz, R](const T s) -> T
         {
             T d = overlap<T>(rz, nz, R, s); 
             T sqrt_d = overlapGamma<T>(rz, nz, R, s, 0.5);
             T step = (d > 0 ? 1.0 : 0.0); 
             return sqrt(R) * (1 - nz * nz) * sqrt_d + boost::math::constants::pi<T>() * R * nz * nz * step;  
         };
-        T target = integrate(func, -half_l, half_l, 1000000);
-        REQUIRE_THAT(
-            areaIntegral1<T>(rz, nz, R, half_l, ss),
-            Catch::Matchers::WithinAbs(target, delta)
-        );
+        T target = integrate(func, -half_l, half_l, meshsize);
+        T integral = areaIntegral1<T>(rz, nz, R, half_l, ss); 
         if (!std::isnan(check_value))
-            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+            return std::make_pair(abs(integral - target), abs(target - check_value)); 
+        else 
+            return std::make_pair(abs(integral - target), 0.0); 
     }; 
     
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
+        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+        meshsize = 10000; 
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta);
+        std::pair<T, T> res = run_tests(rz, nz, R, half_l, tol, meshsize);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
+        meshsize = 10000;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta, 0.0);
+        res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol);  
     }
 }
 
@@ -451,7 +619,9 @@ TEST_CASE("Tests for area integral 1", "[areaIntegral1()]")
 TEST_CASE("Tests for area integral 2", "[areaIntegral2()]")
 {
     const T R = 0.8;
-    const T delta = 1e-6;
+    const double tol = 1e-8;
+    int meshsize = 10000; 
+    const int max_meshsize = 1e+7;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -460,42 +630,63 @@ TEST_CASE("Tests for area integral 2", "[areaIntegral2()]")
         angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
-                        const T delta,
-                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+                        const double tol, const int meshsize,
+                        const double check_value = std::numeric_limits<double>::quiet_NaN()) -> std::pair<T, T>
     {
         T ss = (R - rz) / nz;
-        std::function<T(const T)> func = [rz, nz, R](const T s)
+        std::function<T(const T)> func = [rz, nz, R](const T s) -> T
         {
             T d = overlap<T>(rz, nz, R, s); 
             T sqrt_d = overlapGamma<T>(rz, nz, R, s, 0.5);
             T step = (d > 0 ? 1.0 : 0.0); 
             return s * (sqrt(R) * (1 - nz * nz) * sqrt_d + boost::math::constants::pi<T>() * R * nz * nz * step);  
         };
-        T target = integrate(func, -half_l, half_l, 1000000);
-        REQUIRE_THAT(
-            areaIntegral2<T>(rz, nz, R, half_l, ss),
-            Catch::Matchers::WithinAbs(target, delta)
-        );
+        T target = integrate(func, -half_l, half_l, meshsize);
+        T integral = areaIntegral2<T>(rz, nz, R, half_l, ss); 
         if (!std::isnan(check_value))
-            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+            return std::make_pair(abs(integral - target), abs(target - check_value)); 
+        else 
+            return std::make_pair(abs(integral - target), 0.0); 
     }; 
     
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
+        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+        meshsize = 10000;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta);
+        std::pair<T, T> res = run_tests(rz, nz, R, half_l, tol, meshsize);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
+        meshsize = 10000;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta, 0.0);
+        res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol);  
     }
 }
 
@@ -506,7 +697,9 @@ TEST_CASE("Tests for area integral 2", "[areaIntegral2()]")
 TEST_CASE("Tests for area integral 3", "[areaIntegral3()]")
 {
     const T R = 0.8;
-    const T delta = 1e-6;
+    const double tol = 1e-8;
+    int meshsize = 10000; 
+    const int max_meshsize = 1e+7;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -515,42 +708,63 @@ TEST_CASE("Tests for area integral 3", "[areaIntegral3()]")
         angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
 
     auto run_tests = [](const T rz, const T nz, const T R, const T half_l,
-                        const T delta,
-                        const T check_value = std::numeric_limits<T>::quiet_NaN())
+                        const double tol, const int meshsize,
+                        const double check_value = std::numeric_limits<double>::quiet_NaN()) -> std::pair<T, T>
     {
         T ss = (R - rz) / nz;
-        std::function<T(const T)> func = [rz, nz, R](const T s)
+        std::function<T(const T)> func = [rz, nz, R](const T s) -> T
         {
             T d = overlap<T>(rz, nz, R, s); 
             T sqrt_d = overlapGamma<T>(rz, nz, R, s, 0.5);
             T step = (d > 0 ? 1.0 : 0.0); 
             return s * s * (sqrt(R) * (1 - nz * nz) * sqrt_d + boost::math::constants::pi<T>() * R * nz * nz * step);  
         };
-        T target = integrate(func, -half_l, half_l, 1000000);
-        REQUIRE_THAT(
-            areaIntegral3<T>(rz, nz, R, half_l, ss),
-            Catch::Matchers::WithinAbs(target, delta)
-        );
+        T target = integrate(func, -half_l, half_l, meshsize);
+        T integral = areaIntegral3<T>(rz, nz, R, half_l, ss); 
         if (!std::isnan(check_value))
-            REQUIRE_THAT(target, Catch::Matchers::WithinAbs(check_value, delta)); 
+            return std::make_pair(abs(integral - target), abs(target - check_value)); 
+        else 
+            return std::make_pair(abs(integral - target), 0.0); 
     }; 
     
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
     {
+        std::cout << "Running tests for nz = " << sin(angles(j)) << std::endl; 
+
         // Define the z-orientation
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+        meshsize = 10000;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta);
+        std::pair<T, T> res = run_tests(rz, nz, R, half_l, tol, meshsize);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol); 
 
         // Case 2: Assume the cell does not contact the surface
+        meshsize = 10000;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
-        run_tests(rz, nz, R, half_l, delta, 0.0);
+        res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
+        while ((res.first > tol || res.second > tol) && meshsize < max_meshsize)
+        {
+            meshsize *= 10;
+            std::cout << "- Rerunning tests with increased meshsize = "
+                      << meshsize << std::endl; 
+            res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);  
+        }
+        REQUIRE(res.first < tol);
+        REQUIRE(res.second < tol); 
     }
 }
 
