@@ -433,7 +433,7 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
                 cells(i, __colidx_rz), cells(i, __colidx_nz), R,
                 cells(i, __colidx_half_l), 0.5, ss(i)
             );
-            dEdq(i, 0) = -prefactor0 * ((1 - nz2) * int1 + pow(R, 0.5) * nz2 * int2);
+            dEdq(i, 0) = -prefactor0 * ((1.0 - nz2) * int1 + sqrt(R) * nz2 * int2);
 
             // Compute the derivative of the cell-surface repulsion energy 
             // with respect to z-orientation
@@ -539,7 +539,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             dEdq(i, 1) += prefactor2 * cells(i, __colidx_nz) * int2; 
             dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
             dEdq(i, 1) -= prefactor1 * cells(i, __colidx_nz) * int4;
-            dEdq(i, 1) += term4;
+            dEdq(i, 1) -= term4;
             dEdq(i, 1) *= cells(i, __colidx_sigma0);
         }
     }
