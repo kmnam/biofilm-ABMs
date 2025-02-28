@@ -539,7 +539,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
             dEdq(i, 1) += prefactor2 * cells(i, __colidx_nz) * int2; 
             dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
             dEdq(i, 1) -= prefactor1 * cells(i, __colidx_nz) * int4;
-            dEdq(i, 1) -= term4;
+            dEdq(i, 1) += term4;
             dEdq(i, 1) *= cells(i, __colidx_sigma0);
         }
     }
@@ -595,14 +595,14 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
     if (nz < nz_threshold)
     {
         T phi = R - rz; 
-        if (phi > R - rz)
+        if (phi > 0)    // If the cell is contacting the surface 
         {
-            T prefactor = pow(R * phi, 0.5);
+            T prefactor = eta1 * pow(R * phi, 0.5) / R;
             term3 = prefactor * l; 
             term4 = 0;
             term5 = prefactor * l * l * l / 12; 
         }
-        else
+        else            // Otherwise, there is no cell-surface friction 
         {
             term3 = 0;
             term4 = 0;
