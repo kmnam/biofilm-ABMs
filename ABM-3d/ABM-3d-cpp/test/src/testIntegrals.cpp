@@ -313,8 +313,8 @@ TEST_CASE("Tests for auxiliary integral 4", "[integral4()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 1e+7; 
-    const int max_meshsize = 1e+8;
+    int meshsize = 1e+8; 
+    const int max_meshsize = 1e+9;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -349,7 +349,7 @@ TEST_CASE("Tests for auxiliary integral 4", "[integral4()]")
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 1e+7;
+        meshsize = 1e+8;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -365,7 +365,7 @@ TEST_CASE("Tests for auxiliary integral 4", "[integral4()]")
         REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 1e+7;
+        meshsize = 1e+8;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
@@ -388,8 +388,8 @@ TEST_CASE("Tests for auxiliary integral 5", "[integral5()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 1e+7;
-    const int max_meshsize = 1e+8;
+    int meshsize = 1e+8; 
+    const int max_meshsize = 1e+9;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -424,7 +424,7 @@ TEST_CASE("Tests for auxiliary integral 5", "[integral5()]")
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 1e+7;
+        meshsize = 1e+8;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -440,7 +440,7 @@ TEST_CASE("Tests for auxiliary integral 5", "[integral5()]")
         REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 1e+7;
+        meshsize = 1e+8;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
@@ -463,8 +463,8 @@ TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 1e+7;
-    const int max_meshsize = 1e+8;
+    int meshsize = 1e+8; 
+    const int max_meshsize = 1e+9;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -502,7 +502,7 @@ TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 1e+7;
+        meshsize = 1e+8;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -518,7 +518,7 @@ TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
         REQUIRE(res.second < tol); 
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 1e+7;
+        meshsize = 1e+8;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
@@ -542,8 +542,8 @@ TEST_CASE("Tests for area integral 1", "[areaIntegral1()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 1e+7; 
-    const int max_meshsize = 1e+8;
+    int meshsize = 1e+8; 
+    const int max_meshsize = 1e+9;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -580,7 +580,7 @@ TEST_CASE("Tests for area integral 1", "[areaIntegral1()]")
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 1e+7; 
+        meshsize = 1e+8;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -596,7 +596,7 @@ TEST_CASE("Tests for area integral 1", "[areaIntegral1()]")
         REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 1e+7;
+        meshsize = 1e+8;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
@@ -620,8 +620,8 @@ TEST_CASE("Tests for area integral 2", "[areaIntegral2()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 1e+7; 
-    const int max_meshsize = 1e+8;
+    int meshsize = 1e+8; 
+    const int max_meshsize = 1e+9;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -658,7 +658,7 @@ TEST_CASE("Tests for area integral 2", "[areaIntegral2()]")
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 1e+7;
+        meshsize = 1e+8;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -674,7 +674,7 @@ TEST_CASE("Tests for area integral 2", "[areaIntegral2()]")
         REQUIRE(res.second < tol);  
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 1e+7;
+        meshsize = 1e+8;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
@@ -698,8 +698,8 @@ TEST_CASE("Tests for area integral 3", "[areaIntegral3()]")
 {
     const T R = 0.8;
     const double tol = 1e-8;
-    int meshsize = 1e+7; 
-    const int max_meshsize = 1e+8;
+    int meshsize = 1e+8; 
+    const int max_meshsize = 1e+9;
     T rz, nz; 
     Array<T, 4, 1> exponents;  
     exponents << 0.5, 1.0, 1.5, 2.0;
@@ -736,7 +736,7 @@ TEST_CASE("Tests for area integral 3", "[areaIntegral3()]")
         nz = sin(angles(j));
 
         // Case 1: Assume the cell has a maximum overlap of 0.2 * R
-        meshsize = 1e+7;
+        meshsize = 1e+8;
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
@@ -752,7 +752,7 @@ TEST_CASE("Tests for area integral 3", "[areaIntegral3()]")
         REQUIRE(res.second < tol); 
 
         // Case 2: Assume the cell does not contact the surface
-        meshsize = 1e+7;
+        meshsize = 1e+8;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
         res = run_tests(rz, nz, R, half_l, tol, meshsize, 0.0);
