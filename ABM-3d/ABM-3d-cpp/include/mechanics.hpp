@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/26/2025
+ *     2/28/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -860,6 +860,92 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
     return dEdq;
 }
 
+/**
+ * Given the current positions, orientations, and lengths for the given 
+ * population of cells, compute the total conservative forces on the cells.  
+ *
+ * In this function, the pairs of neighboring cells in the population have 
+ * been pre-computed.
+ *
+ * @param cells Existing population of cells. 
+ * @param neighbors Array specifying pairs of neighboring cells in the
+ *                  population.
+ * @param to_adhere Boolean array specifying whether, for each pair of 
+ *                  neighboring cells, the adhesive force is nonzero.
+ * @param dt Timestep. Only used for debugging output.
+ * @param iter Iteration number. Only used for debugging output. 
+ * @param R Cell radius, including the EPS.
+ * @param Rcell Cell radius, excluding the EPS.
+ * @param cell_cell_prefactors Array of four pre-computed prefactors for
+ *                             cell-cell repulsion forces.
+ * @param E0 Elastic modulus of EPS.
+ * @param nz_threshold Threshold for determining whether the z-orientation of 
+ *                     each cell is zero.
+ * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
+ *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ * @param adhesion_params Parameters required to compute cell-cell adhesion
+ *                        forces.
+ * @returns Array of translational and orientational velocities.   
+ */
+template <typename T>
+Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                           const Ref<const Array<T, Dynamic, 7> >& neighbors,
+                                           const Ref<const Array<int, Dynamic, 1> >& to_adhere,
+                                           const T dt, const int iter,
+                                           const T R, const T Rcell,
+                                           const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                                           const T E0, const T nz_threshold,
+                                           const AdhesionMode adhesion_mode,
+                                           std::unordered_map<std::string, T>& adhesion_params)
+{
+    int n = cells.rows(); 
+
+    // Get cell-body coordinates at which cell-surface overlap is zero for 
+    // each cell
+    Array<T, Dynamic, 1> ss(n); 
+    for (int i = 0; i < n; ++i)
+    {
+        if (cells(i, __colidx_nz) < nz_threshold)
+            ss(i) = std::numeric_limits<T>::quiet_NaN();
+        else
+            ss(i) = sstar(cells(i, __colidx_rz), cells(i, __colidx_nz), R); 
+    }
+    
+    // Compute the cell-cell repulsive forces 
+    Array<T, Dynamic, 6> dEdq_repulsion = cellCellRepulsiveForces<T>(
+        cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors 
+    );
+
+    // Compute the cell-cell adhesive forces (if present) 
+    Array<T, Dynamic, 6> dEdq_adhesion = Array<T, Dynamic, 6>::Zero(n, 6); 
+    if (adhesion_mode != AdhesionMode::NONE)
+    {
+        dEdq_adhesion = cellCellAdhesiveForces<T>(
+            cells, neighbors, to_adhere, dt, iter, R, Rcell, adhesion_mode,
+            adhesion_params
+        ); 
+    }
+
+    // Compute the cell-surface repulsive forces 
+    Array<T, Dynamic, 2> dEdq_surface_repulsion = cellSurfaceRepulsionForces<T>(
+        cells, dt, iter, ss, R, E0, nz_threshold
+    );
+
+    // Compute the cell-surface adhesive forces 
+    Array<T, Dynamic, 2> dEdq_surface_adhesion = cellSurfaceAdhesionForces<T>(
+        cells, dt, iter, ss, R, nz_threshold
+    );
+
+    // Combine the forces accordingly 
+    Array<T, Dynamic, 6> forces = -dEdq_repulsion - dEdq_adhesion; 
+    forces.col(2) -= dEdq_surface_repulsion.col(0); 
+    forces.col(5) -= dEdq_surface_repulsion.col(1);
+    forces.col(2) -= dEdq_surface_adhesion.col(0); 
+    forces.col(5) -= dEdq_surface_adhesion.col(1);
+
+    return forces;  
+}
+
 /* -------------------------------------------------------------------- // 
 //                     NEWTONIAN FORCES AND TORQUES                     // 
 // -------------------------------------------------------------------- */
@@ -994,32 +1080,14 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
         else
             ss(i) = sstar(cells(i, __colidx_rz), cells(i, __colidx_nz), R); 
     }
+
+    // Compute all conservative forces and add noise 
+    Array<T, Dynamic, 6> forces = getConservativeForces<T>(
+        cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors, 
+        E0, nz_threshold, adhesion_mode, adhesion_params
+    );
+    forces += noise; 
     
-    // Compute the cell-cell repulsive forces 
-    Array<T, Dynamic, 6> dEdq_repulsion = cellCellRepulsiveForces<T>(
-        cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors 
-    );
-
-    // Compute the cell-cell adhesive forces (if present) 
-    Array<T, Dynamic, 6> dEdq_adhesion = Array<T, Dynamic, 6>::Zero(n, 6); 
-    if (adhesion_mode != AdhesionMode::NONE)
-    {
-        dEdq_adhesion = cellCellAdhesiveForces<T>(
-            cells, neighbors, to_adhere, dt, iter, R, Rcell, adhesion_mode,
-            adhesion_params
-        ); 
-    }
-
-    // Compute the cell-surface repulsive forces 
-    Array<T, Dynamic, 2> dEdq_surface_repulsion = cellSurfaceRepulsionForces<T>(
-        cells, dt, iter, ss, R, E0, nz_threshold
-    );
-
-    // Compute the cell-surface adhesive forces 
-    Array<T, Dynamic, 2> dEdq_surface_adhesion = cellSurfaceAdhesionForces<T>(
-        cells, dt, iter, ss, R, nz_threshold
-    );
-
     // For each cell ...
     #pragma omp parallel for
     for (int i = 0; i < n; ++i)
@@ -1041,19 +1109,10 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
         A(6, 4) = cells(i, __colidx_ny);
         A(6, 5) = cells(i, __colidx_nz);
 
-        // Extract the derivatives of the cell-cell repulsion energy,
-        // cell-cell adhesion energy, cell-surface repulsion energy, and
-        // cell-surface adhesion energy
-        b(Eigen::seq(0, 5)) = -dEdq_repulsion.row(i).transpose() - dEdq_adhesion.row(i).transpose();
-        b(2) -= (dEdq_surface_repulsion(i, 0) + dEdq_surface_adhesion(i, 0));
-        b(5) -= (dEdq_surface_repulsion(i, 1) + dEdq_surface_adhesion(i, 1));  
-
-        // Add noise component to forces
-        b.head(6) += noise.row(i).transpose();
-
         // Solve the corresponding linear system
         //
         // TODO Which decomposition to use?
+        b.head(6) = forces.row(i);
         auto LU = A.matrix().partialPivLu();
         Array<T, 7, 1> x = LU.solve(b.matrix()).array();
         //auto QR = A.matrix().colPivHouseholderQr(); 
