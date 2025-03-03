@@ -96,8 +96,8 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
         attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_noise, max_noise,
-        basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
-        adhesion_params
+        max_noise, max_noise, basal_only, basal_min_overlap, AdhesionMode::NONE, 
+        adhesion_map, adhesion_params
     );
     cells = result.first;  
 
@@ -150,8 +150,8 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
         attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_noise, max_noise,
-        basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
-        adhesion_params
+        max_noise, max_noise, basal_only, basal_min_overlap, AdhesionMode::NONE,
+        adhesion_map, adhesion_params
     );
     cells = result.first;  
 
@@ -195,8 +195,8 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
         attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_noise, max_noise,
-        basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
-        adhesion_params
+        max_noise, max_noise, basal_only, basal_min_overlap, AdhesionMode::NONE,
+        adhesion_map, adhesion_params
     );
     cells = result.first;  
 
