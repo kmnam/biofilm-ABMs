@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/26/2025
+ *     3/3/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -542,7 +542,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 // the integration 
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
-                    A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
+                    A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
                     max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
                     adhesion_mode, adhesion_params
