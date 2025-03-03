@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/27/2025
+ *     3/3/2025
  */
 #include <iostream>
 #include <cmath>
@@ -44,8 +44,8 @@ TEST_CASE("Test simulations with vertical cells", "[runSimulationAdaptiveLagrang
     const T Ldiv = 2 * (R + L0);
     const T neighbor_threshold = 2 * (2 * R + L0);
     const int max_iter = 10000;
-    const T max_stepsize = 1e-6;
-    const T min_stepsize = 1e-8;
+    const T max_stepsize = 1e-7;
+    const T min_stepsize = 1e-9;
     const bool write = false;
     const std::string outprefix = "";
     const T dt_write = 0.01;
@@ -95,7 +95,7 @@ TEST_CASE("Test simulations with vertical cells", "[runSimulationAdaptiveLagrang
         rng_seed, n_groups, group_attributes, growth_means, growth_stds,
         attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
+        truncate_surface_friction, surface_coulomb_coeff, max_noise, max_noise,
         basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
         adhesion_params
     );
@@ -149,7 +149,7 @@ TEST_CASE("Test simulations with vertical cells", "[runSimulationAdaptiveLagrang
         rng_seed, n_groups, group_attributes, growth_means, growth_stds,
         attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
+        truncate_surface_friction, surface_coulomb_coeff, max_noise, max_noise,
         basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
         adhesion_params
     );
@@ -199,7 +199,7 @@ TEST_CASE("Test simulations with vertical cells", "[runSimulationAdaptiveLagrang
         rng_seed, n_groups, group_attributes, growth_means, growth_stds,
         attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
+        truncate_surface_friction, surface_coulomb_coeff, max_noise, max_noise,
         basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
         adhesion_params
     );
