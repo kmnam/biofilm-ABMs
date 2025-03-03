@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/27/2025
+ *     3/3/2025
  */
 #include <iostream>
 #include <cmath>
@@ -44,8 +44,8 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
     const T Ldiv = 2 * (R + L0);
     const T neighbor_threshold = 2 * (2 * R + L0);
     const int max_iter = 10000;
-    const T max_stepsize = 1e-6;
-    const T min_stepsize = 1e-8;
+    const T max_stepsize = 1e-7;
+    const T min_stepsize = 1e-9;
     const bool write = false;
     const std::string outprefix = "";
     const T dt_write = 0.01;
@@ -95,7 +95,7 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
         rng_seed, n_groups, group_attributes, growth_means, growth_stds,
         attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
+        truncate_surface_friction, surface_coulomb_coeff, max_noise, max_noise,
         basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
         adhesion_params
     );
@@ -103,35 +103,35 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
 
     // Test that the cell has not grown and every attribute other than its 
     // z-coordinate has remained as it was 
-    const T delta = 1e-8;  
+    const T tol = 1e-8;  
     REQUIRE(static_cast<int>(cells(0, __colidx_id)) == 0); 
-    REQUIRE_THAT(cells(0, __colidx_rx), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_ry), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_nx), Catch::Matchers::WithinAbs(1, delta));
-    REQUIRE_THAT(cells(0, __colidx_ny), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_nz), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_l), Catch::Matchers::WithinAbs(2 * half_l, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_half_l), Catch::Matchers::WithinAbs(half_l, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_t0), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_growth), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_eta0), Catch::Matchers::WithinAbs(eta_ambient, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_eta1), Catch::Matchers::WithinAbs(eta_surface, delta));
-    REQUIRE_THAT(cells(0, __colidx_maxeta1), Catch::Matchers::WithinAbs(eta_surface, delta));
-    REQUIRE_THAT(cells(0, __colidx_sigma0), Catch::Matchers::WithinAbs(sigma0, delta));
+    REQUIRE_THAT(cells(0, __colidx_rx), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_ry), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_nx), Catch::Matchers::WithinAbs(1, tol));
+    REQUIRE_THAT(cells(0, __colidx_ny), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_nz), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_l), Catch::Matchers::WithinAbs(2 * half_l, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_half_l), Catch::Matchers::WithinAbs(half_l, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_t0), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_growth), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_eta0), Catch::Matchers::WithinAbs(eta_ambient, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_eta1), Catch::Matchers::WithinAbs(eta_surface, tol));
+    REQUIRE_THAT(cells(0, __colidx_maxeta1), Catch::Matchers::WithinAbs(eta_surface, tol));
+    REQUIRE_THAT(cells(0, __colidx_sigma0), Catch::Matchers::WithinAbs(sigma0, tol));
     REQUIRE(static_cast<int>(cells(0, __colidx_group)) == 1);
 
     // Test that the cell's z-coordinate matches the theoretical value 
     T adhesion = sigma0 / (R * E0);
     T target = R * (1 - pow(0.25 * adhesion, 2./3.));
-    REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(target, delta));
+    REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(target, tol));
 
     // Test that the cell has reached a steady-state position 
-    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, tol));
 
     // Case 2: A horizontal cell within a larger initial contact with the 
     // surface
@@ -149,7 +149,7 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
         rng_seed, n_groups, group_attributes, growth_means, growth_stds,
         attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
+        truncate_surface_friction, surface_coulomb_coeff, max_noise, max_noise,
         basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
         adhesion_params
     );
@@ -158,26 +158,26 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
     // Test that the cell has not grown and every attribute other than its 
     // z-coordinate has remained as it was 
     REQUIRE(static_cast<int>(cells(0, __colidx_id)) == 0); 
-    REQUIRE_THAT(cells(0, __colidx_rx), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_ry), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_nx), Catch::Matchers::WithinAbs(1, delta));
-    REQUIRE_THAT(cells(0, __colidx_ny), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_nz), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_l), Catch::Matchers::WithinAbs(2 * half_l, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_half_l), Catch::Matchers::WithinAbs(half_l, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_t0), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_growth), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_eta0), Catch::Matchers::WithinAbs(eta_ambient, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_eta1), Catch::Matchers::WithinAbs(eta_surface, delta));
-    REQUIRE_THAT(cells(0, __colidx_maxeta1), Catch::Matchers::WithinAbs(eta_surface, delta));
-    REQUIRE_THAT(cells(0, __colidx_sigma0), Catch::Matchers::WithinAbs(sigma0, delta));
+    REQUIRE_THAT(cells(0, __colidx_rx), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_ry), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_nx), Catch::Matchers::WithinAbs(1, tol));
+    REQUIRE_THAT(cells(0, __colidx_ny), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_nz), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_l), Catch::Matchers::WithinAbs(2 * half_l, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_half_l), Catch::Matchers::WithinAbs(half_l, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_t0), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_growth), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_eta0), Catch::Matchers::WithinAbs(eta_ambient, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_eta1), Catch::Matchers::WithinAbs(eta_surface, tol));
+    REQUIRE_THAT(cells(0, __colidx_maxeta1), Catch::Matchers::WithinAbs(eta_surface, tol));
+    REQUIRE_THAT(cells(0, __colidx_sigma0), Catch::Matchers::WithinAbs(sigma0, tol));
     REQUIRE(static_cast<int>(cells(0, __colidx_group)) == 1);
 
     // Test that the cell's z-coordinate matches the theoretical value 
-    REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(target, delta));
+    REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(target, tol));
 
     // Test that the cell has reached a steady-state position 
-    REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, tol));
 
     // Case 3: A horizontal cell that is not in contact with the surface 
     r(2) = 1.1 * R; 
@@ -194,7 +194,7 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
         rng_seed, n_groups, group_attributes, growth_means, growth_stds,
         attribute_means, attribute_stds, SwitchMode::NONE, switch_rates,
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_noise,
+        truncate_surface_friction, surface_coulomb_coeff, max_noise, max_noise,
         basal_only, basal_min_overlap, AdhesionMode::NONE, adhesion_map, 
         adhesion_params
     );
@@ -203,35 +203,36 @@ TEST_CASE("Test simulations with horizontal cells", "[runSimulationAdaptiveLagra
     // Test that the cell has not grown and every attribute other than its 
     // z-coordinate has remained as it was 
     REQUIRE(static_cast<int>(cells(0, __colidx_id)) == 0); 
-    REQUIRE_THAT(cells(0, __colidx_rx), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_ry), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_nx), Catch::Matchers::WithinAbs(1, delta));
-    REQUIRE_THAT(cells(0, __colidx_ny), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_nz), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_l), Catch::Matchers::WithinAbs(2 * half_l, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_half_l), Catch::Matchers::WithinAbs(half_l, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_t0), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_growth), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_eta0), Catch::Matchers::WithinAbs(eta_ambient, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_eta1), Catch::Matchers::WithinAbs(eta_surface, delta));
-    REQUIRE_THAT(cells(0, __colidx_maxeta1), Catch::Matchers::WithinAbs(eta_surface, delta));
-    REQUIRE_THAT(cells(0, __colidx_sigma0), Catch::Matchers::WithinAbs(sigma0, delta));
+    REQUIRE_THAT(cells(0, __colidx_rx), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_ry), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_nx), Catch::Matchers::WithinAbs(1, tol));
+    REQUIRE_THAT(cells(0, __colidx_ny), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_nz), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_l), Catch::Matchers::WithinAbs(2 * half_l, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_half_l), Catch::Matchers::WithinAbs(half_l, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_t0), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_growth), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_eta0), Catch::Matchers::WithinAbs(eta_ambient, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_eta1), Catch::Matchers::WithinAbs(eta_surface, tol));
+    REQUIRE_THAT(cells(0, __colidx_maxeta1), Catch::Matchers::WithinAbs(eta_surface, tol));
+    REQUIRE_THAT(cells(0, __colidx_sigma0), Catch::Matchers::WithinAbs(sigma0, tol));
     REQUIRE(static_cast<int>(cells(0, __colidx_group)) == 1);
 
     // Test that the cell's z-coordinate matches the theoretical value, which 
     // should match the original value 
-    REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(1.1 * R, delta));
+    REQUIRE_THAT(cells(0, __colidx_rz), Catch::Matchers::WithinAbs(1.1 * R, tol));
 
     // Test that the cell has reached a steady-state position 
-    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, delta));
-    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, delta)); 
-    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, delta));
+    REQUIRE_THAT(cells(0, __colidx_drx), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_dry), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_drz), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_dnx), Catch::Matchers::WithinAbs(0, tol));
+    REQUIRE_THAT(cells(0, __colidx_dny), Catch::Matchers::WithinAbs(0, tol)); 
+    REQUIRE_THAT(cells(0, __colidx_dnz), Catch::Matchers::WithinAbs(0, tol));
 }
+
