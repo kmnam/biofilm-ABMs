@@ -1149,8 +1149,14 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param E0 Elastic modulus of EPS. 
  * @param nz_threshold Threshold for determining whether the z-orientation of 
  *                     each cell is zero.
- * @param max_noise Maximum noise to be added to each generalized force used 
- *                  to compute the velocities.
+ * @param max_rxy_noise Maximum noise to be added to each generalized force in
+ *                      the x- and y-directions.
+ * @param max_rz_noise Maximum noise to be added to each generalized force in
+ *                     the z-direction.
+ * @param max_nxy_noise Maximum noise to be added to each generalized torque in
+ *                      the x- and y-directions.
+ * @param max_nz_noise Maximum noise to be added to each generalized torque in
+ *                     the z-direction.
  * @param rng Random number generator.
  * @param uniform_dist Pre-defined instance of standard uniform distribution.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
@@ -1170,8 +1176,9 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            const Ref<const Array<int, Dynamic, 1> >& to_adhere, 
                            const T dt, const int iter, const T R, const T Rcell,
                            const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
-                           const T E0, const T nz_threshold, const T max_noise,
-                           boost::random::mt19937& rng,
+                           const T E0, const T nz_threshold, const T max_rxy_noise,
+                           const T max_rz_noise, const T max_nxy_noise,
+                           const T max_nz_noise, boost::random::mt19937& rng,
                            boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode,
                            std::unordered_map<std::string, T>& adhesion_params)
@@ -1208,17 +1215,34 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
     // are the same in each calculation 
     int n = cells.rows(); 
     Array<T, Dynamic, 6> noise = Array<T, Dynamic, 6>::Zero(n, 6);  
-    if (max_noise > 0)
+    if (max_rxy_noise > 0 || max_rz_noise > 0 || max_nxy_noise > 0 || max_nz_noise > 0)
     {
         for (int i = 0; i < n; ++i)
         {
             for (int j = 0; j < 6; ++j)
             {
                 T r = uniform_dist(rng); 
-                noise(i, j) = -max_noise + 2 * max_noise * r; 
+                if (j == 0 || j == 1)
+                    noise(i, j) = -max_rxy_noise + 2 * max_rxy_noise * r;
+                else if (j == 3 || j == 4)
+                    noise(i, j) = -max_nxy_noise + 2 * max_nxy_noise * r;
+                else if (j == 2) 
+                    noise(i, j) = -max_rz_noise + 2 * max_rz_noise * r;
+                else    // j == 5
+                    noise(i, j) = -max_nz_noise + 2 * max_nz_noise * r; 
             }
         }
     }
+    #ifdef DEBUG_CHECK_NOISE_MAGNITUDES 
+        if (!((noise(Eigen::all, Eigen::seq(0, 1)).abs() < max_rxy_noise).all() &&
+              (noise(Eigen::all, Eigen::seq(3, 4)).abs() < max_nxy_noise).all() &&
+              (noise.col(2).abs() < max_rz_noise).all() &&
+              (noise.col(5).abs() < max_nz_noise).all()))
+        {
+            throw std::runtime_error("Generated out-of-bounds noise vectors"); 
+        }
+    #endif 
+
     int s = b.size(); 
     std::vector<Array<T, Dynamic, 6> > velocities;
     Array<T, Dynamic, 6> v0 = getVelocities<T>(

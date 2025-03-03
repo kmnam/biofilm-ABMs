@@ -122,12 +122,18 @@ std::string floatToString(T x, const int precision = 10)
  * @param surface_coulomb_coeff Friction coefficient that relates the velocity
  *                              of each cell to the normal force due to cell-
  *                              surface repulsion. 
- * @param max_noise Maximum noise to be added to each generalized force used 
- *                  to compute the velocities.
+ * @param max_rxy_noise Maximum noise to be added to each generalized force in
+ *                      the x- and y-directions.
+ * @param max_rz_noise Maximum noise to be added to each generalized force in
+ *                     the z-direction.
+ * @param max_nxy_noise Maximum noise to be added to each generalized torque in
+ *                      the x- and y-directions.
+ * @param max_nz_noise Maximum noise to be added to each generalized torque in
+ *                     the z-direction.
  * @param basal_only If true, keep track of only the basal layer of cells
  *                   throughout the simulation. 
  * @param basal_min_overlap A cell is in the basal layer if its cell-surface 
-*                           overlap is greater than this value. Can be negative.
+ *                          overlap is greater than this value. Can be negative.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_map Set of pairs of group IDs (1, 2, ...) for which cells 
@@ -177,7 +183,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     const T daughter_angle_z_bound,
                                     const bool truncate_surface_friction,
                                     const T surface_coulomb_coeff,
-                                    const T max_noise,
+                                    const T max_rxy_noise,
+                                    const T max_rz_noise,
+                                    const T max_nxy_noise,
+                                    const T max_nz_noise, 
                                     const bool basal_only,
                                     const T basal_min_overlap, 
                                     const AdhesionMode adhesion_mode, 
@@ -376,7 +385,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["daughter_angle_z_bound"] = floatToString<T>(daughter_angle_z_bound, precision);
     params["truncate_surface_friction"] = (truncate_surface_friction ? "1" : "0"); 
     params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
-    params["max_noise"] = floatToString<T>(max_noise, precision);
+    params["max_rxy_noise"] = floatToString<T>(max_rxy_noise, precision);
+    params["max_rz_noise"] = floatToString<T>(max_rz_noise, precision);
+    params["max_nxy_noise"] = floatToString<T>(max_nxy_noise, precision);
+    params["max_nz_noise"] = floatToString<T>(max_nz_noise, precision);
     params["basal_only"] = (basal_only ? "1" : "0"); 
     params["basal_min_overlap"] = floatToString<T>(basal_min_overlap, precision);  
     params["adhesion_mode"] = std::to_string(static_cast<int>(adhesion_mode)); 
@@ -493,8 +505,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Update cell positions and orientations
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-            cell_cell_prefactors, E0, nz_threshold, max_noise, rng,
-            uniform_dist, adhesion_mode, adhesion_params
+            cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
+            max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
+            adhesion_mode, adhesion_params
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 6> errors = result.second;
@@ -529,9 +542,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 // the integration 
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
-                    A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
-                    cell_cell_prefactors, E0, nz_threshold, max_noise, rng,
-                    uniform_dist, adhesion_mode, adhesion_params
+                    A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
+                    cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
+                    max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
+                    adhesion_mode, adhesion_params
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -568,8 +582,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-                cell_cell_prefactors, E0, nz_threshold, max_noise, rng,
-                uniform_dist, adhesion_mode, adhesion_params
+                cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
+                max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
+                adhesion_mode, adhesion_params
             ); 
             cells_new = result.first;
             errors = result.second;
