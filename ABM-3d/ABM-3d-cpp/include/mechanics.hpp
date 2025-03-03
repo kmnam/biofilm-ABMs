@@ -1102,9 +1102,16 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
             T L = K * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
             T mult = -(cells(i, __colidx_nx) * forces(i, 3) + cells(i, __colidx_ny) * forces(i, 4)); 
             velocities(i, 0) = forces(i, 0) / K; 
-            velocities(i, 1) = forces(i, 1) / K; 
+            velocities(i, 1) = forces(i, 1) / K;
             velocities(i, 3) = (forces(i, 3) + mult * cells(i, __colidx_nx)) / L;
-            velocities(i, 4) = (forces(i, 4) + mult * cells(i, __colidx_ny)) / L; 
+            velocities(i, 4) = (forces(i, 4) + mult * cells(i, __colidx_ny)) / L;
+
+            // Set velocities in z-direction, which may be nonzero due to noise 
+            velocities(i, 2) = forces(i, 2) / (cells(i, __colidx_eta0) * cells(i, __colidx_l));
+            velocities(i, 5) = 12 * forces(i, 5) / (
+                cells(i, __colidx_eta0) * cells(i, __colidx_l) * cells(i, __colidx_l) *
+                cells(i, __colidx_l)
+            );
         }
         else     // Otherwise, solve the 3D system of equations 
         {
