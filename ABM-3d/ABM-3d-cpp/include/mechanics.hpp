@@ -1095,11 +1095,11 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
         // If the cell is roughly horizontal, solve the 2D system of equations
         if (cells(i, __colidx_nz) < nz_threshold)
         {
-            T a = sqrt(R) * sqrt(R - rz); 
+            T a = sqrt(R) * sqrt(R - cells(i, __colidx_rz)); 
             T K = cells(i, __colidx_l) * (
                 cells(i, __colidx_eta0) + cells(i, __colidx_eta1) * a / R
             );  
-            T L = L * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
+            T L = K * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
             T mult = -(cells(i, __colidx_nx) * forces(i, 3) + cells(i, __colidx_ny) * forces(i, 4)); 
             velocities(i, 0) = forces(i, 0) / K; 
             velocities(i, 1) = forces(i, 1) / K; 
