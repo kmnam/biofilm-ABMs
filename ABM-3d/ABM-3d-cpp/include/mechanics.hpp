@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/28/2025
+ *     3/3/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -1092,32 +1092,49 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     #pragma omp parallel for
     for (int i = 0; i < n; ++i)
     {
-        Array<T, 7, 7> A = Array<T, 7, 7>::Zero();
-        Array<T, 7, 1> b = Array<T, 7, 1>::Zero();
+        // If the cell is roughly horizontal, solve the 2D system of equations
+        if (cells(i, __colidx_nz) < nz_threshold)
+        {
+            T a = sqrt(R) * sqrt(R - rz); 
+            T K = cells(i, __colidx_l) * (
+                cells(i, __colidx_eta0) + cells(i, __colidx_eta1) * a / R
+            );  
+            T L = L * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
+            T mult = -(cells(i, __colidx_nx) * forces(i, 3) + cells(i, __colidx_ny) * forces(i, 4)); 
+            velocities(i, 0) = forces(i, 0) / K; 
+            velocities(i, 1) = forces(i, 1) / K; 
+            velocities(i, 3) = (forces(i, 3) + mult * cells(i, __colidx_nx)) / L;
+            velocities(i, 4) = (forces(i, 4) + mult * cells(i, __colidx_ny)) / L; 
+        }
+        else     // Otherwise, solve the 3D system of equations 
+        {
+            Array<T, 7, 7> A = Array<T, 7, 7>::Zero();
+            Array<T, 7, 1> b = Array<T, 7, 1>::Zero();
 
-        // Compute the derivatives of the dissipation with respect to the 
-        // cell's translational and orientational velocities 
-        A(Eigen::seq(0, 5), Eigen::seq(0, 5)) = compositeViscosityForceMatrix<T>(
-            cells(i, __colidx_rz), cells(i, __colidx_nz), cells(i, __colidx_l),
-            cells(i, __colidx_half_l), ss(i), cells(i, __colidx_eta0),
-            cells(i, __colidx_eta1), R, nz_threshold
-        );
-        A(3, 6) = -2 * cells(i, __colidx_nx); 
-        A(4, 6) = -2 * cells(i, __colidx_ny);
-        A(5, 6) = -2 * cells(i, __colidx_nz);
-        A(6, 3) = cells(i, __colidx_nx); 
-        A(6, 4) = cells(i, __colidx_ny);
-        A(6, 5) = cells(i, __colidx_nz);
+            // Compute the derivatives of the dissipation with respect to the 
+            // cell's translational and orientational velocities
+            A(Eigen::seq(0, 5), Eigen::seq(0, 5)) = compositeViscosityForceMatrix<T>(
+                cells(i, __colidx_rz), cells(i, __colidx_nz), cells(i, __colidx_l),
+                cells(i, __colidx_half_l), ss(i), cells(i, __colidx_eta0),
+                cells(i, __colidx_eta1), R, nz_threshold
+            );
+            A(3, 6) = -2 * cells(i, __colidx_nx); 
+            A(4, 6) = -2 * cells(i, __colidx_ny);
+            A(5, 6) = -2 * cells(i, __colidx_nz);
+            A(6, 3) = cells(i, __colidx_nx); 
+            A(6, 4) = cells(i, __colidx_ny);
+            A(6, 5) = cells(i, __colidx_nz);
 
-        // Solve the corresponding linear system
-        //
-        // TODO Which decomposition to use?
-        b.head(6) = forces.row(i);
-        auto LU = A.matrix().partialPivLu();
-        Array<T, 7, 1> x = LU.solve(b.matrix()).array();
-        //auto QR = A.matrix().colPivHouseholderQr(); 
-        //Array<T, 7, 1> x = QR.solve(b.matrix()).array();
-        velocities.row(i) = x.head(6);
+            // Solve the corresponding linear system
+            //
+            // TODO Which decomposition to use?
+            b.head(6) = forces.row(i);
+            auto LU = A.matrix().partialPivLu();
+            Array<T, 7, 1> x = LU.solve(b.matrix()).array();
+            //auto QR = A.matrix().colPivHouseholderQr(); 
+            //Array<T, 7, 1> x = QR.solve(b.matrix()).array();
+            velocities.row(i) = x.head(6);
+        }
     }
 
     return velocities;  
