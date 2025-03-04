@@ -23,7 +23,6 @@
 #include <utility>
 #include <tuple>
 #include <iomanip>
-#include <omp.h>
 #include <Eigen/Dense>
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
@@ -349,7 +348,6 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
     // 6) Cell-body coordinate of contact point along centerline of cell j
     //
     // Columns 2, 3, 4, 5, 6 are updated here
-    #pragma omp parallel for
     for (int k = 0; k < neighbors.rows(); ++k)
     {
         int i = static_cast<int>(neighbors(k, 0)); 
@@ -407,7 +405,6 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
     const T prefactor0 = 2 * E0;
     const T prefactor1 = (8. / 3.) * E0 * pow(R, 0.5); 
     const T prefactor2 = 2 * E0 * pow(R, 0.5);
-    #pragma omp parallel for
     for (int i = 0; i < cells.rows(); ++i)
     {
         // If the z-coordinate of the cell's orientation is zero ... 
@@ -460,7 +457,25 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
         }
     }
 
-    // TODO Add debug
+    #ifdef DEBUG_CHECK_CELL_SURFACE_REPULSION_FORCES_NAN
+        for (int i = 0; i < cells.rows(); ++i)
+        {
+            if (dEdq.row(i).isNaN().any() || dEdq.row(i).isInf().any())
+            {
+                std::cerr << "Iteration " << iter
+                          << ": Found nan in repulsive forces between cell " 
+                          << i << " and surface" << std::endl;
+                std::cerr << "Timestep: " << dt << std::endl;
+                Array<T, 6, 1> dEdq_extended; 
+                dEdq_extended << 0, 0, dEdq(i, 0), 0, 0, dEdq(i, 1);  
+                cellLagrangianForcesSummary<T>(
+                    cells(i, __colseq_r), cells(i, __colseq_n),
+                    cells(i, __colidx_half_l), dEdq_extended
+                ); 
+                throw std::runtime_error("Found nan in cell-surface repulsive forces"); 
+            }
+        }
+    #endif
 
     return dEdq;
 }
@@ -492,7 +507,6 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
     const T prefactor0 = pow(R, 0.5) / 2;
     const T prefactor1 = 2 * boost::math::constants::pi<T>() * R;
     const T prefactor2 = 2 * pow(R, 0.5);
-    #pragma omp parallel for
     for (int i = 0; i < cells.rows(); ++i)
     {
         // If the z-coordinate of the cell's orientation is zero ... 
@@ -544,7 +558,25 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
         }
     }
 
-    // TODO Add debug
+    #ifdef DEBUG_CHECK_CELL_SURFACE_ADHESION_FORCES_NAN
+        for (int i = 0; i < cells.rows(); ++i)
+        {
+            if (dEdq.row(i).isNaN().any() || dEdq.row(i).isInf().any())
+            {
+                std::cerr << "Iteration " << iter
+                          << ": Found nan in adhesive forces between cell " 
+                          << i << " and surface" << std::endl;
+                std::cerr << "Timestep: " << dt << std::endl;
+                Array<T, 6, 1> dEdq_extended; 
+                dEdq_extended << 0, 0, dEdq(i, 0), 0, 0, dEdq(i, 1);  
+                cellLagrangianForcesSummary<T>(
+                    cells(i, __colseq_r), cells(i, __colseq_n),
+                    cells(i, __colidx_half_l), dEdq_extended
+                ); 
+                throw std::runtime_error("Found nan in cell-surface adhesive forces"); 
+            }
+        }
+    #endif
 
     return dEdq;
 }
@@ -577,15 +609,19 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
  * @param eta1 Surface friction coefficient of given cell.
  * @param R Cell radius.
  * @param nz_threshold Threshold for determining whether the z-orientation of 
- *                     each cell is zero. 
- * @returns The 6x6 matrix defined above (flattened) for each cell. 
+ *                     each cell is zero.
+ * @param idx Cell index. Only used for debugging output. 
+ * @param dt Timestep. Only used for debugging output.
+ * @param iter Iteration number. Only used for debugging output. 
+ * @returns The 6x6 matrix defined above for the given cell. 
  */
 template <typename T>
 Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
                                              const T l, const T half_l,
                                              const T ss, const T eta0,
                                              const T eta1, const T R,
-                                             const T nz_threshold)
+                                             const T nz_threshold, const int idx,
+                                             const T dt, const int iter)
 {
     Array<T, 6, 6> M = Array<T, 6, 6>::Zero(6, 6);
     
@@ -625,6 +661,27 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
     M(4, 1) = term4;
     M(4, 4) = term2 + term5;
     M(5, 5) = term2;
+
+    #ifdef DEBUG_CHECK_VISCOSITY_FORCES_NAN
+        if (M.isNaN().any() || M.isInf().any())
+        {
+            std::cerr << "Iteration " << iter
+                      << ": Found nan in viscosity forces for cell " << idx << std::endl; 
+            std::cerr << "Timestep: " << dt << std::endl; 
+            std::cerr << std::setprecision(10)
+                      << "Cell center z-position = " << rz << std::endl
+                      << "Cell z-orientation = " << nz << std::endl 
+                      << "Cell half-length = " << half_l << std::endl
+                      << "Generalized ambient viscosity force prefactors: " << std::endl
+                      << " - w.r.t dr(0), dr(1), dr(2) = " << term1 << std::endl
+                      << " - w.r.t dn(0), dn(1), dr(2) = " << term2 << std::endl
+                      << "Generalized cell-surface friction force integrals: " << std::endl
+                      << " - integral 1 = " << term3 << std::endl
+                      << " - integral 2 = " << term4 << std::endl
+                      << " - integral 3 = " << term5 << std::endl; 
+            throw std::runtime_error("Found nan in viscosity forces");
+        }
+    #endif
 
     return M;
 }
@@ -717,7 +774,7 @@ Array<T, Dynamic, 6> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
             forces(0, Eigen::seq(3, 5)) = si * vij;
             forces(1, Eigen::seq(0, 2)) = -vij; 
             forces(1, Eigen::seq(3, 5)) = -sj * vij;  
-            #ifdef DEBUG_CHECK_REPULSIVE_FORCES_NAN
+            #ifdef DEBUG_CHECK_CELL_CELL_REPULSIVE_FORCES_NAN
                 if (forces.isNaN().any() || forces.isInf().any())
                 {
                     std::cerr << "Iteration " << iter
@@ -837,7 +894,7 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                     expd, exp1, dmin, true
                 ); 
             }
-            #ifdef DEBUG_CHECK_ADHESIVE_FORCES_NAN
+            #ifdef DEBUG_CHECK_CELL_CELL_ADHESIVE_FORCES_NAN
                 if (forces.isNaN().any() || forces.isInf().any())
                 {
                     std::cerr << "Iteration " << iter
@@ -1089,7 +1146,6 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     forces += noise; 
     
     // For each cell ...
-    #pragma omp parallel for
     for (int i = 0; i < n; ++i)
     {
         // If the cell is roughly horizontal, solve the 2D system of equations
@@ -1123,7 +1179,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
             A(Eigen::seq(0, 5), Eigen::seq(0, 5)) = compositeViscosityForceMatrix<T>(
                 cells(i, __colidx_rz), cells(i, __colidx_nz), cells(i, __colidx_l),
                 cells(i, __colidx_half_l), ss(i), cells(i, __colidx_eta0),
-                cells(i, __colidx_eta1), R, nz_threshold
+                cells(i, __colidx_eta1), R, nz_threshold, i, dt, iter
             );
             A(3, 6) = -2 * cells(i, __colidx_nx); 
             A(4, 6) = -2 * cells(i, __colidx_ny);
