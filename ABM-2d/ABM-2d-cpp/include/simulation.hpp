@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/26/2025
+ *     3/5/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -157,8 +157,6 @@ std::string floatToString(T x, const int precision = 10)
  * @param growth_void_params Parameters required to introduce growth void 
  *                           within the biofilm.
  * @param track_poles If true, keep track of pole birth times.
- * @param colidx_negpole_t0 Column index for negative pole birth time. 
- * @param colidx_pospole_t0 Column index for positive pole birth time. 
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -207,9 +205,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     std::unordered_map<std::string, T>& confine_params,
                                     const GrowthVoidMode growth_void_mode,
                                     std::unordered_map<std::string, T>& growth_void_params,
-                                    const bool track_poles = false,
-                                    const int colidx_negpole_t0 = __colidx_group + 1,
-                                    const int colidx_pospole_t0 = __colidx_group + 2)
+                                    const bool track_poles = false)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -329,6 +325,33 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             return -daughter_angle_bound + 2 * daughter_angle_bound * r;
         };
 
+    // Peripheral cells are required when either imposing confinement or
+    // imposing a growth void 
+    //
+    // If both are present, then the minimum number of cells for the boundary
+    // calculation is set to the *minimum* of confine_params["mincells_for_boundary"]
+    // and growth_void_params["mincells"]
+    const bool find_boundary = (
+        confine_mode != ConfinementMode::NONE || growth_void_mode != GrowthVoidMode::NONE
+    );
+    int mincells_for_boundary = 0; 
+    if (confine_mode != ConfinementMode::NONE && growth_void_mode != GrowthVoidMode::NONE) 
+        mincells_for_boundary = min(
+            static_cast<int>(confine_params["mincells_for_boundary"]),
+            static_cast<int>(growth_void_params["mincells"])
+        ); 
+    else if (confine_mode != ConfinementMode::NONE)
+        mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
+    else if (growth_void_mode != GrowthVoidMode::NONE) 
+        mincells_for_boundary = static_cast<int>(growth_void_params["mincells"]);
+
+    // Check that the cell data array has the correct size if peripheral cells
+    // or pole ages are to be tracked
+    if (find_boundary && cells.cols() < __ncols_required + 1)
+        throw std::runtime_error("Insufficient number of columns for tracking peripheral cells");  
+    if (track_poles && cells.cols() < __ncols_required + 3)
+        throw std::runtime_error("Insufficient number of columns for tracking pole ages");
+
     // Write simulation parameters to a dictionary
     std::map<std::string, std::string> params;
     const int precision = 10;
@@ -440,32 +463,19 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 params[ss.str()] = floatToString<T>(value);
         }
     }
-
-    // Peripheral cells are required when either imposing confinement or
-    // imposing a growth void 
-    //
-    // If both are present, then the minimum number of cells for the boundary
-    // calculation is set to the *minimum* of confine_params["mincells_for_boundary"]
-    // and growth_void_params["mincells"]
-    const bool find_boundary = (
-        confine_mode != ConfinementMode::NONE || growth_void_mode != GrowthVoidMode::NONE
-    );
-    int mincells_for_boundary = 0; 
-    if (confine_mode != ConfinementMode::NONE && growth_void_mode != GrowthVoidMode::NONE) 
-        mincells_for_boundary = min(
-            static_cast<int>(confine_params["mincells_for_boundary"]),
-            static_cast<int>(growth_void_params["mincells"])
-        ); 
-    else if (confine_mode != ConfinementMode::NONE)
-        mincells_for_boundary = static_cast<int>(confine_params["mincells_for_boundary"]);
-    else if (growth_void_mode != GrowthVoidMode::NONE) 
-        mincells_for_boundary = static_cast<int>(growth_void_params["mincells"]);
+    params["track_poles"] = (track_poles ? "1" : "0"); 
 
     // Get initial subset of peripheral cells (only if confinement or a growth
     // void is present)
     std::vector<int> boundary_idx;
     if (find_boundary)
+    {
         boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
+        for (int i = 0; i < n; ++i)
+            cells(i, __colidx_boundary) = 0;
+        for (const int i : boundary_idx)
+            cells(i, __colidx_boundary) = 1;
+    }
 
     // Determine an initial growth void
     //
@@ -508,12 +518,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     std::unordered_map<int, int> write_other_cols;
     if (find_boundary)
     {
-        write_other_cols[__colidx_group + 1] = 0;
+        write_other_cols[__colidx_boundary] = 0;     // Write boundary indicators as ints
     }
     if (track_poles)
     {
-        write_other_cols[colidx_negpole_t0] = 1; 
-        write_other_cols[colidx_pospole_t0] = 1;
+        write_other_cols[__colidx_negpole_t0] = 1;   // Write pole ages as floats
+        write_other_cols[__colidx_pospole_t0] = 1;
     }
     if (write)
     {
@@ -521,16 +531,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_init; 
         ss_init << outprefix << "_init.txt";
         std::string filename_init = ss_init.str(); 
-        // If desired, write additional indicators for peripheral cells 
-        Array<T, Dynamic, Dynamic> cells_(cells);
-        if (find_boundary)
-        {
-            cells_.conservativeResize(n, cells_.cols() + 1);
-            cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
-            for (const int i : boundary_idx)
-                cells_(i, cells_.cols() - 1) = 1;
-        }
-        writeCells<T>(cells_, params, filename_init, write_other_cols);
+        writeCells<T>(cells, params, filename_init, write_other_cols);
     }
     
     // Define termination criterion, assuming that at least one of n_cells
@@ -560,8 +561,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         {
             auto div_result = divideCellsWithPoles<T>(
                 cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
-                daughter_length_dist, daughter_angle_dist, colidx_negpole_t0,
-                colidx_pospole_t0
+                daughter_length_dist, daughter_angle_dist
             );
             cells = div_result.first;
             daughter_pairs = div_result.second; 
@@ -611,7 +611,13 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
             // Update peripheral cells 
             if (find_boundary)
+            {
                 boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
+                for (int i = 0; i < n; ++i)
+                    cells(i, __colidx_boundary) = 0;
+                for (const int i : boundary_idx)
+                    cells(i, __colidx_boundary) = 1;
+            }
             // Update growth void 
             //
             // Keep track of new daughter cells (which are not in the void, 
@@ -762,7 +768,13 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Update peripheral cells
         if (find_boundary && iter % iter_update_boundary == 0)
+        {
             boundary_idx = getBoundary<T>(cells, R, mincells_for_boundary);
+            for (int i = 0; i < n; ++i)
+                cells(i, __colidx_boundary) = 0;
+            for (const int i : boundary_idx)
+                cells(i, __colidx_boundary) = 1;
+        }
 
         // Switch cells between groups if desired 
         if (switch_mode == SwitchMode::MARKOV)
@@ -838,16 +850,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str();
-            // If desired, write additional indicators for peripheral cells 
-            Array<T, Dynamic, Dynamic> cells_(cells);
-            if (find_boundary)
-            {
-                cells_.conservativeResize(n, cells_.cols() + 1);
-                cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
-                for (const int i : boundary_idx)
-                    cells_(i, cells_.cols() - 1) = 1;
-            }
-            writeCells<T>(cells_, params, filename, write_other_cols);
+            writeCells<T>(cells, params, filename, write_other_cols);
         }
     }
 
@@ -858,16 +861,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         std::stringstream ss_final; 
         ss_final << outprefix << "_final.txt";
         std::string filename_final = ss_final.str(); 
-        // If desired, write additional indicators for peripheral cells 
-        Array<T, Dynamic, Dynamic> cells_(cells);
-        if (find_boundary)
-        {
-            cells_.conservativeResize(n, cells_.cols() + 1);
-            cells_.col(cells_.cols() - 1) = Array<T, Dynamic, 1>::Zero(n); 
-            for (const int i : boundary_idx)
-                cells_(i, cells_.cols() - 1) = 1;
-        }
-        writeCells<T>(cells_, params, filename_final, write_other_cols);
+        writeCells<T>(cells, params, filename_final, write_other_cols);
     }
 
     // Write complete lineage to file 

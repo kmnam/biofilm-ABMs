@@ -42,4 +42,10 @@ const std::vector<int> __colvec_required {
 };
 const int __ncols_required = 17;
 
+// Optional column indices 
+const int __colidx_boundary = 17; 
+const int __colidx_negpole_t0 = 18; 
+const int __colidx_pospole_t0 = 19;
+const ArithmeticSequence<> __colseq_poles_t0 = Eigen::seq(18, 19); 
+
 #endif 

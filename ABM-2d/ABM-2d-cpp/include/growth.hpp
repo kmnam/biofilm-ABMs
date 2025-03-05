@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/25/2025
+ *     3/5/2025
  */
 
 #ifndef BIOFILM_CELL_GROWTH_HPP
@@ -1032,8 +1032,6 @@ Array<T, Dynamic, Dynamic> divideCellsWithPlasmid(const Ref<const Array<T, Dynam
  *                             cell length ratio distribution. 
  * @param daughter_angle_dist Function instance specifying the daughter 
  *                            cell orientation distribution.
- * @param colidx_negpole_t0 Column index for negative pole birth time. 
- * @param colidx_pospole_t0 Column index for positive pole birth time.
  * @returns Updated population of cells, as well as a vector of pairs of 
  *          daughter cell indices. 
  */
@@ -1045,16 +1043,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
                          std::vector<std::function<T(boost::random::mt19937&)> >& growth_dists,
                          boost::random::mt19937& rng,
                          std::function<T(boost::random::mt19937&)>& daughter_length_dist,
-                         std::function<T(boost::random::mt19937&)>& daughter_angle_dist,
-                         const int colidx_negpole_t0, const int colidx_pospole_t0)
+                         std::function<T(boost::random::mt19937&)>& daughter_angle_dist)
 {
-    // Check that the pole birth time column indices are valid
-    #ifdef DEBUG_CHECK_COLUMN_INDICES
-        if (colidx_negpole_t0 >= cells.cols() || colidx_negpole_t0 <= __colidx_group ||
-            colidx_pospole_t0 >= cells.cols() || colidx_pospole_t0 <= __colidx_group)
-            throw std::runtime_error("Invalid column indices for pole birth times");
-    #endif
-
     // If there are cells to be divided ...
     const int n_divide = to_divide.sum();
     std::vector<std::pair<int, int> > daughter_pairs; 
@@ -1210,19 +1200,18 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
             // The second daughter cell of length L2 inherits the *positive*
             // pole (cell body coordinate s = L / 2) in the mother cell, and
             // gets a new *negative* pole at cell body coordinate s = -L2 / 2
-            std::vector<int> colseq_poles_t0 { colidx_negpole_t0, colidx_pospole_t0 }; 
-            Array<T, Dynamic, 2> poles_t0(cells_total(idx_divide, colseq_poles_t0));
+            Array<T, Dynamic, 2> poles_t0(cells_total(idx_divide, __colseq_poles_t0));
             for (int i = 0; i < n_divide; ++i)
             {
                 // First daughter cell inherits negative pole and gets new
                 // positive pole 
-                cells_total(idx_divide[i], colidx_negpole_t0) = poles_t0(i, 0);
-                cells_total(idx_divide[i], colidx_pospole_t0) = t;
+                cells_total(idx_divide[i], __colidx_negpole_t0) = poles_t0(i, 0);
+                cells_total(idx_divide[i], __colidx_pospole_t0) = t;
 
                 // Second daughter cell inherits positive pole and gets new
                 // negative pole 
-                new_cells(i, colidx_negpole_t0) = t; 
-                new_cells(i, colidx_pospole_t0) = poles_t0(i, 1);
+                new_cells(i, __colidx_negpole_t0) = t; 
+                new_cells(i, __colidx_pospole_t0) = poles_t0(i, 1);
             }
 
             // Update cell ID and lineages
