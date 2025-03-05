@@ -753,10 +753,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::string filename = ss.str();
             writeCells<T>(cells, params, filename, write_other_cols);
         }
-        if (iter % 1000 == 0)
-            std::cout << "Passing iteration " << iter << ": " << n
-                      << " cells, time = " << t << ", max_error = "
-                      << errors.abs().maxCoeff() << ", dt = " << dt << std::endl; 
     }
 
     // Write final population to file
