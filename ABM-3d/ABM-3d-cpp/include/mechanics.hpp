@@ -23,6 +23,7 @@
 #include <utility>
 #include <tuple>
 #include <iomanip>
+#include <omp.h>
 #include <Eigen/Dense>
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
@@ -388,7 +389,8 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  * @param R Cell radius.
  * @param E0 Elastic modulus of EPS.
  * @param assume_2d If the i-th entry is true, assume that the i-th cell's
- *                  z-orientation is zero. 
+ *                  z-orientation is zero.
+ * @param multithread If true, use multithreading. 
  * @returns Derivatives of the cell-surface repulsion energies with respect to
  *          cell z-positions and z-orientations.   
  */
@@ -397,7 +399,8 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
                                                 const T dt, const int iter,
                                                 const Ref<const Array<T, Dynamic, 1> >& ss,
                                                 const T R, const T E0,
-                                                const Ref<const Array<int, Dynamic, 1> >& assume_2d)
+                                                const Ref<const Array<int, Dynamic, 1> >& assume_2d,
+                                                const bool multithread)
 {
     Array<T, Dynamic, 2> dEdq = Array<T, Dynamic, 2>::Zero(cells.rows(), 2); 
 
@@ -405,6 +408,7 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
     const T prefactor0 = 2 * E0;
     const T prefactor1 = (8. / 3.) * E0 * pow(R, 0.5); 
     const T prefactor2 = 2 * E0 * pow(R, 0.5);
+    #pragma omp parallel for if(multithread)
     for (int i = 0; i < cells.rows(); ++i)
     {
         // If the z-coordinate of the cell's orientation is near zero ... 
@@ -491,7 +495,8 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
  * @param ss Cell-body coordinates at which each cell-surface overlap is zero. 
  * @param R Cell radius.
  * @param assume_2d If the i-th entry is true, assume that the i-th cell's
- *                  z-orientation is zero. 
+ *                  z-orientation is zero.
+ * @param multithread If true, use multithreading.  
  * @returns Derivatives of the cell-surface adhesion energies with respect to
  *          cell z-positions and z-orientations.   
  */
@@ -500,7 +505,8 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
                                                const T dt, const int iter,
                                                const Ref<const Array<T, Dynamic, 1> >& ss,
                                                const T R,
-                                               const Ref<const Array<int, Dynamic, 1> >& assume_2d)
+                                               const Ref<const Array<int, Dynamic, 1> >& assume_2d,
+                                               const bool multithread)
 {
     Array<T, Dynamic, 2> dEdq = Array<T, Dynamic, 2>::Zero(cells.rows(), 2);
 
@@ -508,6 +514,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
     const T prefactor0 = pow(R, 0.5) / 2;
     const T prefactor1 = 2 * boost::math::constants::pi<T>() * R;
     const T prefactor2 = 2 * pow(R, 0.5);
+    #pragma omp parallel for if(multithread)
     for (int i = 0; i < cells.rows(); ++i)
     {
         // If the z-coordinate of the cell's orientation is zero ... 
@@ -945,6 +952,7 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
+ * @param multithread If true, use multithreading. 
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -957,7 +965,8 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
                                            const T E0,
                                            const Ref<const Array<int, Dynamic, 1> >& assume_2d,
                                            const AdhesionMode adhesion_mode,
-                                           std::unordered_map<std::string, T>& adhesion_params)
+                                           std::unordered_map<std::string, T>& adhesion_params,
+                                           const bool multithread)
 {
     int n = cells.rows(); 
 
@@ -989,12 +998,12 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
 
     // Compute the cell-surface repulsive forces 
     Array<T, Dynamic, 2> dEdq_surface_repulsion = cellSurfaceRepulsionForces<T>(
-        cells, dt, iter, ss, R, E0, assume_2d
+        cells, dt, iter, ss, R, E0, assume_2d, multithread
     );
 
     // Compute the cell-surface adhesive forces 
     Array<T, Dynamic, 2> dEdq_surface_adhesion = cellSurfaceAdhesionForces<T>(
-        cells, dt, iter, ss, R, assume_2d
+        cells, dt, iter, ss, R, assume_2d, multithread
     );
 
     // Combine the forces accordingly 
@@ -1124,6 +1133,7 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
+ * @param multithread If true, use multithreading. 
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -1136,7 +1146,8 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const Ref<const Array<int, Dynamic, 1> >& assume_2d,
                                    const Ref<const Array<T, Dynamic, 6> >& noise,
                                    const AdhesionMode adhesion_mode,
-                                   std::unordered_map<std::string, T>& adhesion_params)
+                                   std::unordered_map<std::string, T>& adhesion_params,
+                                   const bool multithread)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -1170,11 +1181,12 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     // Compute all conservative forces and add noise 
     Array<T, Dynamic, 6> forces = getConservativeForces<T>(
         cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors, 
-        E0, assume_2d, adhesion_mode, adhesion_params
+        E0, assume_2d, adhesion_mode, adhesion_params, multithread
     );
     forces += noise; 
     
     // For each cell ...
+    #pragma omp parallel for if(multithread)
     for (int i = 0; i < n; ++i)
     {
         // If the cell is roughly horizontal, solve the 2D system of equations
@@ -1352,6 +1364,8 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
+ * @param n_start_multithread Minimum number of cells at which to start using
+ *                            multithreading. 
  * @returns Updated population of cells, along with the array of errors in
  *          the cell positions and orientations.  
  */
@@ -1370,7 +1384,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            const T max_nz_noise, boost::random::mt19937& rng,
                            boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode,
-                           std::unordered_map<std::string, T>& adhesion_params)
+                           std::unordered_map<std::string, T>& adhesion_params,
+                           const int n_start_multithread = 50)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
         for (int k = 0; k < neighbors.rows(); ++k)
@@ -1449,11 +1464,12 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
         }
     #endif 
 
-    int s = b.size(); 
+    int s = b.size();
+    bool multithread = (n >= n_start_multithread); 
     std::vector<Array<T, Dynamic, 6> > velocities;
     Array<T, Dynamic, 6> v0 = getVelocities<T>(
         cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
-        E0, assume_2d, noise, adhesion_mode, adhesion_params
+        E0, assume_2d, noise, adhesion_mode, adhesion_params, multithread
     );
     velocities.push_back(v0);
     for (int i = 1; i < s; ++i)
@@ -1466,7 +1482,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
         normalizeOrientations<T>(cells_i, dt, iter);    
         Array<T, Dynamic, 6> vi = getVelocities<T>(
             cells_i, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
-            E0, assume_2d, noise, adhesion_mode, adhesion_params
+            E0, assume_2d, noise, adhesion_mode, adhesion_params, multithread
         );
         velocities.push_back(vi);
     }
