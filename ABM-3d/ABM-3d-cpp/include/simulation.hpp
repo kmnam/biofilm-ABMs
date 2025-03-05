@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/3/2025
+ *     3/5/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -141,8 +141,6 @@ std::string floatToString(T x, const int precision = 10)
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
  * @param track_poles If true, keep track of pole birth times.
- * @param colidx_negpole_t0 Column index for negative pole birth time. 
- * @param colidx_pospole_t0 Column index for positive pole birth time. 
  * @returns Final population of cells.  
  */
 template <typename T>
@@ -192,9 +190,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     const AdhesionMode adhesion_mode, 
                                     std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > >& adhesion_map, 
                                     std::unordered_map<std::string, T>& adhesion_params,
-                                    const bool track_poles = false,
-                                    const int colidx_negpole_t0 = __colidx_group + 1,
-                                    const int colidx_pospole_t0 = __colidx_group + 2)
+                                    const bool track_poles = false)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -317,6 +313,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             return -daughter_angle_z_bound + 2 * daughter_angle_z_bound * r;
         };
 
+    // Check that the cell data array has the correct size if pole ages are 
+    // to be tracked 
+    if (track_poles && cells.cols() < __ncols_required + 2)
+        throw std::runtime_error("Insufficient number of columns for tracking pole ages");  
+
     // Write simulation parameters to a dictionary
     std::map<std::string, std::string> params;
     const int precision = 10;
@@ -403,13 +404,14 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             params[ss.str()] = floatToString<T>(value); 
         }
     }
+    params["track_poles"] = (track_poles ? "1" : "0"); 
 
     // Write the initial population to file
     std::unordered_map<int, int> write_other_cols;
     if (track_poles)
     {
-        write_other_cols[colidx_negpole_t0] = 1; 
-        write_other_cols[colidx_pospole_t0] = 1;
+        write_other_cols[__colidx_negpole_t0] = 1;    // Write pole ages as floats
+        write_other_cols[__colidx_pospole_t0] = 1;
     }
     if (write)
     {
@@ -598,11 +600,33 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             T max_error = max((errors / max_scale).maxCoeff(), min_error);
             if (max_error > 5)
             {
-                std::cout << "[WARN] Maximum error is > 5 times the desired error "
+                std::cout << "[WARN] Maximum error = " << max_error
+                          << " is > 5 times the desired error "
                           << "(absolute tol = relative tol = " << max_error_allowed
                           << ", iteration " << iter << ", time = " << t
                           << ", dt = " << dt << ")" << std::endl;
             }
+        #endif
+        // If desired, check that the cell coordinates do not contain any 
+        // undefined values 
+        #ifdef DEBUG_CHECK_CELL_COORDINATES_NAN
+           for (int i = 0; i < cells.rows(); ++i)
+           {
+               if (cells.row(i).isNaN().any() || cells.row(i).isInf().any())
+               {
+                   std::cerr << std::setprecision(10);
+                   std::cerr << "Iteration " << iter
+                             << ": Data for cell " << i << " contains nan" << std::endl;
+                   std::cerr << "Timestep: " << dt << std::endl;
+                   std::cerr << "Data: (";
+                   for (int j = 0; j < cells.cols() - 1; ++j)
+                   {
+                       std::cerr << cells(i, j) << ", "; 
+                   }
+                   std::cerr << cells(i, cells.cols() - 1) << ")" << std::endl;
+                   throw std::runtime_error("Found nan in cell coordinates"); 
+               }
+           } 
         #endif
         cells = cells_new;
 
@@ -729,6 +753,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             std::string filename = ss.str();
             writeCells<T>(cells, params, filename, write_other_cols);
         }
+        if (iter % 1000 == 0)
+            std::cout << "Passing iteration " << iter << ": " << n
+                      << " cells, time = " << t << ", max_error = "
+                      << errors.abs().maxCoeff() << ", dt = " << dt << std::endl; 
     }
 
     // Write final population to file
