@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/5/2025
+ *     3/12/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -51,8 +51,9 @@ typedef K::Segment_3 Segment_3;
 enum class AdhesionMode
 {
     NONE = 0,
-    KIHARA = 1,
-    GBK = 2
+    JKR = 1,
+    KIHARA = 2,
+    GBK = 3
 };
 
 /**
@@ -711,8 +712,10 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
  * @param R Cell radius, including the EPS. 
  * @param Rcell Cell radius, excluding the EPS.
  * @param E0 Elastic modulus of EPS. 
- * @param prefactors Array of four pre-computed prefactors, namely `2.5 * sqrt(R)`,
- *                   `2.5 * E0 * sqrt(R)`, `E0 * pow(R - Rcell, 1.5)`, and `Ecell`.
+ * @param prefactors Array of three pre-computed prefactors, namely
+ *                   `2.5 * E0 * sqrt(R)`,
+ *                   `2.5 * E0 * sqrt(R) * pow(2 * R - 2 * Rcell, 1.5)`, and
+ *                   `2.5 * Ecell * sqrt(Rcell)`.
  * @returns Derivatives of the cell-cell repulsion energies with respect to
  *          cell positions and orientations.   
  */
@@ -721,7 +724,7 @@ Array<T, Dynamic, 6> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
                                              const Ref<const Array<T, Dynamic, 7> >& neighbors,
                                              const T dt, const int iter,
                                              const T R, const T Rcell,
-                                             const Ref<const Array<T, 4, 1> >& prefactors)
+                                             const Ref<const Array<T, 3, 1> >& prefactors)
 {
     int n = cells.rows();   // Number of cells
 
@@ -741,10 +744,9 @@ Array<T, Dynamic, 6> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
     Array<T, Dynamic, 1> overlaps = 2 * R - magnitudes;
  
     // Note that:
-    //     prefactors(0) = 2.5 * std::sqrt(R)
-    //     prefactors(1) = 2.5 * E0 * std::sqrt(R)
-    //     prefactors(2) = E0 * std::pow(R - Rcell, 1.5)
-    //     prefactors(3) = Ecell
+    //     prefactors(0) = 2.5 * E0 * std::sqrt(R)
+    //     prefactors(1) = 2.5 * E0 * std::sqrt(R) * std::pow(2 * R - 2 * Rcell, 1.5)
+    //     prefactors(2) = 2.5 * Ecell * std::sqrt(Rcell)
 
     // For each pair of neighboring cells ...
     for (int k = 0; k < neighbors.rows(); ++k)
@@ -759,19 +761,22 @@ Array<T, Dynamic, 6> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
         // Define prefactors that determine the magnitudes of the interaction
         // forces, depending on the size of the overlap 
         //
-        // Case 1: the overlap is positive but less than R - Rcell (i.e., it 
-        // is limited to within the EPS coating)
+        // Case 1: the overlap is positive but less than 2 * (R - Rcell) (i.e.,
+        // it is limited to within the EPS coating)
         T prefactor = 0; 
-        if (overlap > 0 && overlap < R - Rcell)
+        if (overlap > 0 && overlap < 2 * (R - Rcell))
         {
-            prefactor = prefactors(1) * pow(overlap, 1.5); 
+            // The force magnitude is 2.5 * E0 * sqrt(R) * pow(overlap, 1.5)
+            prefactor = prefactors(0) * pow(overlap, 1.5); 
         }
-        // Case 2: the overlap is instead greater than R - Rcell (i.e., it 
-        // encroaches into the bodies of the two cells)
-        else if (overlap >= R - Rcell)
+        // Case 2: the overlap is instead greater than 2 * R - 2 * Rcell
+        // (i.e., it encroaches into the bodies of the two cells)
+        else if (overlap >= 2 * (R - Rcell))
         {
-            T term = prefactors(3) * pow(overlap - R + Rcell, 1.5);
-            prefactor = prefactors(0) * (prefactors(2) + term);
+            // The force magnitude is 2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5)
+            // + 2.5 * Ecell * sqrt(Rcell) * pow(2 * Rcell + overlap - 2 * R, 1.5) 
+            T term = prefactors(2) * pow(overlap - 2 * (R - Rcell), 1.5);
+            prefactor = prefactors(1) + term;
         }
 
         if (overlap > 0)
@@ -830,7 +835,7 @@ Array<T, Dynamic, 6> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param mode Choice of potential used to model cell-cell adhesion. Can be
- *             NONE (0), KIHARA (1), or GBK (2).
+ *             NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param params Parameters required to compute cell-cell adhesion forces. 
  * @returns Derivatives of the cell-cell adhesion energies with respect to  
  *          cell positions and orientations.   
@@ -881,8 +886,17 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
             T sj = neighbors(k, 6); 
 
             // Get the corresponding forces
-            Array<T, 2, 6> forces; 
-            if (mode == AdhesionMode::KIHARA) 
+            Array<T, 2, 6> forces;
+            if (mode == AdhesionMode::JKR)
+            {
+                const T strength = params["strength"];
+                const T dmin = params["mindist"];
+                // Enforce orientation vector norm constraint
+                forces = strength * forcesJKRLagrange<T, 3>(
+                    ni, nj, dij, R, si, sj, dmin, true
+                ); 
+            }
+            else if (mode == AdhesionMode::KIHARA) 
             {
                 const T strength = params["strength"];
                 const T expd = params["distance_exp"]; 
@@ -943,13 +957,13 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
- * @param cell_cell_prefactors Array of four pre-computed prefactors for
+ * @param cell_cell_prefactors Array of three pre-computed prefactors for
  *                             cell-cell repulsion forces.
  * @param E0 Elastic modulus of EPS.
  * @param assume_2d If the i-th entry is true, assume that the i-th cell's
  *                  z-orientation is zero. 
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
- *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
  * @param multithread If true, use multithreading. 
@@ -961,7 +975,7 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
                                            const Ref<const Array<int, Dynamic, 1> >& to_adhere,
                                            const T dt, const int iter,
                                            const T R, const T Rcell,
-                                           const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                                           const Ref<const Array<T, 3, 1> >& cell_cell_prefactors,
                                            const T E0,
                                            const Ref<const Array<int, Dynamic, 1> >& assume_2d,
                                            const AdhesionMode adhesion_mode,
@@ -1122,7 +1136,7 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
- * @param cell_cell_prefactors Array of four pre-computed prefactors for
+ * @param cell_cell_prefactors Array of three pre-computed prefactors for
  *                             cell-cell repulsion forces.
  * @param E0 Elastic modulus of EPS.
  * @param assume_2d If the i-th entry is true, assume that the i-th cell's
@@ -1130,7 +1144,7 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  * @param noise Noise to be added to each generalized force used to compute
  *              the velocities.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
- *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
  * @param multithread If true, use multithreading. 
@@ -1141,7 +1155,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const Ref<const Array<T, Dynamic, 7> >& neighbors,
                                    const Ref<const Array<int, Dynamic, 1> >& to_adhere,
                                    const T dt, const int iter, const T R, const T Rcell,
-                                   const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                                   const Ref<const Array<T, 3, 1> >& cell_cell_prefactors,
                                    const T E0,
                                    const Ref<const Array<int, Dynamic, 1> >& assume_2d,
                                    const Ref<const Array<T, Dynamic, 6> >& noise,
@@ -1345,7 +1359,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param dt Timestep. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
- * @param cell_cell_prefactors Array of four pre-computed prefactors for
+ * @param cell_cell_prefactors Array of three pre-computed prefactors for
  *                             cell-cell repulsion forces.
  * @param E0 Elastic modulus of EPS. 
  * @param nz_threshold Threshold for judging whether each cell's z-orientation
@@ -1361,7 +1375,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param rng Random number generator.
  * @param uniform_dist Pre-defined instance of standard uniform distribution.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
- *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
  * @param n_start_multithread Minimum number of cells at which to start using
@@ -1378,7 +1392,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            const Ref<const Array<T, Dynamic, 7> >& neighbors,
                            const Ref<const Array<int, Dynamic, 1> >& to_adhere, 
                            const T dt, const int iter, const T R, const T Rcell,
-                           const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                           const Ref<const Array<T, 3, 1> >& cell_cell_prefactors,
                            const T E0, const T nz_threshold, const T max_rxy_noise,
                            const T max_rz_noise, const T max_nxy_noise,
                            const T max_nz_noise, boost::random::mt19937& rng,
