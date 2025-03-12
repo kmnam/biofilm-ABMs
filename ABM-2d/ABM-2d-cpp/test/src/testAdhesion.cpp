@@ -571,6 +571,154 @@ Array<T, 2, 4> forcesGBKFiniteDiff(const Ref<const Array<T, 2, 1> >& r1,
  *                       GENERIC TEST FUNCTIONS                       //
  * ------------------------------------------------------------------ */
 /**
+ * A generic test function for forcesJKRLagrange(). 
+ *
+ * @param r1 Cell 1 center. 
+ * @param n1 Cell 1 orientation. 
+ * @param half_l1 Cell 1 half-length. 
+ * @param r2 Cell 2 center. 
+ * @param n2 Cell 2 orientation. 
+ * @param half_l2 Cell 2 half-length. 
+ * @param R Cell radius, including the EPS. 
+ * @param dmin Minimum distance at which the potential is nonzero. 
+ * @param delta Increment for finite difference approximation. 
+ * @param target_force_21 Pre-computed force vector on cell 1 due to cell 2. 
+ */
+void testForcesJKRLagrange(const Ref<const Array<T, 2, 1> >& r1,
+                           const Ref<const Array<T, 2, 1> >& n1, const T half_l1,
+                           const Ref<const Array<T, 2, 1> >& r2, 
+                           const Ref<const Array<T, 2, 1> >& n2, const T half_l2,
+                           const T R, const T dmin, const T delta, 
+                           const Ref<const Array<T, 2, 1> >& target_force_21)
+{
+    // Compute the distance vector from cell 1 to cell 2 
+    K kernel; 
+    Segment_3 seg1 = generateSegment<T>(r1, n1, half_l1); 
+    Segment_3 seg2 = generateSegment<T>(r2, n2, half_l2);
+    auto result = distBetweenCells<T>(seg1, seg2, 0, r1, n1, half_l1, 1, r2, n2, half_l2, kernel);
+    Matrix<T, 2, 1> d12 = std::get<0>(result); 
+    T s = std::get<1>(result); 
+    T t = std::get<2>(result);
+    T dist = d12.norm();
+
+    // Compute the forces via forcesJKRLagrange() *without* enforcing the
+    // orientation vector norm constraint 
+    Array<T, 2, 4> forces1_unconstrained = -forcesJKRLagrange<T, 2>(
+        n1.matrix(), n2.matrix(), d12, R, s, t, dmin, false
+    );
+
+    // Do the same *while* enforcing the orientation vector norm constraint 
+    Array<T, 2, 4> forces1_constrained = -forcesJKRLagrange<T, 2>(
+        n1.matrix(), n2.matrix(), d12, R, s, t, dmin, true
+    );
+
+    // Check that the force on cell 1 due to cell 2 is correct 
+    REQUIRE_THAT(
+        (forces1_unconstrained(0, Eigen::seq(0, 1)) - target_force_21.transpose()).matrix().norm(),
+        Catch::Matchers::WithinAbs(0.0, delta)
+    );
+    REQUIRE_THAT(
+        (forces1_constrained(0, Eigen::seq(0, 1)) - target_force_21.transpose()).matrix().norm(), 
+        Catch::Matchers::WithinAbs(0.0, delta)
+    );
+
+    // Check that the torques with and without the constraint differ by the 
+    // Lagrange multiplier 
+    T lambda1 = 0.5 * n1.matrix().dot(-forces1_unconstrained(0, Eigen::seq(2, 3)).matrix()); 
+    T lambda2 = 0.5 * n2.matrix().dot(-forces1_unconstrained(1, Eigen::seq(2, 3)).matrix()); 
+    REQUIRE_THAT(
+        forces1_constrained(0, 2) - forces1_unconstrained(0, 2),
+        Catch::Matchers::WithinAbs(2 * lambda1 * n1(0), delta)
+    );
+    REQUIRE_THAT(
+        forces1_constrained(0, 3) - forces1_unconstrained(0, 3), 
+        Catch::Matchers::WithinAbs(2 * lambda1 * n1(1), delta)
+    );
+    REQUIRE_THAT(
+        forces1_constrained(1, 2) - forces1_unconstrained(1, 2), 
+        Catch::Matchers::WithinAbs(2 * lambda2 * n2(0), delta) 
+    ); 
+    REQUIRE_THAT(
+        forces1_constrained(1, 3) - forces1_unconstrained(1, 3), 
+        Catch::Matchers::WithinAbs(2 * lambda2 * n2(1), delta)
+    );         
+
+    // Check that the torque on cell 1 due to cell 2, inferred from the given
+    // force, is correct
+    //
+    // Following You et al., this torque should be (s * n1).cross(force).cross(n1)
+    Matrix<T, 3, 1> u, v;
+    u << n1(0), n1(1), 0; 
+    v << target_force_21(0), target_force_21(1), 0;
+    Array<T, 2, 1> target_torque_21 = (s * u).cross(v).cross(u)(Eigen::seq(0, 1)).array();
+    REQUIRE_THAT(
+        (forces1_constrained(0, Eigen::seq(2, 3)) - target_torque_21.transpose()).matrix().norm(),
+        Catch::Matchers::WithinAbs(0.0, delta)
+    ); 
+
+    // Check that the two force vectors are equal and opposite
+    REQUIRE_THAT(
+        (forces1_unconstrained(0, Eigen::seq(0, 1)) + forces1_unconstrained(1, Eigen::seq(0, 1))).matrix().norm(),
+        Catch::Matchers::WithinAbs(0.0, delta)
+    );
+    REQUIRE_THAT(
+        (forces1_constrained(0, Eigen::seq(0, 1)) + forces1_constrained(1, Eigen::seq(0, 1))).matrix().norm(),
+        Catch::Matchers::WithinAbs(0.0, delta)
+    );
+
+    // Check that the two torque vectors are zero, if either is expected 
+    //
+    // The torque on either cell should be zero if:
+    // (1) the force is acting on the center of the cell and the force vector
+    //     is orthogonal to the cell orientation, or 
+    // (2) the force is acting on either end of the cell and the force vector 
+    //     is parallel to the cell orientation
+    Matrix<T, 2, 1> dnorm = d12 / dist;
+    bool cond1 = (abs(s) < delta && abs(dnorm.dot(n1.matrix())) < delta); 
+    bool cond2 = (half_l1 - abs(s) < delta && 1.0 - abs(dnorm.dot(n1.matrix())) < delta);
+    bool cond3 = (abs(t) < delta && abs(dnorm.dot(n2.matrix())) < delta); 
+    bool cond4 = (half_l2 - abs(t) < delta && 1.0 - abs(dnorm.dot(n2.matrix())) < delta);
+    if (cond1 || cond2) 
+    {
+        REQUIRE_THAT(
+            forces1_constrained(0, Eigen::seq(2, 3)).matrix().norm(),
+            Catch::Matchers::WithinAbs(0.0, delta)
+        );
+    }
+    if (cond3 || cond4)
+    {
+        REQUIRE_THAT(
+            forces1_constrained(1, Eigen::seq(2, 3)).matrix().norm(),
+            Catch::Matchers::WithinAbs(0.0, delta)
+        );         
+    }
+
+    // Compute the forces via finite differences and check against the 
+    // unconstrained forces  
+    Array<T, 2, 4> dEdq2 = forcesJKRFiniteDiff(
+        r1, n1, half_l1, r2, n2, half_l2, R, dmin, delta
+    );
+    Array<T, 2, 4> forces2(-dEdq2);
+    REQUIRE_THAT(
+        (forces1_unconstrained - forces2).abs().maxCoeff(),
+        Catch::Matchers::WithinAbs(0.0, delta)
+    );         
+
+    // Apply the unit vector constraint to each torque computed via finite 
+    // differences 
+    lambda1 = 0.5 * n1.matrix().dot(dEdq2(0, Eigen::seq(2, 3)).matrix()); 
+    lambda2 = 0.5 * n2.matrix().dot(dEdq2(1, Eigen::seq(2, 3)).matrix());
+    forces2(0, Eigen::seq(2, 3)) += lambda1 * 2 * n1; 
+    forces2(1, Eigen::seq(2, 3)) += lambda2 * 2 * n2;
+
+    // Check that the constrained forces agree with each other
+    REQUIRE_THAT(
+        (forces1_constrained - forces2).abs().maxCoeff(),
+        Catch::Matchers::WithinAbs(0.0, delta)
+    ); 
+}
+
+/**
  * A generic test function for forcesKiharaLagrange(). 
  *
  * @param r1 Cell 1 center. 
