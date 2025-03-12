@@ -32,7 +32,7 @@
 #include "indices.hpp"
 #include "integrals.hpp"
 #include "distances.hpp"
-#include "kiharaGBK.hpp"
+#include "adhesion.hpp"
 
 using namespace Eigen;
 
