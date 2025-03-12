@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/5/2025
+ *     3/12/2025
  */
 
 #ifndef BIOFILM_MECHANICS_2D_HPP
@@ -51,8 +51,9 @@ typedef K::Segment_3 Segment_3;
 enum class AdhesionMode
 {
     NONE = 0,
-    KIHARA = 1,
-    GBK = 2
+    JKR = 1,
+    KIHARA = 2,
+    GBK = 3
 };
 
 /**
@@ -559,7 +560,7 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param mode Choice of potential used to model cell-cell adhesion. Can be
- *             NONE (0), KIHARA (1), or GBK (2).
+ *             NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param params Parameters required to compute cell-cell adhesion forces. 
  * @returns Derivatives of the cell-cell adhesion energies with respect to  
  *          cell positions and orientations.   
@@ -609,8 +610,17 @@ Array<T, Dynamic, 4> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
             T sj = neighbors(k, 5); 
 
             // Get the corresponding forces
-            Array<T, 2, 4> forces; 
-            if (mode == AdhesionMode::KIHARA) 
+            Array<T, 2, 4> forces;
+            if (mode == AdhesionMode::JKR)
+            {
+                const T strength = params["strength"];
+                const T dmin = params["mindist"];
+                // Enforce orientation vector norm constraint
+                forces = strength * forcesJKRLagrange<T, 2>(
+                    ni, nj, dij, R, si, sj, dmin, true
+                ); 
+            }
+            else if (mode == AdhesionMode::KIHARA) 
             {
                 const T strength = params["strength"];
                 const T expd = params["distance_exp"]; 
@@ -1044,7 +1054,7 @@ Array<T, Dynamic, 3> cellCellRepulsiveForcesNewton(const Ref<const Array<T, Dyna
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param mode Choice of potential used to model cell-cell adhesion. Can be
- *             NONE (0), KIHARA (1), or GBK (2).
+ *             NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param params Parameters required to compute cell-cell adhesion forces. 
  * @returns Forces and torques due to cell-cell adhesion for each pair of 
  *          neighboring cells. 
@@ -1096,7 +1106,8 @@ Array<T, Dynamic, 3> cellCellAdhesiveForcesNewton(const Ref<const Array<T, Dynam
 
             // Get the forces and torques on each cell due to the other 
             Array<T, 2, 1> force_ji;
-            Array<T, 3, 1> torque_ji, torque_ij; 
+            Array<T, 3, 1> torque_ji, torque_ij;
+            // TODO Add JKR forces
             if (mode == AdhesionMode::KIHARA) 
             {
                 const T strength = params["strength"];
@@ -1472,7 +1483,7 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param noise Noise to be added to each generalized force used to compute
  *              the velocities.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
- *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
  * @param confine_mode Confinement mode. Can be NONE (0), RADIAL (1), or 
@@ -1678,7 +1689,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param rng Random number generator.
  * @param uniform_dist Pre-defined instance of standard uniform distribution.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
- *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
  * @param confine_mode Confinement mode. Can be NONE (0), RADIAL (1), or 
@@ -1829,7 +1840,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
  * @param eta_cell_cell Array of cell-cell friction coefficients between cells 
  *                      in different groups. 
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
- *                      Can be NONE (0), KIHARA (1), or GBK (2).
+ *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
  * @param confine_mode Confinement mode. Can be NONE (0), RADIAL (1), or 
