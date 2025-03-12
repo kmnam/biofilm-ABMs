@@ -6,11 +6,11 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/5/2025
+ *     3/12/2025
  */
 
-#ifndef KIHARA_GBK_POTENTIAL_FORCES_HPP
-#define KIHARA_GBK_POTENTIAL_FORCES_HPP
+#ifndef ADHESION_POTENTIAL_FORCES_HPP
+#define ADHESION_POTENTIAL_FORCES_HPP
 
 #include <Eigen/Dense>
 #include <boost/multiprecision/mpfr.hpp>
@@ -84,6 +84,39 @@ T potentialHertz(const T dist, const T R, const T Rcell, const T E0, const T Ece
         return E0 * sqrt(R) * pow(2 * R - dist, 2.5);
     }
     // Otherwise, return zero
+    else
+    {
+        return 0.0;
+    }
+}
+
+/**
+ * Compute a simplified JKR contact potential between two neighboring 
+ * cells in arbitrary dimensions (2 or 3).
+ *
+ * @param dist Shortest distance from cell 1 to cell 2. 
+ * @param R Cell radius, including the EPS. 
+ * @param dmin Minimum distance at which the potential is nonzero.
+ * @returns Shifted JKR potential at the given cell-cell distance. 
+ */
+template <typename T>
+T potentialJKR(const T dist, const T R, const T dmin)
+{
+    // If the distance is less than dmin, then return the corresponding 
+    // shift term 
+    if (dist <= dmin)
+    {
+        T d0 = (2 * R + dmin) / 2.0;
+        return -boost::math::constants::pi<T>() * R * (2 * R - dmin) * (d0 - dist); 
+    }
+    // If the distance is greater than dmin and less than 2 * R, then 
+    // evaluate the potential (plus the corresponding shift term)
+    else if (dist <= 2 * R)
+    {
+        T overlap = 2 * R - dist; 
+        return -0.5 * boost::math::constants::pi<T>() * R * overlap * overlap;
+    }
+    // If the distance is greater than 2 * R, return zero
     else
     {
         return 0.0;
