@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/4/2025
+ *     3/12/2025
  */
 #include <cmath>
 #include <Eigen/Dense>
@@ -17,6 +17,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "../../include/distances.hpp"
+#include "../../include/adhesion.hpp"
 #include "../../include/mechanics.hpp"
 #include "../../include/indices.hpp"
 
@@ -65,27 +66,8 @@ T potentialHertz(const Ref<const Array<T, 2, 1> >& r1,
     Segment_3 seg2 = generateSegment<T>(r2, n2, half_l2);
     auto result = distBetweenCells<T>(seg1, seg2, 0, r1, n1, half_l1, 1, r2, n2, half_l2, kernel);
     Matrix<T, 2, 1> d12 = std::get<0>(result); 
-    T dist = d12.norm(); 
-    T overlap = 2 * R - dist;  
-
-    // If the cells are not contacting ... 
-    if (dist > 2 * R)
-    {
-        return 0.0;
-    } 
-    // If the cells are greater than distance R + Rcell apart ... 
-    else if (dist > R + Rcell)
-    {
-        return E0 * sqrt(R) * pow(overlap, 2.5); 
-    }
-    // Otherwise, if the cells are within distance R + Rcell ... 
-    else 
-    {
-        T d0 = (7 * R + 3 * Rcell) / 5.0; 
-        T term1 = 2.5 * E0 * sqrt(R) * pow(R - Rcell, 1.5) * (d0 - dist); 
-        T term2 = Ecell * sqrt(R) * pow(R + Rcell - dist, 2.5); 
-        return term1 + term2;  
-    }
+    T dist = d12.norm();
+    return potentialHertz<T>(dist, R, Rcell, E0, Ecell);  
 }
 
 /**
@@ -216,11 +198,10 @@ void testCellCellRepulsiveForces(const Ref<const Array<T, 2, 1> >& r1,
              1, r2(0), r2(1), n2(0), n2(1), 0, 0, 0, 0, 2 * half_l2, half_l2, 0, 1, 1, 1, 1, 1;
     Array<T, Dynamic, 6> neighbors(1, 6);
     neighbors << 0, 1, d12(0), d12(1), s, t;
-    Array<T, 4, 1> prefactors; 
-    prefactors << 2.5 * sqrt(R), 
-                  2.5 * E0 * sqrt(R), 
-                  E0 * pow(R - Rcell, 1.5), 
-                  Ecell;  
+    Array<T, 3, 1> prefactors; 
+    prefactors << 2.5 * E0 * sqrt(R), 
+                  2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5), 
+                  2.5 * Ecell * sqrt(R);  
 
     // Compute the forces via cellCellRepulsiveForces()
     //
@@ -336,11 +317,10 @@ void testCellCellRepulsiveForcesNewton(const Ref<const Array<T, 2, 1> >& r1,
              1, r2(0), r2(1), n2(0), n2(1), 0, 0, 0, 0, 2 * half_l2, half_l2, 0, 1, 1, 1, 1, 1;
     Array<T, Dynamic, 6> neighbors(1, 6);
     neighbors << 0, 1, d12(0), d12(1), s, t;
-    Array<T, 4, 1> prefactors; 
-    prefactors << 2.5 * sqrt(R), 
-                  2.5 * E0 * sqrt(R), 
-                  E0 * pow(R - Rcell, 1.5), 
-                  Ecell;  
+    Array<T, 3, 1> prefactors; 
+    prefactors << 2.5 * E0 * sqrt(R), 
+                  2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5), 
+                  2.5 * Ecell * sqrt(R);  
 
     // Compute the forces via cellCellRepulsiveForcesNewton()
     Array<T, 2, 3> forces1 = cellCellRepulsiveForcesNewton<T>(
@@ -381,6 +361,9 @@ void testCellCellRepulsiveForcesNewton(const Ref<const Array<T, 2, 1> >& r1,
     );
 }
 
+/* ------------------------------------------------------------------ //
+ *                            TEST MODULES                            //
+ * ------------------------------------------------------------------ */
 /**
  * A series of tests for cellCellRepulsiveForces() for skew cell-cell configurations. 
  */
@@ -423,8 +406,8 @@ TEST_CASE("Tests for cellCellRepulsiveForces(), skew cells", "[cellCellRepulsive
     Array<T, 2, 1> d12; 
     d12 << 0, 1;
     target_force_21 = -d12 * (
-        2.5 * E0 * sqrt(R) * pow(R - Rcell, 1.5) +
-        2.5 * Ecell * sqrt(R) * pow(R + Rcell - 1, 1.5)
+        2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5) +
+        2.5 * Ecell * sqrt(Rcell) * pow(2 * Rcell - 1, 1.5)
     ); 
     testCellCellRepulsiveForces(
         r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
@@ -583,8 +566,8 @@ TEST_CASE("Tests for cellCellRepulsiveForces(), perpendicular cells", "[cellCell
     T dist = d12.matrix().norm(); 
     Array<T, 2, 1> dnorm = d12 / dist; 
     Array<T, 2, 1> target_force_21 = -dnorm * (
-        2.5 * E0 * sqrt(R) * pow(R - Rcell, 1.5) +
-        2.5 * Ecell * sqrt(R) * pow(R + Rcell - dist, 1.5)
+        2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5) +
+        2.5 * Ecell * sqrt(Rcell) * pow(2 * Rcell - dist, 1.5)
     );
     testCellCellRepulsiveForces(
         r1, n1, 0.5, r2, n2, 0.5, R, Rcell, E0, Ecell, delta, target_force_21
