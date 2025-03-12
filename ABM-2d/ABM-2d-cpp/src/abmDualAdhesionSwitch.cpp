@@ -72,8 +72,10 @@ int main(int argc, char** argv)
     if (token == 0)
         adhesion_mode = AdhesionMode::NONE;
     else if (token == 1)
-        adhesion_mode = AdhesionMode::KIHARA; 
+        adhesion_mode = AdhesionMode::JKR; 
     else if (token == 2)
+        adhesion_mode = AdhesionMode::KIHARA; 
+    else if (token == 3)
         adhesion_mode = AdhesionMode::GBK;
     else 
         throw std::runtime_error("Invalid cell-cell adhesion mode specified"); 
@@ -86,7 +88,7 @@ int main(int argc, char** argv)
     {
         adhesion_params["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double());
     }
-    else if (adhesion_mode == AdhesionMode::GBK)
+    if (adhesion_mode == AdhesionMode::GBK)
     { 
         adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double());
     }
