@@ -486,8 +486,8 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
         // Define prefactors that determine the magnitudes of the interaction
         // forces, depending on the size of the overlap 
         //
-        // Case 1: the overlap is positive but less than 2 * (R - Rcell) (i.e., it 
-        // is limited to within the EPS coating)
+        // Case 1: the overlap is positive but less than 2 * (R - Rcell) (i.e.,
+        // it is limited to within the EPS coating)
         T prefactor = 0; 
         if (overlap > 0 && overlap < 2 * (R - Rcell))
         {
