@@ -1,12 +1,13 @@
 /**
- * Test module for the `forcesKiharaLagrange()`, `forceKiharaNewton()`, 
- * `forcesGBKLagrange()`, and `forcesGBKNewton()` functions.  
+ * Test module for the `forcesJKRLagrange()`, `forcesKiharaLagrange()`,
+ * `forceKiharaNewton()`, `forcesGBKLagrange()`, and `forcesGBKNewton()`
+ * functions.  
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/11/2025
+ *     3/12/2025
  */
 #include <cmath>
 #include <Eigen/Dense>
@@ -38,6 +39,140 @@ typedef K::Segment_3 Segment_3;
 /* ------------------------------------------------------------------ //
  *                           HELPER FUNCTIONS                         //
  * ------------------------------------------------------------------ */
+/**
+ * Returns the generalized attractive forces and torques arising from the
+ * simplified JKR potential on the given two cells, computed via finite
+ * difference approximation from the potential.  
+ *
+ * @param r1 Cell 1 center. 
+ * @param n1 Cell 1 orientation. 
+ * @param half_l1 Cell 1 half-length. 
+ * @param r2 Cell 2 center. 
+ * @param n2 Cell 2 orientation. 
+ * @param half_l2 Cell 2 half-length.
+ * @param R Cell radius, including the EPS.
+ * @param dmin Minimum distance at which the potential is nonzero. 
+ * @param delta Increment for finite difference approximation. 
+ * @returns Array of generalized forces and torques on the two cells. 
+ */
+Array<T, 2, 4> forcesJKRFiniteDiff(const Ref<const Array<T, 2, 1> >& r1,
+                                   const Ref<const Array<T, 2, 1> >& n1,
+                                   const T half_l1,
+                                   const Ref<const Array<T, 2, 1> >& r2, 
+                                   const Ref<const Array<T, 2, 1> >& n2,
+                                   const T half_l2, const T R, const T dmin,
+                                   const T delta)
+{
+    K kernel;
+    Segment_3 seg1 = generateSegment<T>(r1, n1, half_l1); 
+    Segment_3 seg2 = generateSegment<T>(r2, n2, half_l2);  
+    Array<T, 2, 4> dEdq = Array<T, 2, 4>::Zero();
+    Array<T, 2, 1> dx, dy; 
+    dx << delta, 0; 
+    dy << 0, delta;
+
+    // Compute all eight finite differences ... 
+    //
+    // 1) Partial derivatives w.r.t r1
+    Segment_3 seg1_px = generateSegment<T>(r1 + dx, n1, half_l1);
+    Segment_3 seg1_mx = generateSegment<T>(r1 - dx, n1, half_l1); 
+    Segment_3 seg1_py = generateSegment<T>(r1 + dy, n1, half_l1); 
+    Segment_3 seg1_my = generateSegment<T>(r1 - dy, n1, half_l1); 
+    auto result = distBetweenCells<T>(
+        seg1_px, seg2, 0, r1 + dx, n1, half_l1, 1, r2, n2, half_l2, kernel
+    );
+    T dist1 = std::get<0>(result).norm();
+    result = distBetweenCells<T>(
+        seg1_mx, seg2, 0, r1 - dx, n1, half_l1, 1, r2, n2, half_l2, kernel
+    );
+    T dist2 = std::get<0>(result).norm();
+    result = distBetweenCells<T>(
+        seg1_py, seg2, 0, r1 + dy, n1, half_l1, 1, r2, n2, half_l2, kernel
+    );
+    T dist3 = std::get<0>(result).norm();  
+    result = distBetweenCells<T>(
+        seg1_my, seg2, 0, r1 - dy, n1, half_l1, 1, r2, n2, half_l2, kernel
+    );
+    T dist4 = std::get<0>(result).norm();  
+    dEdq(0, 0) = potentialJKR<T>(dist1, R, dmin) - potentialJKR<T>(dist2, R, dmin); 
+    dEdq(0, 1) = potentialJKR<T>(dist3, R, dmin) - potentialJKR<T>(dist4, R, dmin); 
+
+    // 2) Partial derivatives w.r.t n1
+    seg1_px = generateSegment<T>(r1, n1 + dx, half_l1);
+    seg1_mx = generateSegment<T>(r1, n1 - dx, half_l1); 
+    seg1_py = generateSegment<T>(r1, n1 + dy, half_l1); 
+    seg1_my = generateSegment<T>(r1, n1 - dy, half_l1);
+    result = distBetweenCells<T>(
+        seg1_px, seg2, 0, r1, n1 + dx, half_l1, 1, r2, n2, half_l2, kernel
+    );
+    dist1 = std::get<0>(result).norm();
+    result = distBetweenCells<T>(
+        seg1_mx, seg2, 0, r1, n1 - dx, half_l1, 1, r2, n2, half_l2, kernel
+    );
+    dist2 = std::get<0>(result).norm();
+    result = distBetweenCells<T>(
+        seg1_py, seg2, 0, r1, n1 + dy, half_l1, 1, r2, n2, half_l2, kernel
+    );
+    dist3 = std::get<0>(result).norm();  
+    result = distBetweenCells<T>(
+        seg1_my, seg2, 0, r1, n1 - dy, half_l1, 1, r2, n2, half_l2, kernel
+    );
+    dist4 = std::get<0>(result).norm(); 
+    dEdq(0, 2) = potentialJKR<T>(dist1, R, dmin) - potentialJKR<T>(dist2, R, dmin); 
+    dEdq(0, 3) = potentialJKR<T>(dist3, R, dmin) - potentialJKR<T>(dist4, R, dmin); 
+    
+    // 3) Partial derivatives w.r.t r2
+    Segment_3 seg2_px = generateSegment<T>(r2 + dx, n2, half_l2);
+    Segment_3 seg2_mx = generateSegment<T>(r2 - dx, n2, half_l2); 
+    Segment_3 seg2_py = generateSegment<T>(r2 + dy, n2, half_l2); 
+    Segment_3 seg2_my = generateSegment<T>(r2 - dy, n2, half_l2); 
+    result = distBetweenCells<T>(
+        seg1, seg2_px, 0, r1, n1, half_l1, 1, r2 + dx, n2, half_l2, kernel
+    );
+    dist1 = std::get<0>(result).norm();
+    result = distBetweenCells<T>(
+        seg1, seg2_mx, 0, r1, n1, half_l1, 1, r2 - dx, n2, half_l2, kernel
+    );
+    dist2 = std::get<0>(result).norm();
+    result = distBetweenCells<T>(
+        seg1, seg2_py, 0, r1, n1, half_l1, 1, r2 + dy, n2, half_l2, kernel
+    );
+    dist3 = std::get<0>(result).norm();  
+    result = distBetweenCells<T>(
+        seg1, seg2_my, 0, r1, n1, half_l1, 1, r2 - dy, n2, half_l2, kernel
+    );
+    dist4 = std::get<0>(result).norm(); 
+    dEdq(1, 0) = potentialJKR<T>(dist1, R, dmin) - potentialJKR<T>(dist2, R, dmin); 
+    dEdq(1, 1) = potentialJKR<T>(dist3, R, dmin) - potentialJKR<T>(dist4, R, dmin);
+
+    // 4) Partial derivatives w.r.t n2
+    seg2_px = generateSegment<T>(r2, n2 + dx, half_l2);
+    seg2_mx = generateSegment<T>(r2, n2 - dx, half_l2); 
+    seg2_py = generateSegment<T>(r2, n2 + dy, half_l2); 
+    seg2_my = generateSegment<T>(r2, n2 - dy, half_l2); 
+    result = distBetweenCells<T>(
+        seg1, seg2_px, 0, r1, n1, half_l1, 1, r2, n2 + dx, half_l2, kernel
+    );
+    dist1 = std::get<0>(result).norm();
+    result = distBetweenCells<T>(
+        seg1, seg2_mx, 0, r1, n1, half_l1, 1, r2, n2 - dx, half_l2, kernel
+    );
+    dist2 = std::get<0>(result).norm();
+    result = distBetweenCells<T>(
+        seg1, seg2_py, 0, r1, n1, half_l1, 1, r2, n2 + dy, half_l2, kernel
+    );
+    dist3 = std::get<0>(result).norm();  
+    result = distBetweenCells<T>(
+        seg1, seg2_my, 0, r1, n1, half_l1, 1, r2, n2 - dy, half_l2, kernel
+    );
+    dist4 = std::get<0>(result).norm(); 
+    dEdq(1, 2) = potentialJKR<T>(dist1, R, dmin) - potentialJKR<T>(dist2, R, dmin); 
+    dEdq(1, 3) = potentialJKR<T>(dist3, R, dmin) - potentialJKR<T>(dist4, R, dmin);
+
+    // Normalize by double the increment and return 
+    return dEdq / (2 * delta); 
+}
+
 /**
  * Returns the generalized attractive forces and torques arising from the
  * Kihara potential on the given two cells, computed via finite difference
