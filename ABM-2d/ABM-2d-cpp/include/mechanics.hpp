@@ -919,8 +919,10 @@ Array<T, Dynamic, 1> getTorques(const Ref<const Array<T, Dynamic, Dynamic> >& ce
  * @param R Cell radius, including the EPS. 
  * @param Rcell Cell radius, excluding the EPS.
  * @param E0 Elastic modulus of EPS. 
- * @param prefactors Array of four pre-computed prefactors, namely `2.5 * sqrt(R)`,
- *                   `2.5 * E0 * sqrt(R)`, `E0 * pow(R - Rcell, 1.5)`, and `Ecell`.
+ * @param prefactors Array of three pre-computed prefactors, namely
+ *                   `2.5 * E0 * sqrt(R)`,
+ *                   `2.5 * E0 * sqrt(R) * pow(2 * R - 2 * Rcell, 1.5)`, and
+ *                   `2.5 * Ecell * sqrt(Rcell)`.
  * @returns Forces and torques due to cell-cell repulsion for each pair of 
  *          neighboring cells. 
  */
@@ -929,7 +931,7 @@ Array<T, Dynamic, 3> cellCellRepulsiveForcesNewton(const Ref<const Array<T, Dyna
                                                    const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                                    const T dt, const int iter,
                                                    const T R, const T Rcell,
-                                                   const Ref<const Array<T, 4, 1> >& prefactors)
+                                                   const Ref<const Array<T, 3, 1> >& prefactors)
 {
     int n = cells.rows();   // Number of cells
 
@@ -962,6 +964,8 @@ Array<T, Dynamic, 3> cellCellRepulsiveForcesNewton(const Ref<const Array<T, Dyna
         T sj = neighbors(k, 5);                         // Cell-body coordinate along cell j
         Array<T, 2, 1> dir_ij = directions.row(k);      // Normalized distance vector 
         T overlap = overlaps(k);                        // Cell-cell overlap 
+
+        // TODO Update with new repulsive forces 
 
         // Define prefactors that determine the magnitudes of the interaction
         // forces, depending on the size of the overlap 
@@ -1481,7 +1485,7 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells)
  * @param iter Iteration number. Only used for debugging output.
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
- * @param cell_cell_prefactors Array of four pre-computed prefactors for 
+ * @param cell_cell_prefactors Array of three pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
  * @param noise Noise to be added to each generalized force used to compute
@@ -1501,7 +1505,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                    const Ref<const Array<int, Dynamic, 1> >& to_adhere,
                                    const T dt, const int iter, const T R, const T Rcell,
-                                   const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                                   const Ref<const Array<T, 3, 1> >& cell_cell_prefactors,
                                    const T surface_contact_density,
                                    const Ref<const Array<T, Dynamic, 4> >& noise,
                                    const AdhesionMode adhesion_mode,
@@ -1685,7 +1689,7 @@ Array<T, Dynamic, 4> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param iter Iteration number. Only used for debugging output.  
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
- * @param cell_cell_prefactors Array of four pre-computed prefactors for 
+ * @param cell_cell_prefactors Array of three pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param surface_contact_density Cell-surface contact area density.
  * @param max_noise Maximum noise to be added to each generalized force used 
@@ -1712,7 +1716,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
                            const Ref<const Array<T, Dynamic, 6> >& neighbors,
                            const Ref<const Array<int, Dynamic, 1> >& to_adhere,
                            const T dt, const int iter, const T R, const T Rcell,
-                           const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                           const Ref<const Array<T, 3, 1> >& cell_cell_prefactors,
                            const T surface_contact_density, const T max_noise,
                            boost::random::mt19937& rng,
                            boost::random::uniform_01<>& uniform_dist,
@@ -1833,7 +1837,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 4> >
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
- * @param cell_cell_prefactors Array of four pre-computed prefactors for 
+ * @param cell_cell_prefactors Array of three pre-computed prefactors for 
  *                             cell-cell interaction forces.
  * @param density Constant density of each cell, including the EPS. 
  * @param surface_contact_density Cell-surface contact area density.
@@ -1857,7 +1861,7 @@ void stepVerlet(Ref<Array<T, Dynamic, Dynamic> > cells,
                 const Ref<const Array<T, Dynamic, 6> >& neighbors,
                 const Ref<const Array<int, Dynamic, 1> >& to_adhere,
                 const T dt, const int iter, const T R, const T Rcell,
-                const Ref<const Array<T, 4, 1> >& cell_cell_prefactors,
+                const Ref<const Array<T, 3, 1> >& cell_cell_prefactors,
                 const T density, const T surface_contact_density,
                 const T max_noise, boost::random::mt19937& rng,
                 boost::random::uniform_01<>& uniform_dist,
