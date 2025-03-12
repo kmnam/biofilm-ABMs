@@ -70,15 +70,15 @@ T squaredAspectRatioParam(const T half_l1, const T half_l2, const T Rcell)
 template <typename T>
 T potentialHertz(const T dist, const T R, const T Rcell, const T E0, const T Ecell)
 {
-    // If the distance is less than R + Rcell ...
-    if (dist <= R + Rcell)
+    // If the distance is less than 2 * Rcell ...
+    if (dist <= 2 * Rcell)
     {
-        T d0 = (7 * R + 3 * Rcell) / 5.0; 
-        T term1 = 2.5 * E0 * pow(R - Rcell, 1.5) * (d0 - dist);
-        T term2 = Ecell * pow(R + Rcell - dist, 2.5);
-        return sqrt(R) * (term1 + term2); 
+        T d0 = (4 * R + 6 * Rcell) / 5.0; 
+        T term1 = 2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5) * (d0 - dist);
+        T term2 = Ecell * sqrt(Rcell) * pow(2 * Rcell - dist, 2.5);
+        return term1 + term2;
     }
-    // If the distance is between R + Rcell and 2 * R ... 
+    // If the distance is between 2 * Rcell and 2 * R ... 
     else if (dist <= 2 * R)
     {
         return E0 * sqrt(R) * pow(2 * R - dist, 2.5);
