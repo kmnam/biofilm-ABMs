@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/21/2025
+ *     3/12/2025
  */
 
 #include <Eigen/Dense>
@@ -81,10 +81,15 @@ int main(int argc, char** argv)
     adhesion_map.insert(std::make_pair(1, 1)); 
     std::unordered_map<std::string, T> adhesion_params;
     adhesion_params["strength"] = static_cast<T>(json_data["adhesion_strength"].as_double());
-    adhesion_params["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double()); 
     adhesion_params["mindist"] = static_cast<T>(json_data["adhesion_mindist"].as_double()); 
-    if (adhesion_mode == AdhesionMode::GBK) 
-        adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double()); 
+    if (adhesion_mode == AdhesionMode::KIHARA || adhesion_mode == AdhesionMode::GBK)
+    {
+        adhesion_params["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double());
+    }
+    else if (adhesion_mode == AdhesionMode::GBK)
+    { 
+        adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double());
+    }
 
     // No confinement forces or growth void 
     const ConfinementMode confine_mode = ConfinementMode::NONE; 
