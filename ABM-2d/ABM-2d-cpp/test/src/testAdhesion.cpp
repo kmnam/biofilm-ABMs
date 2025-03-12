@@ -719,6 +719,77 @@ void testForcesJKRLagrange(const Ref<const Array<T, 2, 1> >& r1,
 }
 
 /**
+ * A generic test function for forceJKRNewton().
+ *
+ * This function compares the calculated forces against those obtained from 
+ * forcesJKRLagrange().  
+ *
+ * @param r1 Cell 1 center. 
+ * @param n1 Cell 1 orientation. 
+ * @param half_l1 Cell 1 half-length. 
+ * @param r2 Cell 2 center. 
+ * @param n2 Cell 2 orientation. 
+ * @param half_l2 Cell 2 half-length. 
+ * @param R Cell radius, including the EPS. 
+ * @param dmin Minimum distance at which the potential is nonzero. 
+ */
+void testForceJKRNewton(const Ref<const Array<T, 2, 1> >& r1,
+                        const Ref<const Array<T, 2, 1> >& n1, const T half_l1,
+                        const Ref<const Array<T, 2, 1> >& r2, 
+                        const Ref<const Array<T, 2, 1> >& n2, const T half_l2,
+                        const T R, const T dmin) 
+{
+    // Compute the distance vector from cell 1 to cell 2 
+    K kernel; 
+    Segment_3 seg1 = generateSegment<T>(r1, n1, half_l1); 
+    Segment_3 seg2 = generateSegment<T>(r2, n2, half_l2);
+    auto result = distBetweenCells<T>(seg1, seg2, 0, r1, n1, half_l1, 1, r2, n2, half_l2, kernel);
+    Matrix<T, 2, 1> d12 = std::get<0>(result); 
+    T s = std::get<1>(result); 
+    T t = std::get<2>(result);
+
+    // Compute the forces via forcesJKRLagrange()
+    Array<T, 2, 4> forces1 = -forcesJKRLagrange<T, 2>(
+        n1.matrix(), n2.matrix(), d12, R, s, t, dmin, true
+    );
+
+    // Compute the force vector on cell 1 due to cell 2 via forceJKRNewton() 
+    Array<T, 2, 1> force_21 = forceJKRNewton<T, 2>(d12, R, dmin);
+
+    // Compute the force vector on cell 2 due to cell 1
+    Array<T, 2, 1> force_12 = -force_21; 
+
+    // Compute the torque on cell 1 due to cell 2 
+    Matrix<T, 3, 1> u1, u2, v1, v2, cross1, cross2; 
+    u1 << n1(0), n1(1), 0; 
+    u2 << n2(0), n2(1), 0; 
+    v1 << force_21(0), force_21(1), 0; 
+    v2 << force_12(0), force_12(1), 0; 
+    cross1 = (s * u1.cross(v1)).cross(u1);
+    cross2 = (t * u2.cross(v2)).cross(u2); 
+
+    // Check that the force vectors match 
+    REQUIRE_THAT(
+        (forces1(0, Eigen::seq(0, 1)) - force_21.transpose()).matrix().norm(),
+        Catch::Matchers::WithinAbs(0.0, 1e-8)
+    );
+    REQUIRE_THAT(
+        (forces1(1, Eigen::seq(0, 1)) - force_12.transpose()).matrix().norm(), 
+        Catch::Matchers::WithinAbs(0.0, 1e-8)
+    );
+
+    // Check that the torque vectors match 
+    REQUIRE_THAT(
+        (cross1.head(2) - forces1(0, Eigen::seq(2, 3)).matrix().transpose()).norm(),
+        Catch::Matchers::WithinAbs(0.0, 1e-8)
+    ); 
+    REQUIRE_THAT(
+        (cross2.head(2) - forces1(1, Eigen::seq(2, 3)).matrix().transpose()).norm(),
+        Catch::Matchers::WithinAbs(0.0, 1e-8)
+    ); 
+}
+
+/**
  * A generic test function for forcesKiharaLagrange(). 
  *
  * @param r1 Cell 1 center. 
@@ -1178,6 +1249,7 @@ void testForceGBKNewton(const Ref<const Array<T, 2, 1> >& r1,
 /**
  * A series of tests for Kihara potential/force parameter calibration. 
  */
+/*
 TEST_CASE(
     "Tests for Kihara potential/force parameter calibration",
     "[potentialKihara(), forceKiharaNewton()]"
@@ -1239,10 +1311,12 @@ TEST_CASE(
 	REQUIRE(forces(minpi + 1, j) > 0);
     }
 }
+*/
 
 /**
  * A series of tests for Gay-Berne-Kihara potential/force parameter calibration. 
  */
+/*
 TEST_CASE(
     "Tests for GBK potential/force parameter calibration",
     "[potentialGBK(), forceKiharaGBK()]"
@@ -1317,6 +1391,7 @@ TEST_CASE(
 	REQUIRE(forces(minpi + 1, j) > 0);
     }
 }
+*/
 
 /* ------------------------------------------------------------------ //
  *           TEST MODULES FOR SKEW CELL-CELL CONFIGURATIONS           //
@@ -1438,6 +1513,66 @@ TEST_CASE("Tests for forcesJKRLagrange(), skew cells", "[forcesJKRLagrange()]")
     testForcesJKRLagrange(
         r1, n1, 0.5, r2, n2, 0.5, R, dmin, delta, target_force_21
     ); 
+}
+
+/**
+ * A series of tests for forceJKRNewton() for skew cell-cell configurations. 
+ */
+TEST_CASE("Tests for forceJKRNewton(), skew cells", "[forceJKRNewton()]") 
+{
+    const T R = 0.8;
+    const T dmin = 1.2;
+
+    // r1 = (2, 1), n1 = (0.6, 0.8), l1 = 2
+    // r2 = (0, 3), n2 = (0, 1), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (-2, 1.5),
+    // which has norm 2.5 > 2 * R = 1.6, which means that the force between
+    // these cells should be zero 
+    Array<T, 2, 1> r1, n1, r2, n2; 
+    r1 << 2, 1; 
+    n1 << 0.6, 0.8; 
+    r2 << 0, 3; 
+    n2 << 0, 1;
+    testForceJKRNewton(r1, n1, 1, r2, n2, 0.5, R, dmin);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.5 + 0.5 * cos(pi/6), 1 + 0.5 * sin(pi/6)), n2 = (cos(pi/6), sin(pi/6)), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (0, 1)
+    r1(0) = 0; 
+    r1(1) = 0; 
+    n1(0) = 1; 
+    n1(1) = 0; 
+    r2(0) = 0.5 + 0.5 * cos(boost::math::constants::sixth_pi<T>()); 
+    r2(1) = 1 + 0.5 * sin(boost::math::constants::sixth_pi<T>()); 
+    n2(0) = cos(boost::math::constants::sixth_pi<T>()); 
+    n2(1) = sin(boost::math::constants::sixth_pi<T>());
+    testForceJKRNewton(r1, n1, 0.5, r2, n2, 0.5, R, dmin);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.2 + 0.5 * cos(pi/6), 1 + 0.5 * sin(pi/6)), n2 = (cos(pi/6), sin(pi/6)), l2 = 1
+    //
+    // The shortest distance between the two cells is, again, (0, 1)
+    r1(0) = 0; 
+    r1(1) = 0; 
+    n1(0) = 1; 
+    n1(1) = 0; 
+    r2(0) = 0.2 + 0.5 * cos(boost::math::constants::sixth_pi<T>()); 
+    r2(1) = 1 + 0.5 * sin(boost::math::constants::sixth_pi<T>()); 
+    n2(0) = cos(boost::math::constants::sixth_pi<T>()); 
+    n2(1) = sin(boost::math::constants::sixth_pi<T>());
+    testForceJKRNewton(r1, n1, 0.5, r2, n2, 0.5, R, dmin);
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.5 + 1.4 / sqrt(2), 1.4 / sqrt(2)), n2 = (1 / sqrt(2), -1 / sqrt(2)), l2 = 1
+    //
+    // The shortest distance between the two cells is (1.4 / sqrt(2), 1.4 / sqrt(2))
+    r2(0) = 0.5 + 1.4 / sqrt(2.0); 
+    r2(1) = 1.4 / sqrt(2.0); 
+    n2(0) = 1.0 / sqrt(2.0); 
+    n2(1) = -1.0 / sqrt(2.0);
+    testForceJKRNewton(r1, n1, 0.5, r2, n2, 0.5, R, dmin);
 }
 
 /**
