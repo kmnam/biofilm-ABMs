@@ -18,7 +18,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "../../include/distances.hpp"
-#include "../../include/kiharaGBK.hpp"
+#include "../../include/adhesion.hpp"
 #include "../../include/indices.hpp"
 
 using namespace Eigen;
@@ -1173,7 +1173,7 @@ void testForceGBKNewton(const Ref<const Array<T, 2, 1> >& r1,
 }
 
 /* ------------------------------------------------------------------ //
- *      TEST MODULES FOR PERPENDICULAR CELL-CELL CONFIGURATIONS       //
+ *           TEST MODULES FOR FORCE PARAMETER CALIBRATION             //
  * ------------------------------------------------------------------ */
 /**
  * A series of tests for Kihara potential/force parameter calibration. 
@@ -1360,6 +1360,84 @@ TEST_CASE(
     );
 
     // TODO More tests with parallel and perpendicular cells  
+}
+
+/**
+ * A series of tests for forcesJKRLagrange() for skew cell-cell configurations. 
+ */
+TEST_CASE("Tests for forcesJKRLagrange(), skew cells", "[forcesJKRLagrange()]") 
+{
+    const T R = 0.8;
+    const T dmin = 1.2;
+    const T delta = 1e-7;  
+
+    // r1 = (2, 1), n1 = (0.6, 0.8), l1 = 2
+    // r2 = (0, 3), n2 = (0, 1), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (-2, 1.5),
+    // which has norm 2.5 > 2 * R = 1.6, which means that the force between
+    // these cells should be zero 
+    Array<T, 2, 1> r1, n1, r2, n2; 
+    r1 << 2, 1; 
+    n1 << 0.6, 0.8; 
+    r2 << 0, 3; 
+    n2 << 0, 1;
+    Array<T, 2, 1> target_force_21 = Array<T, 2, 1>::Zero();  
+    testForcesJKRLagrange(
+        r1, n1, 1, r2, n2, 0.5, R, dmin, delta, target_force_21
+    );
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.5 + 0.5 * cos(pi/6), 1 + 0.5 * sin(pi/6)), n2 = (cos(pi/6), sin(pi/6)), l2 = 1
+    //
+    // The shortest distance between the two cells is the vector (0, 1)
+    r1(0) = 0; 
+    r1(1) = 0; 
+    n1(0) = 1; 
+    n1(1) = 0; 
+    r2(0) = 0.5 + 0.5 * cos(boost::math::constants::sixth_pi<T>()); 
+    r2(1) = 1 + 0.5 * sin(boost::math::constants::sixth_pi<T>()); 
+    n2(0) = cos(boost::math::constants::sixth_pi<T>()); 
+    n2(1) = sin(boost::math::constants::sixth_pi<T>());
+    Array<T, 2, 1> d12; 
+    d12 << 0, 1;
+    target_force_21 = d12 * boost::math::constants::pi<T>() * R * (2 * R - dmin); 
+    testForcesJKRLagrange(
+        r1, n1, 0.5, r2, n2, 0.5, R, dmin, delta, target_force_21
+    );
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.2 + 0.5 * cos(pi/6), 1 + 0.5 * sin(pi/6)), n2 = (cos(pi/6), sin(pi/6)), l2 = 1
+    //
+    // The shortest distance between the two cells is, again, (0, 1)
+    r1(0) = 0; 
+    r1(1) = 0; 
+    n1(0) = 1; 
+    n1(1) = 0; 
+    r2(0) = 0.2 + 0.5 * cos(boost::math::constants::sixth_pi<T>()); 
+    r2(1) = 1 + 0.5 * sin(boost::math::constants::sixth_pi<T>()); 
+    n2(0) = cos(boost::math::constants::sixth_pi<T>()); 
+    n2(1) = sin(boost::math::constants::sixth_pi<T>());
+    testForcesJKRLagrange(
+        r1, n1, 0.5, r2, n2, 0.5, R, dmin, delta, target_force_21
+    );
+
+    // r1 = (0, 0), n1 = (1, 0), l1 = 1
+    // r2 = (0.5 + 1.4 / sqrt(2), 1.4 / sqrt(2)), n2 = (1 / sqrt(2), -1 / sqrt(2)), l2 = 1
+    //
+    // The shortest distance between the two cells is (1.4 / sqrt(2), 1.4 / sqrt(2))
+    r2(0) = 0.5 + 1.4 / sqrt(2.0); 
+    r2(1) = 1.4 / sqrt(2.0); 
+    n2(0) = 1.0 / sqrt(2.0); 
+    n2(1) = -1.0 / sqrt(2.0);
+    d12(0) = 1.4 / sqrt(2.0); 
+    d12(1) = 1.4 / sqrt(2.0);
+    T dist = d12.matrix().norm(); 
+    Array<T, 2, 1> dnorm = d12 / dist;
+    target_force_21 = dnorm * boost::math::constants::pi<T>() * R * (2 * R - dist); 
+    testForcesJKRLagrange(
+        r1, n1, 0.5, r2, n2, 0.5, R, dmin, delta, target_force_21
+    ); 
 }
 
 /**
