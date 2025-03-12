@@ -722,6 +722,46 @@ Array<T, 2, 2 * Dim> forcesGBKLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
  * --------------------------------------------------------------------- */
 /**
  * Compute the Newtonian forces between two neighboring cells that arise
+ * from the shifted JKR potential in arbitrary dimensions (2 or 3).
+ *
+ * Note that this function calculates the force on cell 1 due to cell 2. 
+ *
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param R Cell radius, including the EPS. 
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved. 
+ * @param dmin Minimum distance at which the potential is nonzero.
+ * @returns Force on cell 1 due to cell 2 arising from the JKR potential. 
+ */
+template <typename T, int Dim>
+Array<T, Dim, 1> forceJKRNewton(const Ref<const Matrix<T, Dim, 1> >& d12,
+                                const T R, const T dmin)
+{
+    Matrix<T, Dim, 1> force = Matrix<T, Dim, 1>::Zero();
+    const T dist = d12.norm(); 
+
+    // If the distance is less than 2 * R ... 
+    if (dist <= 2 * R)
+    {
+        // Normalize the distance vector 
+        Matrix<T, Dim, 1> d12n = d12 / dist;
+
+        // Get the terms that contribute to the force on cell 1 due to cell 2
+        T term = boost::math::constants::pi<T>() * R; 
+        if (dist <= dmin)
+            term *= (2 * R - dmin); 
+        else 
+            term *= (2 * R - dist);
+        force = term * d12n; 
+    }
+
+    return force; 
+}
+    
+/**
+ * Compute the Newtonian forces between two neighboring cells that arise
  * from the shifted Kihara potential in arbitrary dimensions (2 or 3).
  *
  * Note that this function calculates the force on cell 1 due to cell 2. 
