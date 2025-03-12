@@ -30,7 +30,7 @@
 #include <CGAL/Segment_3.h>
 #include "indices.hpp"
 #include "distances.hpp"
-#include "kiharaGBK.hpp"
+#include "adhesion.hpp"
 #include "confinement.hpp"
 
 using namespace Eigen;
