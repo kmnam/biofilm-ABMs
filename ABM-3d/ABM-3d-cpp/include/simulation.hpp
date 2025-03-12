@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/5/2025
+ *     3/12/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -213,13 +213,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     T error_order = 2; 
 
     // Prefactors for cell-cell interaction forces
-    const T sqrtR = sqrt(R); 
-    const T powRdiff = pow(R - Rcell, 1.5);
-    Array<T, 4, 1> cell_cell_prefactors; 
-    cell_cell_prefactors << 2.5 * sqrtR,
-                            2.5 * E0 * sqrtR,
-                            E0 * powRdiff,
-                            Ecell;
+    Array<T, 3, 1> cell_cell_prefactors; 
+    cell_cell_prefactors << 2.5 * E0 * sqrt(R),
+                            2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 2.5),
+                            2.5 * Ecell * sqrt(Rcell);
 
     // Compute initial array of neighboring cells
     Array<T, Dynamic, 7> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
