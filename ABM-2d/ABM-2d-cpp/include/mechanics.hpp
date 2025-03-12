@@ -946,10 +946,9 @@ Array<T, Dynamic, 3> cellCellRepulsiveForcesNewton(const Ref<const Array<T, Dyna
     Array<T, Dynamic, 1> overlaps = 2 * R - magnitudes;  
 
     // Note that:
-    //     prefactors(0) = 2.5 * std::sqrt(R)
-    //     prefactors(1) = 2.5 * E0 * std::sqrt(R)
-    //     prefactors(2) = E0 * std::pow(R - Rcell, 1.5)
-    //     prefactors(3) = Ecell
+    //     prefactors(0) = 2.5 * E0 * std::sqrt(R)
+    //     prefactors(1) = 2.5 * E0 * std::sqrt(R) * std::pow(2 * R - 2 * Rcell, 1.5)
+    //     prefactors(2) = 2.5 * Ecell * std::sqrt(Rcell)
 
     // For each pair of neighboring cells ...
     Array<T, Dynamic, 2> forces(0, 2); 
@@ -965,24 +964,25 @@ Array<T, Dynamic, 3> cellCellRepulsiveForcesNewton(const Ref<const Array<T, Dyna
         Array<T, 2, 1> dir_ij = directions.row(k);      // Normalized distance vector 
         T overlap = overlaps(k);                        // Cell-cell overlap 
 
-        // TODO Update with new repulsive forces 
-
         // Define prefactors that determine the magnitudes of the interaction
         // forces, depending on the size of the overlap 
         //
-        // Case 1: the overlap is positive but less than R - Rcell (i.e., it 
+        // Case 1: the overlap is positive but less than 2 * (R - Rcell) (i.e., it 
         // is limited to within the EPS coating)
         T prefactor = 0; 
-        if (overlap > 0 && overlap < R - Rcell)
+        if (overlap > 0 && overlap < 2 * (R - Rcell))
         {
-            prefactor = prefactors(1) * pow(overlap, 1.5); 
+            // The force magnitude is 2.5 * E0 * sqrt(R) * pow(overlap, 1.5)
+            prefactor = prefactors(0) * pow(overlap, 1.5); 
         }
-        // Case 2: the overlap is instead greater than R - Rcell (i.e., it 
-        // encroaches into the bodies of the two cells)
-        else if (overlap >= R - Rcell)
+        // Case 2: the overlap is instead greater than 2 * R - 2 * Rcell
+        // (i.e., it encroaches into the bodies of the two cells)
+        else if (overlap >= 2 * (R - Rcell))
         {
-            T term = prefactors(3) * pow(overlap - R + Rcell, 1.5);
-            prefactor = prefactors(0) * (prefactors(2) + term);
+            // The force magnitude is 2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5)
+            // + 2.5 * Ecell * sqrt(Rcell) * pow(2 * Rcell + overlap - 2 * R, 1.5) 
+            T term = prefactors(2) * pow(overlap - 2 * (R - Rcell), 1.5);
+            prefactor = prefactors(1) + term;
         }
 
         if (overlap > 0)
