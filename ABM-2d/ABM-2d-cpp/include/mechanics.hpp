@@ -438,8 +438,10 @@ void updateNeighborDistances(const Ref<const Array<T, Dynamic, Dynamic> >& cells
  * @param R Cell radius, including the EPS. 
  * @param Rcell Cell radius, excluding the EPS.
  * @param E0 Elastic modulus of EPS. 
- * @param prefactors Array of four pre-computed prefactors, namely `2.5 * sqrt(R)`,
- *                   `2.5 * E0 * sqrt(R)`, `E0 * pow(R - Rcell, 1.5)`, and `Ecell`.
+ * @param prefactors Array of three pre-computed prefactors, namely
+ *                   `2.5 * E0 * sqrt(R)`,
+ *                   `2.5 * E0 * sqrt(R) * pow(2 * R - 2 * Rcell, 1.5)`, and
+ *                   `2.5 * Ecell * sqrt(Rcell)`.
  * @returns Derivatives of the cell-cell interaction energies with respect 
  *          to cell positions and orientations.   
  */
@@ -448,7 +450,7 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
                                              const Ref<const Array<T, Dynamic, 6> >& neighbors,
                                              const T dt, const int iter,
                                              const T R, const T Rcell,
-                                             const Ref<const Array<T, 4, 1> >& prefactors)
+                                             const Ref<const Array<T, 3, 1> >& prefactors)
 {
     int n = cells.rows();   // Number of cells
 
@@ -467,10 +469,9 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
     Array<T, Dynamic, 1> overlaps = 2 * R - magnitudes;  
 
     // Note that:
-    //     prefactors(0) = 2.5 * std::sqrt(R)
-    //     prefactors(1) = 2.5 * E0 * std::sqrt(R)
-    //     prefactors(2) = E0 * std::pow(R - Rcell, 1.5)
-    //     prefactors(3) = Ecell
+    //     prefactors(0) = 2.5 * E0 * std::sqrt(R)
+    //     prefactors(1) = 2.5 * E0 * std::sqrt(R) * std::pow(2 * R - 2 * Rcell, 1.5)
+    //     prefactors(2) = 2.5 * Ecell * std::sqrt(Rcell)
 
     // For each pair of neighboring cells ...
     for (int k = 0; k < neighbors.rows(); ++k)
@@ -485,19 +486,22 @@ Array<T, Dynamic, 4> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
         // Define prefactors that determine the magnitudes of the interaction
         // forces, depending on the size of the overlap 
         //
-        // Case 1: the overlap is positive but less than R - Rcell (i.e., it 
+        // Case 1: the overlap is positive but less than 2 * (R - Rcell) (i.e., it 
         // is limited to within the EPS coating)
         T prefactor = 0; 
-        if (overlap > 0 && overlap < R - Rcell)
+        if (overlap > 0 && overlap < 2 * (R - Rcell))
         {
-            prefactor = prefactors(1) * pow(overlap, 1.5); 
+            // The force magnitude is 2.5 * E0 * sqrt(R) * pow(overlap, 1.5)
+            prefactor = prefactors(0) * pow(overlap, 1.5); 
         }
-        // Case 2: the overlap is instead greater than R - Rcell (i.e., it 
-        // encroaches into the bodies of the two cells)
-        else if (overlap >= R - Rcell)
+        // Case 2: the overlap is instead greater than 2 * R - 2 * Rcell
+        // (i.e., it encroaches into the bodies of the two cells)
+        else if (overlap >= 2 * (R - Rcell))
         {
-            T term = prefactors(3) * pow(overlap - R + Rcell, 1.5);
-            prefactor = prefactors(0) * (prefactors(2) + term);
+            // The force magnitude is 2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5)
+            // + 2.5 * Ecell * sqrt(Rcell) * pow(2 * Rcell + overlap - 2 * R, 1.5) 
+            T term = prefactors(2) * pow(overlap - 2 * (R - Rcell), 1.5);
+            prefactor = prefactors(1) + term;
         }
 
         if (overlap > 0)
