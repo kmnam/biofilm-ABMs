@@ -222,8 +222,8 @@ std::tuple<Matrix<T, 3, 1>, T, T> distBetweenCells(const Segment_3& cell1,
 
     // Are the two cells (nearly) parallel?
     //
-    // We say that two cells are nearly parallel if they have are at an angle
-    // of theta <= 0.01 radians, which translates to cos(theta) >= 0.9999
+    // We say that two cells are nearly parallel if they are at an angle of
+    // theta <= 0.01 radians, which translates to cos(theta) >= 0.9999
     T cos_theta = n1.dot(n2);
     if (cos_theta >= 0.9999 || cos_theta <= -0.9999)
     {
