@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/25/2025
+ *     3/12/2025
  */
 #include <cmath>
 #include <Eigen/Dense>
@@ -41,12 +41,12 @@ void testNearestCellBodyCoordToPoint(const T rx, const T ry, const T nx,
  * A generic test function for distBetweenCells().
  *
  * @param r1x x-coordinate of cell 1 center. 
- * @param r1y y-coordinate of cell 1 center. 
+ * @param r1y y-coordinate of cell 1 center.
  * @param n1x x-coordinate of cell 1 orientation. 
  * @param n1y y-coordinate of cell 1 orientation.
  * @param half_l1 Half-length of cell 1.
  * @param r2x x-coordinate of cell 2 center. 
- * @param r2y y-coordinate of cell 2 center. 
+ * @param r2y y-coordinate of cell 2 center.
  * @param n2x x-coordinate of cell 2 orientation. 
  * @param n2y y-coordinate of cell 2 orientation.
  * @param half_l2 Half-length of cell 2.
@@ -57,7 +57,7 @@ void testNearestCellBodyCoordToPoint(const T rx, const T ry, const T nx,
  * @param target_s Pre-computed centerline coordinate along cell 1.
  * @param target_t Pre-computed centerline coordinate along cell 2.  
  */
-void testDistBetweenCells(const T r1x, const T r1y, const T n1x, const T n1y, 
+void testDistBetweenCells(const T r1x, const T r1y, const T n1x, const T n1y,
                           const T half_l1, const T r2x, const T r2y, const T n2x,
                           const T n2y, const T half_l2, const T target_dx,
                           const T target_dy, const T target_s, const T target_t)
@@ -74,7 +74,7 @@ void testDistBetweenCells(const T r1x, const T r1y, const T n1x, const T n1y,
         seg1, seg2, 0, r1, n1, half_l1, 1, r2, n2, half_l2, kernel    // Use IDs 0 and 1
     );
     REQUIRE_THAT(std::get<0>(result)(0), Catch::Matchers::WithinAbs(target_dx, 1e-8)); 
-    REQUIRE_THAT(std::get<0>(result)(1), Catch::Matchers::WithinAbs(target_dy, 1e-8)); 
+    REQUIRE_THAT(std::get<0>(result)(1), Catch::Matchers::WithinAbs(target_dy, 1e-8));
     REQUIRE_THAT(std::get<1>(result), Catch::Matchers::WithinAbs(target_s, 1e-8)); 
     REQUIRE_THAT(std::get<2>(result), Catch::Matchers::WithinAbs(target_t, 1e-8)); 
 }
@@ -84,6 +84,9 @@ void testDistBetweenCells(const T r1x, const T r1y, const T n1x, const T n1y,
  */
 TEST_CASE("Tests for nearestCellBodyCoordToPoint()", "[nearestCellBodyCoordToPoint()]")
 {
+    /* -------------------------------------------------------------- //
+     *                     HORIZONTAL TEST CASES                      //
+     * -------------------------------------------------------------- */
     // r = (2, 1), n = (0.6, 0.8), l = 2, q = (0, 3)
     //
     // The nearest cell-body coordinate should be 0.4
@@ -92,12 +95,16 @@ TEST_CASE("Tests for nearestCellBodyCoordToPoint()", "[nearestCellBodyCoordToPoi
     // r = (6, 2), n = (12 / 13, 5 / 13), l = 1.5, q = (7, 1)
     //
     // The nearest cell-body coordinate should be ~0.5384615385
-    testNearestCellBodyCoordToPoint(6, 2, 12.0 / 13.0, 5.0 / 13.0, 0.75, 7, 1, 0.5384615385); 
+    testNearestCellBodyCoordToPoint(
+        6, 2, 12.0 / 13.0, 5.0 / 13.0, 0.75, 7, 1, 0.5384615385
+    ); 
 
     // The same configuration as the previous, except with l = 1.0
     //
     // The nearest cell-body coordinate should be 0.5
-    testNearestCellBodyCoordToPoint(6, 2, 12.0 / 13.0, 5.0 / 13.0, 0.5, 7, 1, 0.5);
+    testNearestCellBodyCoordToPoint(
+        6, 2, 12.0 / 13.0, 5.0 / 13.0, 0.5, 7, 1, 0.5
+    );
 }
 
 /**
@@ -105,12 +112,19 @@ TEST_CASE("Tests for nearestCellBodyCoordToPoint()", "[nearestCellBodyCoordToPoi
  */
 TEST_CASE("Tests for distBetweenCells(), skew cells", "[distBetweenCells()]")
 {
+    /* -------------------------------------------------------------- //
+     *                     HORIZONTAL TEST CASES                      //
+     * -------------------------------------------------------------- */
     // r1 = (2, 1), n1 = (0.6, 0.8), l1 = 2
     // r2 = (0, 3), n2 = (0, 1), l2 = 1
     //
     // The shortest distance between the two cells should be the vector
     // from r1 = (2, 1) to r2 - 0.5 * n2 = (0, 2.5), which is (-2, 1.5)
-    testDistBetweenCells(2, 1, 0.6, 0.8, 1, 0, 3, 0, 1, 0.5, -2, 1.5, 0, -0.5);
+    testDistBetweenCells(
+        2, 1, 0.6, 0.8, 1,    // Cell 1
+        0, 3, 0, 1, 0.5,      // Cell 2
+        -2, 1.5, 0, -0.5
+    );
 
     // r1 = (4, 4), n1 = (5 / 13, 12 / 13), l1 = 5.4
     // r2 = (5, 3), n1 = (0, 1), l2 = 1
@@ -120,10 +134,10 @@ TEST_CASE("Tests for distBetweenCells(), skew cells", "[distBetweenCells()]")
     T target_s = -0.07692307692; 
     T target_t = 0.5; 
     T target_dx = (5 + target_t * 0) - (4 + target_s * 5.0 / 13.0);
-    T target_dy = (3 + target_t * 1) - (4 + target_s * 12.0 / 13.0); 
+    T target_dy = (3 + target_t * 1) - (4 + target_s * 12.0 / 13.0);
     testDistBetweenCells(
-        4, 4, 5.0 / 13.0, 12.0 / 13.0, 2.7,
-        5, 3, 0, 1, 0.5,
+        4, 4, 5.0 / 13.0, 12.0 / 13.0, 2.7,    // Cell 1
+        5, 3, 0, 1, 0.5,                       // Cell 2
         target_dx, target_dy, target_s, target_t
     );
 
@@ -132,8 +146,8 @@ TEST_CASE("Tests for distBetweenCells(), skew cells", "[distBetweenCells()]")
     // The two cells should now intersect at (5, 6.4), which correspond
     // to cell-body coordinates of s = 13 / 5 = 2.6 and t = 3.4
     testDistBetweenCells(
-        4, 4, 5.0 / 13.0, 12.0 / 13.0, 2.7,
-        5, 3, 0, 1, 5.0, 
+        4, 4, 5.0 / 13.0, 12.0 / 13.0, 2.7,    // Cell 1
+        5, 3, 0, 1, 5.0,                       // Cell 2
         0.0, 0.0, 2.6, 3.4
     );
 
@@ -144,10 +158,10 @@ TEST_CASE("Tests for distBetweenCells(), skew cells", "[distBetweenCells()]")
     target_s = 1.0; 
     target_t = 1.9230769231;
     target_dx = (5 + target_t * 0) - (4 + target_s * 5.0 / 13.0); 
-    target_dy = (3 + target_t * 1) - (4 + target_s * 12.0 / 13.0); 
+    target_dy = (3 + target_t * 1) - (4 + target_s * 12.0 / 13.0);
     testDistBetweenCells(
-        4, 4, 5.0 / 13.0, 12.0 / 13.0, 1.0,
-        5, 3, 0, 1, 5.0, 
+        4, 4, 5.0 / 13.0, 12.0 / 13.0, 1.0,    // Cell 1
+        5, 3, 0, 1, 5.0,                       // Cell 2 
         target_dx, target_dy, target_s, target_t
     );
 
@@ -159,10 +173,10 @@ TEST_CASE("Tests for distBetweenCells(), skew cells", "[distBetweenCells()]")
     target_s = -0.6; 
     target_t = 0.5;
     target_dx = (6 + target_t * 0) - (4 + target_s * 5.0 / 13.0); 
-    target_dy = (2 + target_t * 1) - (4 + target_s * 12.0 / 13.0); 
+    target_dy = (2 + target_t * 1) - (4 + target_s * 12.0 / 13.0);
     testDistBetweenCells(
-        4, 4, 5.0 / 13.0, 12.0 / 13.0, 0.6,
-        6, 2, 0, 1, 0.5, 
+        4, 4, 5.0 / 13.0, 12.0 / 13.0, 0.6,    // Cell 1
+        6, 2, 0, 1, 0.5,                       // Cell 2
         target_dx, target_dy, target_s, target_t
     );
 }
@@ -173,6 +187,9 @@ TEST_CASE("Tests for distBetweenCells(), skew cells", "[distBetweenCells()]")
  */
 TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]")
 {
+    /* -------------------------------------------------------------- //
+     *                     HORIZONTAL TEST CASES                      //
+     * -------------------------------------------------------------- */
     // r1 = (0, 0), n1 = (1, 0), l1 = 2
     // r2 = (-2, 2), n2 = (1, 0), l2 = 1.5
     //
@@ -183,8 +200,8 @@ TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]"
     T target_dx = (-2 + target_t * 1) - (0 + target_s * 1);
     T target_dy = 2;
     testDistBetweenCells(
-        0, 0, 1, 0, 1.0,
-        -2, 2, 1, 0, 0.75,
+        0, 0, 1, 0, 1.0,      // Cell 1
+        -2, 2, 1, 0, 0.75,    // Cell 2
         target_dx, target_dy, target_s, target_t
     );
 
@@ -192,8 +209,8 @@ TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]"
     // r2 = (-0.8, 2), n2 = (1, 0), l2 = 3
     //
     // The shortest distance between the two cells is achieved halfway between
-    // the two vectors from (-1, 0) to (-1, 2) and from (0.7, 0) to (0.7, 2),
-    // which is the vector from (-0.15, 0) to (-0.15, 2)
+    // the two vectors from (-1, 0) to (-1, 2) and from (0.7, 0) to
+    // (0.7, 2), which is the vector from (-0.15, 0) to (-0.15, 2)
     //
     // This is achieved at the cell-body coordinates s = -0.15 and t = 0.65
     target_s = -0.15; 
@@ -201,8 +218,8 @@ TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]"
     target_dx = 0;
     target_dy = 2;
     testDistBetweenCells(
-        0, 0, 1, 0, 1.0,
-        -0.8, 2, 1, 0, 1.5,
+        0, 0, 1, 0, 1.0,       // Cell 1
+        -0.8, 2, 1, 0, 1.5,    // Cell 2
         target_dx, target_dy, target_s, target_t
     );
 
@@ -213,8 +230,8 @@ TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]"
     // to (-0.15, 2), which is achieved at the cell-body coordinates s = -0.15
     // and t = -0.65
     testDistBetweenCells(
-        0, 0, 1, 0, 1.0,
-        -0.8, 2, -1, 0, 1.5, 
+        0, 0, 1, 0, 1.0,       // Cell 1
+        -0.8, 2, -1, 0, 1.5,   // Cell 2
         target_dx, target_dy, target_s, -target_t
     );
 
@@ -229,8 +246,8 @@ TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]"
     target_s = 0; 
     target_t = -0.1; 
     testDistBetweenCells(
-        0, 0, 1, 0, 1.0,
-        0.1, 2, 1, 0, 1.5,
+        0, 0, 1, 0, 1.0,      // Cell 1
+        0.1, 2, 1, 0, 1.5,    // Cell 2
         target_dx, target_dy, target_s, target_t
     );
 
@@ -244,8 +261,8 @@ TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]"
     target_s = 0.1;
     target_t = 0;
     testDistBetweenCells(
-        0, 0, 1, 0, 1.0,
-        0.1, 2, 1, 0, 0.6,
+        0, 0, 1, 0, 1.0,     // Cell 1
+        0.1, 2, 1, 0, 0.6,   // Cell 2
         target_dx, target_dy, target_s, target_t
     );
 
@@ -260,8 +277,8 @@ TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]"
     target_s = 0.2; 
     target_t = -0.3; 
     testDistBetweenCells(
-        0, 0, 1, 0, 1.0, 
-        0.5, 2, 1, 0, 1.1,
+        0, 0, 1, 0, 1.0,      // Cell 1
+        0.5, 2, 1, 0, 1.1,    // Cell 2
         target_dx, target_dy, target_s, target_t
     );
 
@@ -271,15 +288,15 @@ TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]"
     // The shortest distance between the two cells again runs from (0.2, 0)
     // to (0.2, 2), which is achieved at s = 0.2 and t = 0.3
     testDistBetweenCells(
-        0, 0, 1, 0, 1.0, 
-        0.5, 2, -1, 0, 1.1,
+        0, 0, 1, 0, 1.0,       // Cell 1
+        0.5, 2, -1, 0, 1.1,    // Cell 2
         target_dx, target_dy, target_s, -target_t
     );
 
     // The same configuration as the previous, but with the two cells switched
     testDistBetweenCells(
-        0.5, 2, 1, 0, 1.1,
-        0, 0, 1, 0, 1.0,
+        0.5, 2, 1, 0, 1.1,     // Cell 1
+        0, 0, 1, 0, 1.0,       // Cell 2
         -target_dx, -target_dy, target_t, target_s
     );
 
@@ -291,10 +308,10 @@ TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]"
     target_s = 1;
     target_t = -1.5; 
     target_dx = (5 + target_t * 1) - (0 + target_s * 1); 
-    target_dy = 2; 
+    target_dy = 2;
     testDistBetweenCells(
-        0, 0, 1, 0, 1.0,
-        5, 2, 1, 0, 1.5,
+        0, 0, 1, 0, 1.0,      // Cell 1
+        5, 2, 1, 0, 1.5,      // Cell 2
         target_dx, target_dy, target_s, target_t
     );
 
@@ -304,8 +321,8 @@ TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]"
     // The shortest distance between the two cells is again achieved at the
     // two endpoints, s = -1 and t = -1.5
     testDistBetweenCells(
-        0, 0, -1, 0, 1.0,
-        5, 2, 1, 0, 1.5,
+        0, 0, -1, 0, 1.0,    // Cell 1
+        5, 2, 1, 0, 1.5,     // Cell 2
         target_dx, target_dy, -target_s, target_t
     );
 
@@ -317,10 +334,10 @@ TEST_CASE("Tests for distBetweenCells(), parallel cells", "[distBetweenCells()]"
     target_s = 1;
     target_t = -1.5; 
     target_dx = (5 + target_t * 1) - (0 + target_s * 1); 
-    target_dy = 0; 
+    target_dy = 0;
     testDistBetweenCells(
-        0, 0, 1, 0, 1.0,
-        5, 0, 1, 0, 1.5,
+        0, 0, 1, 0, 1.0,    // Cell 1
+        5, 0, 1, 0, 1.5,    // Cell 2
         target_dx, target_dy, target_s, target_t
     );
 }
