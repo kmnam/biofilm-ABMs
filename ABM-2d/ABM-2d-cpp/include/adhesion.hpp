@@ -378,6 +378,76 @@ Array<T, 2, 2 * Dim> forcesKiharaLagrange(const Ref<const Matrix<T, Dim, 1> >& n
 }
 
 /**
+ * Compute the Lagrangian generalized forces between two neighboring cells
+ * that arise from the simplified JKR potential in arbitrary dimensions (2
+ * or 3).
+ *
+ * Note that this function technically calculates the *negatives* of the
+ * generalized forces.
+ *
+ * @param n1 Orientation of cell 1.
+ * @param n2 Orientation of cell 2. 
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param R Cell radius, including the EPS. 
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved. 
+ * @param dmin Minimum distance at which the potential is nonzero.
+ * @param include_constraint If true, enforce the orientation vector norm 
+ *                           constraint on the generalized torques. 
+ * @returns Matrix of generalized forces arising from the simplified JKR
+ *          contact potential.
+ */
+template <typename T, int Dim>
+Array<T, 2, 2 * Dim> forcesJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1, 
+                                       const Ref<const Matrix<T, Dim, 1> >& n2, 
+                                       const Ref<const Matrix<T, Dim, 1> >& d12,
+                                       const T R, const T s, const T t, const T dmin, 
+                                       const bool include_constraint = true)
+{
+    Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
+    const T dist = d12.norm(); 
+
+    // If the distance is less than 2 * R ... 
+    if (dist <= 2 * R)
+    {
+        // Normalize the distance vector 
+        Matrix<T, Dim, 1> d12n = d12 / dist;
+
+        // Get the terms that contribute to each generalized force
+        T term = boost::math::constants::pi<T>() * R; 
+        if (dist <= dmin)
+            term *= (2 * R - dmin); 
+        else 
+            term *= (2 * R - dist);
+        Matrix<T, Dim, 1> v = term * d12n;  
+        
+        // Partial derivatives w.r.t cell 1 center 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
+
+        // Partial derivatives w.r.t cell 2 center 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = v;
+
+        // Partial derivatives w.r.t cell orientations 
+        if (!include_constraint)
+        {
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -s * v; 
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * v;
+        }
+        else    // Correct torques to account for orientation norm constraint 
+        {
+            T w1 = n1.dot(-v);
+            T w2 = n2.dot(-v);  
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = s * (-w1 * n1 - v);
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * (w2 * n2 + v);  
+        }
+    }
+    
+    return dEdq.array(); 
+}
+
+/**
  * Compute the first anisotropy parameter in the Gay-Berne-Kihara potential
  * in arbitrary dimensions (2 or 3), as well as its partial derivatives with
  * respect to the cell coordinates. 
