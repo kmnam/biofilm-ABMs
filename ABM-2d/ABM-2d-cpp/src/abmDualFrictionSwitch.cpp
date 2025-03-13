@@ -49,8 +49,7 @@ int main(int argc, char** argv)
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
     const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64();
     const int iter_update_boundary = 0;
-    //const T neighbor_threshold = 2 * (2 * R + L0);
-    const T neighbor_threshold = 0.5 * (2 * R + Ldiv); 
+    const T neighbor_threshold = 2 * R + Ldiv; 
     const int max_iter = json_data["max_iter"].as_int64();
     const int n_cells = json_data["n_cells"].as_int64();
     const T growth_mean = static_cast<T>(json_data["growth_mean"].as_double());
