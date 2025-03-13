@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/21/2025
+ *     3/12/2025
  */
 
 #include <Eigen/Dense>
@@ -49,7 +49,7 @@ int main(int argc, char** argv)
     const int iter_update_stepsize = json_data["iter_update_stepsize"].as_int64(); 
     const int iter_update_neighbors = json_data["iter_update_neighbors"].as_int64();
     const int iter_update_boundary = 0;
-    const T neighbor_threshold = 2 * (2 * R + L0);
+    const T neighbor_threshold = 2 * R + Ldiv;
     const int max_iter = json_data["max_iter"].as_int64();
     const int n_cells = json_data["n_cells"].as_int64();
     const T growth_mean1 = static_cast<T>(json_data["growth_mean1"].as_double());
@@ -85,7 +85,7 @@ int main(int argc, char** argv)
     growth_stds << growth_std1, growth_std2; 
 
     // Vectors of friction coefficient means and standard deviations
-    std::vector<int> group_attributes { __colidx_eta1 };
+    std::vector<int> group_attributes { __colidx_maxeta1 };
     Array<T, Dynamic, Dynamic> attribute_means(2, 1);
     Array<T, Dynamic, Dynamic> attribute_stds(2, 1);
     attribute_means << eta_mean1, eta_mean2;
