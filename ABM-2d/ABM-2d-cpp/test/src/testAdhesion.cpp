@@ -1,7 +1,7 @@
 /**
- * Test module for the `forcesJKRLagrange()`, `forcesKiharaLagrange()`,
- * `forceKiharaNewton()`, `forcesGBKLagrange()`, and `forcesGBKNewton()`
- * functions.  
+ * Test module for the `forcesJKRLagrange()`, `forceJKRNewton()`,
+ * `forcesKiharaLagrange()`, `forceKiharaNewton()`, `forcesGBKLagrange()`,
+ * and `forcesGBKNewton()` functions.  
  *
  * Authors:
  *     Kee-Myoung Nam
@@ -1247,6 +1247,82 @@ void testForceGBKNewton(const Ref<const Array<T, 2, 1> >& r1,
  *           TEST MODULES FOR FORCE PARAMETER CALIBRATION             //
  * ------------------------------------------------------------------ */
 /**
+ * A series of tests for JKR potential/force parameter calibration. 
+ */
+TEST_CASE(
+    "Tests for JKR potential/force parameter calibration",
+    "[potentialJKR(), forceJKRNewton()]"
+)
+{
+    const T R = 0.8;
+    const T Rcell = 0.5; 
+    const T E0 = 3900.0;
+    const T Ecell = 1000.0 * E0; 
+    Array<T, 2, 1> dnorm; 
+    dnorm << 1, 0;
+
+    // Define cell 1: r1 = (0, 0), n1 = (1, 0), l1 = 1
+    Array<T, 2, 1> r1, n1, r2, n2; 
+    r1 << 0, 0; 
+    n1 << 1, 0; 
+
+    // Define an array of distances 
+    const int n = 1000; 
+    Array<T, Dynamic, 1> dists = Array<T, Dynamic, 1>::LinSpaced(n, 2 * Rcell - 0.05, 2 * R + 0.05);
+    std::vector<T> dmins { 1.13, 1.3, 1.52 };
+    std::vector<T> coefs { 2600.0, 2900.0, 7000.0 };
+
+    // Define output arrays for potentials and forces 
+    Array<T, Dynamic, Dynamic> potentials(n, dmins.size()), forces(n, dmins.size());
+    
+    std::cout << "Parameter calibration for JKR potentials" << std::endl; 
+    std::cout << "----------------------------------------" << std::endl; 
+
+    // For each distance and exponent ...
+    for (int j = 0; j < dmins.size(); ++j)
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            // Calculate the corresponding hybrid potential and force for 
+            // a second cell the given distance vector away  
+            Matrix<T, 2, 1> d12; 
+            d12 << dists(i), 0; 
+            potentials(i, j) = (
+                potentialHertz<T>(dists(i), R, Rcell, E0, Ecell) +
+                coefs[j] * potentialJKR<T>(dists(i), R, dmins[j])
+            );
+            Array<T, 2, 1> force = coefs[j] * forceJKRNewton<T, 2>(d12, R, dmins[j]);
+            if (dists(i) < 2 * Rcell)
+            {
+                force -= 2.5 * (
+                    E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5) +
+                    Ecell * sqrt(Rcell) * pow(2 * Rcell - dists(i), 1.5)
+                ) * dnorm; 
+            }
+            else if (dists(i) < 2 * R)
+            {
+                force -= 2.5 * E0 * sqrt(R) * pow(2 * R - dists(i), 1.5) * dnorm; 
+            }
+            forces(i, j) = force(0);    // Get only the x-coordinate  
+        }
+
+        // Find the distance at which the potential is minimized 
+        Eigen::Index minpi;
+        potentials.col(j).minCoeff(&minpi);
+
+	// Check that the minimum distance is close to 1.2
+        std::cout << "Potential for dmin = " << dmins[j] << ", A = " << coefs[j]
+                  << ": equilibrium distance = " << dists(minpi)
+                  << "; minimum potential value = " << potentials(minpi, j)
+                  << "; force at equilibrium distance = " << forces(minpi, j) << std::endl; 
+
+        // Check that the force at this distance is near zero 
+        REQUIRE(forces(minpi - 1, j) < 0);
+	REQUIRE(forces(minpi + 1, j) > 0);
+    }
+}
+
+/**
  * A series of tests for Kihara potential/force parameter calibration. 
  */
 /*
@@ -1319,7 +1395,7 @@ TEST_CASE(
 /*
 TEST_CASE(
     "Tests for GBK potential/force parameter calibration",
-    "[potentialGBK(), forceKiharaGBK()]"
+    "[potentialGBK(), forceGBKNewton()]"
 )
 {
     const T R = 0.8;
