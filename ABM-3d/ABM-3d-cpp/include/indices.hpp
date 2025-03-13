@@ -49,6 +49,7 @@ const int __ncols_required = 22;
 
 // Optional column indices
 const int __colidx_negpole_t0 = 22;
-const int __colidx_pospole_t0 = 23; 
+const int __colidx_pospole_t0 = 23;
+const ArithmeticSequence<> __colseq_poles_t0 = Eigen::seq(22, 23);
 
 #endif 
