@@ -444,17 +444,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                       << "(iteration " << iter << ")" << std::endl;
         if (track_poles)    // Track poles if desired 
         {
-            // TODO Implement this
-            throw std::runtime_error("Not implemented"); 
-            /*
             auto div_result = divideCellsWithPoles<T>(
                 cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
-                daughter_length_dist, daughter_angle_dist, colidx_negpole_t0,
-                colidx_pospole_t0
+                daughter_length_dist, daughter_angle_xy_dist, daughter_angle_z_dist
             );
             cells = div_result.first;
             daughter_pairs = div_result.second;
-            */ 
         }
         else                // Otherwise, simply divide 
         {
