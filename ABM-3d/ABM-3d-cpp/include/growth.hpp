@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/12/2025
+ *     3/14/2025
  */
 
 #ifndef BIOFILM_CELL_GROWTH_3D_HPP
@@ -180,7 +180,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
     if (n_divide > 0)
     {
         // Get indices of cells to be divided
-        int n = cells.rows(); 
+        const int n = cells.rows(); 
         std::vector<int> idx_divide;
         for (int i = 0; i < n; ++i)
         {
@@ -338,19 +338,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
                 new_cells.col(__colidx_rz) + (div + delta2) * new_cells.col(__colidx_nz)
             );
 
-            // Update cell ID and lineages 
-            int max_id = parents.size() - 1; 
-            for (int i = 0; i < n_divide; ++i)
-            {
-                int daughter_id1 = max_id + (2 * i + 1); 
-                int daughter_id2 = max_id + (2 * i + 2);
-                int parent_id = cells_total(idx_divide[i], __colidx_id); 
-                cells_total(idx_divide[i], __colidx_id) = daughter_id1; 
-                new_cells(i, __colidx_id) = daughter_id2; 
-                parents.push_back(parent_id); 
-                parents.push_back(parent_id); 
-            }
-
             // Update cell birth times
             cells_total(idx_divide, __colidx_t0) = t;
             new_cells.col(__colidx_t0) = t;
@@ -417,6 +404,19 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
         if (satisfies_distance.sum() < n_divide)
             std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion";
 
+        // Update cell ID and lineages 
+        int max_id = parents.size() - 1; 
+        for (int i = 0; i < n_divide; ++i)
+        {
+            int daughter_id1 = max_id + (2 * i + 1); 
+            int daughter_id2 = max_id + (2 * i + 2);
+            int parent_id = cells_total(idx_divide[i], __colidx_id); 
+            cells_total(idx_divide[i], __colidx_id) = daughter_id1; 
+            cells_total(n + i, __colidx_id) = daughter_id2; 
+            parents.push_back(parent_id); 
+            parents.push_back(parent_id); 
+        }
+
         return std::make_pair(cells_total, daughter_pairs);  
     }
     else 
@@ -470,7 +470,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
     if (n_divide > 0)
     {
         // Get indices of cells to be divided
-        int n = cells.rows(); 
+        const int n = cells.rows(); 
         std::vector<int> idx_divide;
         for (int i = 0; i < n; ++i)
         {
@@ -628,19 +628,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
                 new_cells.col(__colidx_rz) + (div + delta2) * new_cells.col(__colidx_nz)
             );
 
-            // Update cell ID and lineages
-            int max_id = parents.size() - 1; 
-            for (int i = 0; i < n_divide; ++i)
-            {
-                int daughter_id1 = max_id + (2 * i + 1); 
-                int daughter_id2 = max_id + (2 * i + 2);
-                int parent_id = cells_total(idx_divide[i], __colidx_id); 
-                cells_total(idx_divide[i], __colidx_id) = daughter_id1; 
-                new_cells(i, __colidx_id) = daughter_id2; 
-                parents.push_back(parent_id); 
-                parents.push_back(parent_id); 
-            }
-
             // Update cell birth times
             cells_total(idx_divide, __colidx_t0) = t;
             new_cells.col(__colidx_t0) = t;
@@ -713,6 +700,19 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
         if (satisfies_distance.sum() < n_divide)
             std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion";
 
+        // Update cell ID and lineages 
+        int max_id = parents.size() - 1; 
+        for (int i = 0; i < n_divide; ++i)
+        {
+            int daughter_id1 = max_id + (2 * i + 1); 
+            int daughter_id2 = max_id + (2 * i + 2);
+            int parent_id = cells_total(idx_divide[i], __colidx_id); 
+            cells_total(idx_divide[i], __colidx_id) = daughter_id1; 
+            cells_total(n + i, __colidx_id) = daughter_id2; 
+            parents.push_back(parent_id); 
+            parents.push_back(parent_id); 
+        }
+
         return std::make_pair(cells_total, daughter_pairs); 
     }
     else 
@@ -772,7 +772,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
     if (n_divide > 0)
     {
         // Get indices of cells to be divided
-        int n = cells.rows(); 
+        const int n = cells.rows(); 
         std::vector<int> idx_divide;
         for (int i = 0; i < n; ++i)
         {
@@ -951,19 +951,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
                 new_cells(i, __colidx_pospole_t0) = poles_t0(i, 1);
             }
 
-            // Update cell ID and lineages
-            int max_id = parents.size() - 1; 
-            for (int i = 0; i < n_divide; ++i)
-            {
-                int daughter_id1 = max_id + (2 * i + 1); 
-                int daughter_id2 = max_id + (2 * i + 2);
-                int parent_id = cells_total(idx_divide[i], __colidx_id); 
-                cells_total(idx_divide[i], __colidx_id) = daughter_id1; 
-                new_cells(i, __colidx_id) = daughter_id2; 
-                parents.push_back(parent_id); 
-                parents.push_back(parent_id); 
-            }
-
             // Update cell birth times
             cells_total(idx_divide, __colidx_t0) = t;
             new_cells.col(__colidx_t0) = t;
@@ -1035,6 +1022,19 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
         // cell, then print a warning
         if (satisfies_distance.sum() < n_divide)
             std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion";
+
+        // Update cell ID and lineages 
+        int max_id = parents.size() - 1; 
+        for (int i = 0; i < n_divide; ++i)
+        {
+            int daughter_id1 = max_id + (2 * i + 1); 
+            int daughter_id2 = max_id + (2 * i + 2);
+            int parent_id = cells_total(idx_divide[i], __colidx_id); 
+            cells_total(idx_divide[i], __colidx_id) = daughter_id1; 
+            cells_total(n + i, __colidx_id) = daughter_id2; 
+            parents.push_back(parent_id); 
+            parents.push_back(parent_id); 
+        }
 
         return std::make_pair(cells_total, daughter_pairs);  
     }
