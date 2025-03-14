@@ -136,7 +136,7 @@ int main(int argc, char** argv)
     // with zero velocity, mean growth rate, and default viscosity and friction
     // coefficients
     Array<T, Dynamic, Dynamic> cells(1, __ncols_required);
-    cells << 0, 0, 0, 0.96 * R, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
+    cells << 0, 0, 0, 0.96 * R, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean1,
              eta_ambient, eta_surface, eta_surface, sigma0, 1;
 
     // Initialize parent IDs 
