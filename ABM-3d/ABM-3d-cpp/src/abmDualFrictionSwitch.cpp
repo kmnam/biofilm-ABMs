@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/3/2025
+ *     3/12/2025
  */
 
 #include <Eigen/Dense>
@@ -41,8 +41,8 @@ int main(int argc, char** argv)
     const T Ldiv = 2 * L0 + 2 * R;
     const T E0 = static_cast<T>(json_data["E0"].as_double());
     const T Ecell = static_cast<T>(json_data["Ecell"].as_double()); 
-    const T sigma0 = static_cast<T>(json_data["sigma0"].as_double()); 
     const T eta_ambient = static_cast<T>(json_data["eta_ambient"].as_double()); 
+    const T eta_surface = static_cast<T>(json_data["eta_surface"].as_double());
     const T max_stepsize = static_cast<T>(json_data["max_stepsize"].as_double());
     const T min_stepsize = static_cast<T>(json_data["min_stepsize"].as_double()); 
     const T dt_write = static_cast<T>(json_data["dt_write"].as_double()); 
@@ -54,10 +54,10 @@ int main(int argc, char** argv)
     const int n_cells = json_data["n_cells"].as_int64();
     const T growth_mean = static_cast<T>(json_data["growth_mean"].as_double());
     const T growth_std = static_cast<T>(json_data["growth_std"].as_double());
-    const T eta_mean1 = static_cast<T>(json_data["eta_mean1"].as_double());
-    const T eta_std1 = static_cast<T>(json_data["eta_std1"].as_double()); 
-    const T eta_mean2 = static_cast<T>(json_data["eta_mean2"].as_double());
-    const T eta_std2 = static_cast<T>(json_data["eta_std2"].as_double());
+    const T sigma0_mean1 = static_cast<T>(json_data["sigma0_mean1"].as_double()); 
+    const T sigma0_std1 = static_cast<T>(json_data["sigma0_std1"].as_double()); 
+    const T sigma0_mean2 = static_cast<T>(json_data["sigma0_mean2"].as_double());
+    const T sigma0_std2 = static_cast<T>(json_data["sigma0_std2"].as_double());
     const T lifetime_mean1 = static_cast<T>(json_data["lifetime_mean1"].as_double()); 
     const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
@@ -89,11 +89,11 @@ int main(int argc, char** argv)
     growth_stds << growth_std, growth_std; 
 
     // Vectors of friction coefficient means and standard deviations
-    std::vector<int> group_attributes { __colidx_maxeta1 };
+    std::vector<int> group_attributes { __colidx_sigma0 };
     Array<T, Dynamic, Dynamic> attribute_means(2, 1);
     Array<T, Dynamic, Dynamic> attribute_stds(2, 1);
-    attribute_means << eta_mean1, eta_mean2;
-    attribute_stds << eta_std1, eta_std2;
+    attribute_means << sigma0_mean1, sigma0_mean2;
+    attribute_stds << sigma0_std1, sigma0_std2;
 
     // Switching rates between groups 1 and 2
     Array<T, Dynamic, Dynamic> switch_rates(2, 2); 
@@ -113,7 +113,7 @@ int main(int argc, char** argv)
     // coefficients
     Array<T, Dynamic, Dynamic> cells(1, __ncols_required);
     cells << 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
-             eta_ambient, eta_mean1, eta_mean1, sigma0, 1;
+             eta_ambient, eta_surface, eta_surface, sigma0_mean1, 1;
 
     // Initialize parent IDs 
     std::vector<int> parents; 
