@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/12/2025
+ *     3/15/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -140,6 +140,10 @@ std::string floatToString(T x, const int precision = 10)
  *                     can adhere to each other. 
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
+ * @param no_surface If true, omit the surface from the simulations. 
+ * @param n_cells_start_switch Number of cells at which to begin switching.
+ *                             All switching is suppressed until this number
+ *                             of cells is reached. 
  * @param track_poles If true, keep track of pole birth times.
  * @returns Final population of cells.  
  */
@@ -190,6 +194,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     const AdhesionMode adhesion_mode, 
                                     std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > >& adhesion_map, 
                                     std::unordered_map<std::string, T>& adhesion_params,
+                                    const bool no_surface = false,
+                                    const int n_cells_start_switch = 0,
                                     const bool track_poles = false)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
@@ -401,7 +407,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             params[ss.str()] = floatToString<T>(value); 
         }
     }
-    params["track_poles"] = (track_poles ? "1" : "0"); 
+    params["track_poles"] = (track_poles ? "1" : "0");
+    params["no_surface"] = (no_surface ? "1" : "0");
+    params["n_cells_start_switch"] = std::to_string(n_cells_start_switch);  
 
     // Write the initial population to file
     std::unordered_map<int, int> write_other_cols;
@@ -466,7 +474,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (to_divide.sum() > 0)
         {
             // Switch cells between groups if desired 
-            if (switch_mode == SwitchMode::INHERIT)
+            if (n >= n_cells_start_switch && switch_mode == SwitchMode::INHERIT)
             {
                 switchGroupsInherit<T>(
                     cells, daughter_pairs, group_attributes, n_groups,
@@ -501,7 +509,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
             cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
             max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-            adhesion_mode, adhesion_params
+            adhesion_mode, adhesion_params, no_surface
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 6> errors = result.second;
@@ -539,7 +547,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
                     max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-                    adhesion_mode, adhesion_params
+                    adhesion_mode, adhesion_params, no_surface
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -578,7 +586,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
                 max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-                adhesion_mode, adhesion_params
+                adhesion_mode, adhesion_params, no_surface
             ); 
             cells_new = result.first;
             errors = result.second;
@@ -630,7 +638,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // If desired, pick out only the cells that overlap with the surface,
         // updating array of neighboring cells whenever a cell is deleted
-        if (basal_only)
+        if (!no_surface && basal_only)
         { 
             // Since we assume that the z-orientation is always positive, 
             // the maximum cell-surface overlap for each cell occurs at 
@@ -686,7 +694,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         }
 
         // Switch cells between groups if desired 
-        if (switch_mode == SwitchMode::MARKOV)
+        if (n >= n_cells_start_switch && switch_mode == SwitchMode::MARKOV)
         {
             // First switch the cells 
             switchGroupsMarkov<T>(
