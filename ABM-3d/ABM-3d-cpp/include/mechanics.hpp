@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/12/2025
+ *     3/15/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -41,6 +41,8 @@ using std::pow;
 using boost::multiprecision::pow;
 using std::abs;
 using boost::multiprecision::abs;
+using std::isnan;
+using boost::multiprecision::isnan; 
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Segment_3 Segment_3;
@@ -610,6 +612,9 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
  *
  * This function returns the matrix M for the given cell. 
  *
+ * This function assumes that the cell does overlap with the surface, and 
+ * that its z-orientation is nonzero. 
+ *
  * @param rz z-position of given cell.
  * @param nz z-orientation of given cell.
  * @param l Length of given cell.
@@ -618,7 +623,6 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
  * @param eta0 Ambient viscosity of given cell.
  * @param eta1 Surface friction coefficient of given cell.
  * @param R Cell radius.
- * @param assume_2d If true, assume that the z-orientation is zero. 
  * @param idx Cell index. Only used for debugging output. 
  * @param dt Timestep. Only used for debugging output.
  * @param iter Iteration number. Only used for debugging output. 
@@ -629,38 +633,29 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
                                              const T l, const T half_l,
                                              const T ss, const T eta0,
                                              const T eta1, const T R,
-                                             const bool assume_2d,
                                              const int idx, const T dt,
                                              const int iter)
 {
     Array<T, 6, 6> M = Array<T, 6, 6>::Zero(6, 6);
+
+    #ifdef DEBUG_CHECK_CELL_ZORIENTATIONS_NONZERO
+        if (isnan(ss) || nz <= 0)
+            throw std::runtime_error(
+                "Composite viscosity matrix function assumes positive cell z-orientation"
+            ); 
+    #endif
+    #ifdef DEBUG_CHECK_CELL_SURFACE_OVERLAP_NONZERO
+        if (abs(ss) >= half_l)
+            throw std::runtime_error(
+                "Composite viscosity matrix function assumes positive cell-surface overlap"
+            ); 
+    #endif
     
     T term1 = eta0 * l;
     T term2 = eta0 * l * l * l / 12;
-    T term3, term4, term5;
-    if (assume_2d)
-    {
-        T phi = R - rz; 
-        if (phi > 0)    // If the cell is contacting the surface 
-        {
-            T prefactor = eta1 * pow(R * phi, 0.5) / R;
-            term3 = prefactor * l; 
-            term4 = 0;
-            term5 = prefactor * l * l * l / 12; 
-        }
-        else            // Otherwise, there is no cell-surface friction 
-        {
-            term3 = 0;
-            term4 = 0;
-            term5 = 0;
-        }
-    }
-    else
-    {
-        term3 = (eta1 / R) * areaIntegral1(rz, nz, R, half_l, ss); 
-        term4 = (eta1 / R) * areaIntegral2(rz, nz, R, half_l, ss);
-        term5 = (eta1 / R) * areaIntegral3(rz, nz, R, half_l, ss);
-    }
+    T term3 = (eta1 / R) * areaIntegral1(rz, nz, R, half_l, ss); 
+    T term4 = (eta1 / R) * areaIntegral2(rz, nz, R, half_l, ss);
+    T term5 = (eta1 / R) * areaIntegral3(rz, nz, R, half_l, ss);
     M(0, 0) = term1 + term3;
     M(0, 3) = term4;
     M(1, 1) = term1 + term3;
@@ -678,7 +673,6 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
             std::cerr << "Iteration " << iter
                       << ": Found nan in viscosity forces for cell " << idx << std::endl; 
             std::cerr << "Timestep: " << dt << std::endl;
-            std::cerr << "2D assumption: " << assume_2d << std::endl; 
             std::cerr << std::setprecision(10)
                       << "Cell center z-position = " << rz << std::endl
                       << "Cell z-orientation = " << nz << std::endl 
@@ -966,6 +960,7 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
+ * @param no_surface If true, omit the surface from the simulation. 
  * @param multithread If true, use multithreading. 
  * @returns Array of translational and orientational velocities.   
  */
@@ -980,6 +975,7 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
                                            const Ref<const Array<int, Dynamic, 1> >& assume_2d,
                                            const AdhesionMode adhesion_mode,
                                            std::unordered_map<std::string, T>& adhesion_params,
+                                           const bool no_surface,
                                            const bool multithread)
 {
     int n = cells.rows(); 
@@ -1010,15 +1006,18 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
         ); 
     }
 
-    // Compute the cell-surface repulsive forces 
-    Array<T, Dynamic, 2> dEdq_surface_repulsion = cellSurfaceRepulsionForces<T>(
-        cells, dt, iter, ss, R, E0, assume_2d, multithread
-    );
-
-    // Compute the cell-surface adhesive forces 
-    Array<T, Dynamic, 2> dEdq_surface_adhesion = cellSurfaceAdhesionForces<T>(
-        cells, dt, iter, ss, R, assume_2d, multithread
-    );
+    // Compute the cell-surface interaction forces (if present)
+    Array<T, Dynamic, 2> dEdq_surface_repulsion = Array<T, Dynamic, 2>::Zero(n, 2);
+    Array<T, Dynamic, 2> dEdq_surface_adhesion = Array<T, Dynamic, 2>::Zero(n, 2); 
+    if (!no_surface)
+    { 
+        dEdq_surface_repulsion = cellSurfaceRepulsionForces<T>(
+            cells, dt, iter, ss, R, E0, assume_2d, multithread
+        );
+        dEdq_surface_adhesion = cellSurfaceAdhesionForces<T>(
+            cells, dt, iter, ss, R, assume_2d, multithread
+        );
+    }
 
     // Combine the forces accordingly 
     Array<T, Dynamic, 6> forces = -dEdq_repulsion - dEdq_adhesion; 
@@ -1147,6 +1146,7 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
+ * @param no_surface If true, omit the surface from the simulation. 
  * @param multithread If true, use multithreading. 
  * @returns Array of translational and orientational velocities.   
  */
@@ -1161,6 +1161,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const Ref<const Array<T, Dynamic, 6> >& noise,
                                    const AdhesionMode adhesion_mode,
                                    std::unordered_map<std::string, T>& adhesion_params,
+                                   const bool no_surface,
                                    const bool multithread)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
@@ -1195,7 +1196,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     // Compute all conservative forces and add noise 
     Array<T, Dynamic, 6> forces = getConservativeForces<T>(
         cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors, 
-        E0, assume_2d, adhesion_mode, adhesion_params, multithread
+        E0, assume_2d, adhesion_mode, adhesion_params, no_surface, multithread
     );
     forces += noise; 
     
@@ -1203,21 +1204,66 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     #pragma omp parallel for if(multithread)
     for (int i = 0; i < n; ++i)
     {
-        // If the cell is roughly horizontal, solve the 2D system of equations
-        if (assume_2d(i))
+        // If there is no surface or the cell is not contacting the surface,
+        // solve the simplified 3D system of equations with no cell-surface
+        // friction 
+        bool contacting_surface = (
+            (!assume_2d(i) && abs(ss(i)) >= cells(i, __colidx_half_l)) || 
+            (assume_2d(i) && R - cells(i, __colidx_rz) < 0)
+        ); 
+        if (no_surface || !contacting_surface)
+        {
+            T K = cells(i, __colidx_eta0) * cells(i, __colidx_l);
+            T L = K * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
+            T mult = -(
+                cells(i, __colidx_nx) * forces(i, 3) +
+                cells(i, __colidx_ny) * forces(i, 4) +
+                cells(i, __colidx_nz) * forces(i, 5)
+            ); 
+            velocities(i, Eigen::seq(0, 2)) = forces(i, Eigen::seq(0, 2)) / K;  
+            velocities(i, Eigen::seq(3, 5)) = (forces(i, Eigen::seq(3, 5)) + mult * cells(i, __colseq_n)) / L;
+            #ifdef DEBUG_CHECK_VELOCITIES_NAN
+                if (velocities.row(i).isNaN().any() || velocities.row(i).isInf().any())
+                {
+                    std::cerr << std::setprecision(10); 
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in velocities of cell " << i << std::endl; 
+                    std::cerr << "Timestep: " << dt << std::endl;
+                    std::cerr << "Contacting surface: 0" << std::endl; 
+                    std::cerr << "Cell center = (" << cells(i, __colidx_rx) << ", "
+                                                   << cells(i, __colidx_ry) << ", "
+                                                   << cells(i, __colidx_rz) << ")" << std::endl
+                              << "Cell orientation = (" << cells(i, __colidx_nx) << ", "
+                                                        << cells(i, __colidx_ny) << ", "
+                                                        << cells(i, __colidx_nz) << ")" << std::endl
+                              << "Cell half-length = " << cells(i, __colidx_half_l) << std::endl
+                              << "Cell translational velocity = (" << velocities(i, 0) << ", "
+                                                                   << velocities(i, 1) << ", "
+                                                                   << velocities(i, 2) << ")" << std::endl
+                              << "Cell orientational velocity = (" << velocities(i, 3) << ", "
+                                                                   << velocities(i, 4) << ", "
+                                                                   << velocities(i, 5) << ")" << std::endl
+                              << "Constraint variable = " << mult / 2.0 << std::endl
+                              << "Composite viscosity prefactors = " << K << ", " << L << std::endl
+                              << "Conservative force vector = (" << forces(i, 0) << ", "
+                                                                 << forces(i, 1) << ", "
+                                                                 << forces(i, 2) << ", "
+                                                                 << forces(i, 3) << ", "
+                                                                 << forces(i, 4) << ", "
+                                                                 << forces(i, 5) << ")" << std::endl; 
+                    throw std::runtime_error("Found nan in velocities"); 
+                }
+            #endif
+        }
+        // Otherwise, if the cell is roughly horizontal, solve the 2D system
+        // of equations with cell-surface friction 
+        else if (assume_2d(i))
         {
             T K, L;                              // Viscosity force prefactors 
-            if (R - cells(i, __colidx_rz) > 0)   // If the cell overlaps with the surface ...  
-            {
-                T a = sqrt(R * (R - cells(i, __colidx_rz))); 
-                K = cells(i, __colidx_l) * (
-                    cells(i, __colidx_eta0) + cells(i, __colidx_eta1) * a / R
-                );  
-            }
-            else     // Otherwise, there is no cell-surface friction 
-            {
-                K = cells(i, __colidx_l) * cells(i, __colidx_eta0); 
-            }
+            T a = sqrt(R * (R - cells(i, __colidx_rz))); 
+            K = cells(i, __colidx_l) * (
+                cells(i, __colidx_eta0) + cells(i, __colidx_eta1) * a / R
+            );  
             L = K * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
             T mult = -(cells(i, __colidx_nx) * forces(i, 3) + cells(i, __colidx_ny) * forces(i, 4)); 
             velocities(i, 0) = forces(i, 0) / K; 
@@ -1238,6 +1284,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                     std::cerr << "Iteration " << iter
                               << ": Found nan in velocities of cell " << i << std::endl; 
                     std::cerr << "Timestep: " << dt << std::endl;
+                    std::cerr << "Contacting surface: 1" << std::endl; 
                     std::cerr << "2D assumption: 1" << std::endl; 
                     std::cerr << "Cell center = (" << cells(i, __colidx_rx) << ", "
                                                    << cells(i, __colidx_ry) << ", "
@@ -1264,7 +1311,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                 }
             #endif
         }
-        else     // Otherwise, solve the 3D system of equations 
+        else     // Otherwise, solve the full 3D system of equations 
         {
             Array<T, 7, 7> A = Array<T, 7, 7>::Zero();
             Array<T, 7, 1> b = Array<T, 7, 1>::Zero();
@@ -1274,7 +1321,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
             A(Eigen::seq(0, 5), Eigen::seq(0, 5)) = compositeViscosityForceMatrix<T>(
                 cells(i, __colidx_rz), cells(i, __colidx_nz), cells(i, __colidx_l),
                 cells(i, __colidx_half_l), ss(i), cells(i, __colidx_eta0),
-                cells(i, __colidx_eta1), R, assume_2d(i), i, dt, iter
+                cells(i, __colidx_eta1), R, i, dt, iter
             );
             A(3, 6) = -2 * cells(i, __colidx_nx); 
             A(4, 6) = -2 * cells(i, __colidx_ny);
@@ -1298,6 +1345,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                     std::cerr << "Iteration " << iter
                               << ": Found nan in velocities of cell " << i << std::endl; 
                     std::cerr << "Timestep: " << dt << std::endl;
+                    std::cerr << "Contacting surface: 1" << std::endl; 
                     std::cerr << "2D assumption: 0" << std::endl; 
                     std::cerr << "Cell center = (" << cells(i, __colidx_rx) << ", "
                                                    << cells(i, __colidx_ry) << ", "
@@ -1378,6 +1426,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
+ * @param no_surface If true, omit the surface from the simulation. 
  * @param n_start_multithread Minimum number of cells at which to start using
  *                            multithreading. 
  * @returns Updated population of cells, along with the array of errors in
@@ -1399,6 +1448,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode,
                            std::unordered_map<std::string, T>& adhesion_params,
+                           const bool no_surface,
                            const int n_start_multithread = 50)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
@@ -1483,7 +1533,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
     std::vector<Array<T, Dynamic, 6> > velocities;
     Array<T, Dynamic, 6> v0 = getVelocities<T>(
         cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
-        E0, assume_2d, noise, adhesion_mode, adhesion_params, multithread
+        E0, assume_2d, noise, adhesion_mode, adhesion_params, no_surface,
+        multithread
     );
     velocities.push_back(v0);
     for (int i = 1; i < s; ++i)
@@ -1496,7 +1547,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
         normalizeOrientations<T>(cells_i, dt, iter);    
         Array<T, Dynamic, 6> vi = getVelocities<T>(
             cells_i, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
-            E0, assume_2d, noise, adhesion_mode, adhesion_params, multithread
+            E0, assume_2d, noise, adhesion_mode, adhesion_params, no_surface,
+            multithread
         );
         velocities.push_back(vi);
     }
