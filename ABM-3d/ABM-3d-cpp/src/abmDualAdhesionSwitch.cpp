@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/12/2025
+ *     3/15/2025
  */
 
 #include <Eigen/Dense>
@@ -100,7 +100,23 @@ int main(int argc, char** argv)
     if (adhesion_mode == AdhesionMode::GBK) 
     {
         adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double());
-    } 
+    }
+
+    // Omit the surface, if desired 
+    bool no_surface = false; 
+    try
+    {
+        no_surface = json_data["no_surface"].as_int64(); 
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e) { }
+
+    // Parse minimum number of cells at which to start switching, if given
+    int n_cells_start_switch = 0; 
+    try
+    {
+        n_cells_start_switch = json_data["n_cells_start_switch"].as_int64(); 
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e) { }
 
     // Vectors of growth rate means and standard deviations (identical for
     // both groups) 
@@ -151,7 +167,7 @@ int main(int argc, char** argv)
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_rxy_noise, max_rz_noise,
         max_nxy_noise, max_nz_noise, basal_only, basal_min_overlap, adhesion_mode,
-        adhesion_map, adhesion_params
+        adhesion_map, adhesion_params, no_surface, n_cells_start_switch
     ); 
     
     return 0; 
