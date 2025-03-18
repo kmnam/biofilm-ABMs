@@ -5,249 +5,240 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    1/27/2024
+    3/18/2025
 """
 
-import sys
+import os
+import multiprocessing
 import numpy as np
 from PIL import Image
 import cv2
 import pyvista as pv
-pv.start_xvfb()
+#pv.start_xvfb()
 import seaborn as sns
 from utils import read_cells, parse_dir
 
 #######################################################################
-def plot_cells(cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
-               title, view='xy', res=50):
+# Column indices for cell data  
+_colidx_id = 0
+_colidx_rx = 1
+_colidx_ry = 2
+_colidx_rz = 3
+_colseq_r = [1, 2, 3]
+_colidx_nx = 4
+_colidx_ny = 5
+_colidx_nz = 6
+_colseq_n = [4, 5, 6]
+_colidx_drx = 7
+_colidx_dry = 8
+_colidx_drz = 9
+_colidx_dnx = 10
+_colidx_dny = 11
+_colidx_dnz = 12
+_colidx_l = 13
+_colidx_half_l = 14
+_colidx_t0 = 15
+_colidx_growth = 16
+_colidx_eta0 = 17
+_colidx_eta1 = 18
+_colidx_maxeta1 = 19
+_colidx_sigma0 = 20
+_colidx_group = 21
+
+#######################################################################
+def plot_cells(cells, R, colors, xmin, xmax, ymin, ymax, zmin, zmax, title,
+               view='xyz', res=50, image_scale=2, position=None, show=False):
     """
     Plot the given population of cells with the given colors to the given
-    PDF file. 
+    output file. 
 
     Parameters
     ----------
     cells : `numpy.ndarray`
-        Population of cells to be plotted.
-    pl : `pyvista.Plotter`
-        Plotter instance onto which to plot the cells. 
-    R : float
-        Cell radius.
-    colors : list
-        List of colors for each cell.
-    xmin, xmax : float, float
-        x-axis bounds. 
-    ymin, ymax : float, float
-        y-axis bounds.
-    zmin, zmax : float, float
-        z-axis bounds.
+        Input population of cells. 
+    R : float 
+        Cell radius. 
+    colors : list or `numpy.ndarray`
+        Cell colors. 
+    xmin, xmax : float
+        Minimum and maximum x-values. 
+    ymin, ymax : float
+        Minimum and maximum y-values. 
+    zmin, zmax : float
+        Minimum and maximum z-values. 
     title : str
-        Plot title.
-    view : str, 'xy' or 'xz' or 'yz'
-        Set the view to the given pair of axes. 
+        Plot title. 
+    view : str
+        Camera view; should be either 'xy', 'xz', 'yz', or 'xyz'.
     res : int
-        Resolution for plotting each cylinder and hemisphere.
+        Spherocylinder resolution. 
+    image_scale : int
+        Image scale. 
+    position : list of tuples
+        The camera position, focal point, and up value; if None, the value 
+        is set automatically by the plotter. 
+    show : bool
+        If True, show the plot instead of saving it to file.
+
+    Returns
+    -------
+    A screenshot of the plot, plus the camera position. 
     """
-    # Plot each spherocylinder ... 
-    for i in range(cells.shape[0]):
-        # Define the cylinder and hemispherical caps that constitute each 
-        # spherocylinder
-        cylinder = pv.Cylinder(
-            center=cells[i, :3],
-            direction=cells[i, 3:6],
-            radius=R,
-            height=cells[i, 6],
-            resolution=res,
-            capping=False
-        )
-        cap1_center = cells[i, :3] - cells[i, 7] * cells[i, 3:6]
-        cap2_center = cells[i, :3] + cells[i, 7] * cells[i, 3:6]
-        cap1 = pv.Sphere(
-            center=cap1_center,
-            direction=cells[i, 3:6],
-            radius=R,
-            start_phi=90,
-            end_phi=180,
-            theta_resolution=res,
-            phi_resolution=res
-        )
-        cap2 = pv.Sphere(
-            center=cap2_center,
-            direction=cells[i, 3:6],
-            radius=R,
-            start_phi=0,
-            end_phi=90,
-            theta_resolution=res,
-            phi_resolution=res
-        )
+    with multiprocessing.Pool(1) as pool:
+        # Plot each spherocylinder ...
+        ws = np.array([1024, 768], dtype=np.int64)
+        pl = pv.Plotter(window_size=ws*image_scale, off_screen=(not show))
+        for i in range(cells.shape[0]):
+            # Define the cylinder and hemispherical caps that constitute each 
+            # spherocylinder
+            cylinder = pv.Cylinder(
+                center=cells[i, _colseq_r],
+                direction=cells[i, _colseq_n],
+                radius=R,
+                height=cells[i, _colidx_l],
+                resolution=res,
+                capping=False
+            )
+            cap1_center = cells[i, _colseq_r] - cells[i, _colidx_half_l] * cells[i, _colseq_n]
+            cap2_center = cells[i, _colseq_r] + cells[i, _colidx_half_l] * cells[i, _colseq_n]
+            cap1 = pv.Sphere(
+                center=cap1_center,
+                direction=cells[i, _colseq_n],
+                radius=R,
+                start_phi=90,
+                end_phi=180,
+                theta_resolution=res,
+                phi_resolution=res
+            )
+            cap2 = pv.Sphere(
+                center=cap2_center,
+                direction=cells[i, _colseq_n],
+                radius=R,
+                start_phi=0,
+                end_phi=90,
+                theta_resolution=res,
+                phi_resolution=res
+            )
 
-        # Add the composite surface to the plotter instance with the 
-        # corresponding color
-        pl.add_mesh(cylinder + cap1 + cap2, color=colors[i])
+            # Add the composite surface to the plotter instance with the 
+            # corresponding color
+            pl.add_mesh(cylinder + cap1 + cap2, color=colors[i])
 
-    # Change the view to bird's eye, reconfigure axes, add axes directions,
-    # and save
-    pl.add_title(title, font='arial', font_size=12)
-    if view == 'xy':
-        pl.view_xy()
-        pl.show_bounds(
-            bounds=[xmin, xmax, ymin, ymax, zmin, zmax], show_zlabels=False,
-            n_xlabels=2, n_ylabels=2, xtitle='', ytitle='', ztitle='',
-            font_family='arial', font_size=12
-        )
-    elif view == 'xz':
-        pl.view_xz()
-        pl.show_bounds(
-            bounds=[xmin, xmax, ymin, ymax, zmin, zmax], show_ylabels=False,
-            n_xlabels=2, n_zlabels=2, xtitle='', ytitle='', ztitle='',
-            font_family='arial', font_size=12
-        )
-    elif view == 'yz':
-        pl.view_yz()
-        pl.show_bounds(
-            bounds=[xmin, xmax, ymin, ymax, zmin, zmax], show_xlabels=False,
-            n_ylabels=2, n_zlabels=2, xtitle='', ytitle='', ztitle='',
-            font_family='arial', font_size=12
-        )
-    pl.add_axes()
-    pl.reset_camera(bounds=[xmin, xmax, ymin, ymax, zmin, zmax])
+        # Reconfigure axes, add title and axes directions, and save
+        pl.add_title(title, font='arial', font_size=12*image_scale)
+        if view == 'xy':
+            pl.view_xy()
+        elif view == 'xz':
+            pl.view_xz()
+        elif view == 'yz':
+            pl.view_yz()
+        elif view == 'xyz':
+            pl.view_isometric()
+            pl.camera.elevation -= 15
+        if position is not None:
+            pos, focal_point, up = position
+            pl.camera.position = pos
+            pl.camera.focal_point = focal_point
+            pl.camera.up = up
+        else:
+            position = pl.camera_position
+        pl.add_axes()
+        if show:
+            screenshot = None
+            pl.show()
+        else:
+            screenshot = pl.screenshot()
 
-    return pl
+    print(position)
+    return screenshot, position
 
 #######################################################################
-def plot_simulation(filenames, outfilename, R, xmin, xmax, ymin,
-                    ymax, zmin, zmax, view='xy', res=50, fps=10,
-                    uniform_color=False, color_by_orientation=False):
+def plot_frame(filename, outfilename=None, plot_basal=False, xmin=None,
+               xmax=None, ymin=None, ymax=None, zmin=None, zmax=None, view='xyz',
+               res=50, time=None, image_scale=2, uniform_color=False,
+               xcross=False, ycross=False, group=None, position=None,
+               show=False):
     """
-    Given an ordered list of files containing cells to be plotted, parse 
-    and plot each population of cells and generate a video. 
+    Plot the cells in the given file.
 
     Parameters
     ----------
-    filenames : list of str
-        Ordered list of paths to files containing the cells to be plotted.
-    outfilename : str
-        Output filename. 
-    R : float
-        Cell radius.
-    colors : list
-        List of colors for each cell.
-    xmin, xmax : float, float
-        x-axis bounds. 
-    ymin, ymax : float, float
-        y-axis bounds.
-    zmin, zmax : float, float
-        z-axis bounds.
-    view : str, 'xy' or 'xz' or 'yz'
-        Set the view to the given pair of axes. 
-    res : int
-        Resolution for plotting each cylinder and hemisphere.
-    fps : int
-        Frames per second.
-    uniform_color : bool
-        If True, color all cells with a single color (blue).
-    color_by_orientation : bool
-        If True, color all cells based on its z-orientation (blue if >= -0.5,
-        red if < -0.5).
+    TODO Write
     """
-    images = []
-    palette = [    # Assume a maximum of five groups 
-        sns.color_palette('muted')[0],
-        sns.color_palette('muted')[3],
-        sns.color_palette('muted')[2],
-        sns.color_palette('muted')[1],
-        sns.color_palette('muted')[4]
-    ]
-
-    for filename in filenames:
-        # Parse and plot the cells in the given file
-        cells, params = read_cells(filename)
-        if uniform_color:
-            colors = [palette[0] for i in range(cells.shape[0])]
-        elif color_by_orientation:
-            colors = [
-                palette[0] if cells[i, 5] >= -0.5 else palette[1] 
-                for i in range(cells.shape[0])
-            ]
-        else:
-            ngroups = int(max(cells[:, 13]))
-            palette_ = palette[:ngroups]
-            colors = [
-                palette_[int(cells[i, 13]) - 1] for i in range(cells.shape[0])
-            ]
-        title = 't = {:.10f}, n = {}'.format(params['t_curr'], cells.shape[0])
-        print('Plotting {} ({} cells) ...'.format(filename, cells.shape[0]))
-        pl = pv.Plotter(off_screen=True)
-        pl = plot_cells(
-            cells, pl, R, colors, xmin, xmax, ymin, ymax, zmin, zmax,
-            title, view=view, res=res
-        )
-
-        # Get a screenshot of the plotted cells
-        image = pl.screenshot()
-
-        # Convert to PIL image and append
-        images.append(Image.fromarray(image))
-        pl.close()
-
-    # Stitch the images together and export as an .avi file
-    width, height = images[0].size
-    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-    video = cv2.VideoWriter(
-        outfilename, fourcc, fps, (width, height), isColor=True
-    )
-    for image in images:
-        video.write(np.array(image)[:, :, ::-1])    # Switch from RGB to BGR
-
-#######################################################################
-if __name__ == '__main__':
-    filedir = sys.argv[1]
-    outprefix = sys.argv[2]
-    nframes = int(sys.argv[3])
-    uniform_color = (len(sys.argv) == 5 and sys.argv[4] == '--uniform-color')
-    color_by_orientation = (
-        len(sys.argv) == 5 and sys.argv[4] == '--color-by-orientation'
-    )
-    filenames = parse_dir(filedir)
-
-    # Get cell radius, final dimensions, and final timepoint from final file
-    cells, params = read_cells(filenames[-1])
+    # Parse the cells
+    cells, params = read_cells(filename)
     R = params['R']
     L0 = params['L0']
-    xmin = np.floor(cells[:, 0].min() - 4 * L0)
-    xmax = np.ceil(cells[:, 0].max() + 4 * L0)
-    ymin = np.floor(cells[:, 1].min() - 4 * L0)
-    ymax = np.ceil(cells[:, 1].max() + 4 * L0)
-    zmin = np.floor(cells[:, 2].min() - 4 * L0)
-    zmax = np.ceil(cells[:, 2].max() + 4 * L0)
-    t_final = params['t_curr']
+    if plot_basal:
+        basal = (cells[:, _colidx_rz] - cells[:, _colidx_half_l] * cells[:, _colidx_nz] < 1.1 * R)
+        cells = cells[basal, :]
+    if group is not None:
+        cells = cells[cells[:, _colidx_group] == group, :]
 
-    # Generate array of timepoints
-    timepoints = np.linspace(0, t_final, nframes)
-    
-    # Run through the files and identify, for each timepoint, the file 
-    # whose timepoint is closest
-    file_timepoints = []
-    for filename in filenames:
-        _, params = read_cells(filename)
-        file_timepoints.append(params['t_curr'])
-    filenames_nearest = []
-    for t in timepoints:
-        nearest_idx = np.argmin(np.abs(file_timepoints - t))
-        filenames_nearest.append(filenames[nearest_idx])
+    # If plotting a cross-section, find the center of mass and shift the 
+    # cells accordingly 
+    if xcross or ycross:
+        center = np.mean(cells[:, _colseq_r], axis=0)
+        if xcross:
+            yshift = center[1] - np.floor(cells[:, _colidx_ry].min() - 10 * L0)
+            for i in range(cells.shape[0]):
+                if cells[i, _colidx_rx] > center[0]:
+                    cells[i, _colidx_ry] -= yshift
+        else:
+            xshift = center[0] - np.floor(cells[:, _colidx_rx].min() - 10 * L0)
+            for i in range(cells.shape[0]):
+                if cells[i, _colidx_ry] > center[0]:
+                    cells[i, _colidx_rx] -= xshift
 
-    # Plot the simulation in 200-frame increments
-    increment = 200
-    start = 0
-    end = increment
-    i = 0
-    while end <= nframes:
-        plot_simulation(
-            filenames_nearest[start:end], outprefix + '_{}.avi'.format(i), R,
-            xmin, xmax, ymin, ymax, zmin, zmax, view='xy', res=20, fps=20,
-            uniform_color=uniform_color, color_by_orientation=color_by_orientation
-        )
-        print('Saving video: {}_{}.avi'.format(outprefix, i))
-        start += increment
-        end += increment
-        i += 1
+    # Infer axes limits
+    if xmin is None:
+        xmin = np.floor(cells[:, _colidx_rx].min() - 4 * L0)
+    if xmax is None:
+        xmax = np.ceil(cells[:, _colidx_rx].max() + 4 * L0)
+    if ymin is None:
+        ymin = np.floor(cells[:, _colidx_ry].min() - 4 * L0)
+    if ymax is None:
+        ymax = np.ceil(cells[:, _colidx_ry].max() + 4 * L0)
+    if zmin is None:
+        zmin = np.floor(cells[:, _colidx_rz].min() - 4 * L0)
+    if zmax is None:
+        zmax = np.ceil(cells[:, _colidx_rz].max() + 4 * L0)
+    if time is None:
+        time = params['t_curr']
+
+    # Use a spectral colormap
+    ngroups = int(params['n_groups'])
+    if uniform_color:
+        palette = np.array([sns.color_palette('hls')[5]]) * np.ones((ngroups, 4))
+    else:
+        cmap = sns.color_palette('coolwarm', as_cmap=True)
+        idx = np.linspace(0.1, 0.9, ngroups)
+        palette = np.array([cmap(i) for i in idx])[:, :3]
+    pastel = 0.5 * palette + 0.5 * np.ones((ngroups, 3))
+    deep = 0.5 * palette + 0.5 * np.zeros((ngroups, 3))
+
+    # Determine cell colors
+    if uniform_color:
+        colors = [palette[0, :] for i in range(cells.shape[0])]
+    else:
+        colors = []
+        for i in range(cells.shape[0]):
+            group_idx = int(cells[i, _colidx_group]) - 1
+            colors.append(palette[group_idx, :])
+
+    # Plot the cells 
+    print('Plotting {} (t = {}, {} cells) ...'.format(filename, time, cells.shape[0]))
+    title = 't = {:.10f}, n = {}'.format(time, cells.shape[0])
+    screenshot, position = plot_cells(
+        cells, R, colors, xmin, xmax, ymin, ymax, zmin, zmax, title,
+        view=view, res=res, image_scale=image_scale, position=position,
+        show=show
+    )
+
+    # Get a screenshot of the plotted cells, if desired
+    if outfilename is not None and screenshot is not None:
+        image = Image.fromarray(screenshot)
+        print('... saving to {}'.format(outfilename))
+        image.save(outfilename)
+    print("(" + ','.join([str(x) for i in range(3) for x in position[i]]) + ")")
 
