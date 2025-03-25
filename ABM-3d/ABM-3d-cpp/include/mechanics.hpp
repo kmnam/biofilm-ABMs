@@ -532,41 +532,40 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
         // Otherwise ... 
         else
         {
-            // If the cell is at least partially overlapping with the 
-            // surface ... 
+            // Compute the derivative of the cell-surface adhesion energy 
+            // with respect to z-position
+            T nz2 = cells(i, __colidx_nz) * cells(i, __colidx_nz);
+            T int1 = integral1<T>(    // Integral of \delta_i^{-1/2}(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), -0.5, ss(i)
+            );
+            T term2 = 0.0;
             if (abs(ss(i)) < cells(i, __colidx_half_l))
-            {
-                // Compute the derivative of the cell-surface adhesion energy 
-                // with respect to z-position
-                T nz2 = cells(i, __colidx_nz) * cells(i, __colidx_nz);
-                T int1 = integral1<T>(    // Integral of \delta_i^{-1/2}(s)
-                    cells(i, __colidx_rz), cells(i, __colidx_nz), R,
-                    cells(i, __colidx_half_l), -0.5, ss(i)
-                );
-                T term2 = (prefactor1 / 2) * cells(i, __colidx_nz);
-                dEdq(i, 0) = prefactor0 * (1 - nz2) * int1 + term2;
-                dEdq(i, 0) *= cells(i, __colidx_sigma0);
+                term2 = (prefactor1 / 2) * cells(i, __colidx_nz);
+            dEdq(i, 0) = prefactor0 * (1 - nz2) * int1 + term2;
+            dEdq(i, 0) *= cells(i, __colidx_sigma0);
 
-                // Compute the derivative of the cell-surface adhesion energy
-                // with respect to z-orientation
-                T int2 = integral1<T>(    // Integral of \delta_i^{1/2}(s)
-                    cells(i, __colidx_rz), cells(i, __colidx_nz), R,
-                    cells(i, __colidx_half_l), 0.5, ss(i)
-                );
-                T int3 = integral2<T>(    // Integral of s * \delta_i^{-1/2}(s)
-                    cells(i, __colidx_rz), cells(i, __colidx_nz), R,
-                    cells(i, __colidx_half_l), -0.5, ss(i)
-                );
-                T int4 = integral4<T>(    // Integral of \Theta(\delta_i(s))
-                    cells(i, __colidx_half_l), ss(i)
-                );
-                T term4 = (prefactor1 / 2) * (R - cells(i, __colidx_rz));
-                dEdq(i, 1) += prefactor2 * cells(i, __colidx_nz) * int2; 
-                dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
-                dEdq(i, 1) -= prefactor1 * cells(i, __colidx_nz) * int4;
-                dEdq(i, 1) += term4;
-                dEdq(i, 1) *= cells(i, __colidx_sigma0);
-            }
+            // Compute the derivative of the cell-surface adhesion energy
+            // with respect to z-orientation
+            T int2 = integral1<T>(    // Integral of \delta_i^{1/2}(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 0.5, ss(i)
+            );
+            T int3 = integral2<T>(    // Integral of s * \delta_i^{-1/2}(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), -0.5, ss(i)
+            );
+            T int4 = integral4<T>(    // Integral of \Theta(\delta_i(s))
+                cells(i, __colidx_half_l), ss(i)
+            );
+            T term4 = 0.0;
+            if (abs(ss(i)) < cells(i, __colidx_half_l))
+                term4 = (prefactor1 / 2) * (R - cells(i, __colidx_rz));
+            dEdq(i, 1) += prefactor2 * cells(i, __colidx_nz) * int2; 
+            dEdq(i, 1) += prefactor0 * (1 - nz2) * int3;
+            dEdq(i, 1) -= prefactor1 * cells(i, __colidx_nz) * int4;
+            dEdq(i, 1) += term4;
+            dEdq(i, 1) *= cells(i, __colidx_sigma0);
         }
     }
 
@@ -1205,13 +1204,25 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     #pragma omp parallel for if(multithread)
     for (int i = 0; i < n; ++i)
     {
+        // Is the cell contacting the surface?
+        bool contacting_surface = false;
+        if (!assume_2d(i))    // If the cell is not horizontal, then ... 
+        {
+            // Identify the cell height at either endpoint and check that
+            // there is some cell-surface overlap 
+            T z1 = cells(i, __colidx_rz) - cells(i, __colidx_half_l) * cells(i, __colidx_nz); 
+            T z2 = cells(i, __colidx_rz) + cells(i, __colidx_half_l) * cells(i, __colidx_nz);
+            contacting_surface = (z1 < R || z2 < R); 
+        }
+        else    // If the cell is horizontal, then ... 
+        {
+            // Simply check the height of the cell center 
+            contacting_surface = (cells(i, __colidx_rz) < R); 
+        }
+
         // If there is no surface or the cell is not contacting the surface,
         // solve the simplified 3D system of equations with no cell-surface
         // friction 
-        bool contacting_surface = (
-            (!assume_2d(i) && abs(ss(i)) < cells(i, __colidx_half_l)) || 
-            (assume_2d(i) && R - cells(i, __colidx_rz) > 0)
-        ); 
         if (no_surface || !contacting_surface)
         {
             T K = cells(i, __colidx_eta0) * cells(i, __colidx_l);
