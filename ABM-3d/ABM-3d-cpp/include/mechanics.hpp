@@ -426,46 +426,41 @@ Array<T, Dynamic, 2> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
         // Otherwise ...
         else
         {
-            // If the cell is at least partially overlapping with the 
-            // surface ... 
-            if (abs(ss(i)) < cells(i, __colidx_half_l))
-            {
-                // Compute the derivative of the cell-surface repulsion energy 
-                // with respect to z-position
-                T nz2 = cells(i, __colidx_nz) * cells(i, __colidx_nz);
-                T int1 = integral1<T>(    // Integral of \delta_i(s)
-                    cells(i, __colidx_rz), cells(i, __colidx_nz), R,
-                    cells(i, __colidx_half_l), 1.0, ss(i)
-                );
-                T int2 = integral1<T>(    // Integral of \sqrt{\delta_i(s)}
-                    cells(i, __colidx_rz), cells(i, __colidx_nz), R,
-                    cells(i, __colidx_half_l), 0.5, ss(i)
-                );
-                dEdq(i, 0) = -prefactor0 * ((1.0 - nz2) * int1 + sqrt(R) * nz2 * int2);
+            // Compute the derivative of the cell-surface repulsion energy 
+            // with respect to z-position
+            T nz2 = cells(i, __colidx_nz) * cells(i, __colidx_nz);
+            T int1 = integral1<T>(    // Integral of \delta_i(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 1.0, ss(i)
+            );
+            T int2 = integral1<T>(    // Integral of \sqrt{\delta_i(s)}
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 0.5, ss(i)
+            );
+            dEdq(i, 0) = -prefactor0 * ((1.0 - nz2) * int1 + sqrt(R) * nz2 * int2);
 
-                // Compute the derivative of the cell-surface repulsion energy 
-                // with respect to z-orientation
-                T int3 = integral1<T>(    // Integral of \delta_i^2(s)
-                    cells(i, __colidx_rz), cells(i, __colidx_nz), R,
-                    cells(i, __colidx_half_l), 2.0, ss(i)
-                );
-                T int4 = integral2<T>(    // Integral of s * \delta_i(s)
-                    cells(i, __colidx_rz), cells(i, __colidx_nz), R,
-                    cells(i, __colidx_half_l), 1.0, ss(i)
-                );
-                T int5 = integral1<T>(    // Integral of \delta_i^{3/2}(s)
-                    cells(i, __colidx_rz), cells(i, __colidx_nz), R,
-                    cells(i, __colidx_half_l), 1.5, ss(i)
-                );
-                T int6 = integral2<T>(    // Integral of s * \sqrt{\delta_i(s)}
-                    cells(i, __colidx_rz), cells(i, __colidx_nz), R,
-                    cells(i, __colidx_half_l), 0.5, ss(i)
-                );
-                dEdq(i, 1) -= prefactor0 * cells(i, __colidx_nz) * int3;
-                dEdq(i, 1) -= prefactor0 * (1 - nz2) * int4;
-                dEdq(i, 1) += prefactor1 * cells(i, __colidx_nz) * int5;
-                dEdq(i, 1) -= prefactor2 * nz2 * int6;
-            } 
+            // Compute the derivative of the cell-surface repulsion energy 
+            // with respect to z-orientation
+            T int3 = integral1<T>(    // Integral of \delta_i^2(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 2.0, ss(i)
+            );
+            T int4 = integral2<T>(    // Integral of s * \delta_i(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 1.0, ss(i)
+            );
+            T int5 = integral1<T>(    // Integral of \delta_i^{3/2}(s)
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 1.5, ss(i)
+            );
+            T int6 = integral2<T>(    // Integral of s * \sqrt{\delta_i(s)}
+                cells(i, __colidx_rz), cells(i, __colidx_nz), R,
+                cells(i, __colidx_half_l), 0.5, ss(i)
+            );
+            dEdq(i, 1) -= prefactor0 * cells(i, __colidx_nz) * int3;
+            dEdq(i, 1) -= prefactor0 * (1 - nz2) * int4;
+            dEdq(i, 1) += prefactor1 * cells(i, __colidx_nz) * int5;
+            dEdq(i, 1) -= prefactor2 * nz2 * int6;
         }
     }
 
