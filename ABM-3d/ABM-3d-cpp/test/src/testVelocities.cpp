@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/3/2025
+ *     3/25/2025
  */
 #include <iostream>
 #include <cmath>
@@ -47,11 +47,10 @@ TEST_CASE("Tests for velocity calculations", "[getVelocities()]")
     const T eta0 = 0.072; 
     const T eta1 = 720.0;
     const T nz_threshold = 1e-8;
-    Array<T, 4, 1> cell_cell_prefactors;  
-    cell_cell_prefactors << 2.5 * sqrt(R),
-                            2.5 * E0 * sqrt(R),
-                            E0 * pow(R - Rcell, 1.5), 
-                            Ecell;
+    Array<T, 3, 1> cell_cell_prefactors;  
+    cell_cell_prefactors << 2.5 * E0 * sqrt(R),
+                            2.5 * E0 * sqrt(R) * pow(2 * R - 2 * Rcell, 1.5),
+                            2.5 * Ecell * sqrt(Rcell);
     std::unordered_map<std::string, T> adhesion_params;  
     const T delta = 1e-50;
     const double tol = 1e-12;   // Subtraction leads to precision loss  
@@ -78,21 +77,25 @@ TEST_CASE("Tests for velocity calculations", "[getVelocities()]")
                  half_l * 2, half_l, 0, 0, eta0, eta1, eta1, sigma0, 0;
         Array<T, Dynamic, 7> neighbors(0, 7); 
         Array<int, Dynamic, 1> to_adhere(0);
-        Array<T, Dynamic, 6> noise = Array<T, Dynamic, 6>::Zero(1, 6);  
+        Array<int, Dynamic, 1> assume_2d = Array<int, Dynamic, 1>::Zero(1);
+        assume_2d(0) = (cells(0, __colidx_nz) < nz_threshold); 
+        Array<T, Dynamic, 6> noise = Array<T, Dynamic, 6>::Zero(1, 6);
         Array<T, Dynamic, 6> velocities = getVelocities<T>(
             cells, neighbors, to_adhere, 1e-7, 0, R, Rcell, cell_cell_prefactors,
-            E0, nz_threshold, noise, AdhesionMode::NONE, adhesion_params
+            E0, assume_2d, noise, AdhesionMode::NONE, adhesion_params, false,
+            false
         );
 
         // Compute the viscosity force matrix
         Matrix<T, 6, 6> vmatrix = compositeViscosityForceMatrix<T>(
-            rz, nz, 2 * half_l, half_l, (R - rz) / nz, eta0, eta1, R, nz_threshold
+            rz, nz, 2 * half_l, half_l, (R - rz) / nz, eta0, eta1, R, 0, 
+            1e-7, 0
         ).matrix();
 
         // Compute the conservative force vector
         Matrix<T, Dynamic, 6> cforces = getConservativeForces<T>(
             cells, neighbors, to_adhere, 1e-7, 0, R, Rcell, cell_cell_prefactors,
-            E0, nz_threshold, AdhesionMode::NONE, adhesion_params
+            E0, assume_2d, AdhesionMode::NONE, adhesion_params, false, false
         ).matrix();
 
         // Check that the velocity vector solves the desired linear equation
@@ -132,7 +135,8 @@ TEST_CASE("Tests for velocity calculations", "[getVelocities()]")
             noise(k) = k * 1e-6; 
         velocities = getVelocities<T>(
             cells, neighbors, to_adhere, 1e-7, 0, R, Rcell, cell_cell_prefactors,
-            E0, nz_threshold, noise, AdhesionMode::NONE, adhesion_params
+            E0, assume_2d, noise, AdhesionMode::NONE, adhesion_params, false,
+            false
         );
 
         // Check that the velocity vector solves the desired linear equation

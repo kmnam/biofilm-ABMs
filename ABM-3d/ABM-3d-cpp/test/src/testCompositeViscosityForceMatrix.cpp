@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/2/2025
+ *     3/25/2025
  */
 #include <iostream>
 #include <cmath>
@@ -121,7 +121,7 @@ TEST_CASE("Tests for viscosity forces", "[compositeViscosityForceMatrix()]")
 
         // Compute the viscosity force matrix
         Matrix<T, 6, 6> vmatrix = compositeViscosityForceMatrix<T>(
-            rz, nz, 2 * half_l, half_l, (R - rz) / nz, eta0, eta1, R, nz_threshold
+            rz, nz, 2 * half_l, half_l, (R - rz) / nz, eta0, eta1, R, 0, 1e-6, 0
         ).matrix();
 
         // Compute the viscosity and cell-surface friction forces for a given 

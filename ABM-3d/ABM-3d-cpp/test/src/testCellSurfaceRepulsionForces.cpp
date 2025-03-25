@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/26/2025
+ *     3/25/2025
  */
 #include <iostream>
 #include <cmath>
@@ -113,8 +113,10 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceRepulsionForce
                  half_l * 2, half_l, 0, 0, 0, 0, 0, 0, 0;
         Array<T, Dynamic, 1> ss(1);  
         ss << (R - rz) / nz;
+        Array<int, Dynamic, 1> assume_2d = Array<int, Dynamic, 1>::Zero(1); 
+        assume_2d(0) = (nz < nz_threshold); 
         Array<T, Dynamic, 2> forces1 = cellSurfaceRepulsionForces<T>(
-            cells, 1e-6, 0, ss, R, E0, nz_threshold
+            cells, 1e-6, 0, ss, R, E0, assume_2d, false
         );
 
         // Compute forces via finite differences 
@@ -138,7 +140,8 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceRepulsionForce
         cells << 0, 0, 0, rz, cos(angles(j)), 0, nz, 0, 0, 0, 0, 0, 0,
                  half_l * 2, half_l, 0, 0, 0, 0, 0, 0, 0;
         ss << (R - rz) / nz;
-        forces1 = cellSurfaceRepulsionForces<T>(cells, 1e-6, 0, ss, R, E0, nz_threshold);
+        assume_2d(0) = (nz < nz_threshold); 
+        forces1 = cellSurfaceRepulsionForces<T>(cells, 1e-6, 0, ss, R, E0, assume_2d, false);
 
         // Compute forces via finite differences 
         forces2 = cellSurfaceRepulsionForcesFiniteDiff(rz, nz, half_l, R, E0, delta); 

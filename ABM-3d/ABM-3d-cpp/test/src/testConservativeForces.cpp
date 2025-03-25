@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/28/2025
+ *     3/25/2025
  */
 #include <iostream>
 #include <cmath>
@@ -85,11 +85,10 @@ TEST_CASE("Tests for conservative forces for a single cell", "[getConservativeFo
     const T Ecell = 3900000.0; 
     const T sigma0 = 100.0;
     const T nz_threshold = 1e-8;
-    Array<T, 4, 1> cell_cell_prefactors;  
-    cell_cell_prefactors << 2.5 * sqrt(R),
-                            2.5 * E0 * sqrt(R),
-                            E0 * pow(R - Rcell, 1.5), 
-                            Ecell;
+    Array<T, 3, 1> cell_cell_prefactors;  
+    cell_cell_prefactors << 2.5 * E0 * sqrt(R),
+                            2.5 * E0 * sqrt(R) * pow(2 * R - 2 * Rcell, 1.5),
+                            2.5 * Ecell * sqrt(Rcell);
     std::unordered_map<std::string, T> adhesion_params;  
     const T delta = 1e-50;
     const double tol = 1e-12;   // Subtraction leads to precision loss  
@@ -114,10 +113,12 @@ TEST_CASE("Tests for conservative forces for a single cell", "[getConservativeFo
         cells << 0, 0, 0, rz, cos(angles(j)), 0, nz, 0, 0, 0, 0, 0, 0,
                  half_l * 2, half_l, 0, 0, 0, 0, 0, sigma0, 0;
         Array<T, Dynamic, 7> neighbors(0, 7); 
-        Array<int, Dynamic, 1> to_adhere(0); 
+        Array<int, Dynamic, 1> to_adhere(0);
+        Array<int, Dynamic, 1> assume_2d = Array<int, Dynamic, 1>::Zero(1);
+        assume_2d(0) = (nz < nz_threshold);  
         Array<T, Dynamic, 6> forces = getConservativeForces<T>(
             cells, neighbors, to_adhere, 1e-6, 0, R, Rcell, cell_cell_prefactors, 
-            E0, nz_threshold, AdhesionMode::NONE, adhesion_params
+            E0, assume_2d, AdhesionMode::NONE, adhesion_params, false, false
         );
 
         // Check that the forces in the x- and y-directions are zero 
