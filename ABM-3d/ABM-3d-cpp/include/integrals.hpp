@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/26/2025
+ *     4/15/2025
  */
 
 #ifndef BIOFILM_3D_AUXILIARY_INTEGRALS_HPP
@@ -401,6 +401,107 @@ T areaIntegral3(const T rz, const T nz, const T R, const T half_l, const T ss)
     T term1 = pow(R, 0.5) * (1 - nz * nz) * integral3<T>(rz, nz, R, half_l, 0.5, ss);
     T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral6<T>(rz, nz, R, half_l, ss);
     return term1 + term2;
+}
+
+/**
+ * Compute the integral of
+ *
+ * (s*\hat{n}_i \cross \hat{z}) * \delta_i^\gamma(s),
+ * 
+ * where \hat{n}_i is the orientation vector, \hat{z} = (0, 0, 1), and \gamma 
+ * is a real exponent, from s = -l_i/2 to s = +l_i/2, where l_i is the length
+ * of the cell.
+ *
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
+ *
+ * @param rz z-coordinate of cell center.
+ * @param n Cell orientation vector.
+ * @param R Cell radius.
+ * @param half_l Half of cell length.
+ * @param gamma Exponent; should not be -1 or -2.
+ * @param ss Pre-computed value of `sstar(rz, nz, R)`.
+ * @returns Desired integral.
+ */
+template <typename T>
+Matrix<T, 3, 1> crossIntegral1(const T rz, const Ref<const Matrix<T, 3, 1> >& n,
+                               const T R, const T half_l, const T gamma, 
+                               const T ss)
+{
+    // Get the cross product of the orientation vector with the z-unit vector 
+    Matrix<T, 3, 1> z; 
+    z << 0, 0, 1; 
+    Matrix<T, 3, 1> cross = n.cross(z);
+
+    // Get the integral of s * \delta_i^\gamma(s)
+    T integral = integral2<T>(rz, n(2), R, half_l, gamma, ss);
+
+    return integral * cross; 
+}
+
+/**
+ * Compute the integral of
+ *
+ * (s*\hat{n}_i \cross \hat{z}) * \Theta(\delta_i(s)),
+ * 
+ * where \hat{n}_i is the orientation vector and \hat{z} = (0, 0, 1), from
+ * s = -l_i/2 to s = +l_i/2, where l_i is the length of the cell.
+ *
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
+ *
+ * @param rz z-coordinate of cell center.
+ * @param n Cell orientation vector.
+ * @param R Cell radius.
+ * @param half_l Half of cell length.
+ * @param ss Pre-computed value of `sstar(rz, nz, R)`.
+ * @returns Desired integral.
+ */
+template <typename T>
+Matrix<T, 3, 1> crossIntegral2(const T rz, const Ref<const Matrix<T, 3, 1> >& n,
+                               const T R, const T half_l, const T ss)
+{
+    // Get the cross product of the orientation vector with the z-unit vector 
+    Matrix<T, 3, 1> z; 
+    z << 0, 0, 1; 
+    Matrix<T, 3, 1> cross = n.cross(z);
+
+    // Get the integral of s * \Theta(\delta_i(s))
+    T integral = integral5<T>(rz, n(2), R, half_l, ss);
+
+    return integral * cross; 
+}
+
+/**
+ * Compute the integral of 
+ *
+ * (s*\hat{n}_i \cross v) * a_i(s), 
+ *
+ * where \hat{n}_i is the orientation vector, v is an input vector, and
+ * a_i(s) is the cell-surface contact area density, from s = -l_i/2 to
+ * s = +l_i/2, where l_i is the length of the cell.
+ *
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
+ *
+ * @param rz z-coordinate of cell center.
+ * @param n Cell orientation vector.
+ * @param R Cell radius.
+ * @param half_l Half of cell length.
+ * @param v Input vector. 
+ * @param ss Pre-computed value of `sstar(rz, nz, R)`.
+ * @returns Desired integral.
+ */
+template <typename T>
+Matrix<T, 3, 1> crossAreaIntegral(const T rz, const Ref<const Matrix<T, 3, 1> >& n, 
+                                  const T R, const T half_l,
+                                  const Ref<const Matrix<T, 3, 1> >& v, 
+                                  const T ss)
+{
+    // Get the cross product of the orientation vector with the z-unit vector 
+    Matrix<T, 3, 1> cross = n.cross(v);
+
+    // Get the integral of s * a_i(s)
+    T integral = areaIntegral2<T>(rz, n(2), R, half_l, ss);
+
+    return integral * cross; 
 }
 
 #endif
