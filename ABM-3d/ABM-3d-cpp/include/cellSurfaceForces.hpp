@@ -43,7 +43,8 @@ std::vector<double> cellSurfaceRepulsionForce(std::vector<double>& r,
                                               const double R, const double E0)
 {
     std::vector<double> force {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-    const double EPSILON = 1e-8;  
+    const double EPSILON = 1e-8; 
+    const double l = 2 * half_l;  
 
     // If the z-coordinate of the cell's orientation is near zero ... 
     if (abs(n[2]) < EPSILON)
@@ -73,10 +74,10 @@ std::vector<double> cellSurfaceRepulsionForce(std::vector<double>& r,
 
         // Compute the moment vector 
         double int3 = integral2<double>(    // Integral of s * \delta_i(s)
-            r[2], n, R, half_l, 1.0, ss
+            r[2], n[2], R, half_l, 1.0, ss
         );
         double int4 = integral2<double>(    // Integral of s * \sqrt{\delta_i(s)}
-            r[2], n, R, half_l, 0.5, ss
+            r[2], n[2], R, half_l, 0.5, ss
         );
         std::vector<double> cross {n[1], -n[0], 0.0};  
         force[3] = 2 * E0 * cross[0] * ((1.0 - nz2) * int3 + sqrt(R) * nz2 * int4); 
@@ -105,7 +106,8 @@ std::vector<double> cellSurfaceAdhesionForce(std::vector<double>& r,
                                              const double sigma0)
 {
     std::vector<double> force {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-    const double EPSILON = 1e-8;  
+    const double EPSILON = 1e-8; 
+    const double l = 2 * half_l;  
 
     // If the z-coordinate of the cell's orientation is near zero ... 
     if (abs(n[2]) < EPSILON)
@@ -135,7 +137,7 @@ std::vector<double> cellSurfaceAdhesionForce(std::vector<double>& r,
 
         // Compute the moment vector 
         double int2 = integral2<double>(    // Integral of s * \delta_i^{-1/2}(s)
-            r[2], n, R, half_l, -0.5, ss
+            r[2], n[2], R, half_l, -0.5, ss
         );
         std::vector<double> cross {n[1], -n[0], 0.0};
         double w1 = 0.0, w2 = 0.0;
