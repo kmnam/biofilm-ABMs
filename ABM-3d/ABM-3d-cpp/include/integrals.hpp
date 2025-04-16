@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     4/15/2025
+ *     4/16/2025
  */
 
 #ifndef BIOFILM_3D_AUXILIARY_INTEGRALS_HPP
@@ -280,21 +280,10 @@ T integral5(const T rz, const T nz, const T R, const T half_l, const T ss)
             ); 
     #endif
 
-    T term1 = integral1<T>(rz, nz, R, half_l, 1.0, ss);
-    T term2 = 0;
-    if (ss > half_l)
-    {
-        T overlap1 = phi<T>(rz, nz, R, -half_l);
-        T overlap2 = phi<T>(rz, nz, R, half_l);
-        term2 = -half_l * (overlap1 + overlap2);
-    }
-    else if (ss > -half_l)    // -half_l < ss <= half_l
-    {
-        // Overlap at s = ss is zero 
-        T overlap1 = phi<T>(rz, nz, R, -half_l);
-        term2 = -half_l * overlap1;
-    }
-    return (term1 + term2) / nz;
+    if (-half_l < ss <= half_l)
+        return (ss * ss - half_l * half_l) / 2.0;
+    else 
+        return 0.0; 
 }
 
 /**
@@ -321,21 +310,12 @@ T integral6(const T rz, const T nz, const T R, const T half_l, const T ss)
             ); 
     #endif
 
-    T term1 = 2 * integral2<T>(rz, nz, R, half_l, 1.0, ss);
-    T term2 = 0;
     if (ss > half_l)
-    {
-        T overlap1 = phi<T>(rz, nz, R, -half_l);
-        T overlap2 = phi<T>(rz, nz, R, half_l);
-        term2 = half_l * half_l * (overlap1 - overlap2);
-    }
+        return 2 * pow(half_l, 3) / 3.0;
     else if (ss > -half_l)    // -half_l < ss <= half_l
-    {
-        // Overlap at s = ss is zero 
-        T overlap1 = phi<T>(rz, nz, R, -half_l);
-        term2 = half_l * half_l * overlap1;
-    }
-    return (term1 + term2) / nz;
+        return (pow(ss, 3) + pow(half_l, 3)) / 3.0; 
+    else
+        return 0.0;
 }
 
 /**
