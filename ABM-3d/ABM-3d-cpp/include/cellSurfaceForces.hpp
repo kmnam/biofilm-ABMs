@@ -27,7 +27,9 @@ using std::abs;
 
 /**
  * Compute the force and moment vectors due to cell-surface repulsion on 
- * the given cell. 
+ * the given cell.
+ *
+ * This function assumes that the z-orientation (n[2]) is nonnegative.  
  *
  * @param r Cell center. 
  * @param n Cell orientation.
@@ -91,13 +93,15 @@ std::vector<double> cellSurfaceRepulsionForce(std::vector<double>& r,
  * Compute the force and moment vectors due to cell-surface adhesion on 
  * the given cell. 
  *
+ * This function assumes that the z-orientation (n[2]) is nonnegative.  
+ *
  * @param r Cell center. 
  * @param n Cell orientation.
  * @param half_l Cell half-length.  
  * @param R Cell radius.
  * @param sigma0 Cell-surface adhesion energy density. 
  * @returns A six-dimensional vector that contains the force and moment 
- *          vectors due to cell-surface repulsion. 
+ *          vectors due to cell-surface adhesion. 
  */
 std::vector<double> cellSurfaceAdhesionForce(std::vector<double>& r,
                                              std::vector<double>& n, 
@@ -155,7 +159,9 @@ std::vector<double> cellSurfaceAdhesionForce(std::vector<double>& r,
 
 /**
  * Compute the force and moment vectors due to cell-surface friction on 
- * the given cell. 
+ * the given cell.
+ *
+ * This function assumes that the z-orientation (n[2]) is nonnegative.  
  *
  * @param r Cell center. 
  * @param n Cell orientation.
