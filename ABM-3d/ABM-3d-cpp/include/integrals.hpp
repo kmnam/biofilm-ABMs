@@ -280,7 +280,7 @@ T integral5(const T rz, const T nz, const T R, const T half_l, const T ss)
             ); 
     #endif
 
-    if (-half_l < ss <= half_l)
+    if (-half_l < ss && ss <= half_l)
         return (ss * ss - half_l * half_l) / 2.0;
     else 
         return 0.0; 
