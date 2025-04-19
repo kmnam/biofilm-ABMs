@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/26/2025
+ *     4/19/2025
  */
 
 #ifndef SIMPLICIAL_COMPLEXES_3D_HPP
@@ -18,10 +18,6 @@
 #include <Eigen/Dense>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/connected_components.hpp>
-#include <gudhi/Simplex_tree.h>
-#include <gudhi/Persistent_cohomology.h>
-#include <gudhi/Matrix.h>
-#include <gudhi/persistence_matrix_options.h>
 #include "distances.hpp"
 #include "mechanics.hpp"
 #include "utils.hpp"
