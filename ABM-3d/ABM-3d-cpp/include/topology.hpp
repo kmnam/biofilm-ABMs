@@ -28,7 +28,8 @@
 
 using namespace Eigen;
 
-typedef boost::adjacency_list<boost::hash_setS, boost::vecS, boost::undirectedS> Graph; 
+typedef boost::property<boost::edge_weight_t, double> EdgeProperty; 
+typedef boost::adjacency_list<boost::hash_setS, boost::vecS, boost::undirectedS, boost::no_property, EdgeProperty> Graph; 
 
 /** ------------------------------------------------------------------- //
  *                            GRAPH UTILITIES                           //
@@ -62,7 +63,7 @@ Graph getNeighborGraph(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
         int j = neighbors(k, 1); 
         T dij = neighbors(k, Eigen::seq(2, 4)).matrix().norm();
         if (dij < 2 * R && cells(i, __colidx_group) == 1 && cells(j, __colidx_group) == 1)
-            boost::add_edge(i, j, graph);
+            boost::add_edge(i, j, EdgeProperty(dij), graph);
     }
 
     return graph; 
@@ -321,13 +322,15 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
 
     // Write the edges to the output file
     std::pair<boost::graph_traits<Graph>::edge_iterator, 
-              boost::graph_traits<Graph>::edge_iterator> it; 
+              boost::graph_traits<Graph>::edge_iterator> it;
+    boost::property_map<Graph, boost::edge_weight_t>::type weights = boost::get(boost:edge_weight, graph);  
     for (it = boost::edges(graph); it.first != it.second; ++it.first)
     {
         boost::graph_traits<Graph>::edge_descriptor edge = *(it.first);
         int i = boost::source(edge, graph); 
         int j = boost::target(edge, graph);
-        outfile << "EDGE\t" << i << '\t' << j << std::endl; 
+        double dij = weights[*it]; 
+        outfile << "EDGE\t" << i << '\t' << j << '\t' << dij << std::endl; 
     }
 
     // Write the component sizes to the output file 
@@ -365,7 +368,11 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
  *                         SIMPLICIAL COMPLEXES                         //
  *  ------------------------------------------------------------------- */
 /**
+ * Get the binomial coefficient, n choose k.
  *
+ * @param n Total number of items.
+ * @param k Number of items to choose. 
+ * @returns n choose k. 
  */
 int binom(const int n, const int k)
 {
@@ -380,6 +387,10 @@ int binom(const int n, const int k)
 /**
  * A simple quasi-recursive function for getting the power set of an ordered
  * set (i.e., a vector).
+ *
+ * @param vec Input ordered set. 
+ * @param nonempty If true, skip the empty set. 
+ * @returns Power set of input set. 
  */
 std::vector<std::vector<int> > getPowerset(const std::vector<int>& vec, 
                                            const bool nonempty = true)
@@ -411,7 +422,11 @@ std::vector<std::vector<int> > getPowerset(const std::vector<int>& vec,
 
 /**
  * A simple quasi-recursive function for getting all k-combinations of an
- * ordered set (i.e., a vector).  
+ * ordered set (i.e., a vector). 
+ *
+ * @param vec Input ordered set. 
+ * @param k Number of items to choose per combination. 
+ * @returns All k-combinations of input set. 
  */
 std::vector<std::vector<int> > getCombinations(const std::vector<int>& vec, 
                                                const int k)
@@ -496,38 +511,6 @@ class Trie
         {
         }
 
-        /**
-         * Get the node that corresponds to the last letter in the given 
-         * string/value.
-         *
-         * TODO Unnecessary 
-         */
-        std::shared_ptr<TrieNode> getNode(const std::vector<int>& value) const 
-        {
-            // Travel down the trie from the root to get the node 
-            std::shared_ptr<TrieNode> curr = this->root;
-            int nletters = 0; 
-            while (nletters < value.size())
-            {
-                std::vector<std::shared_ptr<TrieNode> > children = curr->children;
-                bool found_matching_child = false; 
-                for (auto& ptr : children)
-                {
-                    if (ptr->letter == value[nletters])
-                    {
-                        found_matching_child = true; 
-                        curr = ptr;
-                        nletters++;  
-                        break; 
-                    }
-                }
-                if (!found_matching_child)
-                    return nullptr; 
-            }
-
-            return curr; 
-        }
-            
         /**
          * Return true if the trie contains a node for the full string/value.
          */
