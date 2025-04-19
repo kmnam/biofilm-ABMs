@@ -319,13 +319,13 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
     // Write the edges to the output file
     std::pair<boost::graph_traits<Graph>::edge_iterator, 
               boost::graph_traits<Graph>::edge_iterator> it;
-    boost::property_map<Graph, boost::edge_weight_t>::type weights = boost::get(boost:edge_weight, graph);  
+    auto weights = boost::get(boost::edge_weight, graph);  
     for (it = boost::edges(graph); it.first != it.second; ++it.first)
     {
         boost::graph_traits<Graph>::edge_descriptor edge = *(it.first);
         int i = boost::source(edge, graph); 
         int j = boost::target(edge, graph);
-        double dij = weights[*it]; 
+        double dij = weights[edge];
         outfile << "EDGE\t" << i << '\t' << j << '\t' << dij << std::endl; 
     }
 
