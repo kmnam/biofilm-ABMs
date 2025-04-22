@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    4/21/2025
+    4/22/2025
 """
 import os
 import glob
@@ -276,7 +276,23 @@ def simulate_cell_births_with_switching(cells_init, n_final, rng, R=0.8, L0=1.0,
             growth_rates.append(growth2)
             birth_times.append(min_tdiv)
 
+            # The remaining cell lengths should be updated according to the
+            # growth law:
+            # 
+            # l(t) = -(a / b) + (l(t0) + a / b) * exp(b * (t - t0)),
+            #
+            # where t0 is the current time, a = (4/3) * (growth rate) * R,
+            # and b = growth rate
+            dt = min_tdiv - t_curr
+            for i in range(cells.shape[0] - 1):
+                if i != min_idx:
+                    a = (4. / 3.) * cells[i, _colidx_growth] * R
+                    b = cells[i, _colidx_growth]
+                    l0 = cells[i, _colidx_l]
+                    cells[i, _colidx_l] = -(a / b) + (l0 + (a / b)) * np.exp(b * dt)
+
             # Update current time 
             t_curr = min_tdiv
 
     return cells, growth_rates, birth_times, lifetimes, t_curr
+
