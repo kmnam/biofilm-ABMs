@@ -296,3 +296,155 @@ def simulate_cell_births_with_switching(cells_init, n_final, rng, R=0.8, L0=1.0,
 
     return cells, growth_rates, birth_times, lifetimes, t_curr
 
+#######################################################################
+def nearest_cell_body_coord_to_point(r, n, half_l, q):
+    """
+    Return the cell-body coordinate along the given cell centerline that is 
+    nearest to the given point. 
+    """
+    s = np.dot(q - r, n)
+    if np.abs(s) <= half_l:
+        return s
+    elif s > half_l:
+        return half_l
+    else:    # s < -half_l
+        return -half_l
+
+########################################################################
+def dist_between_cells(r1, n1, half_l1, r2, n2, half_l2):
+    """
+    Return the shortest distance between the centerlines of two cells, along
+    with the cell-body coordinates at which the shortest distance is achieved.
+
+    The distance vector returned by this function runs from cell 1 to cell 2.
+    """
+    d = np.zeros((3,), dtype=np.float64)
+    s = 0.0
+    t = 0.0
+
+    # Are the two cells nearly parallel? 
+    #
+    # We say that two cells are nearly parallel if they are at an angle of 
+    # theta <= 0.01 radians, which translates to cos(theta) >= 0.9999
+    cos_theta = np.dot(n1, n2)
+    if cos_theta >= 0.9999 or cos_theta <= -0.9999:
+        # Identify the four endpoint vectors
+        p1 = r1 - half_l1 * n1
+        q1 = r1 + half_l1 * n1
+        p2 = r2 - half_l2 * n2
+        q2 = r2 + half_l2 * n2
+
+        # Get the distance vectors between the endpoints of cell 1 and the
+        # body of cell 2
+        s_p1_to_cell2 = nearest_cell_body_coord_to_point(r2, n2, half_l2, p1)
+        s_q1_to_cell2 = nearest_cell_body_coord_to_point(r2, n2, half_l2, q1)
+        d_p1_to_cell2 = r2 + s_p1_to_cell2 * n2 - p1
+        d_q1_to_cell2 = r2 + s_q1_to_cell2 * n2 - q1
+        dist_p1_to_cell2 = np.linalg.norm(d_p1_to_cell2)
+        dist_q1_to_cell2 = np.linalg.norm(d_q1_to_cell2)
+
+        # If the two distance vectors point to the same point along cell 2
+        # (which should be an endpoint), return the shorter of the two
+        if s_p1_to_cell2 == s_q1_to_cell2:
+            if dist_p1_to_cell2 < dist_q1_to_cell2:
+                s = -half_l1
+                t = s_p1_to_cell2
+                d = d_p1_to_cell2
+            else:    # dist_p1_to_cell2 >= dist_q1_to_cell2
+                s = half_l1
+                t = s_q1_to_cell2
+                d = d_q1_to_cell2
+        # Otherwise, get the distance vectors between the endpoints of cell 2
+        # and the body of cell 1
+        else:
+            s_p2_to_cell1 = nearest_cell_body_coord_to_point(r1, n1, half_l1, p2)
+            s_q2_to_cell1 = nearest_cell_body_coord_to_point(r1, n1, half_l1, q2)
+            d_p2_to_cell1 = r1 + s_p2_to_cell1 * n1 - p2
+            d_q2_to_cell1 = r1 + s_q2_to_cell1 * n1 - q2
+            dist_p2_to_cell1 = np.linalg.norm(d_p2_to_cell1)
+            dist_q2_to_cell1 = np.linalg.norm(d_q2_to_cell1)
+
+            # Get the two shortest distance vectors among the four 
+            sortidx = np.argsort([
+                dist_p1_to_cell2, dist_q1_to_cell2, dist_p2_to_cell1, dist_q2_to_cell1
+            ])
+            minidx = set(sortidx[:2])
+            if 0 in minidx:
+                if 1 in minidx:      # Average between d_p1_to_cell2 and d_q1_to_cell2
+                    s = 0.0
+                    t = nearest_cell_body_coord_to_point(r2, n2, half_l2, r1)
+                    d = r2 + t * n2 - r1
+                elif 2 in minidx:    # Average between d_p1_to_cell2 and d_p2_to_cell1
+                    s = (-half_l1 + s_p2_to_cell1) / 2
+                    t = nearest_cell_body_coord_to_point(r2, n2, half_l2, r1 + s * n1)
+                    d = r2 + t * n2 - r1 - s * n1
+                else:   # 3 in minidx; average between d_p1_to_cell2 and d_q2_to_cell1
+                    s = (-half_l1 + s_q2_to_cell1) / 2
+                    t = nearest_cell_body_coord_to_point(r2, n2, half_l2, r1 + s * n1)
+                    d = r2 + t * n2 - r1 - s * n1
+            elif 1 in minidx:
+                if 2 in minidx:      # Average between d_q1_to_cell2 and d_p2_to_cell1
+                    s = (half_l1 + s_p2_to_cell1) / 2
+                    t = nearest_cell_body_coord_to_point(r2, n2, half_l2, r1 + s * n1)
+                    d = r2 + t * n2 - r1 - s * n1
+                else:   # 3 in minidx; average between d_q1_to_cell2 and d_q2_to_cell1
+                    s = (half_l1 + s_q2_to_cell1) / 2
+                    t = nearest_cell_body_coord_to_point(r2, n2, half_l2, r1 + s * n1)
+                    d = r2 + t * n2 - r1 - s * n1
+            else:   # 2 and 3 in minidx; average between d_p2_to_cell1 and d_q2_to_cell1
+                t = 0.0
+                s = nearest_cell_body_coord_to_point(r1, n1, half_l1, r2)
+                d = r2 - r1 - s * n1
+    # Otherwise, compute the distance vector 
+    else:
+        # We are looking for the values of s, t such that the norm of 
+        # r2 + t * n2 - r1 - s * n1 is minimized
+        r12 = r2 - r1
+        r12_dot_n1 = np.dot(r12, n1)
+        r12_dot_n2 = np.dot(r12, n2)
+        n1_dot_n2 = np.dot(n1, n2)
+        s_numer = r12_dot_n1 - n1_dot_n2 * r12_dot_n2
+        t_numer = n1_dot_n2 * r12_dot_n1 - r12_dot_n2
+        denom = 1.0 - n1_dot_n2 * n1_dot_n2
+        s = s_numer / denom
+        t = t_numer / denom
+
+        # If the unconstrained minimum values do not fall within the square 
+        # [-half_l1, half_l1] x [-half_l2, half_l2] ... 
+        if np.abs(s) > half_l1 or np.abs(t) > half_l2:
+            # Find the side of the square to which the unconstrained minimum
+            # value is nearest
+            #
+            # Region 1 (above top side):      between t = -s - X and t = s - X
+            # Region 2 (right of right side): between t = s - X and t = -s + X
+            # Region 3 (below bottom side):   between t = -s + X and t = s + X
+            # Region 4 (left of left side):   between t = s + X and t = -s - X
+            #
+            # where X = (l1 - l2) / 2
+            X = half_l1 - half_l2
+            Y = s + X
+            Z = s - X
+            if t >= -Y and t >= Z:    # In region 1
+                # Set t = half_l2 and find s
+                q = r2 + half_l2 * n2
+                s = nearest_cell_body_coord_to_point(r1, n1, half_l1, q)
+                t = half_l2
+            elif t < Z and t >= -Z:   # In region 2
+                # Set s = half_l1 and find t
+                q = r1 + half_l1 * n1
+                t = nearest_cell_body_coord_to_point(r2, n2, half_l2, q)
+                s = half_l1
+            elif t < -Z and t < Y:    # In region 3
+                # Set t = -half_l2 and find s
+                q = r2 - half_l2 * n2
+                s = nearest_cell_body_coord_to_point(r1, n1, half_l1, q)
+                t = -half_l2
+            else:   # t >= s + X and t < -s - X, in region 4
+                # Set s = -half_l1 and find t
+                q = r1 - half_l1 * n1
+                t = nearest_cell_body_coord_to_point(r2, n2, half_l2, q)
+                s = -half_l1
+        d = r12 + t * n2 - s * n1
+
+    return d, s, t
+
