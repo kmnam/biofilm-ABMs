@@ -333,7 +333,7 @@ TEST_CASE("Tests for auxiliary integral 4", "[integral4()]")
             return (value > 0 ? 1.0 : 0.0); 
         };
         T target = integrate(func, -half_l, half_l, meshsize); 
-        T integral = integral4<T>(half_l, ss);
+        T integral = integral4<T>(nz, half_l, ss);
         if (!std::isnan(check_value))
             return std::make_pair(abs(integral - target), abs(target - check_value)); 
         else 
@@ -408,7 +408,7 @@ TEST_CASE("Tests for auxiliary integral 5", "[integral5()]")
             return (value > 0 ? s : 0.0); 
         };
         T target = integrate(func, -half_l, half_l, meshsize);
-        T integral = integral5<T>(rz, nz, R, half_l, ss);
+        T integral = integral5<T>(nz, half_l, ss);
         if (!std::isnan(check_value))
             return std::make_pair(abs(integral - target), abs(target - check_value)); 
         else 
@@ -486,7 +486,7 @@ TEST_CASE("Tests for auxiliary integral 6", "[integral6()]")
                 return 0.0;
         };
         T target = integrate(func, -half_l, half_l, meshsize);
-        T integral = integral6<T>(rz, nz, R, half_l, ss);
+        T integral = integral6<T>(nz, half_l, ss);
         if (!std::isnan(check_value))
             return std::make_pair(abs(integral - target), abs(target - check_value));
         else 
@@ -798,6 +798,7 @@ TEST_CASE("Tests for all three area integrals", "[areaIntegrals()]")
         T half_l = 0.5;
         T max_overlap = 0.2 * R;
         rz = R + half_l * nz - max_overlap;
+        T ss = (R - rz) / nz; 
         T area1 = areaIntegral1<T>(rz, nz, R, half_l, ss);
         T area2 = areaIntegral2<T>(rz, nz, R, half_l, ss); 
         T area3 = areaIntegral3<T>(rz, nz, R, half_l, ss); 
@@ -819,6 +820,7 @@ TEST_CASE("Tests for all three area integrals", "[areaIntegrals()]")
         meshsize = 1e+7;
         max_overlap = -0.1 * R; 
         rz = R + half_l * nz - max_overlap;
+        ss = (R - rz) / nz; 
         area1 = areaIntegral1<T>(rz, nz, R, half_l, ss);
         area2 = areaIntegral2<T>(rz, nz, R, half_l, ss); 
         area3 = areaIntegral3<T>(rz, nz, R, half_l, ss); 
