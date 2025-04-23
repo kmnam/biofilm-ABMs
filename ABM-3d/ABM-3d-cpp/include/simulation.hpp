@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/15/2025
+ *     4/23/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -17,6 +17,7 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <chrono>
 #include <vector>
 #include <map>
 #include <Eigen/Dense>
@@ -196,13 +197,16 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     std::unordered_map<std::string, T>& adhesion_params,
                                     const bool no_surface = false,
                                     const int n_cells_start_switch = 0,
-                                    const bool track_poles = false)
+                                    const bool track_poles = false,
+                                    const int n_start_multithread = 20)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
     T dt = max_stepsize; 
     int iter = 0;
     int n = cells.rows();
+    auto t_real = std::chrono::system_clock::now();
+    bool started_multithread = false;  
     boost::random::mt19937 rng(rng_seed);
 
     // Define Butcher tableau for order 3(2) Runge-Kutta method by Bogacki
@@ -505,11 +509,19 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         }
 
         // Update cell positions and orientations
+        #ifdef _OPENMP
+            if (n >= n_start_multithread && !started_multithread)
+            {
+                std::cout << "[NOTE] Started multithreading: detected "
+                          << omp_get_max_threads() << " threads" << std::endl;
+                started_multithread = true; 
+            }
+        #endif
         auto result = stepRungeKuttaAdaptive<T>(
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
             cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
             max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-            adhesion_mode, adhesion_params, no_surface
+            adhesion_mode, adhesion_params, no_surface, n_start_multithread
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 6> errors = result.second;
@@ -743,8 +755,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         double t_new_factor = std::fmod(t + 1e-12, dt_write);  
         if (write && t_old_factor > t_new_factor) 
         {
+            auto t_now = std::chrono::system_clock::now();
+            std::chrono::duration<double> elapsed = t_now - t_real;
+            t_real = t_now;  
             std::cout << "Iteration " << iter << ": " << n << " cells, time = "
-                      << t << ", max error = " << errors.abs().maxCoeff()
+                      << t << ", time elapsed = " << elapsed.count() << " sec"
+                      << ", max error = " << errors.abs().maxCoeff()
                       << ", avg error = " << errors.abs().sum() / (6 * n)
                       << ", dt = " << dt << std::endl;
             params["t_curr"] = floatToString<T>(t);
