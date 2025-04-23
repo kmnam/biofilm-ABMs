@@ -235,13 +235,14 @@ T integral3(const T rz, const T nz, const T R, const T half_l, const T gamma,
  *
  * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
+ * @param nz z-coordinate of cell orientation.
  * @param half_l Half of cell length.
  * @param ss Pre-computed value of `sstar(rz, nz, R)`, whose input values are
  *           defined elsewhere and not passed into this function.
  * @returns Desired integral.  
  */
 template <typename T>
-T integral4(const T half_l, const T ss)
+T integral4(const T nz, const T half_l, const T ss)
 {
     #ifdef CHECK_CELL_ORIENTATION_ZCOORD_POSITIVE
         if (nz <= 0)
@@ -265,15 +266,13 @@ T integral4(const T half_l, const T ss)
  *
  * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
- * @param rz z-coordinate of cell center.
  * @param nz z-coordinate of cell orientation.
- * @param R Cell radius.
  * @param half_l Half of cell length.
  * @param ss Pre-computed value of `sstar(rz, nz, R)`.
  * @returns Desired integral.  
  */
 template <typename T>
-T integral5(const T rz, const T nz, const T R, const T half_l, const T ss)
+T integral5(const T nz, const T half_l, const T ss)
 {
     #ifdef CHECK_CELL_ORIENTATION_ZCOORD_POSITIVE
         if (nz <= 0)
@@ -295,15 +294,13 @@ T integral5(const T rz, const T nz, const T R, const T half_l, const T ss)
  *
  * The z-coordinate of the cell's orientation vector is assumed to be positive.
  *
- * @param rz z-coordinate of cell center.
  * @param nz z-coordinate of cell orientation.
- * @param R Cell radius.
  * @param half_l Half of cell length.
  * @param ss Pre-computed value of `sstar(rz, nz, R)`.
  * @returns Desired integral.  
  */
 template <typename T>
-T integral6(const T rz, const T nz, const T R, const T half_l, const T ss)
+T integral6(const T nz, const T half_l, const T ss)
 {
     #ifdef CHECK_CELL_ORIENTATION_ZCOORD_POSITIVE
         if (nz <= 0)
@@ -337,7 +334,7 @@ template <typename T>
 T areaIntegral1(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
     T term1 = sqrt(R) * (1 - nz * nz) * integral1<T>(rz, nz, R, half_l, 0.5, ss);
-    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral4<T>(half_l, ss);
+    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral4<T>(nz, half_l, ss);
     return term1 + term2;
 }
 
@@ -359,7 +356,7 @@ template <typename T>
 T areaIntegral2(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
     T term1 = sqrt(R) * (1 - nz * nz) * integral2<T>(rz, nz, R, half_l, 0.5, ss);
-    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral5<T>(rz, nz, R, half_l, ss);
+    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral5<T>(nz, half_l, ss);
     return term1 + term2;
 }
 
@@ -381,7 +378,7 @@ template <typename T>
 T areaIntegral3(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
     T term1 = sqrt(R) * (1 - nz * nz) * integral3<T>(rz, nz, R, half_l, 0.5, ss);
-    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral6<T>(rz, nz, R, half_l, ss);
+    T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral6<T>(nz, half_l, ss);
     return term1 + term2;
 }
 
@@ -405,17 +402,17 @@ std::tuple<T, T, T> areaIntegrals(const T rz, const T nz, const T R,
                                   const T half_l, const T ss)
 {
     // Calculate integrals 4, 5, and 6
-    T int4 = integral4<T>(half_l, ss); 
-    T int5 = integral5<T>(half_l, ss); 
-    T int6 = integral6<T>(half_l, ss); 
+    T int4 = integral4<T>(nz, half_l, ss); 
+    T int5 = integral5<T>(nz, half_l, ss); 
+    T int6 = integral6<T>(nz, half_l, ss); 
 
     // Calculate integral 1 for exponents 0.5, 1.5, and 2.5
     T int1a = integral1<T>(rz, nz, R, half_l, 0.5, ss); 
-    T int2a = integral1<T>(rz, nz, R, half_l, 1.5, ss); 
-    T int3a = integral1<T>(rz, nz, R, half_l, 2.5, ss);
+    T int1b = integral1<T>(rz, nz, R, half_l, 1.5, ss); 
+    T int1c = integral1<T>(rz, nz, R, half_l, 2.5, ss);
 
     // Then area integral 1 is obtained from integrals 1a and 4
-    T term1 = sqrt(R) * (1 - nz * nz) * int1; 
+    T term1 = sqrt(R) * (1 - nz * nz) * int1a; 
     T term2 = boost::math::constants::pi<T>() * R * nz * nz * int4;
     T area1 = term1 + term2;
 
@@ -436,7 +433,7 @@ std::tuple<T, T, T> areaIntegrals(const T rz, const T nz, const T R,
     // in turn requires integral 1b
     T overlap1_pow1 = pow(overlap1, 1.5); 
     T overlap2_pow1 = pow(overlap2, 1.5); 
-    term2 = -half_l * (overlap1_pow1 + overlap2_pow2); 
+    term2 = -half_l * (overlap1_pow1 + overlap2_pow1); 
     T int2a = (int1b + term2) / (1.5 * nz);
     term1 = sqrt(R) * (1 - nz * nz) * int2a; 
     term2 = boost::math::constants::pi<T>() * R * nz * nz * int5;
