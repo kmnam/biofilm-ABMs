@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     2/26/2025
+ *     4/23/2025
  */
 #include <iostream>
 #include <cmath>
@@ -765,6 +765,76 @@ TEST_CASE("Tests for area integral 3", "[areaIntegral3()]")
         }
         REQUIRE(res.first < tol);
         REQUIRE(res.second < tol); 
+    }
+}
+
+/**
+ * A series of tests for areaIntegrals(), which computes all three area 
+ * integrals in one fell swoop.
+ */
+TEST_CASE("Tests for all three area integrals", "[areaIntegrals()]")
+{
+    const T R = 0.8;
+    const double tol = 1e-7;
+    int meshsize = 1e+7; 
+    const int max_meshsize = 1e+9;
+    T rz, nz; 
+    Array<T, 4, 1> exponents;  
+    exponents << 0.5, 1.0, 1.5, 2.0;
+    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
+    for (int i = 0; i < angles.size(); ++i)
+        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
+
+    // For each angle ... 
+    for (int j = 0; j < angles.size(); ++j)
+    {
+        std::cout << "Running tests for areaIntegrals(), nz = " << sin(angles(j)) << std::endl; 
+
+        // Define the z-orientation
+        nz = sin(angles(j));
+
+        // Case 1: Assume the cell has a maximum overlap of 0.2 * R
+        meshsize = 1e+7;
+        T half_l = 0.5;
+        T max_overlap = 0.2 * R;
+        rz = R + half_l * nz - max_overlap;
+        T area1 = areaIntegral1<T>(rz, nz, R, half_l, ss);
+        T area2 = areaIntegral2<T>(rz, nz, R, half_l, ss); 
+        T area3 = areaIntegral3<T>(rz, nz, R, half_l, ss); 
+        auto result = areaIntegrals<T>(rz, nz, R, half_l, ss); 
+        REQUIRE_THAT(
+            static_cast<double>(area1 - std::get<0>(result)),
+            Catch::Matchers::WithinAbs(0, tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(area2 - std::get<1>(result)), 
+            Catch::Matchers::WithinAbs(0, tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(area3 - std::get<2>(result)), 
+            Catch::Matchers::WithinAbs(0, tol)
+        );  
+        
+        // Case 2: Assume the cell does not contact the surface
+        meshsize = 1e+7;
+        max_overlap = -0.1 * R; 
+        rz = R + half_l * nz - max_overlap;
+        area1 = areaIntegral1<T>(rz, nz, R, half_l, ss);
+        area2 = areaIntegral2<T>(rz, nz, R, half_l, ss); 
+        area3 = areaIntegral3<T>(rz, nz, R, half_l, ss); 
+        result = areaIntegrals<T>(rz, nz, R, half_l, ss); 
+        REQUIRE_THAT(
+            static_cast<double>(area1 - std::get<0>(result)),
+            Catch::Matchers::WithinAbs(0, tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(area2 - std::get<1>(result)), 
+            Catch::Matchers::WithinAbs(0, tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(area3 - std::get<2>(result)), 
+            Catch::Matchers::WithinAbs(0, tol)
+        );  
     }
 }
 
