@@ -17,6 +17,8 @@
 #include <boost/multiprecision/mpfr.hpp>
 
 // Expose math functions for both standard and boost MPFR types
+using std::sqrt; 
+using boost::multiprecision::sqrt; 
 using std::pow;
 using boost::multiprecision::pow;
 
@@ -311,9 +313,9 @@ T integral6(const T rz, const T nz, const T R, const T half_l, const T ss)
     #endif
 
     if (ss > half_l)
-        return 2 * pow(half_l, 3) / 3.0;
+        return 2 * half_l * half_l * half_l / 3.0;
     else if (ss > -half_l)    // -half_l < ss <= half_l
-        return (pow(ss, 3) + pow(half_l, 3)) / 3.0; 
+        return (ss * ss * ss + half_l * half_l * half_l) / 3.0; 
     else
         return 0.0;
 }
@@ -334,7 +336,7 @@ T integral6(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T areaIntegral1(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
-    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral1<T>(rz, nz, R, half_l, 0.5, ss);
+    T term1 = sqrt(R) * (1 - nz * nz) * integral1<T>(rz, nz, R, half_l, 0.5, ss);
     T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral4<T>(half_l, ss);
     return term1 + term2;
 }
@@ -356,7 +358,7 @@ T areaIntegral1(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T areaIntegral2(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
-    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral2<T>(rz, nz, R, half_l, 0.5, ss);
+    T term1 = sqrt(R) * (1 - nz * nz) * integral2<T>(rz, nz, R, half_l, 0.5, ss);
     T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral5<T>(rz, nz, R, half_l, ss);
     return term1 + term2;
 }
@@ -378,9 +380,89 @@ T areaIntegral2(const T rz, const T nz, const T R, const T half_l, const T ss)
 template <typename T>
 T areaIntegral3(const T rz, const T nz, const T R, const T half_l, const T ss)
 {
-    T term1 = pow(R, 0.5) * (1 - nz * nz) * integral3<T>(rz, nz, R, half_l, 0.5, ss);
+    T term1 = sqrt(R) * (1 - nz * nz) * integral3<T>(rz, nz, R, half_l, 0.5, ss);
     T term2 = boost::math::constants::pi<T>() * R * nz * nz * integral6<T>(rz, nz, R, half_l, ss);
     return term1 + term2;
+}
+
+/**
+ * Compute all three area integrals in one fell swoop. 
+ *
+ * This function minimizes separate function calls for calculating the six
+ * auxiliary integrals. 
+ *
+ * The z-coordinate of the cell's orientation vector is assumed to be positive.
+ *
+ * @param rz z-coordinate of cell center.
+ * @param nz z-coordinate of cell orientation.
+ * @param R Cell radius.
+ * @param half_l Half of cell length.
+ * @param ss Pre-computed value of `sstar(rz, nz, R)`.
+ * @returns Desired integral.
+ */
+template <typename T>
+std::tuple<T, T, T> areaIntegrals(const T rz, const T nz, const T R,
+                                  const T half_l, const T ss)
+{
+    // Calculate integrals 4, 5, and 6
+    T int4 = integral4<T>(half_l, ss); 
+    T int5 = integral5<T>(half_l, ss); 
+    T int6 = integral6<T>(half_l, ss); 
+
+    // Calculate integral 1 for exponents 0.5, 1.5, and 2.5
+    T int1a = integral1<T>(rz, nz, R, half_l, 0.5, ss); 
+    T int2a = integral1<T>(rz, nz, R, half_l, 1.5, ss); 
+    T int3a = integral1<T>(rz, nz, R, half_l, 2.5, ss);
+
+    // Then area integral 1 is obtained from integrals 1a and 4
+    T term1 = sqrt(R) * (1 - nz * nz) * int1; 
+    T term2 = boost::math::constants::pi<T>() * R * nz * nz * int4;
+    T area1 = term1 + term2;
+
+    // Get overlaps at the two endpoints, accounting for partial contacts
+    T overlap1 = 0;
+    T overlap2 = 0;
+    if (ss > half_l)
+    {
+        overlap1 = phi<T>(rz, nz, R, -half_l);
+        overlap2 = phi<T>(rz, nz, R, half_l); 
+    }
+    else if (ss > -half_l)   // In which case -half_l < ss <= half_l
+    {
+        overlap1 = phi<T>(rz, nz, R, -half_l); 
+    }
+
+    // To get area integral 2, we need integral 2 with exponent 0.5, which
+    // in turn requires integral 1b
+    T overlap1_pow1 = pow(overlap1, 1.5); 
+    T overlap2_pow1 = pow(overlap2, 1.5); 
+    term2 = -half_l * (overlap1_pow1 + overlap2_pow2); 
+    T int2a = (int1b + term2) / (1.5 * nz);
+    term1 = sqrt(R) * (1 - nz * nz) * int2a; 
+    term2 = boost::math::constants::pi<T>() * R * nz * nz * int5;
+    T area2 = term1 + term2;
+
+    // To get area integral 3, we need integral 3 with exponent 0.5, which
+    // in turn requires integral 2 with exponent 1.5, which in turn requires
+    // integral 1c
+    //
+    // First calculate integral 2 with exponent 1.5 ...
+    T overlap1_pow2 = overlap1_pow1 * overlap1; 
+    T overlap2_pow2 = overlap2_pow1 * overlap2;  
+    term2 = -half_l * (overlap1_pow2 + overlap2_pow2); 
+    T int2b = (int1c + term2) / (2.5 * nz);
+
+    // ... then calculate integral 3 with exponent 0.5 ... 
+    term1 = 2 * int2b;
+    term2 = half_l * half_l * (overlap1_pow1 - overlap2_pow1);  
+    T int3 = (term1 + term2) / (1.5 * nz); 
+
+    // ... then finally calculate area integral 3 
+    term1 = sqrt(R) * (1 - nz * nz) * int3; 
+    term2 = boost::math::constants::pi<T>() * R * nz * nz * int6;
+    T area3 = term1 + term2;
+
+    return std::make_tuple(area1, area2, area3); 
 }
 
 #endif
