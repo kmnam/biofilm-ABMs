@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/25/2025
+ *     4/23/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -556,7 +556,7 @@ Array<T, Dynamic, 2> cellSurfaceAdhesionForces(const Ref<const Array<T, Dynamic,
                 cells(i, __colidx_half_l), -0.5, ss(i)
             );
             T int4 = integral4<T>(    // Integral of \Theta(\delta_i(s))
-                cells(i, __colidx_half_l), ss(i)
+                cells(i, __colidx_nz), cells(i, __colidx_half_l), ss(i)
             );
             T term4 = 0.0;
             if (abs(ss(i)) < cells(i, __colidx_half_l))
