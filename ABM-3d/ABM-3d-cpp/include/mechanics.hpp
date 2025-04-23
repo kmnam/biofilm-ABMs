@@ -653,9 +653,10 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
     
     T term1 = eta0 * l;
     T term2 = eta0 * l * l * l / 12;
-    T term3 = (eta1 / R) * areaIntegral1(rz, nz, R, half_l, ss); 
-    T term4 = (eta1 / R) * areaIntegral2(rz, nz, R, half_l, ss);
-    T term5 = (eta1 / R) * areaIntegral3(rz, nz, R, half_l, ss);
+    std::tuple<T, T, T> integrals = areaIntegrals<T>(rz, nz, R, half_l, ss); 
+    T term3 = (eta1 / R) * std::get<0>(integrals);
+    T term4 = (eta1 / R) * std::get<1>(integrals);
+    T term5 = (eta1 / R) * std::get<2>(integrals);
     M(0, 0) = term1 + term3;
     M(0, 3) = term4;
     M(1, 1) = term1 + term3;
@@ -1325,6 +1326,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
         }
         else     // Otherwise, solve the full 3D system of equations 
         {
+            /*
             Array<T, 7, 7> A = Array<T, 7, 7>::Zero();
             Array<T, 7, 1> b = Array<T, 7, 1>::Zero();
 
@@ -1350,8 +1352,47 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
             Array<T, 7, 1> x = LU.solve(b.matrix()).array();
             //auto QR = A.matrix().colPivHouseholderQr(); 
             //Array<T, 7, 1> x = QR.solve(b.matrix()).array();
+            */
+
+            // Solve the linear system explicitly, using back-substitution 
+            const T rz = cells(i, __colidx_rz); 
+            const T nz = cells(i, __colidx_nz); 
+            const T l = cells(i, __colidx_l); 
+            const T half_l = cells(i, __colidx_half_l);
+            const T eta0 = cells(i, __colidx_eta0); 
+            const T eta1 = cells(i, __colidx_eta1); 
+            std::tuple<T, T, T> integrals = areaIntegrals<T>(rz, nz, R, half_l, ss(i)); 
+            const T c1 = eta0 * l + (eta1 / R) * std::get<0>(integrals);
+            const T c2 = eta0 * l; 
+            const T c3 = c2 * l * l / 12 + (eta1 / R) * std::get<2>(integrals);
+            const T c4 = c2 * l * l / 12; 
+            const T c5 = (eta1 / R) * std::get<1>(integrals);
+            const T term1 = c3 - (c5 * c5 / c1);
+            const T w4 = forces(i, 3) - forces(i, 0) * (c5 / c1); 
+            const T w5 = forces(i, 4) - forces(i, 1) * (c5 / c1); 
+
+            // Calculate the Lagrange multiplier ...  
+            const T nx = cells(i, __colidx_nx); 
+            const T ny = cells(i, __colidx_ny); 
+            const T nx2 = nx / term1; 
+            const T ny2 = ny / term1; 
+            const T nz2 = nz / c4; 
+            const T alpha = 2 * (nx * nx2 + ny * ny2 + nz * nz2);
+            const T beta = -(w4 * nx2 + w5 * ny2 + forces(i, 5) * nz2);
+            const T lambda = beta / alpha;
+
+            // ... then calculate the velocities via back-substitution 
+            velocities(i, 5) = (forces(i, 5) + 2 * nz * lambda) / c4;
+            velocities(i, 4) = (w5 + 2 * ny * lambda) / term1; 
+            velocities(i, 3) = (w4 + 2 * nx * lambda) / term1; 
+            velocities(i, 2) = forces(i, 2) / c2; 
+            velocities(i, 1) = (forces(i, 1) - c5 * velocities(i, 4)) / c1; 
+            velocities(i, 0) = (forces(i, 0) - c5 * velocities(i, 3)) / c1;
+
+            // TODO Update debug here
             #ifdef DEBUG_CHECK_VELOCITIES_NAN
-                if (x.isNaN().any() || x.isInf().any())
+                //if (x.isNaN().any() || x.isInf().any())
+                if (velocities.row(i).isNaN().any() || velocities.row(i).isInf().any())
                 {
                     std::cerr << std::setprecision(10); 
                     std::cerr << "Iteration " << iter
@@ -1366,14 +1407,22 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                                         << cells(i, __colidx_ny) << ", "
                                                         << cells(i, __colidx_nz) << ")" << std::endl
                               << "Cell half-length = " << cells(i, __colidx_half_l) << std::endl
-                              << "Cell translational velocity = (" << x(0) << ", "
-                                                                   << x(1) << ", "
-                                                                   << x(2) << ")" << std::endl
-                              << "Cell orientational velocity = (" << x(3) << ", "
-                                                                   << x(4) << ", "
-                                                                   << x(5) << ")" << std::endl
-                              << "Constraint variable = " << x(6) << std::endl
-                              << "Composite viscosity force matrix = " << std::endl; 
+                              //<< "Cell translational velocity = (" << x(0) << ", "
+                              //                                     << x(1) << ", "
+                              //                                     << x(2) << ")" << std::endl
+                              //<< "Cell orientational velocity = (" << x(3) << ", "
+                              //                                     << x(4) << ", "
+                              //                                     << x(5) << ")" << std::endl
+                              //<< "Constraint variable = " << x(6) << std::endl
+                              << "Cell translational velocity = (" << velocities(i, 0) << ", "
+                                                                   << velocities(i, 1) << ", "
+                                                                   << velocities(i, 2) << ")" << std::endl
+                              << "Cell orientational velocity = (" << velocities(i, 3) << ", "
+                                                                   << velocities(i, 4) << ", "
+                                                                   << velocities(i, 5) << ")" << std::endl
+                              << "Constraint variable = " << lambda << std::endl
+                              << "Composite viscosity force matrix = " << std::endl;
+                    /* 
                     for (int j = 0; j < 7; ++j)
                     {
                         std::cerr << "  [";
@@ -1386,11 +1435,12 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                                                  << b(2) << ", "
                                                                  << b(3) << ", "
                                                                  << b(4) << ", "
-                                                                 << b(5) << ")" << std::endl; 
+                                                                 << b(5) << ")" << std::endl;
+                    */
                     throw std::runtime_error("Found nan in velocities"); 
                 }
             #endif
-            velocities.row(i) = x.head(6);
+            //velocities.row(i) = x.head(6);
         }
     }
 
