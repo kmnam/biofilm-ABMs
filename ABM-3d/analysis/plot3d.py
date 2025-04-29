@@ -128,6 +128,14 @@ def plot_cells(cells, R, colors, xmin, xmax, ymin, ymax, zmin, zmax, title,
         pl.add_title(title, font='arial', font_size=12*image_scale)
         if view == 'xy':
             pl.view_xy()
+        elif view == 'xy_bottom':
+            pl.view_xy()
+            pl.camera.position = (
+                pl.camera.position[0], pl.camera.position[1], -pl.camera.position[2]
+            )
+            pl.camera.focal_point = (
+                pl.camera.focal_point[0], pl.camera.focal_point[1], -pl.camera.focal_point[2]
+            )
         elif view == 'xz':
             pl.view_xz()
         elif view == 'yz':
@@ -153,11 +161,10 @@ def plot_cells(cells, R, colors, xmin, xmax, ymin, ymax, zmin, zmax, title,
     return screenshot, position
 
 #######################################################################
-def plot_frame(filename, outfilename=None, plot_basal=False, xmin=None,
-               xmax=None, ymin=None, ymax=None, zmin=None, zmax=None, view='xyz',
-               res=50, time=None, image_scale=2, uniform_color=False,
-               xcross=False, ycross=False, group=None, position=None,
-               show=False):
+def plot_frame(filename, outfilename=None, xmin=None, xmax=None, ymin=None,
+               ymax=None, zmin=None, zmax=None, view='xyz', res=50, time=None,
+               image_scale=2, uniform_color=False, xcross=False, ycross=False,
+               group=None, position=None, show=False):
     """
     Plot the cells in the given file.
 
@@ -169,9 +176,6 @@ def plot_frame(filename, outfilename=None, plot_basal=False, xmin=None,
     cells, params = read_cells(filename)
     R = params['R']
     L0 = params['L0']
-    if plot_basal:
-        basal = (cells[:, _colidx_rz] - cells[:, _colidx_half_l] * cells[:, _colidx_nz] < 1.1 * R)
-        cells = cells[basal, :]
     if group is not None:
         cells = cells[cells[:, _colidx_group] == group, :]
 
@@ -187,7 +191,7 @@ def plot_frame(filename, outfilename=None, plot_basal=False, xmin=None,
         else:
             xshift = center[0] - np.floor(cells[:, _colidx_rx].min() - 10 * L0)
             for i in range(cells.shape[0]):
-                if cells[i, _colidx_ry] > center[0]:
+                if cells[i, _colidx_ry] > center[1]:
                     cells[i, _colidx_rx] -= xshift
 
     # Infer axes limits
@@ -241,4 +245,82 @@ def plot_frame(filename, outfilename=None, plot_basal=False, xmin=None,
         print('... saving to {}'.format(outfilename))
         image.save(outfilename)
     print("(" + ','.join([str(x) for i in range(3) for x in position[i]]) + ")")
+
+#######################################################################
+def plot_simplicial_complex(points, tree, groups, xmin, xmax, ymin, ymax, zmin,
+                            zmax, title, view='xyz', res=50, image_scale=2,
+                            position=None, show=False):
+    """
+    TODO Write
+    """
+    color1 = sns.color_palette('coolwarm', as_cmap=True)(0.1)
+    color2 = sns.color_palette('pastel')[0]
+
+    with multiprocessing.Pool(1) as pool:
+        # Plot each simplex ... 
+        ws = np.array([1024, 768], dtype=np.int64)
+        pl = pv.Plotter(window_size=ws*image_scale, off_screen=(not show))
+        for simplex, _ in tree.get_simplices():
+            # Only plot each simplex if it is full-dimensional or if it has 
+            # no cofaces
+            if len(tree.get_cofaces(simplex, 1)) == 0:
+                if len(simplex) == 2:
+                    v1, v2 = simplex
+                    pl.add_mesh(
+                        pv.Line(pointa=points[v1, :], pointb=points[v2, :]),
+                        color='black', line_width=5
+                    )
+                elif len(simplex) == 3:
+                    v1, v2, v3 = simplex
+                    t = pv.Triangle([points[v1, :], points[v2, :], points[v3, :]])
+                    pl.add_mesh(t, color=color2)
+                elif len(simplex) == 4:
+                    v1, v2, v3, v4 = simplex
+                    t1 = pv.Triangle([points[v1, :], points[v2, :], points[v3, :]])
+                    t2 = pv.Triangle([points[v1, :], points[v2, :], points[v4, :]])
+                    t3 = pv.Triangle([points[v1, :], points[v3, :], points[v4, :]])
+                    t4 = pv.Triangle([points[v2, :], points[v3, :], points[v4, :]])
+                    pl.add_mesh(t1, color=color1)
+                    pl.add_mesh(t2, color=color1)
+                    pl.add_mesh(t3, color=color1)
+                    pl.add_mesh(t4, color=color1)
+
+        # Plot the points as spheres 
+        for i in range(points.shape[0]):
+            if groups[i] == 1:
+                pl.add_mesh(
+                    pv.Sphere(radius=0.2, center=points[i, :]),
+                    color='black'
+                )
+        
+        # Reconfigure axes, add title and axes directions, and save
+        pl.add_title(title, font='arial', font_size=12*image_scale)
+        if view == 'xy':
+            pl.view_xy()
+        elif view == 'xz':
+            pl.view_xz()
+        elif view == 'yz':
+            pl.view_yz()
+        elif view == 'xyz':
+            pl.view_isometric()
+            pl.camera.elevation -= 15
+        if position is not None:
+            pos, focal_point, up = position
+            pl.camera.position = pos
+            pl.camera.focal_point = focal_point
+            pl.camera.up = up
+        else:
+            position = pl.camera_position
+        pl.add_axes()
+        if show:
+            screenshot = None
+            pl.show()
+        else:
+            screenshot = pl.screenshot()
+
+    print(position)
+    return screenshot, position
+
+#######################################################################
+
 
