@@ -271,10 +271,36 @@ def plot_frame(filename, outfilename=None, xmin=None, xmax=None, ymin=None,
 
 #######################################################################
 def plot_simplicial_complex(points, tree, groups, xmin, xmax, ymin, ymax, zmin,
-                            zmax, title, view='xyz', res=50, image_scale=2,
-                            position=None, show=False):
+                            zmax, title, maxdim=3, view='xyz', res=50,
+                            image_scale=2, position=None, show=False):
     """
-    TODO Write
+    Plot the given simplicial complex.
+
+    Parameters
+    ----------
+    points : `numpy.ndarray`
+        Input array of points.
+    tree : `gudhi.SimplexTree`
+        Input simplicial complex, stored as a simplex tree. 
+    groups : list of int
+        List of groups corresponding to each point (cell). 
+    xmin, xmax, ymin, ymax, zmin, zmax : float
+        Axes limits.
+    title : str
+        Plot title. 
+    maxdim : int
+        Maximum simplex dimension to be plotted. 
+    view : str
+        Camera view; should be either 'xy', 'xz', 'yz', 'xy_bottom', or 'xyz'.
+    res : int
+        Spherocylinder resolution.
+    image_scale : int
+        Image scale.
+    position : list of tuples
+        The camera position, focal point, and up value; if None, the value 
+        is set automatically by the plotter.
+    show : bool
+        If True, show the plot instead of returning the screenshot.
     """
     color1 = sns.color_palette('coolwarm', as_cmap=True)(0.1)
     color2 = sns.color_palette('pastel')[0]
@@ -287,17 +313,17 @@ def plot_simplicial_complex(points, tree, groups, xmin, xmax, ymin, ymax, zmin,
             # Only plot each simplex if it is full-dimensional or if it has 
             # no cofaces
             if len(tree.get_cofaces(simplex, 1)) == 0:
-                if len(simplex) == 2:
+                if len(simplex) == 2 and maxdim >= 1:
                     v1, v2 = simplex
                     pl.add_mesh(
                         pv.Line(pointa=points[v1, :], pointb=points[v2, :]),
                         color='black', line_width=5
                     )
-                elif len(simplex) == 3:
+                elif len(simplex) == 3 and maxdim >= 2:
                     v1, v2, v3 = simplex
                     t = pv.Triangle([points[v1, :], points[v2, :], points[v3, :]])
                     pl.add_mesh(t, color=color2)
-                elif len(simplex) == 4:
+                elif len(simplex) == 4 and maxdim >= 3:
                     v1, v2, v3, v4 = simplex
                     t1 = pv.Triangle([points[v1, :], points[v2, :], points[v3, :]])
                     t2 = pv.Triangle([points[v1, :], points[v2, :], points[v4, :]])
@@ -320,6 +346,14 @@ def plot_simplicial_complex(points, tree, groups, xmin, xmax, ymin, ymax, zmin,
         pl.add_title(title, font='arial', font_size=12*image_scale)
         if view == 'xy':
             pl.view_xy()
+        elif view == 'xy_bottom':
+            pl.view_xy()
+            pl.camera.position = (
+                pl.camera.position[0], pl.camera.position[1], -pl.camera.position[2]
+            )
+            pl.camera.focal_point = (
+                pl.camera.focal_point[0], pl.camera.focal_point[1], -pl.camera.focal_point[2]
+            )
         elif view == 'xz':
             pl.view_xz()
         elif view == 'yz':
@@ -341,9 +375,6 @@ def plot_simplicial_complex(points, tree, groups, xmin, xmax, ymin, ymax, zmin,
         else:
             screenshot = pl.screenshot()
 
-    print(position)
+    print(position)    # Print for use in video script 
     return screenshot, position
-
-#######################################################################
-
 
