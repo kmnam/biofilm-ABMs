@@ -491,8 +491,19 @@ def plot_trajectory_frame(trajectory, idx, boundary, R, plot_prev=True,
         if orientation is None:
             return np.array([r, z])
         else:
-            projection = np.dot(orientation, rdir) * rdir
-            return np.array([r, z]), projection
+            # We need to rotate the orientation vector by theta about the
+            # z-axis, where theta is the angle formed by the projection 
+            # of the orientation vector onto the x-y plane and the y-axis
+            #
+            # Note that arccos() returns a value in [0, pi]
+            theta = np.arccos(orientation[1] / np.linalg.norm(orientation[:2]))
+            rot = np.array([
+                [np.cos(theta), -np.sin(theta), 0],
+                [np.sin(theta), np.cos(theta), 0],
+                [0, 0, 1]
+            ])
+            rotated = rot @ orientation.reshape(-1, 1)
+            return np.array([r, z]), rotated.reshape(-1)
 
     # --------------------------------------------------------------- #
     with multiprocessing.Pool(1) as pool:
@@ -522,7 +533,10 @@ def plot_trajectory_frame(trajectory, idx, boundary, R, plot_prev=True,
                 color = (
                     0.5 * color[0] + 0.5, 0.5 * color[1] + 0.5, 0.5 * color[2] + 0.5
                 )
-                pl.add_mesh(pv.Sphere(radius=0.8 * R, center=p), color=color)
+                pl.add_mesh(
+                    pv.Sphere(radius=0.8 * R, center=[p[0], 0, p[1]]),
+                    color=color
+                )
 
         # Plot the spherocylinder ...
         #
@@ -534,7 +548,7 @@ def plot_trajectory_frame(trajectory, idx, boundary, R, plot_prev=True,
         r_proj = np.array([r_proj[0], 0, r_proj[1]])
         l = trajectory[idx, _colidx_l2]
         cylinder = pv.Cylinder(
-            center=[r_proj[0], 0, r_proj[1]],
+            center=r_proj,
             direction=n_proj,
             radius=R,
             height=l,
@@ -573,7 +587,9 @@ def plot_trajectory_frame(trajectory, idx, boundary, R, plot_prev=True,
 
         # Plot the boundary as points and lines ...
         boundary = np.hstack((
-            boundary[:, 0], np.zeros(boundary.shape[0]).reshape(-1, 1), boundary[:, 1]
+            boundary[:, 0].reshape(-1, 1),
+            np.zeros(boundary.shape[0]).reshape(-1, 1),
+            boundary[:, 1].reshape(-1, 1)
         ))
         lines = [[2, i, i + 1] for i in range(boundary.shape[0] - 1)]
         lines.append([2, boundary.shape[0] - 1, 0])
