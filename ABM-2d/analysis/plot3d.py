@@ -49,7 +49,30 @@ def plot_cells(cells, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
 
     Parameters
     ----------
-    TODO Write
+    cells : `numpy.ndarray`
+        Input population of cells. 
+    R : float
+        Cell radius (including the EPS).
+    rz : float
+        Cell z-coordinate.
+    colors : list or `numpy.ndarray`
+        List of colors, one for each cell. 
+    xmin, xmax, ymin, ymax, zmin, zmax : float
+        Axes limits. 
+    title : str
+        Plot title. 
+    res : int
+        Spherocylinder resolution. 
+    image_scale : int 
+        Image scale. 
+    position : tuple
+        Camera position. 
+    show : bool
+        If True, show the plot instead of returning the screenshot.
+
+    Returns
+    -------
+    Screenshot of the plot and the camera position. 
     """
     # Define arrays for cell centers and orientations with z-coordinate
     positions = np.hstack((cells[:, _colseq_r], rz * np.ones((cells.shape[0], 1))))
@@ -112,7 +135,7 @@ def plot_cells(cells, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
         else:
             screenshot = pl.screenshot()
 
-    print(position)
+    print(position)    # Print for use in video script 
     return screenshot, position
 
 #######################################################################
