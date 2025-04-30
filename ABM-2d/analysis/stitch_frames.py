@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    3/22/2025
+    4/29/2025
 """
 
 import sys
@@ -14,14 +14,26 @@ from PIL import Image
 import cv2
 
 #########################################################################
+suffix = sys.argv[1]
+filenames = sys.argv[2:-1]
+outfilename = sys.argv[-1]
+if suffix == 'None':
+    image_filenames = filenames
+else:
+    image_filenames = [
+        filename[:-4] + '_{}.jpg'.format(suffix) for filename in filenames
+    ]
+
 # Stitch the images together and export as an .avi file
-filenames = sys.argv[1:]
-outfilename = filenames[0][:-9] + '.avi'
-image_filenames = [filename[:-4] + '_frame.jpg' for filename in filenames]
+#
+# First get the dimensions of the first image (assuming they are the same
+# for all frames)
 width = None
 height = None
 with Image.open(image_filenames[0]) as image:
     width, height = image.size
+
+# Stitch the images together 
 fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
 fps = 20
 video = cv2.VideoWriter(
