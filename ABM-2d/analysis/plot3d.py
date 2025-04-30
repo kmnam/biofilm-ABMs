@@ -19,6 +19,7 @@ import seaborn as sns
 from utils import read_cells, parse_dir
 
 #######################################################################
+# Column indices for cell data
 _colidx_id = 0
 _colidx_rx = 1
 _colidx_ry = 2
@@ -66,13 +67,14 @@ def plot_cells(cells, R, rz, colors, xmin, xmax, ymin, ymax, zmin, zmax,
     image_scale : int 
         Image scale. 
     position : tuple
-        Camera position. 
+        The camera position, focal point, and up value; if None, the value 
+        is set automatically by the plotter. 
     show : bool
         If True, show the plot instead of returning the screenshot.
 
     Returns
     -------
-    Screenshot of the plot and the camera position. 
+    A screenshot of the plot, plus the camera position. 
     """
     # Define arrays for cell centers and orientations with z-coordinate
     positions = np.hstack((cells[:, _colseq_r], rz * np.ones((cells.shape[0], 1))))
@@ -144,14 +146,38 @@ def plot_frame(filename, outfilename=None, xmin=None, xmax=None, ymin=None,
                plot_boundary=False, plot_membrane=False, plot_arrested=False,
                group=None, position=None, show=False):
     """
-    Given an ordered list of files containing cells to be plotted, parse 
-    and plot each population of cells and generate a video.
-
-    There should be at least 11 columns in the input data. 
+    Plot the cells in the given file.
 
     Parameters
     ----------
-    TODO Write
+    filename : str
+        Input filename.
+    outfilename : str
+        Output filename. 
+    xmin, xmax, ymin, ymax, zmin, zmax : float
+        Axes limits. Inferred from cell coordinates if not given.  
+    res : int
+        Spherocylinder resolution.
+    time : float
+        Timepoint. Parsed from input if not given.  
+    image_scale : int
+        Image scale.
+    uniform_color : bool
+        If True, plot every cell with the same color; otherwise, plot every
+        cell according to its group value.
+    plot_boundary : bool
+        If True, plot each cell along the boundary with a pastel color.
+    plot_membrane : bool
+        If True, plot the surrounding membrane (should it exist) as a circle. 
+    plot_arrested : bool
+        If True, plot each cell with zero growth rate with a pastel color. 
+    group : int
+        If given, plot only the cells with this group value. 
+    position : list of tuples
+        The camera position, focal point, and up value; if None, the value 
+        is set automatically by the plotter.
+    show : bool
+        If True, show the plot instead of returning the screenshot.
     """
     # Parse the cells
     cells, params = read_cells(filename)

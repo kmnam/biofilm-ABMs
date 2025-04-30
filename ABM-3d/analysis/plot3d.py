@@ -56,20 +56,16 @@ def plot_cells(cells, R, colors, xmin, xmax, ymin, ymax, zmin, zmax, title,
     ----------
     cells : `numpy.ndarray`
         Input population of cells. 
-    R : float 
-        Cell radius. 
+    R : float
+        Cell radius (including the EPS).
     colors : list or `numpy.ndarray`
-        Cell colors. 
-    xmin, xmax : float
-        Minimum and maximum x-values. 
-    ymin, ymax : float
-        Minimum and maximum y-values. 
-    zmin, zmax : float
-        Minimum and maximum z-values. 
+        List of colors, one for each cell. 
+    xmin, xmax, ymin, ymax, zmin, zmax : float
+        Axes limits. 
     title : str
         Plot title. 
     view : str
-        Camera view; should be either 'xy', 'xz', 'yz', or 'xyz'.
+        Camera view; should be either 'xy', 'xz', 'yz', 'xy_bottom', or 'xyz'.
     res : int
         Spherocylinder resolution. 
     image_scale : int
@@ -78,7 +74,7 @@ def plot_cells(cells, R, colors, xmin, xmax, ymin, ymax, zmin, zmax, title,
         The camera position, focal point, and up value; if None, the value 
         is set automatically by the plotter. 
     show : bool
-        If True, show the plot instead of saving it to file.
+        If True, show the plot instead of returning the screenshot. 
 
     Returns
     -------
@@ -157,7 +153,7 @@ def plot_cells(cells, R, colors, xmin, xmax, ymin, ymax, zmin, zmax, title,
         else:
             screenshot = pl.screenshot()
 
-    print(position)
+    print(position)    # Print for use in video script 
     return screenshot, position
 
 #######################################################################
@@ -170,7 +166,34 @@ def plot_frame(filename, outfilename=None, xmin=None, xmax=None, ymin=None,
 
     Parameters
     ----------
-    TODO Write
+    filename : str
+        Input filename.
+    outfilename : str
+        Output filename. 
+    xmin, xmax, ymin, ymax, zmin, zmax : float
+        Axes limits. Inferred from cell coordinates if not given.  
+    view : str
+        Camera view; should be either 'xy', 'xz', 'yz', 'xy_bottom', or 'xyz'.
+    res : int
+        Spherocylinder resolution.
+    time : float
+        Timepoint. Parsed from input if not given.  
+    image_scale : int
+        Image scale.
+    uniform_color : bool
+        If True, plot every cell with the same color; otherwise, plot every
+        cell according to its group value.
+    xcross : bool
+        If True, split open the biofilm along the y-z plane. 
+    ycross : bool
+        If True, split open the biofilm along the x-z plane. 
+    group : int
+        If given, plot only the cells with this group value. 
+    position : list of tuples
+        The camera position, focal point, and up value; if None, the value 
+        is set automatically by the plotter.
+    show : bool
+        If True, show the plot instead of returning the screenshot.
     """
     # Parse the cells
     cells, params = read_cells(filename)
