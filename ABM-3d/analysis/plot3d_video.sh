@@ -3,9 +3,11 @@
 #######################################################################
 DIR=$1
 NFRAMES=$2
+NMAX=$3
+BASAL=$4
 
 # Get list of files to plot 
-FILES=`python3 plot3d_filenames.py "${DIR}/*" ${NFRAMES}`
+FILES=`python3 plot3d_filenames.py ${DIR} ${NFRAMES} -1 ${NMAX}`
 
 # Get final file 
 i=0
@@ -19,25 +21,25 @@ do
 done
 echo $FINAL
 
-# Get axes limits from cells in the final file
-XMIN=`python3 -c "import numpy as np; print(np.loadtxt('${FINAL}', delimiter='\t', comments='#')[:, 1].min())"`
-XMAX=`python3 -c "import numpy as np; print(np.loadtxt('${FINAL}', delimiter='\t', comments='#')[:, 1].max())"`
-YMIN=`python3 -c "import numpy as np; print(np.loadtxt('${FINAL}', delimiter='\t', comments='#')[:, 2].min())"`
-YMAX=`python3 -c "import numpy as np; print(np.loadtxt('${FINAL}', delimiter='\t', comments='#')[:, 2].max())"`
-ZMIN=`python3 -c "import numpy as np; print(np.loadtxt('${FINAL}', delimiter='\t', comments='#')[:, 3].min())"`
-ZMAX=`python3 -c "import numpy as np; print(np.loadtxt('${FINAL}', delimiter='\t', comments='#')[:, 3].max())"`
-
 # Plot final file with the given axes limits
-OUTFILE="${FINAL%.*}_frame.jpg"
-POSITION=`python3 plot3d_frame.py ${FINAL} ${OUTFILE} ${XMIN} ${XMAX} ${YMIN} ${YMAX} ${ZMIN} ${ZMAX} | tail -n 1`
+PREFIX=${FINAL%.*}
+PREFIX=${PREFIX%_*}
+OUTFILE="${PREFIX}_final_frame.jpg"
+if [[ $BASAL -eq 1 ]]
+then
+    POSITION=`python3 plot3d_frame.py ${FINAL} ${OUTFILE} --basal | tail -n 1`
+else 
+    POSITION=`python3 plot3d_frame.py ${FINAL} ${OUTFILE} | tail -n 1`
+fi
 
 # Plot each file with the given axes limits 
 for FILE in $FILES
 do
     OUTFILE="${FILE%.*}_frame.jpg"
-    python3 plot3d_frame.py ${FILE} ${OUTFILE} ${XMIN} ${XMAX} ${YMIN} ${YMAX} ${ZMIN} ${ZMAX} ${POSITION}
+    python3 plot3d_frame.py ${FILE} ${OUTFILE} ${POSITION}
 done
 
 # Stitch together the files 
-python3 stitch.py $FILES 
+OUTFILE="${PREFIX}.avi"
+python3 stitch_frames.py frame $FILES $OUTFILE
 
