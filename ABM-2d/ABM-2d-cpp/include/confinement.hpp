@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     1/7/2025
+ *     4/29/2025
  */
 
 #ifndef BIOFILM_CONFINEMENT_HPP
@@ -90,93 +90,6 @@ std::pair<AlphaShape2DProperties, std::vector<int> >
 }
 
 /**
- * Get the peripheral subset of the given cells from a simply connected
- * alpha-shape built from 2-D cross-sectional outlines of the cells.
- *
- * It is assumed that there are 3 or more cells. 
- *
- * @param cells            Input population of cells. 
- * @param R                Cell radius. 
- * @param outline_meshsize Approximate meshsize with which to obtain points
- *                         from each cell outline.
- * @returns An object containing the alpha-shape built from the cell outlines,
- *          together with a vector of indices that assigns each outline point
- *          to the cell from which it originates. 
- */
-template <typename T>
-std::pair<AlphaShape2DProperties, std::vector<int> >
-    getBoundaryFromOutlines(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                            const T R, const T outline_meshsize)
-{
-    std::vector<double> x, y;
-    std::vector<int> idx;
-
-    // For each cell ... 
-    for (int i = 0; i < cells.rows(); ++i)
-    {
-        Array<T, 2, 1> ri = cells(i, __colseq_r).transpose(); 
-        Array<T, 2, 1> ni = cells(i, __colseq_n).transpose(); 
-        T li = cells(i, __colidx_l);
-        T half_li = cells(i, __colidx_half_l);
-        Array<T, 2, 1> ni_rot; 
-        ni_rot << R * (-ni(1)), R * ni(0); 
-
-        // Generate a 2-D outline with approximately the given meshsize
-        //
-        // First generate the cylinder ...
-        int m = static_cast<int>(li / outline_meshsize) + 1;
-        Array<T, 2, 1> mesh1 = Array<T, 2, 1>::LinSpaced(m, -half_li, half_li);
-        for (int j = 0; j < m; ++j)
-        {
-            Array<T, 2, 1> p = ri + mesh1(j) * ni;
-            Array<T, 2, 1> q = p + ni_rot;
-            Array<T, 2, 1> s = p - ni_rot;
-
-            // For each point, keep track of the x- and y-coordinates and the 
-            // cell from which it originates 
-            x.push_back(static_cast<double>(p(0)));
-            y.push_back(static_cast<double>(p(1))); 
-            idx.push_back(i); 
-            x.push_back(static_cast<double>(q(0))); 
-            y.push_back(static_cast<double>(q(1))); 
-            idx.push_back(i); 
-            x.push_back(static_cast<double>(s(0))); 
-            y.push_back(static_cast<double>(s(1))); 
-            idx.push_back(i); 
-        }
-
-        // ... then generate the hemispherical caps
-        m = static_cast<int>(boost::math::constants::pi<T>() * R / outline_meshsize) + 1;
-        Array<T, 2, 1> mesh2 = Array<T, 2, 1>::LinSpaced(
-            m, -boost::math::constants::half_pi<T>(), boost::math::constants::half_pi<T>()
-        );
-        Array<T, 2, 1> pi = ri - half_li * ni;
-        Array<T, 2, 1> qi = ri + half_li * ni;
-        for (int j = 0; j < m; ++j)
-        {
-            Matrix<T, 2, 2> rot; 
-            T cos_theta = cos(mesh2(j)); 
-            T sin_theta = sin(mesh2(j)); 
-            rot << cos_theta, -sin_theta,
-                   sin_theta,  cos_theta; 
-            Matrix<T, 2, 1> v = pi.matrix() + R * rot * (-ni).matrix();
-            Matrix<T, 2, 1> w = qi.matrix() + R * rot * ni.matrix();
-
-            // For each point, keep track of the x- and y-coordinates and the 
-            // cell from which it originates 
-            x.push_back(static_cast<double>(v(0))); 
-            y.push_back(static_cast<double>(v(1))); 
-            idx.push_back(i); 
-            x.push_back(static_cast<double>(w(0))); 
-            y.push_back(static_cast<double>(w(1))); 
-            idx.push_back(i);
-        }
-    }
-    
-    return std::make_pair(Boundary2D(x, y).getSimplyConnectedBoundary(), idx); 
-}
-
-/**
  * Get the peripheral subset of the given population of cells.
  *
  * This is done as follows:
@@ -222,6 +135,93 @@ std::vector<int> getBoundary(const Ref<const Array<T, Dynamic, Dynamic> >& cells
                   << "alpha-shape" << std::endl;
     #endif
     return std::vector<int>(cell_idx.begin(), cell_idx.end()); 
+}
+
+/**
+ * Get the peripheral subset of the given cells from a simply connected
+ * alpha-shape built from 2-D cross-sectional outlines of the cells.
+ *
+ * It is assumed that there are 3 or more cells.  
+ *
+ * @param cells            Input population of cells. 
+ * @param R                Cell radius. 
+ * @param outline_meshsize Approximate meshsize with which to obtain points
+ *                         from each cell outline.
+ * @returns An object containing the alpha-shape built from the cell outlines,
+ *          together with a vector of indices that assigns each outline point
+ *          to the cell from which it originates. 
+ */
+template <typename T>
+std::pair<AlphaShape2DProperties, std::vector<int> >
+    getBoundaryFromOutlines(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                            const T R, const T outline_meshsize) 
+{
+    std::vector<double> x, y;
+    std::vector<int> idx;
+
+    // For each cell ... 
+    for (int i = 0; i < cells.rows(); ++i)
+    {
+        Array<T, 2, 1> ri = cells(i, __colseq_r).transpose(); 
+        Array<T, 2, 1> ni = cells(i, __colseq_n).transpose(); 
+        T li = cells(i, __colidx_l);
+        T half_li = cells(i, __colidx_half_l);
+        Array<T, 2, 1> ni_rot; 
+        ni_rot << R * (-ni(1)), R * ni(0); 
+
+        // Generate a 2-D outline with approximately the given meshsize
+        //
+        // First generate the cylinder ...
+        int m = static_cast<int>(li / outline_meshsize) + 1;
+        Array<T, Dynamic, 1> mesh1 = Array<T, Dynamic, 1>::LinSpaced(m, -half_li, half_li);
+        for (int j = 0; j < m; ++j)
+        {
+            Array<T, 2, 1> p = ri + mesh1(j) * ni;
+            Array<T, 2, 1> q = p + ni_rot;
+            Array<T, 2, 1> s = p - ni_rot;
+
+            // For each point, keep track of the x- and y-coordinates and the 
+            // cell from which it originates 
+            x.push_back(static_cast<double>(p(0)));
+            y.push_back(static_cast<double>(p(1))); 
+            idx.push_back(i); 
+            x.push_back(static_cast<double>(q(0))); 
+            y.push_back(static_cast<double>(q(1))); 
+            idx.push_back(i); 
+            x.push_back(static_cast<double>(s(0))); 
+            y.push_back(static_cast<double>(s(1))); 
+            idx.push_back(i); 
+        }
+
+        // ... then generate the hemispherical caps
+        m = static_cast<int>(boost::math::constants::pi<T>() * R / outline_meshsize) + 1;
+        Array<T, Dynamic, 1> mesh2 = Array<T, Dynamic, 1>::LinSpaced(
+            m, -boost::math::constants::half_pi<T>(), boost::math::constants::half_pi<T>()
+        );
+        Array<T, 2, 1> pi = ri - half_li * ni;
+        Array<T, 2, 1> qi = ri + half_li * ni;
+        for (int j = 0; j < m; ++j)
+        {
+            Matrix<T, 2, 2> rot; 
+            T cos_theta = cos(mesh2(j)); 
+            T sin_theta = sin(mesh2(j)); 
+            rot << cos_theta, -sin_theta,
+                   sin_theta,  cos_theta; 
+            Matrix<T, 2, 1> v = pi.matrix() + R * rot * (-ni).matrix();
+            Matrix<T, 2, 1> w = qi.matrix() + R * rot * ni.matrix();
+
+            // For each point, keep track of the x- and y-coordinates and the 
+            // cell from which it originates 
+            x.push_back(static_cast<double>(v(0))); 
+            y.push_back(static_cast<double>(v(1))); 
+            idx.push_back(i); 
+            x.push_back(static_cast<double>(w(0))); 
+            y.push_back(static_cast<double>(w(1))); 
+            idx.push_back(i);
+        }
+    }
+   
+    return std::make_pair(Boundary2D(x, y).getSimplyConnectedBoundary(), idx);
 }
 
 /**
