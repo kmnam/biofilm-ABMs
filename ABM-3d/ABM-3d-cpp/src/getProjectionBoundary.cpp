@@ -37,9 +37,9 @@ using std::cos;
 template <typename T>
 Array<T, Dynamic, 5> projectRZ(const Ref<const Array<T, Dynamic, Dynamic> >& cells)
 {
-    // Get the radial direction for each cell
-    Array<T, 3, 1> origin = cells(Eigen::all, __colseq_r).colwise().mean();
-    Array<T, Dynamic, 3> rdists = cells(Eigen::all, __colseq_r).rowwise() - origin.transpose();
+    // Get the radial direction for each cell from the origin (which we 
+    // take as (0, 0, 0) for consistency)
+    Array<T, Dynamic, 3> rdists = cells(Eigen::all, __colseq_r);
     Array<T, Dynamic, 1> rnorms = rdists.matrix().rowwise().norm().array();
     Array<T, Dynamic, 3> rdirs = rdists.colwise() / rnorms;
 
