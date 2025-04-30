@@ -193,7 +193,7 @@ def plot_frame(filename, outfilename=None, xmin=None, xmax=None, ymin=None,
         The camera position, focal point, and up value; if None, the value 
         is set automatically by the plotter.
     show : bool
-        If True, show the plot instead of returning the screenshot.
+        If True, show the plot instead of saving the screenshot to file. 
     """
     # Parse the cells
     cells, params = read_cells(filename)
@@ -377,4 +377,79 @@ def plot_simplicial_complex(points, tree, groups, xmin, xmax, ymin, ymax, zmin,
 
     print(position)    # Print for use in video script 
     return screenshot, position
+
+#######################################################################
+def save_simplicial_complex_to_file(filename, cells_filename, outfilename=None,
+                                    xmin=None, xmax=None, ymin=None, ymax=None,
+                                    zmin=None, zmax=None, maxdim=3, view='xyz',
+                                    res=50, time=None, image_scale=2,
+                                    position=None, show=False):
+    """
+    Plot the cells in the given file.
+
+    Parameters
+    ----------
+    filename : str
+        Path to input file specifying the simplicial complex.
+    cells_filename : str
+        Path to input file specifying the cell coordinates. 
+    outfilename : str
+        Output filename. 
+    xmin, xmax, ymin, ymax, zmin, zmax : float
+        Axes limits. Inferred from cell coordinates if not given.
+    maxdim : int
+        Maximum simplex dimension to be plotted. 
+    view : str
+        Camera view; should be either 'xy', 'xz', 'yz', 'xy_bottom', or 'xyz'.
+    res : int
+        Spherocylinder resolution.
+    time : float
+        Timepoint. Parsed from input if not given.  
+    image_scale : int
+        Image scale.
+    position : list of tuples
+        The camera position, focal point, and up value; if None, the value 
+        is set automatically by the plotter.
+    show : bool
+        If True, show the plot instead of saving the screenshot to file. 
+    """
+    # Parse the simplicial complex and the cells
+    tree = read_simplicial_complex(filename)
+    cells, params = read_cells(cells_filename)
+    points = cells[:, _colseq_r]
+    groups = cells[:, _colidx_group]
+    R = params['R']
+    L0 = params['L0']
+    
+    # Infer axes limits
+    if xmin is None:
+        xmin = np.floor(cells[:, _colidx_rx].min() - 4 * L0)
+    if xmax is None:
+        xmax = np.ceil(cells[:, _colidx_rx].max() + 4 * L0)
+    if ymin is None:
+        ymin = np.floor(cells[:, _colidx_ry].min() - 4 * L0)
+    if ymax is None:
+        ymax = np.ceil(cells[:, _colidx_ry].max() + 4 * L0)
+    if zmin is None:
+        zmin = np.floor(cells[:, _colidx_rz].min() - 4 * L0)
+    if zmax is None:
+        zmax = np.ceil(cells[:, _colidx_rz].max() + 4 * L0)
+    if time is None:
+        time = params['t_curr']
+
+    # Plot the complex 
+    print('Plotting {} (t = {}, {} cells) ...'.format(filename, time, cells.shape[0]))
+    title = 't = {:.10f}, n = {}'.format(time, cells.shape[0])
+    screenshot, position = plot_simplicial_complex(
+        points, tree, groups, xmin, xmax, ymin, ymax, zmin, zmax, title, 
+        maxdim=maxdim, view=view, res=res, image_scale=image_scale,
+        position=position, show=show
+    )
+
+    # Get a screenshot of the plotted cells, if desired
+    if outfilename is not None and screenshot is not None:
+        image = Image.fromarray(screenshot)
+        print('... saving to {}'.format(outfilename))
+        image.save(outfilename)
+    print("(" + ','.join([str(x) for i in range(3) for x in position[i]]) + ")")
 
