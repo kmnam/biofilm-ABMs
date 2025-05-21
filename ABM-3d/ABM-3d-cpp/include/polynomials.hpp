@@ -21,7 +21,6 @@
 #include <sstream>
 #include <Eigen/Dense>
 #include <boost/math/constants/constants.hpp>
-#include "products.hpp"
 
 using namespace Eigen;
 
