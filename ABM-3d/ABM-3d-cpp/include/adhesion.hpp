@@ -13,6 +13,7 @@
 #define ADHESION_POTENTIAL_FORCES_HPP
 
 #include <Eigen/Dense>
+#include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
 
 using namespace Eigen;
@@ -23,6 +24,10 @@ using std::sqrt;
 using boost::multiprecision::sqrt;
 using std::min;
 using boost::multiprecision::min;
+using std::real; 
+using boost::multiprecision::real; 
+using std::imag; 
+using boost::multiprecision::imag; 
 
 /* --------------------------------------------------------------------- //
  *                          AUXILIARY FUNCTIONS                          //
@@ -51,6 +56,42 @@ T squaredAspectRatioParam(const T half_l1, const T half_l2, const T Rcell)
     T chi2_term4 = total_l1_sq + width_sq;
     
     return (chi2_term1 * chi2_term2) / (chi2_term3 * chi2_term4);
+}
+
+/**
+ * Solve for the JKR contact radius for a circular contact area, given the 
+ * overlap, equivalent radius and elastic modulus of the contact bodies,
+ * and adhesion energy density.
+ *
+ * @param delta Overlap between the two contacting bodies. 
+ * @param R Equivalent radius of the two contacting bodies.
+ * @parma E Equivalent elastic modulus of the two contacting bodies. 
+ * @param gamma Adhesion energy density.
+ * @param tol Tolerance for solving the requisite polynomial. 
+ * @returns JKR contact radius.  
+ */
+template <typename T>
+T jkrContactRadius(const T delta, const T R, const T E, const T gamma, const T tol = 1e-8)
+{
+    // Solve the quartic equation for the square root of the contact radius 
+    Matrix<T, Dynamic, 1> coefs; 
+    coefs << -delta, -2 * sqrt(boost::math::constants::pi<T>() * gamma / E), 0.0, 0.0, 1.0 / R; 
+    Polynomial p(coefs);
+    Matrix<std::complex<T>, Dynamic, 1> roots = p.solveAberth(tol);
+    
+    // Square the first root that is positive real 
+    for (int i = 0; i < roots.size(); ++i)
+    {
+        if (abs(imag(roots(i))) < tol)
+        {
+            return real(roots(i)) * real(roots(i)); 
+        }
+    }
+
+    // If no root is positive real, then throw an exception 
+    throw std::runtime_error(
+        "JKR contact radius is undefined; no real root found from radius-overlap polynomial"
+    ); 
 }
 
 /* --------------------------------------------------------------------- //
