@@ -13,6 +13,7 @@
 #include <Eigen/Dense>
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
+#include <boost/random.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "../../include/ellipsoidContactArea.hpp"
@@ -332,5 +333,27 @@ TEST_CASE("Tests for projection function", "[projectOntoEllipsoid()]")
     REQUIRE_THAT(static_cast<double>(x(0)), Catch::Matchers::WithinAbs(0.0, tol)); 
     REQUIRE_THAT(static_cast<double>(x(1)), Catch::Matchers::WithinAbs(0.0, tol)); 
     REQUIRE_THAT(static_cast<double>(x(2)), Catch::Matchers::WithinAbs(static_cast<double>(-R), tol));
+
+    // Case 1d: Query point lies elsewhere 
+    //
+    // Here, we check optimality by randomly sampling values along the 
+    // ellipsoid surface and checking their distance to the query point
+    boost::random::mt19937 rng(1234567890);
+    boost::random::uniform_01<> dist;  
+    a << static_cast<T>(dist(rng)),
+         static_cast<T>(dist(rng)), 
+         static_cast<T>(dist(rng)), 
+    a *= (5 * R / a.norm());    // Ensure that the point lies outside the ellipsoid   
+    x = projectOntoEllipsoid<T>(a, A, b, project_tol, max_iter, true);
+    for (int i = 0; i < 1000; ++i)
+    {
+        T theta = boost::math::constants::pi<T>() * static_cast<T>(dist(rng));
+        T phi = boost::math::constants::two_pi<T>() * static_cast<T>(dist(rng));
+        Matrix<T, 3, 1> y; 
+        y << (R + half_l) * sin(theta) * cos(phi),
+             R * sin(theta) * sin(phi),
+             R * cos(theta); 
+        REQUIRE((x - a).norm() < (y - a).norm());  
+    }
 }
 
