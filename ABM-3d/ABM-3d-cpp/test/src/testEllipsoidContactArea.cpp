@@ -278,3 +278,59 @@ TEST_CASE("Tests for ellipsoid quadratic form function", "[getEllipsoidQuadratic
     }
 }
 
+/**
+ * A series of tests for projectOntoEllipsoid().
+ */
+TEST_CASE("Tests for projection function", "[projectOntoEllipsoid()]")
+{
+    const double tol = 1e-8;
+    const T project_tol = 1e-20;  
+    const int max_iter = 10000; 
+
+    // Case 1: Ellipsoid with long axis parallel to the x-axis 
+    Matrix<T, 3, 1> r, n, a; 
+    r << 0, 0, 0; 
+    n << 1, 0, 0; 
+    const T R = 0.8; 
+    const T half_l = 0.5;
+    auto result = getEllipsoidQuadraticForm<T>(r, n, R, half_l); 
+    Matrix<T, 3, 3> A = result.first;
+    Matrix<T, 3, 1> b = result.second; 
+
+    // Case 1a: Query point lies along x-axis 
+    a << 2 * (R + half_l), 0, 0;
+    Matrix<T, 3, 1> x = projectOntoEllipsoid<T>(a, A, b, project_tol, max_iter, true);
+    REQUIRE_THAT(static_cast<double>(x(0)), Catch::Matchers::WithinAbs(static_cast<double>(R + half_l), tol)); 
+    REQUIRE_THAT(static_cast<double>(x(1)), Catch::Matchers::WithinAbs(0.0, tol)); 
+    REQUIRE_THAT(static_cast<double>(x(2)), Catch::Matchers::WithinAbs(0.0, tol));
+    a << -2 * (R + half_l), 0, 0;
+    x = projectOntoEllipsoid<T>(a, A, b, project_tol, max_iter, true);
+    REQUIRE_THAT(static_cast<double>(x(0)), Catch::Matchers::WithinAbs(static_cast<double>(-R - half_l), tol)); 
+    REQUIRE_THAT(static_cast<double>(x(1)), Catch::Matchers::WithinAbs(0.0, tol)); 
+    REQUIRE_THAT(static_cast<double>(x(2)), Catch::Matchers::WithinAbs(0.0, tol));
+
+    // Case 1b: Query point lies along y-axis 
+    a << 0, 2 * R, 0; 
+    x = projectOntoEllipsoid<T>(a, A, b, project_tol, max_iter, true);
+    REQUIRE_THAT(static_cast<double>(x(0)), Catch::Matchers::WithinAbs(0.0, tol)); 
+    REQUIRE_THAT(static_cast<double>(x(1)), Catch::Matchers::WithinAbs(static_cast<double>(R), tol)); 
+    REQUIRE_THAT(static_cast<double>(x(2)), Catch::Matchers::WithinAbs(0.0, tol));
+    a << 0, -2 * R, 0; 
+    x = projectOntoEllipsoid<T>(a, A, b, project_tol, max_iter, true);
+    REQUIRE_THAT(static_cast<double>(x(0)), Catch::Matchers::WithinAbs(0.0, tol)); 
+    REQUIRE_THAT(static_cast<double>(x(1)), Catch::Matchers::WithinAbs(static_cast<double>(-R), tol)); 
+    REQUIRE_THAT(static_cast<double>(x(2)), Catch::Matchers::WithinAbs(0.0, tol));
+
+    // Case 1c: Query point lies along z-axis 
+    a << 0, 0, 2 * R; 
+    x = projectOntoEllipsoid<T>(a, A, b, project_tol, max_iter, true);
+    REQUIRE_THAT(static_cast<double>(x(0)), Catch::Matchers::WithinAbs(0.0, tol)); 
+    REQUIRE_THAT(static_cast<double>(x(1)), Catch::Matchers::WithinAbs(0.0, tol)); 
+    REQUIRE_THAT(static_cast<double>(x(2)), Catch::Matchers::WithinAbs(static_cast<double>(R), tol));
+    a << 0, 0, -2 * R;  
+    x = projectOntoEllipsoid<T>(a, A, b, project_tol, max_iter, true);
+    REQUIRE_THAT(static_cast<double>(x(0)), Catch::Matchers::WithinAbs(0.0, tol)); 
+    REQUIRE_THAT(static_cast<double>(x(1)), Catch::Matchers::WithinAbs(0.0, tol)); 
+    REQUIRE_THAT(static_cast<double>(x(2)), Catch::Matchers::WithinAbs(static_cast<double>(-R), tol));
+}
+
