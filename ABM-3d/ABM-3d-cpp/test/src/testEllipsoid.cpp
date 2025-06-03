@@ -1,5 +1,5 @@
 /**
- * Test module for the functions in `ellipsoidContactArea.hpp`.
+ * Test module for the functions in `ellipsoid.hpp`.
  *
  * Authors:
  *     Kee-Myoung Nam
@@ -16,7 +16,7 @@
 #include <boost/random.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include "../../include/ellipsoidContactArea.hpp"
+#include "../../include/ellipsoid.hpp"
 
 using namespace Eigen; 
 
