@@ -120,12 +120,12 @@ class HighPrecisionPolynomial
          *
          * @returns Derivative polynomial. 
          */
-        HighPrecisionPolynomial<RealType> deriv()
+        HighPrecisionPolynomial<N> deriv()
         {
             // If the polynomial has degree zero, return the zero polynomial
             if (this->degree == 0)
             {
-                return HighPrecisionPolynomial<RealType>();
+                return HighPrecisionPolynomial<N>();
             }
             // Otherwise, differentiate the polynomial term-by-term
             else
@@ -133,7 +133,7 @@ class HighPrecisionPolynomial
                 Matrix<ComplexType, Dynamic, 1> dcoefs(this->degree);
                 for (int i = 1; i <= this->degree; ++i)
                     dcoefs(i - 1) = this->coefs(i) * static_cast<RealType>(i);
-                return HighPrecisionPolynomial<RealType>(dcoefs);
+                return HighPrecisionPolynomial<N>(dcoefs);
             }
         }
 
@@ -268,7 +268,7 @@ class HighPrecisionPolynomial
         Matrix<ComplexType, Dynamic, 1> solveAberth(const RealType tol)
         {
             // Get the derivative of the polynomial 
-            HighPrecisionPolynomial<RealType> deriv = this->deriv();
+            HighPrecisionPolynomial<N> deriv = this->deriv();
 
             // Initialize the roots as the n-th roots of unity, where 
             // n is the degree of the polynomial 
