@@ -26,6 +26,11 @@
 
 using namespace Eigen;
 
+using boost::multiprecision::abs; 
+using boost::multiprecision::sin;
+using boost::multiprecision::cos;
+using boost::multiprecision::real; 
+
 /**
  * A simple univariate polynomial class with complex-valued coefficients.
  *
@@ -153,9 +158,9 @@ class HighPrecisionPolynomial
                     = Matrix<RealType, Dynamic, Dynamic>::Zero(this->degree, this->degree);
                 companion(Eigen::seq(1, this->degree - 1), Eigen::seq(0, this->degree - 2))
                     = Matrix<RealType, Dynamic, Dynamic>::Identity(this->degree - 1, this->degree - 1);
-                RealType lead = std::real(this->coefs(this->degree));
+                RealType lead = real(this->coefs(this->degree));
                 for (int i = 0; i < this->degree; ++i)
-                    companion(i, this->degree - 1) = std::real(-this->coefs(i)) / lead;
+                    companion(i, this->degree - 1) = real(-this->coefs(i)) / lead;
 
                 // Get the eigenvalues of the companion matrix
                 EigenSolver<Matrix<RealType, Dynamic, Dynamic> > es; 
@@ -195,8 +200,8 @@ class HighPrecisionPolynomial
             Matrix<ComplexType, Dynamic, 1> roots(this->degree);
             for (int i = 0; i < this->degree; ++i)
             {
-                RealType a = std::cos(i * boost::math::constants::two_pi<RealType>() / this->degree);
-                RealType b = std::sin(i * boost::math::constants::two_pi<RealType>() / this->degree);
+                RealType a = cos(i * boost::math::constants::two_pi<RealType>() / this->degree);
+                RealType b = sin(i * boost::math::constants::two_pi<RealType>() / this->degree);
                 roots(i) = ComplexType(a, b);
             }
 
@@ -238,8 +243,13 @@ class HighPrecisionPolynomial
                     updates(i) = val_i / (this->coefs(this->degree) * dprod);
                 }
 
-                // Identify the update with the largest magnitude 
-                max_update = updates.cwiseAbs().maxCoeff();
+                // Identify the update with the largest magnitude
+                max_update = 0.0; 
+                for (int i = 0; i < this->degree; ++i)
+                {
+                    if (max_update < abs(updates(i)))
+                        max_update = abs(updates(i)); 
+                }
 
                 // Update the roots 
                 roots -= updates;
@@ -275,8 +285,8 @@ class HighPrecisionPolynomial
             Matrix<ComplexType, Dynamic, 1> roots(this->degree);
             for (int i = 0; i < this->degree; ++i)
             {
-                RealType a = std::cos(i * boost::math::constants::two_pi<RealType>() / this->degree);
-                RealType b = std::sin(i * boost::math::constants::two_pi<RealType>() / this->degree);
+                RealType a = cos(i * boost::math::constants::two_pi<RealType>() / this->degree);
+                RealType b = sin(i * boost::math::constants::two_pi<RealType>() / this->degree);
                 roots(i) = ComplexType(a, b);
             }
 
@@ -321,7 +331,12 @@ class HighPrecisionPolynomial
                 }
 
                 // Identify the update with the largest magnitude 
-                max_update = updates.cwiseAbs().maxCoeff();
+                max_update = 0.0; 
+                for (int i = 0; i < this->degree; ++i)
+                {
+                    if (max_update < abs(updates(i)))
+                        max_update = abs(updates(i)); 
+                }
 
                 // Update the roots 
                 roots -= updates;
