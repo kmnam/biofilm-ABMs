@@ -1,0 +1,244 @@
+/**
+ * Functions for computing JKR contact areas and forces between contacting
+ * bodies.  
+ *
+ * Authors:
+ *     Kee-Myoung Nam
+ *
+ * Last updated:
+ *     6/3/2025
+ */
+
+#ifndef BIOFILM_JKR_HPP
+#define BIOFILM_JKR_HPP
+
+#include <cmath>
+#include <Eigen/Dense>
+#include <boost/multiprecision/mpfr.hpp>
+#include "polynomials.hpp"
+#include "ellipsoid.hpp"
+
+using namespace Eigen; 
+
+using std::cos; 
+using boost::multiprecision::cos; 
+using std::acos;
+using boost::multiprecision::acos;
+using std::sqrt;
+using boost::multiprecision::sqrt;
+
+/**
+ * Solve for the Hertzian contact area between two contacting ellipsoidal
+ * bodies.
+ *
+ * This calculation follows the approach prescribed in Barber (Eqs. 3.35 and
+ * 3.36; see also Eqs. 3.19 and 3.29). 
+ *
+ * @param delta Overlap between the two contacting bodies. 
+ * @param Rx1 Principal radius of curvature of body 1 along long axis. 
+ * @param Ry1 Principal radius of curvature of body 1 along short axis.
+ * @param Rx2 Principal radius of curvature of body 2 along long axis. 
+ * @param Ry2 Principal radius of curvature of body 2 along short axis.
+ * @param n1 Orientation vector of body 1.
+ * @param n2 Orientation vector of body 2. 
+ * @param ellip_table Values of the elliptic integral function for various
+ *                    eccentricities between 0 and 1. 
+ */
+template <typename T>
+T hertzContactArea(const T delta, const T Rx1, const T Ry1, const T Rx2, 
+                   const T Ry2, const Ref<const Matrix<T, 3, 1> >& n1,
+                   const Ref<const Matrix<T, 3, 1> >& n2, 
+                   const Ref<const Matrix<T, Dynamic, 4> >& ellip_table)
+{
+    // First calculate B and A ... 
+    T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
+    T theta = acos(n1.dot(n2));
+    T delta1 = (1.0 / Rx1 - 1.0 / Ry1); 
+    T delta2 = (1.0 / Rx2 - 1.0 / Ry2); 
+    T diff = 0.5 * sqrt(
+        delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * theta)
+    );
+    T B = 0.5 * (sum + diff);
+    T A = sum - B;
+
+    // ... and check that B > A
+    if (B < A)
+    {
+        // If not, then switch the x- and y-axes and recalculate 
+        T Rx1_ = Ry1; 
+        T Ry1_ = Rx1; 
+        T Rx2_ = Ry2; 
+        T Ry2_ = Rx2;
+        delta1 = (1.0 / Rx1_ - 1.0 / Ry1_); 
+        delta2 = (1.0 / Rx2_ - 1.0 / Ry2_);
+        diff = 0.5 * sqrt(
+            delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * theta)
+        ); 
+        B = 0.5 * (sum + diff); 
+        A = sum - B;
+    }
+    T ratio = B / A; 
+
+    // Column 0: eccentricity 
+    // Column 1: value of K(e), complete elliptic integral of first kind 
+    // Column 2: value of E(e), complete elliptic integral of second kind
+    // Column 3: value of LHS of Eqn. 3.29 in Barber, which is equal to B / A
+    int nearest_idx; 
+    if (ratio < ellip_table(0, 3))
+    {
+        nearest_idx = 0; 
+    }
+    else if (ratio > ellip_table(ellip_table.rows() - 1, 3))
+    {
+        nearest_idx = ellip_table.rows() - 1; 
+    }
+    else 
+    {
+        for (int i = 1; i < ellip_table.rows(); ++i)
+        {
+            if (ratio >= ellip_table(i - 1, 3) && ratio < ellip_table(i, 3))
+            {
+                T d1 = abs(ratio - ellip_table(i - 1, 3)); 
+                T d2 = abs(ratio - ellip_table(i, 3));
+                if (d1 < d2)
+                    nearest_idx = i - 1; 
+                else
+                    nearest_idx = i; 
+            }
+        }
+    }
+    T eccentricity = ellip_table(nearest_idx, 0);
+    T Ke = ellip_table(nearest_idx, 1); 
+    T Ee = ellip_table(nearest_idx, 2);
+
+    // From here, get the contact area dimensions
+    T e2 = eccentricity * eccentricity;  
+    T a = sqrt(delta * (1 - Ee / Ke) / (A * e2)); 
+    T area = boost::math::constants::pi<T>() * a * a * sqrt(1 - e2);
+
+    return area; 
+}
+
+/**
+ * Solve for the JKR contact radius for a circular contact area, given the 
+ * overlap, equivalent radius and elastic modulus of the contact bodies,
+ * and adhesion energy density.
+ *
+ * @param delta Overlap between the two contacting bodies. 
+ * @param R Equivalent radius of the two contacting bodies.
+ * @parma E Equivalent elastic modulus of the two contacting bodies. 
+ * @param gamma Adhesion energy density.
+ * @param tol Tolerance for solving the requisite polynomial. 
+ * @returns JKR contact radius.  
+ */
+template <typename T>
+T jkrContactRadius(const T delta, const T R, const T E, const T gamma, const T tol = 1e-8)
+{
+    // Solve the quartic equation for the square root of the contact radius 
+    Matrix<T, Dynamic, 1> coefs; 
+    coefs << -delta, -2 * sqrt(boost::math::constants::pi<T>() * gamma / E), 0.0, 0.0, 1.0 / R; 
+    Polynomial p(coefs);
+    Matrix<std::complex<T>, Dynamic, 1> roots = p.solveAberth(tol);
+    
+    // Square the first root that is positive real 
+    for (int i = 0; i < roots.size(); ++i)
+    {
+        if (abs(imag(roots(i))) < tol)
+        {
+            return real(roots(i)) * real(roots(i)); 
+        }
+    }
+
+    // If no root is positive real, then throw an exception 
+    throw std::runtime_error(
+        "JKR contact radius is undefined; no real root found from radius-"
+        "overlap polynomial"
+    ); 
+}
+
+/**
+ * Solve for the estimated JKR contact area for an elliptical contact 
+ * area.
+ *
+ * This function assumes that the two bodies are prolate ellipsoids whose
+ * major semi-axis lengths are given by half_l1 + R and half_l2 + R, and
+ * whose minor semi-axis lengths are given by R. 
+ *
+ * @param n1 
+ * @param half_l1
+ * @param n2
+ * @param half_l2
+ * @param R
+ * @param d12
+ * @param s
+ * @param t
+ * @param E0
+ * @param gamma
+ * @param ellip_table
+ * @param aberth_tol
+ */
+template <typename T>
+T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1, 
+                          const Ref<const Matrix<T, 3, 1> >& n1, const T half_l1,  
+                          const Ref<const Matrix<T, 3, 1> >& r2, 
+                          const Ref<const Matrix<T, 3, 1> >& n2, const T half_l2,
+                          const T R, const Ref<const Matrix<T, 3, 1> >& d12,
+                          const T s, const T t, const T E0, const T gamma,
+                          const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
+                          const T project_tol = 1e-6, const int project_max_iter = 100,
+                          const T aberth_tol = 1e-8)
+{
+    // Compute overlap between the two cells
+    T dist = d12.norm(); 
+    Matrix<T, 3, 1> d12n = d12 / dist; 
+    T delta = 2 * R - dist;
+
+    // Project outward from the centerline along the distance vector, until 
+    // we identify points that lie outside the ellipsoids corresponding to 
+    // the two cells 
+    auto form1 = getEllipsoidQuadraticForm<T>(r1, n1, R, half_l1); 
+    auto form2 = getEllipsoidQuadraticForm<T>(r2, n2, R, half_l2);
+    Matrix<T, 3, 3> A1 = form1.first;
+    Matrix<T, 3, 1> b1 = form1.second;
+    Matrix<T, 3, 3> A2 = form2.first;
+    Matrix<T, 3, 1> b2 = form2.second; 
+    std::function<bool(const Ref<const Matrix<T, 3, 1> >&)> in_ellipsoid1
+        = [&A1, &b1](const Ref<const Matrix<T, 3, 1> >& q)
+        {
+            return (q.dot(A1 * q) + b1.dot(q) <= 1.0); 
+        };
+    std::function<bool(const Ref<const Matrix<T, 3, 1> >&)> in_ellipsoid2
+        = [&A2, &b2](const Ref<const Matrix<T, 3, 1> >& q)
+        {
+            return (q.dot(A2 * q) + b2.dot(q) <= 1.0); 
+        };
+    Matrix<T, 3, 1> u1 = r1 + s * n1 + R * d12n; 
+    Matrix<T, 3, 1> u2 = r2 + t * n2 - R * d12n;
+    while (in_ellipsoid1(u1))
+        u1 += 0.1 * d12n; 
+    while (in_ellipsoid2(u2))
+        u2 -= 0.1 * d12n;
+
+    // Now project these points onto the ellipsoid surfaces 
+    u1 = projectOntoEllipsoid<T>(u1, A1, b1, project_tol, project_max_iter); 
+    u2 = projectOntoEllipsoid<T>(u2, A2, b2, project_tol, project_max_iter);
+
+    // Compute the principal radii of curvature at these points 
+    auto radii1 = getPrincipalRadiiOfCurvature<T>(n1, R, half_l1, u1); 
+    T Rx1 = radii1.first; 
+    T Ry1 = radii1.second; 
+    auto radii2 = getPrincipalRadiiOfCurvature<T>(n2, R, half_l2, u2); 
+    T Rx2 = radii2.first; 
+    T Ry2 = radii2.second;  
+    
+    // Compute the expected contact area for a Hertzian contact 
+    T area = hertzContactArea<T>(delta, Rx1, Ry1, Rx2, Ry2, n1, n2, ellip_table);
+
+    // Compute the correction factor to account for JKR-based adhesion  
+    T jkr_radius = jkrContactRadius<T>(delta, R, E0, gamma, aberth_tol);
+    T jkr_radius_factor = jkr_radius / sqrt(R * delta);
+
+    return area * jkr_radius_factor * jkr_radius_factor;  
+}
+
+#endif
