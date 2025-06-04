@@ -184,19 +184,25 @@ T jkrContactRadius(const T delta, const T R, const T E, const T gamma,
  * major semi-axis lengths are given by half_l1 + R and half_l2 + R, and
  * whose minor semi-axis lengths are given by R. 
  *
- * @param n1 
- * @param half_l1
- * @param n2
- * @param half_l2
- * @param R
- * @param d12
- * @param s
- * @param t
- * @param E0
- * @param gamma
- * @param ellip_table
- * @param imag_tol
- * @param aberth_tol
+ * @param n1 Orientation of body 1 (long axis). 
+ * @param half_l1 Half-length of body 1 centerline.
+ * @param n2 Orientation of body 2 (long axis). 
+ * @param half_l2 Half-length of body 2 centerline. 
+ * @param R Body radius. 
+ * @param d12 Overlap vector. 
+ * @param s Centerline coordinate along body 1 determining tail of overlap vector.  
+ * @param t Centerline coordinate along body 2 determining head of overlap vector. 
+ * @param E0 Elastic modulus. 
+ * @param gamma Surface energy density. 
+ * @param ellip_table Pre-computed table containing values for the elliptic
+ *                    integral function for various eccentricities between 0
+ *                    and 1. 
+ * @param project_tol Tolerance for ellipsoid projection. 
+ * @param project_max_iter Maximum number of iterations for ellipsoid projection. 
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for the Aberth-Ehrlich method.
+ * @returns Estimated JKR contact area.  
  */
 template <typename T, int N = 100>
 T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1, 
