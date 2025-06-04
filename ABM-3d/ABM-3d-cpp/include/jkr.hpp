@@ -13,6 +13,7 @@
 #define BIOFILM_JKR_HPP
 
 #include <cmath>
+#include <algorithm>
 #include <Eigen/Dense>
 #include <boost/multiprecision/mpfr.hpp>
 #include "polynomials.hpp"
@@ -131,29 +132,48 @@ T hertzContactArea(const T delta, const T Rx1, const T Ry1, const T Rx2,
  * @param tol Tolerance for solving the requisite polynomial. 
  * @returns JKR contact radius.  
  */
-template <typename T>
-T jkrContactRadius(const T delta, const T R, const T E, const T gamma, const T tol = 1e-8)
+template <typename T, int N = 100>
+T jkrContactRadius(const T delta, const T R, const T E, const T gamma,
+                   const T imag_tol = 1e-20, const T aberth_tol = 1e-20)
 {
-    // Solve the quartic equation for the square root of the contact radius 
-    Matrix<T, Dynamic, 1> coefs; 
-    coefs << -delta, -2 * sqrt(boost::math::constants::pi<T>() * gamma / E), 0.0, 0.0, 1.0 / R; 
-    Polynomial p(coefs);
-    Matrix<std::complex<T>, Dynamic, 1> roots = p.solveAberth(tol);
-    
-    // Square the first root that is positive real 
+    typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<N> >  RealType;
+    typedef boost::multiprecision::number<boost::multiprecision::mpc_complex_backend<N> > ComplexType;
+
+    // Solve the quartic equation for the square root of the contact area
+    Matrix<RealType, Dynamic, 1> coefs(5);
+    RealType delta_ = static_cast<RealType>(delta); 
+    RealType gamma_ = static_cast<RealType>(gamma);
+    RealType R_ = static_cast<RealType>(R);
+    RealType E_ = static_cast<RealType>(E);  
+    coefs << delta_ * delta_ * R_ * R_,
+             -4 * R_ * R_  * boost::math::constants::pi<RealType>() * gamma_ / E_, 
+             -2 * R_ * delta_, 
+             0.0, 1.0;
+
+    // Solve for the roots of the polynomial with the specified precision
+    HighPrecisionPolynomial<N> p(coefs);
+    Matrix<ComplexType, Dynamic, 1> roots = p.solveAberth(static_cast<RealType>(aberth_tol));
+
+    // Identify the larger of the two roots that are positive real 
+    std::vector<RealType> roots_real; 
     for (int i = 0; i < roots.size(); ++i)
     {
-        if (abs(imag(roots(i))) < tol)
-        {
-            return real(roots(i)) * real(roots(i)); 
-        }
+        if (abs(imag(roots(i))) < static_cast<RealType>(imag_tol))
+            roots_real.push_back(real(roots(i))); 
     }
-
-    // If no root is positive real, then throw an exception 
-    throw std::runtime_error(
-        "JKR contact radius is undefined; no real root found from radius-"
-        "overlap polynomial"
-    ); 
+    if (roots_real.size() > 0)
+    {
+        RealType radius = *std::max_element(roots_real.begin(), roots_real.end());
+        return static_cast<T>(radius);
+    }
+    else
+    {
+        // If no root is positive real, then throw an exception 
+        throw std::runtime_error(
+            "JKR contact radius is undefined; no real root found from radius-"
+            "overlap polynomial"
+        );
+    } 
 }
 
 /**
@@ -175,9 +195,10 @@ T jkrContactRadius(const T delta, const T R, const T E, const T gamma, const T t
  * @param E0
  * @param gamma
  * @param ellip_table
+ * @param imag_tol
  * @param aberth_tol
  */
-template <typename T>
+template <typename T, int N = 100>
 T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1, 
                           const Ref<const Matrix<T, 3, 1> >& n1, const T half_l1,  
                           const Ref<const Matrix<T, 3, 1> >& r2, 
@@ -186,7 +207,7 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
                           const T s, const T t, const T E0, const T gamma,
                           const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
                           const T project_tol = 1e-6, const int project_max_iter = 100,
-                          const T aberth_tol = 1e-8)
+                          const T imag_tol = 1e-20, const T aberth_tol = 1e-20)
 {
     // Compute overlap between the two cells
     T dist = d12.norm(); 
@@ -235,7 +256,7 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
     T area = hertzContactArea<T>(delta, Rx1, Ry1, Rx2, Ry2, n1, n2, ellip_table);
 
     // Compute the correction factor to account for JKR-based adhesion  
-    T jkr_radius = jkrContactRadius<T>(delta, R, E0, gamma, aberth_tol);
+    T jkr_radius = jkrContactRadius<T, N>(delta, R, E0, gamma, imag_tol, aberth_tol);
     T jkr_radius_factor = jkr_radius / sqrt(R * delta);
 
     return area * jkr_radius_factor * jkr_radius_factor;  
