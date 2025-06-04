@@ -128,8 +128,10 @@ T hertzContactArea(const T delta, const T Rx1, const T Ry1, const T Rx2,
  * @param delta Overlap between the two contacting bodies. 
  * @param R Equivalent radius of the two contacting bodies.
  * @parma E Equivalent elastic modulus of the two contacting bodies. 
- * @param gamma Adhesion energy density.
- * @param tol Tolerance for solving the requisite polynomial. 
+ * @param gamma Surface energy density. 
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method. 
  * @returns JKR contact radius.  
  */
 template <typename T, int N = 100>
