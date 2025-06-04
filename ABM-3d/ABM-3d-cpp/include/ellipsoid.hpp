@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/3/2025
+ *     6/4/2025
  */
 
 #ifndef BIOFILM_ELLIPSOID_HPP
@@ -272,7 +272,7 @@ Matrix<T, Dynamic, 4> getEllipticIntegralTable(const int n)
         ellip_table(i, 0) = e(i);  
         ellip_table(i, 1) = Ke; 
         ellip_table(i, 2) = Ee; 
-        ellip_table(i, 3) = (Ee / (1 - e * e) - Ke) / (Ke - Ee); 
+        ellip_table(i, 3) = (Ee / (1 - e(i) * e(i)) - Ke) / (Ke - Ee); 
     }
 
     return ellip_table; 
