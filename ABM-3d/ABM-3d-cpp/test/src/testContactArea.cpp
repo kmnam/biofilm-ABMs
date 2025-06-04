@@ -27,16 +27,8 @@ typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<
 
 using std::abs; 
 using boost::multiprecision::abs; 
-using std::sin; 
-using boost::multiprecision::sin;
-using std::cos; 
-using boost::multiprecision::cos; 
 using std::sqrt; 
 using boost::multiprecision::sqrt;
-using std::real; 
-using boost::multiprecision::real; 
-using std::imag; 
-using boost::multiprecision::imag; 
 
 /* ------------------------------------------------------------------- //
  *                             TEST MODULES                            //
