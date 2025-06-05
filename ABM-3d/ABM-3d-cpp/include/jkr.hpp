@@ -132,11 +132,14 @@ T hertzContactArea(const T delta, const T Rx1, const T Ry1, const T Rx2,
  * @param imag_tol Tolerance for determining whether a root for the the JKR
  *                 contact radius polynomial is real.
  * @param aberth_tol Tolerance for Aberth-Ehrlich method. 
- * @returns JKR contact radius.  
+ * @returns The two possible JKR contact radii. Negative values will also 
+ *          be returned (in which case only the positive value is a valid 
+ *          radius). 
  */
 template <typename T, int N = 100>
-T jkrContactRadius(const T delta, const T R, const T E, const T gamma,
-                   const T imag_tol = 1e-20, const T aberth_tol = 1e-20)
+std::pair<T, T> jkrContactRadius(const T delta, const T R, const T E,
+                                 const T gamma, const T imag_tol = 1e-20,
+                                 const T aberth_tol = 1e-20)
 {
     typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<N> >  RealType;
     typedef boost::multiprecision::number<boost::multiprecision::mpc_complex_backend<N> > ComplexType;
@@ -156,24 +159,48 @@ T jkrContactRadius(const T delta, const T R, const T E, const T gamma,
     HighPrecisionPolynomial<N> p(coefs);
     Matrix<ComplexType, Dynamic, 1> roots = p.solveAberth(static_cast<RealType>(aberth_tol));
 
-    // Identify the larger of the two roots that are positive real 
+    // Return both of the two positive real roots
     std::vector<RealType> roots_real; 
     for (int i = 0; i < roots.size(); ++i)
     {
         if (abs(imag(roots(i))) < static_cast<RealType>(imag_tol))
             roots_real.push_back(real(roots(i))); 
     }
-    if (roots_real.size() > 0)
+
+    // If there are fewer than 2 real roots identified, raise an exception
+    for (int i = 0; i < roots.size() - 1; ++i)
+        std::cout << roots(i) << " "; 
+    std::cout << roots(roots.size() - 1) << std::endl;  
+    if (roots_real.size() < 2)
     {
-        RealType radius = *std::max_element(roots_real.begin(), roots_real.end());
-        return static_cast<T>(radius);
-    }
-    else
-    {
-        // If no root is positive real, then throw an exception 
         throw std::runtime_error(
-            "JKR contact radius is undefined; no real root found from radius-"
-            "overlap polynomial"
+            "JKR contact radius is undefined; invalid number of real roots found "
+            "from radius-overlap polynomial"
+        );
+    }
+    // If there are exactly 2 real roots identified, return both 
+    else if (roots_real.size() == 2)
+    {
+        std::sort(roots_real.begin(), roots_real.end()); 
+        return std::make_pair(roots_real[0], roots_real[1]);
+    } 
+    else   // Otherwise, find the 2 real roots with the smallest imaginary parts
+    {
+        std::vector<std::pair<RealType, int> > roots_imag; 
+        for (int i = 0; i < roots.size(); ++i)
+        {
+            if (abs(imag(roots(i))) < static_cast<RealType>(imag_tol))
+                roots_imag.push_back(std::make_pair(imag(roots(i)), i)); 
+        }
+        std::sort(
+            roots_imag.begin(), roots_imag.end(), 
+            [](std::pair<RealType, int> a, std::pair<RealType, int> b)
+            {
+                return (abs(a.first) < abs(b.first)); 
+            }
+        );
+        return std::make_pair(
+            real(roots(roots_imag[0].second)), real(roots(roots_imag[1].second))
         );
     } 
 }
@@ -264,8 +291,10 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
     T area = hertzContactArea<T>(delta, Rx1, Ry1, Rx2, Ry2, n1, n2, ellip_table);
 
     // Compute the correction factor to account for JKR-based adhesion  
-    T jkr_radius = jkrContactRadius<T, N>(delta, R, E0, gamma, imag_tol, aberth_tol);
-    T jkr_radius_factor = jkr_radius / sqrt(R * delta);
+    std::pair<T, T> jkr_radius = jkrContactRadius<T, N>(
+        delta, R, E0, gamma, imag_tol, aberth_tol
+    );
+    T jkr_radius_factor = jkr_radius.second / sqrt(R * delta);
 
     return area * jkr_radius_factor * jkr_radius_factor;  
 }
