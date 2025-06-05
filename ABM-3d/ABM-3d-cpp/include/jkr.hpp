@@ -168,9 +168,6 @@ std::pair<T, T> jkrContactRadius(const T delta, const T R, const T E,
     }
 
     // If there are fewer than 2 real roots identified, raise an exception
-    for (int i = 0; i < roots.size() - 1; ++i)
-        std::cout << roots(i) << " "; 
-    std::cout << roots(roots.size() - 1) << std::endl;  
     if (roots_real.size() < 2)
     {
         throw std::runtime_error(
