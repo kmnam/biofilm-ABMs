@@ -1,12 +1,12 @@
 /**
- * Updated Kihara- and Gay-Berne-Kihara-based attractive potentials for 
- * modeling cell-cell adhesion. 
+ * Updated JKR-based attractive potentials and forces for modeling cell-cell
+ * adhesion. 
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/12/2025
+ *     6/5/2025
  */
 
 #ifndef ADHESION_POTENTIAL_FORCES_HPP
@@ -15,6 +15,7 @@
 #include <Eigen/Dense>
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
+#include "jkr.hpp"
 
 using namespace Eigen;
 
@@ -31,39 +32,10 @@ using boost::multiprecision::acos;
 using std::real; 
 using boost::multiprecision::real; 
 using std::imag; 
-using boost::multiprecision::imag; 
+using boost::multiprecision::imag;
 
 /* --------------------------------------------------------------------- //
- *                          AUXILIARY FUNCTIONS                          //
- * --------------------------------------------------------------------- */
-/**
- * Compute the squared aspect ratio parameter in the first anisotropy 
- * parameter of the Gay-Berne-Kihara potential.  
- *
- * @param half_l1 Half of length of cell 1.
- * @param half_l2 Half of length of cell 2. 
- * @param Rcell Cell radius, excluding the EPS.
- * @returns Squared aspect ratio parameter. 
- */
-template <typename T>
-T squaredAspectRatioParam(const T half_l1, const T half_l2, const T Rcell)
-{
-    T total_l1 = half_l1 + Rcell; 
-    T total_l2 = half_l2 + Rcell; 
-    T width = Rcell;
-    T total_l1_sq = total_l1 * total_l1; 
-    T total_l2_sq = total_l2 * total_l2; 
-    T width_sq = width * width; 
-    T chi2_term1 = total_l1_sq - width_sq; 
-    T chi2_term2 = total_l2_sq - width_sq;
-    T chi2_term3 = total_l2_sq + width_sq; 
-    T chi2_term4 = total_l1_sq + width_sq;
-    
-    return (chi2_term1 * chi2_term2) / (chi2_term3 * chi2_term4);
-}
-
-/* --------------------------------------------------------------------- //
- *                              POTENTIALS                               //
+ *                               POTENTIALS                              t //
  * --------------------------------------------------------------------- */
 /**
  * Compute the Hertzian contact potential between two neighboring cells
@@ -130,6 +102,151 @@ T potentialJKR(const T dist, const T R, const T dmin)
     {
         return 0.0;
     }
+}
+
+/* --------------------------------------------------------------------- //
+ *           LAGRANGIAN GENERALIZED FORCES IN 2 OR 3 DIMENSIONS          //
+ * --------------------------------------------------------------------- */
+/**
+ * Compute the Lagrangian generalized forces between two neighboring cells
+ * that arise from the isotropic, non-hysteretic JKR potential in arbitrary
+ * dimensions (2 or 3).
+ *
+ * Note that this function technically calculates the *negatives* of the
+ * generalized forces.
+ *
+ * @param n1 Orientation of cell 1.
+ * @param n2 Orientation of cell 2. 
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param R Cell radius, including the EPS. 
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved. 
+ * @param dmin Minimum distance at which the potential is nonzero.
+ * @param include_constraint If true, enforce the orientation vector norm 
+ *                           constraint on the generalized torques. 
+ * @returns Matrix of generalized forces arising from the simplified JKR
+ *          contact potential.
+ */
+template <typename T, int Dim>
+Array<T, 2, 2 * Dim> forcesJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1, 
+                                       const Ref<const Matrix<T, Dim, 1> >& n2, 
+                                       const Ref<const Matrix<T, Dim, 1> >& d12,
+                                       const T R, const T s, const T t, const T dmin, 
+                                       const bool include_constraint = true)
+{
+    Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
+    const T dist = d12.norm(); 
+
+    // If the distance is less than 2 * R ... 
+    if (dist <= 2 * R)
+    {
+        // Normalize the distance vector 
+        Matrix<T, Dim, 1> d12n = d12 / dist;
+
+        // Get the terms that contribute to each generalized force
+        T term = boost::math::constants::pi<T>() * R; 
+        if (dist <= dmin)
+            term *= (2 * R - dmin); 
+        else 
+            term *= (2 * R - dist);
+        Matrix<T, Dim, 1> v = term * d12n;  
+        
+        // Partial derivatives w.r.t cell 1 center 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
+
+        // Partial derivatives w.r.t cell 2 center 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = v;
+
+        // Partial derivatives w.r.t cell orientations 
+        if (!include_constraint)
+        {
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -s * v; 
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * v;
+        }
+        else    // Correct torques to account for orientation norm constraint 
+        {
+            T w1 = n1.dot(-v);
+            T w2 = n2.dot(-v);  
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = s * (-w1 * n1 - v);
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * (w2 * n2 + v);  
+        }
+    }
+    
+    return dEdq.array(); 
+}
+
+/* --------------------------------------------------------------------- //
+ *                  NEWTONIAN FORCES IN 2 OR 3 DIMENSIONS                //
+ * --------------------------------------------------------------------- */
+/**
+ * Compute the Newtonian forces between two neighboring cells that arise
+ * from the shifted JKR potential in arbitrary dimensions (2 or 3).
+ *
+ * Note that this function calculates the force on cell 1 due to cell 2. 
+ *
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param R Cell radius, including the EPS. 
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved. 
+ * @param dmin Minimum distance at which the potential is nonzero.
+ * @returns Force on cell 1 due to cell 2 arising from the JKR potential. 
+ */
+template <typename T, int Dim>
+Array<T, Dim, 1> forceJKRNewton(const Ref<const Matrix<T, Dim, 1> >& d12,
+                                const T R, const T dmin)
+{
+    Matrix<T, Dim, 1> force = Matrix<T, Dim, 1>::Zero();
+    const T dist = d12.norm(); 
+
+    // If the distance is less than 2 * R ... 
+    if (dist <= 2 * R)
+    {
+        // Normalize the distance vector 
+        Matrix<T, Dim, 1> d12n = d12 / dist;
+
+        // Get the terms that contribute to the force on cell 1 due to cell 2
+        T term = boost::math::constants::pi<T>() * R; 
+        if (dist <= dmin)
+            term *= (2 * R - dmin); 
+        else 
+            term *= (2 * R - dist);
+        force = term * d12n; 
+    }
+
+    return force; 
+}
+
+/* --------------------------------------------------------------------- //
+ *                            LEGACY FUNCTIONS                           //
+ * --------------------------------------------------------------------- */
+/**
+ * Compute the squared aspect ratio parameter in the first anisotropy 
+ * parameter of the Gay-Berne-Kihara potential.  
+ *
+ * @param half_l1 Half of length of cell 1.
+ * @param half_l2 Half of length of cell 2. 
+ * @param Rcell Cell radius, excluding the EPS.
+ * @returns Squared aspect ratio parameter. 
+ */
+template <typename T>
+T squaredAspectRatioParam(const T half_l1, const T half_l2, const T Rcell)
+{
+    T total_l1 = half_l1 + Rcell; 
+    T total_l2 = half_l2 + Rcell; 
+    T width = Rcell;
+    T total_l1_sq = total_l1 * total_l1; 
+    T total_l2_sq = total_l2 * total_l2; 
+    T width_sq = width * width; 
+    T chi2_term1 = total_l1_sq - width_sq; 
+    T chi2_term2 = total_l2_sq - width_sq;
+    T chi2_term3 = total_l2_sq + width_sq; 
+    T chi2_term4 = total_l1_sq + width_sq;
+    
+    return (chi2_term1 * chi2_term2) / (chi2_term3 * chi2_term4);
 }
 
 /**
@@ -315,9 +432,6 @@ T potentialGBK(const Ref<const Matrix<T, Dim, 1> >& r1,
     }
 }
 
-/* --------------------------------------------------------------------- //
- *           LAGRANGIAN GENERALIZED FORCES IN 2 OR 3 DIMENSIONS          //
- * --------------------------------------------------------------------- */
 /**
  * Compute the Lagrangian generalized forces between two neighboring cells
  * that arise from the shifted Kihara potential in arbitrary dimensions (2
@@ -361,76 +475,6 @@ Array<T, 2, 2 * Dim> forcesKiharaLagrange(const Ref<const Matrix<T, Dim, 1> >& n
         T term1 = (dist <= dmin ? 1.0 / pow(dmin, exp + 1) : 1.0 / pow(dist, exp + 1)); 
         T term2 = 1.0 / pow(2 * R, exp + 1);
         Matrix<T, Dim, 1> v = exp * (term1 - term2) * d12n;
-        
-        // Partial derivatives w.r.t cell 1 center 
-        dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
-
-        // Partial derivatives w.r.t cell 2 center 
-        dEdq(1, Eigen::seq(0, Dim - 1)) = v;
-
-        // Partial derivatives w.r.t cell orientations 
-        if (!include_constraint)
-        {
-            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -s * v; 
-            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * v;
-        }
-        else    // Correct torques to account for orientation norm constraint 
-        {
-            T w1 = n1.dot(-v);
-            T w2 = n2.dot(-v);  
-            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = s * (-w1 * n1 - v);
-            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * (w2 * n2 + v);  
-        }
-    }
-    
-    return dEdq.array(); 
-}
-
-/**
- * Compute the Lagrangian generalized forces between two neighboring cells
- * that arise from the simplified JKR potential in arbitrary dimensions (2
- * or 3).
- *
- * Note that this function technically calculates the *negatives* of the
- * generalized forces.
- *
- * @param n1 Orientation of cell 1.
- * @param n2 Orientation of cell 2. 
- * @param d12 Shortest distance vector from cell 1 to cell 2.
- * @param R Cell radius, including the EPS. 
- * @param s Cell-body coordinate along cell 1 at which shortest distance is 
- *          achieved. 
- * @param t Cell-body coordinate along cell 2 at which shortest distance is
- *          achieved. 
- * @param dmin Minimum distance at which the potential is nonzero.
- * @param include_constraint If true, enforce the orientation vector norm 
- *                           constraint on the generalized torques. 
- * @returns Matrix of generalized forces arising from the simplified JKR
- *          contact potential.
- */
-template <typename T, int Dim>
-Array<T, 2, 2 * Dim> forcesJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1, 
-                                       const Ref<const Matrix<T, Dim, 1> >& n2, 
-                                       const Ref<const Matrix<T, Dim, 1> >& d12,
-                                       const T R, const T s, const T t, const T dmin, 
-                                       const bool include_constraint = true)
-{
-    Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
-    const T dist = d12.norm(); 
-
-    // If the distance is less than 2 * R ... 
-    if (dist <= 2 * R)
-    {
-        // Normalize the distance vector 
-        Matrix<T, Dim, 1> d12n = d12 / dist;
-
-        // Get the terms that contribute to each generalized force
-        T term = boost::math::constants::pi<T>() * R; 
-        if (dist <= dmin)
-            term *= (2 * R - dmin); 
-        else 
-            term *= (2 * R - dist);
-        Matrix<T, Dim, 1> v = term * d12n;  
         
         // Partial derivatives w.r.t cell 1 center 
         dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
@@ -726,49 +770,7 @@ Array<T, 2, 2 * Dim> forcesGBKLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
     return dEdq.array(); 
 }
 
-/* --------------------------------------------------------------------- //
- *                  NEWTONIAN FORCES IN 2 OR 3 DIMENSIONS                //
- * --------------------------------------------------------------------- */
-/**
- * Compute the Newtonian forces between two neighboring cells that arise
- * from the shifted JKR potential in arbitrary dimensions (2 or 3).
- *
- * Note that this function calculates the force on cell 1 due to cell 2. 
- *
- * @param d12 Shortest distance vector from cell 1 to cell 2.
- * @param R Cell radius, including the EPS. 
- * @param s Cell-body coordinate along cell 1 at which shortest distance is 
- *          achieved. 
- * @param t Cell-body coordinate along cell 2 at which shortest distance is
- *          achieved. 
- * @param dmin Minimum distance at which the potential is nonzero.
- * @returns Force on cell 1 due to cell 2 arising from the JKR potential. 
- */
-template <typename T, int Dim>
-Array<T, Dim, 1> forceJKRNewton(const Ref<const Matrix<T, Dim, 1> >& d12,
-                                const T R, const T dmin)
-{
-    Matrix<T, Dim, 1> force = Matrix<T, Dim, 1>::Zero();
-    const T dist = d12.norm(); 
-
-    // If the distance is less than 2 * R ... 
-    if (dist <= 2 * R)
-    {
-        // Normalize the distance vector 
-        Matrix<T, Dim, 1> d12n = d12 / dist;
-
-        // Get the terms that contribute to the force on cell 1 due to cell 2
-        T term = boost::math::constants::pi<T>() * R; 
-        if (dist <= dmin)
-            term *= (2 * R - dmin); 
-        else 
-            term *= (2 * R - dist);
-        force = term * d12n; 
-    }
-
-    return force; 
-}
-    
+  
 /**
  * Compute the Newtonian forces between two neighboring cells that arise
  * from the shifted Kihara potential in arbitrary dimensions (2 or 3).
