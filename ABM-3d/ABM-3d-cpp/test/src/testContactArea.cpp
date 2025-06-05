@@ -101,9 +101,8 @@ TEST_CASE("Tests for Hertzian contact area calculation", "[hertzContactArea()]")
  */
 TEST_CASE("Tests for JKR contact radius calculations", "[jkrContactRadius()]")
 {
-    typedef boost::multiprecision::number<boost::multiprecision::mpc_complex_backend<100> > ComplexType; 
-    const T radius_tol = 1e-20;  
-    const T eval_tol = 1e-15; 
+    typedef boost::multiprecision::number<boost::multiprecision::mpc_complex_backend<100> > ComplexType;
+    const T tol = 1e-15;  
 
     T delta = 0.1;
     T R = 0.8; 
@@ -111,12 +110,18 @@ TEST_CASE("Tests for JKR contact radius calculations", "[jkrContactRadius()]")
     T gamma = 100.0;
     T imag_tol = 1e-20;
     T aberth_tol = 1e-20; 
-    T radius = jkrContactRadius<T, 100>(delta, R, E, gamma, imag_tol, aberth_tol);
+    std::pair<T, T> radii = jkrContactRadius<T, 100>(delta, R, E, gamma, imag_tol, aberth_tol);
+    T r1 = radii.first; 
+    T r2 = radii.second;
 
-    // Check that the radius is greater than the Hertzian expectation 
-    REQUIRE(radius - sqrt(R * delta) > radius_tol);
+    // Check that both radii are positive
+    REQUIRE(r1 > tol);
+    REQUIRE(r2 > tol);
 
-    // Check that the polynomial evaluates to zero at the computed radius
+    // Check that the larger radius is greater than the Hertzian expectation
+    REQUIRE(r2 - sqrt(R * delta) > tol);
+
+    // Check that the polynomial evaluates to zero at both computed radii
     T c0 = R * R * delta * delta; 
     T c1 = -4 * boost::math::constants::pi<T>() * gamma * R * R / E;
     T c2 = -2 * R * delta; 
@@ -124,8 +129,10 @@ TEST_CASE("Tests for JKR contact radius calculations", "[jkrContactRadius()]")
     Matrix<T, Dynamic, 1> coefs(5); 
     coefs << c0, c1, c2, 0.0, c4; 
     HighPrecisionPolynomial<100> p(coefs);
-    ComplexType z(radius, 0.0);  
-    REQUIRE(abs(p.eval(z)) < eval_tol); 
+    ComplexType z1(r1, 0.0);
+    ComplexType z2(r2, 0.0);  
+    REQUIRE(abs(p.eval(z1)) < tol);
+    REQUIRE(abs(p.eval(z2)) < tol);
 
     // Compare against the analytical formula derived by Parteli et al. (2014)
     T P = -c2 * c2 / 12.0 - c0; 
@@ -138,11 +145,18 @@ TEST_CASE("Tests for JKR contact radius calculations", "[jkrContactRadius()]")
         s -= pow(Q, 1. / 3.);
     T w = sqrt(c2 + 2 * s); 
     T lambda = c1 / (2 * w);
-    T a = 0.5 * (w + sqrt(w * w - 4 * (c2 + s + lambda)));
+    T a1 = 0.5 * (w + sqrt(w * w - 4 * (c2 + s + lambda)));
+    T a2 = 0.5 * (w - sqrt(w * w - 4 * (c2 + s + lambda))); 
     REQUIRE_THAT(
-        static_cast<double>(radius),
-        Catch::Matchers::WithinAbs(static_cast<double>(a), static_cast<double>(radius_tol))
+        static_cast<double>(r2),
+        Catch::Matchers::WithinAbs(static_cast<double>(a1), static_cast<double>(tol))
     );
-    ComplexType y(a, 0.0); 
-    REQUIRE(abs(p.eval(y)) < eval_tol); 
+    REQUIRE_THAT(
+        static_cast<double>(r1),
+        Catch::Matchers::WithinAbs(static_cast<double>(a2), static_cast<double>(tol))
+    );
+    ComplexType y1(a1, 0.0);
+    ComplexType y2(a2, 0.0);  
+    REQUIRE(abs(p.eval(y1)) < tol);
+    REQUIRE(abs(p.eval(y2)) < tol);
 }
