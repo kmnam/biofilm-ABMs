@@ -147,16 +147,17 @@ Array<T, 2, 2 * Dim> forcesSimpleJKRLagrange(const Ref<const Matrix<T, Dim, 1> >
  * @param n2 Orientation of cell 2. 
  * @param d12 Shortest distance vector from cell 1 to cell 2.
  * @param R Cell radius, including the EPS.
- * @param E Elastic modulus of EPS.  
+ * @param E0 Elastic modulus of EPS.
+ * @param gamma Surface energy density. 
  * @param s Cell-body coordinate along cell 1 at which shortest distance is 
  *          achieved. 
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
  *          achieved. 
- * @param dmin Minimum distance at which the potential is nonzero.
- * @param choose_smaller_area If true, use the smaller of the two possible
- *                            contact area. 
  * @param include_constraint If true, enforce the orientation vector norm 
- *                           constraint on the generalized torques. 
+ *                           constraint on the generalized torques.
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for the Aberth-Ehrlich method.
  * @returns Matrix of generalized forces arising from the simplified JKR
  *          contact potential.
  */
@@ -165,7 +166,7 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
                                                 const Ref<const Matrix<T, Dim, 1> >& n2,
                                                 const Ref<const Matrix<T, Dim, 1> >& d12,
                                                 const T R, const T E0, const T gamma,
-                                                const T s, const T t, const T dmin,
+                                                const T s, const T t,
                                                 const bool include_constraint = true,
                                                 const T imag_tol = 1e-20, 
                                                 const T aberth_tol = 1e-20)
@@ -178,9 +179,7 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
     {
         // Normalize the distance vector 
         Matrix<T, Dim, 1> d12n = d12 / dist;
-
-        // Bound the overlap by the maximum value
-        T delta = min(2 * R - dist, 2 * R - dmin); 
+        T delta = 2 * R - dist; 
 
         // Get the corresponding JKR contact area
         std::pair<T, T> radii = jkrContactRadius<T, N>(
@@ -191,6 +190,101 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
         // Calculate the generalized forces
         T a3 = radius * radius * radius;  
         T term = 4 * sqrt(boost::math::constants::pi<T>() * a3 * gamma * E0);
+        Matrix<T, Dim, 1> v = term * d12n;  
+        
+        // Partial derivatives w.r.t cell 1 center 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
+
+        // Partial derivatives w.r.t cell 2 center 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = v;
+
+        // Partial derivatives w.r.t cell orientations 
+        if (!include_constraint)
+        {
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -s * v; 
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * v;
+        }
+        else    // Correct torques to account for orientation norm constraint 
+        {
+            T w1 = n1.dot(-v);
+            T w2 = n2.dot(-v);  
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = s * (-w1 * n1 - v);
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * (w2 * n2 + v);  
+        }
+    }
+    
+    return dEdq.array(); 
+}
+
+/**
+ * Compute the Lagrangian generalized forces between two neighboring cells
+ * that arise from the anisotropic JKR force in arbitrary dimensions (2 or 3).
+ *
+ * Note that this function technically calculates the *negatives* of the
+ * generalized forces.
+ *
+ * @param r1 Center of cell 1.
+ * @param n1 Orientation of cell 1.
+ * @param half_l1 Half-length of cell 1.
+ * @param r2 Center of cell 2.
+ * @param n2 Orientation of cell 2.
+ * @param half_l2 Half-length of cell 2. 
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param R Cell radius, including the EPS.
+ * @param E0 Elastic modulus of EPS. 
+ * @param gamma Surface energy density. 
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved. 
+ * @param ellip_table Pre-computed table containing values for the elliptic
+ *                    integral function for various eccentricities between 0
+ *                    and 1. 
+ * @param include_constraint If true, enforce the orientation vector norm 
+ *                           constraint on the generalized torques.
+ * @param project_tol Tolerance for ellipsoid projection. 
+ * @param project_max_iter Maximum number of iterations for ellipsoid projection. 
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for the Aberth-Ehrlich method.
+ * @returns Matrix of generalized forces arising from the simplified JKR
+ *          contact potential.
+ */
+template <typename T, int Dim, int N = 100>
+Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
+                                                  const Ref<const Matrix<T, Dim, 1> >& n1,
+                                                  const T half_l1,
+                                                  const Ref<const Matrix<T, Dim, 1> >& r2,
+                                                  const Ref<const Matrix<T, Dim, 1> >& n2,
+                                                  const T half_l2,
+                                                  const Ref<const Matrix<T, Dim, 1> >& d12,
+                                                  const T R, const T E0, const T gamma,
+                                                  const T s, const T t,
+                                                  const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
+                                                  const bool include_constraint = true,
+                                                  const T project_tol = 1e-6, 
+                                                  const int project_max_iter = 100,
+                                                  const T imag_tol = 1e-20, 
+                                                  const T aberth_tol = 1e-20)
+{
+    Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
+    const T dist = d12.norm(); 
+
+    // If the distance is less than 2 * R ... 
+    if (dist <= 2 * R)
+    {
+        // Normalize the distance vector 
+        Matrix<T, Dim, 1> d12n = d12 / dist;
+
+        // Get the corresponding JKR contact area
+        T area = jkrContactAreaEllipsoid<T, N>(
+            r1, n1, half_l1, r2, n2, half_l2, R, d12, s, t, E0, gamma, ellip_table,
+            project_tol, project_max_iter, imag_tol, aberth_tol
+        );
+        T radius = sqrt(area / boost::math::constants::pi<T>()); 
+
+        // Calculate the generalized forces
+        T term = 4 * sqrt(area * radius * gamma * E0);
         Matrix<T, Dim, 1> v = term * d12n;  
         
         // Partial derivatives w.r.t cell 1 center 
