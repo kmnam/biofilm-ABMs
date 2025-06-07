@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/3/2025
+ *     6/7/2025
  */
 
 #ifndef BIOFILM_JKR_HPP
@@ -178,6 +178,7 @@ std::pair<T, T> jkrContactRadius(const T delta, const T R, const T E,
     // If there are exactly 2 real roots identified, return both 
     else if (roots_real.size() == 2)
     {
+        // Sort the real roots in ascending order 
         std::sort(roots_real.begin(), roots_real.end()); 
         return std::make_pair(roots_real[0], roots_real[1]);
     } 
@@ -196,9 +197,13 @@ std::pair<T, T> jkrContactRadius(const T delta, const T R, const T E,
                 return (abs(a.first) < abs(b.first)); 
             }
         );
-        return std::make_pair(
-            real(roots(roots_imag[0].second)), real(roots(roots_imag[1].second))
-        );
+
+        // Gather and sort the real roots in ascending order
+        roots_real.clear();
+        roots_real.push_back(real(roots(roots_imag[0].second)));
+        roots_real.push_back(real(roots(roots_imag[1].second))); 
+        std::sort(roots_real.begin(), roots_real.end());   
+        return std::make_pair(roots_real[0], roots_real[1]);
     } 
 }
 
@@ -287,7 +292,10 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
     // Compute the expected contact area for a Hertzian contact 
     T area = hertzContactArea<T>(delta, Rx1, Ry1, Rx2, Ry2, n1, n2, ellip_table);
 
-    // Compute the correction factor to account for JKR-based adhesion  
+    // Compute the correction factor to account for JKR-based adhesion
+    //
+    // TODO Take care of the possibility of hysteresis (in which case the 
+    // lower radius value may need to be used) 
     std::pair<T, T> jkr_radius = jkrContactRadius<T, N>(
         delta, R, E0, gamma, imag_tol, aberth_tol
     );
