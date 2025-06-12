@@ -5,16 +5,22 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/8/2025
+ *     6/11/2025
  */
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 #include <iomanip>
 #include <utility>
 #include <Eigen/Dense>
 #include <boost/multiprecision/mpfr.hpp>
 #include <boost/random.hpp>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Point_3.h>
+#include <CGAL/Vector_3.h>
+#include <CGAL/Polyhedron_3.h>
+#include <CGAL/Subdivision_method_3.h>
 #include "../include/adhesion.hpp"
 #include "../include/jkr.hpp"
 
@@ -23,7 +29,13 @@ using boost::multiprecision::sqrt;
 using boost::multiprecision::log10; 
 using boost::multiprecision::pow; 
 
-typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<100> > PreciseType; 
+typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<100> > PreciseType;
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
+typedef K::Point_3 Point_3;
+typedef K::Vector_3 Vector_3; 
+typedef CGAL::Polyhedron_3<K> Polyhedron_3;
+typedef Polyhedron_3::Vertex_handle Vertex_handle;
+typedef Polyhedron_3::HalfedgeDS HalfedgeDS;
 
 /**
  * Calculate the Hertz-JKR equilibrium cell-cell distance for the given
@@ -54,7 +66,6 @@ T jkrEquilibriumDistance(const T R, const T E, const T gamma, const T delta_min,
     T dist = dmin + (dmax - dmin) * uniform_dist(rng);
     T delta = 2 * R - dist;  
     T update = std::numeric_limits<T>::infinity();
-    int iter = 0; 
 
     // While the update between consecutive overlaps is larger than the 
     // given tolerance ... 
@@ -228,6 +239,142 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E, const T deq_target,
     return gamma; 
 }
 
+/**
+ * Generate a uniform mesh of points on the unit sphere, obtained by iteratively
+ * subdividing a regular icosahedral mesh. 
+ *
+ * @param n Minimum number of points to be included in the final mesh. 
+ * @returns Nearly uniform mesh of points on the unit sphere. 
+ */
+template <typename T>
+Matrix<T, Dynamic, 3> uniformMeshSphere(const int n)
+{
+    // Create an initial icosahedral mesh
+    //
+    // These coordinates are taken from:
+    // https://math.stackexchange.com/questions/2174594/
+    // co-ordinates-of-the-vertices-an-icosahedron-relative-to-its-centroid
+    std::vector<Point_3> vertices;
+    double a = 1 / std::sqrt(5); 
+    double b = (5 - std::sqrt(5)) / 10; 
+    double c = (5 + std::sqrt(5)) / 10; 
+    double d = -b;    // -5 + sqrt(5) / 10 
+    double e = -c;    // -5 - sqrt(5) / 10
+    vertices.push_back(Point_3(1, 0, 0)); 
+    vertices.push_back(Point_3(a, 2 * a, 0)); 
+    vertices.push_back(Point_3(a, b, sqrt(c))); 
+    vertices.push_back(Point_3(a, e, sqrt(b))); 
+    vertices.push_back(Point_3(a, e, -sqrt(b))); 
+    vertices.push_back(Point_3(a, b, -sqrt(c))); 
+    vertices.push_back(Point_3(-1, 0, 0)); 
+    vertices.push_back(Point_3(-a, -2 * a, 0)); 
+    vertices.push_back(Point_3(-a, d, -sqrt(c))); 
+    vertices.push_back(Point_3(-a, c, -sqrt(b))); 
+    vertices.push_back(Point_3(-a, c, sqrt(b))); 
+    vertices.push_back(Point_3(-a, d, sqrt(c)));
+
+    // Store the edges in an adjacency matrix 
+    Matrix<int, Dynamic, Dynamic> edges = Matrix<int, Dynamic, Dynamic>(12, 12);
+    for (int i = 1; i < 6; ++i)
+    {
+        edges(0, i) = 1;
+        edges(i, 0) = 1; 
+        edges(i, 2 + i % 5 - 1) = 1; 
+        edges(i, 2 + (i + 3) % 5 - 1) = 1; 
+        edges(i, 8 + (i + 1) % 5 - 1) = 1; 
+        edges(i, 8 + (i + 2) % 5 - 1) = 1; 
+    }
+    for (int i = 6; i < 12; ++i)
+    {
+        edges(6, i) = 1; 
+        edges(i, 6) = 1; 
+        edges(i, 8 + (i - 1) % 5 - 1) = 1; 
+        edges(i, 8 + (i + 2) % 5 - 1) = 1; 
+        edges(i, 2 + i % 5 - 1) = 1; 
+        edges(i, 2 + (i + 1) % 5 - 1) = 1; 
+    }
+
+    // Get the faces from the adjacency matrix
+    std::vector<std::vector<int> > faces; 
+    for (int i = 0; i < 12; ++i)
+    {
+        for (int j = i + 1; j < 12; ++j)
+        {
+            if (edges(i, j))
+            {
+                for (int k = j + 1; k < 12; ++k)
+                {
+                    if (edges(j, k) && edges(i, k))
+                    {
+                        // The face is (i, j, k)
+                        //
+                        // First find a normal vector to the face 
+                        Vector_3 u(vertices[i], vertices[j]); 
+                        Vector_3 v(vertices[i], vertices[k]); 
+                        Vector_3 cross = CGAL::cross_product(u, v);
+
+                        // Calculate the dot product of this normal vector
+                        // with an inward-pointing vector (towards the origin)
+                        Vector_3 center(
+                            (vertices[i].x() + vertices[j].x() + vertices[k].x()) / 3,
+                            (vertices[i].y() + vertices[j].y() + vertices[k].y()) / 3,
+                            (vertices[i].z() + vertices[j].z() + vertices[k].z()) / 3
+                        );  
+                        double dot = CGAL::scalar_product(cross, center);
+                        if (dot < 0)    // Normal points outward
+                            faces.push_back({i, j, k});
+                        else            // Normal points inward
+                            faces.push_back({i, k, j}); 
+                        std::cout << i << " " << j << " " << k << std::endl;  
+                    }
+                }
+            }
+        }
+    }
+
+    // Define the icosahedron 
+    Polyhedron_3 poly;
+    CGAL::Polyhedron_incremental_builder_3<HalfedgeDS> builder(poly.hds(), true);
+    builder.begin_surface(vertices.size(), faces.size()); 
+    for (const Point_3& v : vertices)
+        builder.add_vertex(v); 
+    for (int i = 0; i < faces.size(); ++i)
+    {
+        builder.begin_facet(); 
+        builder.add_vertex_to_facet(faces[i][0]);
+        builder.add_vertex_to_facet(faces[i][1]);
+        builder.add_vertex_to_facet(faces[i][2]); 
+        builder.end_facet(); 
+    }
+    builder.end_surface();
+
+    // Subdivide the polyhedron using the Loop subdivision method
+    int n_vertices = poly.size_of_vertices(); 
+    while (n_vertices < n)
+    {
+        CGAL::Subdivision_method_3::Loop_subdivision(poly, 1);
+        n_vertices = poly.size_of_vertices(); 
+    }
+
+    // Extract the vertices in the subdivided mesh and normalize each 
+    Matrix<T, Dynamic, 3> mesh(poly.size_of_vertices(), 3);
+    int i = 0; 
+    for (auto it = poly.vertices_begin(); it != poly.vertices_end(); ++it)
+    {
+        Point_3 p = it->point();
+        T x = static_cast<T>(p.x()); 
+        T y = static_cast<T>(p.y()); 
+        T z = static_cast<T>(p.z());  
+        T norm = sqrt(x * x + y * y + z * z);
+        mesh(i, 0) = x / norm; 
+        mesh(i, 1) = y / norm; 
+        mesh(i, 2) = z / norm; 
+        i++; 
+    }
+
+    return mesh; 
+}
+
 int main(int argc, char** argv)
 {
     const PreciseType R = 0.8;
@@ -264,5 +411,7 @@ int main(int argc, char** argv)
         R, E, deq_target, gamma_min, gamma_max, delta_min, delta_max, rng, tol,
         d_log_gamma, max_learn_rate, d_delta, newton_tol, imag_tol, aberth_tol,
         verbose
-    ); 
+    );
+
+    uniformMeshSphere<PreciseType>(200); 
 }
