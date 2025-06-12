@@ -38,6 +38,10 @@ using std::sqrt;
 using boost::multiprecision::sqrt;
 using std::log;
 using boost::multiprecision::log;
+using std::pow; 
+using boost::multiprecision::pow;
+using std::ceil; 
+using boost::multiprecision::ceil; 
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Point_3 Point_3;
@@ -592,6 +596,87 @@ Matrix<T, Dynamic, 3> uniformMeshSphere(const int n)
     }
 
     return mesh; 
+}
+
+/**
+ * Given a maximum (centerline) cell length and a range of acceptable cell-cell
+ * distances, generate a uniform lattice of cell centers whose (approximate)
+ * maximal cell-cell distances to a maximum-length cell at the origin are
+ * within the given range. 
+ *
+ * @param n Minimum number of cell centers to include in the lattice. 
+ * @param dmin Minimum cell-cell distance. 
+ * @param dmax Maximum cell-cell distance. 
+ * @param lmax Maximum cell length. 
+ * @returns Generated lattice of cell centers. 
+ */
+template <typename T>
+Matrix<T, Dynamic, 3> uniformLattice(const int n, const T dmin, const T dmax,
+                                     const T lmax)
+{
+    K kernel; 
+
+    // Infer the maximum coordinate per dimension
+    const T rmax = dmax + lmax;  
+
+    // Iteratively create and refine the lattice until it contains at least
+    // n points ...
+    //
+    // Start with n^{1/3} points per dimension
+    int n_per_dim = static_cast<int>(ceil(pow(n, 1. / 3.));
+    int n_lattice = 0;
+    Matrix<T, 3, 1> r1, n1, z;
+    r1 << 0, 0, 0; 
+    n1 << 1, 0 ,0;
+    z << 0, 0, 1;
+    Segment_3 cell1 = generateSegment<T>(r1, n1, lmax / 2.0); 
+    while (n_lattice < n)
+    {
+        // Generate a uniform lattice from 0 to rmax along each dimension 
+        Matrix<T, Dynamic, 1> mesh_per_dim = Matrix<T, Dynamic, 1>::LinSpaced(n_per_dim, 0, rmax);
+        Matrix<T, Dynamic, 3> lattice = Matrix<T, Dynamic, 3>::Zero(pow(n_per_dim, 3), 3);
+        int m = 0; 
+        for (int i = 0; i < n_per_dim; ++i)
+        {
+            for (int j = 0; j < n_per_dim; ++j)
+            {
+                for (int k = 0; k < n_per_dim; ++k)
+                {
+                    Matrix<T, 3, 1> r2;
+                    r2 << mesh_per_dim(i), mesh_per_dim(j), mesh_per_dim(k);
+
+                    // Get the nearest point along the central, maximum-length
+                    // cell to r2
+                    T s = nearestCellBodyCoordToPoint<T>(r1, n1, lmax / 2.0, r2); 
+                    Matrix<T, 3, 1> q = r1 + s * n1; 
+
+                    // Get the distance between the central, maximum-length
+                    // cell to the maximum-length cell centered at r2 with 
+                    // some orientation orthogonal to the vector from q to r2
+                    Matrix<T, 3, 1> n2 = (r2 - q).cross(z);
+                    n2 /= n2.norm();
+                    Segment_3 cell2 = generateSegment<T>(r2, n2, lmax / 2.0); 
+                    auto result = distBetweenCells<T>(
+                        cell1, cell2, 0, r1, n1, lmax / 2.0, 1, r2, n2,
+                        lmax / 2.0, kernel
+                    );
+                    Matrix<T, 3, 1> d12 = std::get<0>(result);
+                    
+                    // If the distance is within the desired range, collect r2
+                    T d = d12.norm(); 
+                    if (d >= dmin && d <= dmax)
+                    {
+                        lattice.row(m) = r2;
+                        m++;
+                    }
+                }
+            }
+        }
+        n_lattice = m;
+        n_per_dim++;  
+    }
+
+    return lattice.conservativeResize(n_lattice, 3);  
 }
 
 /**
