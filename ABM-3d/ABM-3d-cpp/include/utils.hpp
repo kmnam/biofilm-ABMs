@@ -783,7 +783,7 @@ Matrix<T, Dynamic, Dim> uniformLattice(const int n, const T dmin, const T dmax,
                 }
             }
         }
-        n_lattice = m + 1;
+        n_lattice = m;
         n_per_dim++;  
     }
 
