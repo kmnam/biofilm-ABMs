@@ -26,6 +26,7 @@
 #include <CGAL/Polyhedron_3.h>
 #include <CGAL/Subdivision_method_3.h>
 #include "indices.hpp"
+#include "distances.hpp"
 
 using std::abs;
 using boost::multiprecision::abs;
@@ -466,10 +467,11 @@ Array<T, 3, 1> rotateOutOfXY(const Ref<const Array<T, 3, 1> >& n, const T theta)
  * subdividing a regular icosahedral mesh. 
  *
  * @param n Minimum number of points to be included in the final mesh. 
+ * @param restrict_zpos If true, restrict the z-coordinate to be positive.
  * @returns Nearly uniform mesh of points on the unit sphere. 
  */
 template <typename T>
-Matrix<T, Dynamic, 3> uniformMeshSphere(const int n)
+Matrix<T, Dynamic, 3> uniformMeshSphere(const int n, const bool restrict_zpos = false)
 {
     // Create an initial icosahedral mesh
     //
@@ -569,28 +571,57 @@ Matrix<T, Dynamic, 3> uniformMeshSphere(const int n)
     }
     builder.end_surface();
 
-    // Subdivide the polyhedron using the Loop subdivision method
-    int n_vertices = poly.size_of_vertices(); 
+    // Subdivide the polyhedron using the Loop subdivision method, checking
+    // after each iteration if the minimum number of vertices has been
+    // reached 
+    int n_vertices; 
+    if (restrict_zpos)
+    {
+        for (auto it = poly.vertices_begin(); it != poly.vertices_end(); ++it)
+        {
+            if (it->point().z() >= 0)
+                n_vertices++;  
+        }
+    }
+    else
+    {
+        n_vertices = poly.size_of_vertices();
+    } 
     while (n_vertices < n)
     {
         CGAL::Subdivision_method_3::Loop_subdivision(poly, 1);
-        n_vertices = poly.size_of_vertices(); 
+        if (restrict_zpos)
+        {
+            for (auto it = poly.vertices_begin(); it != poly.vertices_end(); ++it)
+            {
+                if (it->point().z() >= 0)
+                    n_vertices++;  
+            }
+        }
+        else
+        {
+            n_vertices = poly.size_of_vertices();
+        } 
     }
 
-    // Extract the vertices in the subdivided mesh and normalize each 
-    Matrix<T, Dynamic, 3> mesh(poly.size_of_vertices(), 3);
+    // Extract the vertices in the subdivided mesh and normalize each vertex
+    // to be unit length
+    Matrix<T, Dynamic, 3> mesh(n_vertices, 3); 
     int i = 0; 
     for (auto it = poly.vertices_begin(); it != poly.vertices_end(); ++it)
     {
         Point_3 p = it->point();
         T x = static_cast<T>(p.x()); 
         T y = static_cast<T>(p.y()); 
-        T z = static_cast<T>(p.z());  
-        T norm = sqrt(x * x + y * y + z * z);
-        mesh(i, 0) = x / norm; 
-        mesh(i, 1) = y / norm; 
-        mesh(i, 2) = z / norm; 
-        i++; 
+        T z = static_cast<T>(p.z());
+        if (!restrict_zpos || z >= 0)
+        { 
+            T norm = sqrt(x * x + y * y + z * z);
+            mesh(i, 0) = x / norm; 
+            mesh(i, 1) = y / norm; 
+            mesh(i, 2) = z / norm; 
+            i++;
+        } 
     }
 
     return mesh; 
@@ -615,24 +646,26 @@ Matrix<T, Dynamic, 3> uniformLattice(const int n, const T dmin, const T dmax,
     K kernel; 
 
     // Infer the maximum coordinate per dimension
-    const T rmax = dmax + lmax;  
+    const double rmax = static_cast<double>(dmax + lmax);  
 
     // Iteratively create and refine the lattice until it contains at least
     // n points ...
     //
     // Start with n^{1/3} points per dimension
-    int n_per_dim = static_cast<int>(ceil(pow(n, 1. / 3.));
+    int n_per_dim = static_cast<int>(ceil(pow(n, 1. / 3.)));
     int n_lattice = 0;
-    Matrix<T, 3, 1> r1, n1, z;
+    Matrix<double, 3, 1> r1, n1, z;
     r1 << 0, 0, 0; 
-    n1 << 1, 0 ,0;
+    n1 << 1, 0, 0;
     z << 0, 0, 1;
-    Segment_3 cell1 = generateSegment<T>(r1, n1, lmax / 2.0); 
+    Segment_3 cell1 = generateSegment<double>(r1, n1, static_cast<double>(lmax / 2.0)); 
+    Matrix<T, Dynamic, 3> lattice;  
     while (n_lattice < n)
     {
         // Generate a uniform lattice from 0 to rmax along each dimension 
-        Matrix<T, Dynamic, 1> mesh_per_dim = Matrix<T, Dynamic, 1>::LinSpaced(n_per_dim, 0, rmax);
-        Matrix<T, Dynamic, 3> lattice = Matrix<T, Dynamic, 3>::Zero(pow(n_per_dim, 3), 3);
+        Matrix<double, Dynamic, 1> mesh_per_dim
+            = Matrix<double, Dynamic, 1>::LinSpaced(n_per_dim, 0, rmax);
+        lattice = Matrix<T, Dynamic, 3>::Zero(pow(n_per_dim, 3), 3);
         int m = 0; 
         for (int i = 0; i < n_per_dim; ++i)
         {
@@ -640,41 +673,45 @@ Matrix<T, Dynamic, 3> uniformLattice(const int n, const T dmin, const T dmax,
             {
                 for (int k = 0; k < n_per_dim; ++k)
                 {
-                    Matrix<T, 3, 1> r2;
+                    Matrix<double, 3, 1> r2;
                     r2 << mesh_per_dim(i), mesh_per_dim(j), mesh_per_dim(k);
 
                     // Get the nearest point along the central, maximum-length
                     // cell to r2
-                    T s = nearestCellBodyCoordToPoint<T>(r1, n1, lmax / 2.0, r2); 
-                    Matrix<T, 3, 1> q = r1 + s * n1; 
+                    double s = nearestCellBodyCoordToPoint<double>(
+                        r1, n1, static_cast<double>(lmax / 2.0), r2
+                    ); 
+                    Matrix<double, 3, 1> q = r1 + s * n1; 
 
                     // Get the distance between the central, maximum-length
                     // cell to the maximum-length cell centered at r2 with 
                     // some orientation orthogonal to the vector from q to r2
-                    Matrix<T, 3, 1> n2 = (r2 - q).cross(z);
+                    Matrix<double, 3, 1> n2 = (r2 - q).cross(z);
                     n2 /= n2.norm();
-                    Segment_3 cell2 = generateSegment<T>(r2, n2, lmax / 2.0); 
-                    auto result = distBetweenCells<T>(
-                        cell1, cell2, 0, r1, n1, lmax / 2.0, 1, r2, n2,
-                        lmax / 2.0, kernel
+                    Segment_3 cell2 = generateSegment<double>(
+                        r2, n2, static_cast<double>(lmax / 2.0)
+                    ); 
+                    auto result = distBetweenCells<double>(
+                        cell1, cell2, 0, r1, n1, static_cast<double>(lmax / 2.0),
+                        1, r2, n2, static_cast<double>(lmax / 2.0), kernel
                     );
-                    Matrix<T, 3, 1> d12 = std::get<0>(result);
+                    Matrix<double, 3, 1> d12 = std::get<0>(result);
                     
                     // If the distance is within the desired range, collect r2
-                    T d = d12.norm(); 
+                    double d = d12.norm(); 
                     if (d >= dmin && d <= dmax)
                     {
-                        lattice.row(m) = r2;
+                        lattice.row(m) = r2.template cast<T>();
                         m++;
                     }
                 }
             }
         }
-        n_lattice = m;
+        n_lattice = m + 1;
         n_per_dim++;  
     }
 
-    return lattice.conservativeResize(n_lattice, 3);  
+    return lattice(Eigen::seq(0, n_lattice - 1), Eigen::all); 
 }
 
 /**
