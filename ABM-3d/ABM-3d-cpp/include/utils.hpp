@@ -548,7 +548,6 @@ Matrix<T, Dynamic, 3> uniformMeshSphere(const int n)
                             faces.push_back({i, j, k});
                         else            // Normal points inward
                             faces.push_back({i, k, j}); 
-                        std::cout << i << " " << j << " " << k << std::endl;  
                     }
                 }
             }
