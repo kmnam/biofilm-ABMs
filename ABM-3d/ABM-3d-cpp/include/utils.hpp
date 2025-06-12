@@ -657,7 +657,9 @@ Matrix<T, Dynamic, 3> uniformMeshSphere(const int n, const bool restrict_zpos = 
  * Given a maximum (centerline) cell length and a range of acceptable cell-cell
  * distances, generate a uniform lattice of cell centers whose (approximate)
  * maximal cell-cell distances to a maximum-length cell at the origin are
- * within the given range. 
+ * within the given range.
+ *
+ * This function can generate this mesh in either 2 or 3 dimensions.  
  *
  * @param n Minimum number of cell centers to include in the lattice. 
  * @param dmin Minimum cell-cell distance. 
@@ -665,61 +667,65 @@ Matrix<T, Dynamic, 3> uniformMeshSphere(const int n, const bool restrict_zpos = 
  * @param lmax Maximum cell length. 
  * @returns Generated lattice of cell centers. 
  */
-template <typename T>
-Matrix<T, Dynamic, 3> uniformLattice(const int n, const T dmin, const T dmax,
-                                     const T lmax)
+template <typename T, int Dim>
+Matrix<T, Dynamic, Dim> uniformLattice(const int n, const T dmin, const T dmax,
+                                       const T lmax)
 {
-    K kernel; 
+    K kernel;
+    const double half_lmax = static_cast<double>(lmax / 2);  
 
     // Infer the maximum coordinate per dimension
-    const double rmax = static_cast<double>(dmax + lmax);  
+    const double rmax = static_cast<double>(dmax + lmax);
 
     // Iteratively create and refine the lattice until it contains at least
     // n points ...
     //
-    // Start with n^{1/3} points per dimension
-    int n_per_dim = static_cast<int>(ceil(pow(n, 1. / 3.)));
+    // Start with n^{1/2} points or n^{1/3} points per dimension, depending
+    // on the dimensionality
+    int n_per_dim = static_cast<int>(ceil(pow(n, 1. / static_cast<double>(Dim))));
     int n_lattice = 0;
     Matrix<double, 3, 1> r1, n1, z;
     r1 << 0, 0, 0; 
     n1 << 1, 0, 0;
     z << 0, 0, 1;
-    Segment_3 cell1 = generateSegment<double>(r1, n1, static_cast<double>(lmax / 2.0)); 
-    Matrix<T, Dynamic, 3> lattice;  
+    Segment_3 cell1 = generateSegment<double>(r1, n1, half_lmax);
+    Matrix<T, Dynamic, Dim> lattice;  
     while (n_lattice < n)
     {
         // Generate a uniform lattice from 0 to rmax along each dimension 
         Matrix<double, Dynamic, 1> mesh_per_dim
             = Matrix<double, Dynamic, 1>::LinSpaced(n_per_dim, 0, rmax);
-        lattice = Matrix<T, Dynamic, 3>::Zero(pow(n_per_dim, 3), 3);
-        int m = 0; 
-        for (int i = 0; i < n_per_dim; ++i)
+        lattice = Matrix<T, Dynamic, Dim>::Zero(pow(n_per_dim, Dim), Dim);
+        int m = 0;
+        if (Dim == 2)
         {
-            for (int j = 0; j < n_per_dim; ++j)
+            Matrix<double, 2, 2> rot;    // Rotation by 90 degrees 
+            rot << 0, -1, 
+                   1,  0; 
+            for (int i = 0; i < n_per_dim; ++i)
             {
-                for (int k = 0; k < n_per_dim; ++k)
+                for (int j = 0; j < n_per_dim; ++j)
                 {
                     Matrix<double, 3, 1> r2;
-                    r2 << mesh_per_dim(i), mesh_per_dim(j), mesh_per_dim(k);
+                    r2 << mesh_per_dim(i), mesh_per_dim(j), 0;
 
                     // Get the nearest point along the central, maximum-length
                     // cell to r2
                     double s = nearestCellBodyCoordToPoint<double>(
-                        r1, n1, static_cast<double>(lmax / 2.0), r2
+                        r1, n1, half_lmax, r2
                     ); 
                     Matrix<double, 3, 1> q = r1 + s * n1; 
 
                     // Get the distance between the central, maximum-length
                     // cell to the maximum-length cell centered at r2 with 
                     // some orientation orthogonal to the vector from q to r2
-                    Matrix<double, 3, 1> n2 = (r2 - q).cross(z);
+                    Matrix<double, 3, 1> n2 = Matrix<double, 3, 1>::Zero(); 
+                    n2.head(2) = rot * (r2 - q).head(2);
                     n2 /= n2.norm();
-                    Segment_3 cell2 = generateSegment<double>(
-                        r2, n2, static_cast<double>(lmax / 2.0)
-                    ); 
+                    Segment_3 cell2 = generateSegment<double>(r2, n2, half_lmax); 
                     auto result = distBetweenCells<double>(
-                        cell1, cell2, 0, r1, n1, static_cast<double>(lmax / 2.0),
-                        1, r2, n2, static_cast<double>(lmax / 2.0), kernel
+                        cell1, cell2, 0, r1, n1, half_lmax, 1, r2, n2, half_lmax,
+                        kernel
                     );
                     Matrix<double, 3, 1> d12 = std::get<0>(result);
                     
@@ -727,8 +733,52 @@ Matrix<T, Dynamic, 3> uniformLattice(const int n, const T dmin, const T dmax,
                     double d = d12.norm(); 
                     if (d >= dmin && d <= dmax)
                     {
-                        lattice.row(m) = r2.template cast<T>();
+                        lattice(m, 0) = static_cast<T>(r2(0)); 
+                        lattice(m, 1) = static_cast<T>(r2(1)); 
                         m++;
+                    }
+                }
+            }
+        }
+        else    // Dim == 3
+        {
+            for (int i = 0; i < n_per_dim; ++i)
+            {
+                for (int j = 0; j < n_per_dim; ++j)
+                {
+                    for (int k = 0; k < n_per_dim; ++k)
+                    {
+                        Matrix<double, 3, 1> r2;
+                        r2 << mesh_per_dim(i), mesh_per_dim(j), mesh_per_dim(k);
+
+                        // Get the nearest point along the central, maximum-length
+                        // cell to r2
+                        double s = nearestCellBodyCoordToPoint<double>(
+                            r1, n1, half_lmax, r2
+                        ); 
+                        Matrix<double, 3, 1> q = r1 + s * n1; 
+
+                        // Get the distance between the central, maximum-length
+                        // cell to the maximum-length cell centered at r2 with 
+                        // some orientation orthogonal to the vector from q to r2
+                        Matrix<double, 3, 1> n2 = (r2 - q).cross(z);
+                        n2 /= n2.norm();
+                        Segment_3 cell2 = generateSegment<double>(r2, n2, half_lmax); 
+                        auto result = distBetweenCells<double>(
+                            cell1, cell2, 0, r1, n1, half_lmax, 1, r2, n2,
+                            half_lmax, kernel
+                        );
+                        Matrix<double, 3, 1> d12 = std::get<0>(result);
+                        
+                        // If the distance is within the desired range, collect r2
+                        double d = d12.norm(); 
+                        if (d >= dmin && d <= dmax)
+                        {
+                            lattice(m, 0) = static_cast<T>(r2(0)); 
+                            lattice(m, 1) = static_cast<T>(r2(1)); 
+                            lattice(m, 2) = static_cast<T>(r2(2)); 
+                            m++;
+                        }
                     }
                 }
             }
