@@ -463,6 +463,31 @@ Array<T, 3, 1> rotateOutOfXY(const Ref<const Array<T, 3, 1> >& n, const T theta)
 }
 
 /**
+ * Generate a uniform mesh of points on the unit circle.
+ *
+ * @param n Number of points to be included in the mesh. 
+ * @param restrict_ypos If true, restrict the y-coordinate to be positive.
+ * @returns Uniform mesh of points on the unit circle.
+ */
+template <typename T>
+Matrix<T, Dynamic, 2> uniformMeshCircle(const int n, const bool restrict_ypos = false)
+{
+    // Create the mesh in terms of polar coordinates
+    Matrix<T, Dynamic, 1> theta = Matrix<T, Dynamic, 1>::LinSpaced(
+        n, 0,
+        (
+            restrict_ypos ? boost::math::constants::pi<T>() * (n - 1) / n :
+            boost::math::constants::two_pi<T>() * (n - 1) / n
+        )
+    );
+    Matrix<T, Dynamic, 2> mesh(n, 2); 
+    mesh.col(0) = theta.array().cos().matrix();
+    mesh.col(1) = theta.array().sin().matrix(); 
+
+    return mesh; 
+}
+
+/**
  * Generate a uniform mesh of points on the unit sphere, obtained by iteratively
  * subdividing a regular icosahedral mesh. 
  *
@@ -574,7 +599,7 @@ Matrix<T, Dynamic, 3> uniformMeshSphere(const int n, const bool restrict_zpos = 
     // Subdivide the polyhedron using the Loop subdivision method, checking
     // after each iteration if the minimum number of vertices has been
     // reached 
-    int n_vertices; 
+    int n_vertices = 0; 
     if (restrict_zpos)
     {
         for (auto it = poly.vertices_begin(); it != poly.vertices_end(); ++it)
@@ -592,6 +617,7 @@ Matrix<T, Dynamic, 3> uniformMeshSphere(const int n, const bool restrict_zpos = 
         CGAL::Subdivision_method_3::Loop_subdivision(poly, 1);
         if (restrict_zpos)
         {
+            n_vertices = 0; 
             for (auto it = poly.vertices_begin(); it != poly.vertices_end(); ++it)
             {
                 if (it->point().z() >= 0)
