@@ -595,9 +595,14 @@ Matrix<T, Dynamic, 3> uniformMeshSphere(const int n)
 }
 
 /**
- * Binary search.
+ * Identify, via binary search, the index of the nearest value to the given
+ * query, x, in the given array.
  *
- * The values are assumed to be distinct and sorted in ascending order.  
+ * The values are assumed to be distinct and sorted in ascending order.
+ *
+ * @param values Input array.
+ * @param x Query value. 
+ * @returns Index of nearest value to x.  
  */
 template <typename T>
 int nearestValue(const Ref<const Matrix<T, Dynamic, 1> >& values, const T x)
