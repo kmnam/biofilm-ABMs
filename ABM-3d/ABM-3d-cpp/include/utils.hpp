@@ -25,7 +25,6 @@
 #include <CGAL/Vector_3.h>
 #include <CGAL/Polyhedron_3.h>
 #include <CGAL/Subdivision_method_3.h>
-#include <CGAL/Kd_tree.h>
 #include "indices.hpp"
 
 using std::abs;
