@@ -277,9 +277,26 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
         Matrix<T, Dim, 1> d12n = d12 / dist;
 
         // Get the corresponding JKR contact area
+        Matrix<T, 3, 1> r1_, n1_, r2_, n2_, d12_; 
+        if (Dim == 2)
+        {
+            r1_ << r1(0), r1(1), 0; 
+            n1_ << n1(0), n1(1), 0; 
+            r2_ << r2(0), r2(1), 0; 
+            n2_ << n2(0), n2(1), 0; 
+            d12_ << d12(0), d12(1), 0;  
+        }
+        else    // Dim == 3
+        {
+            r1_ << r1(0), r1(1), r1(2); 
+            n1_ << n1(0), n1(1), n1(2); 
+            r2_ << r2(0), r2(1), r2(2); 
+            n2_ << n2(0), n2(1), n2(2); 
+            d12_ << d12(0), d12(1), d12(2);  
+        }
         T area = jkrContactAreaEllipsoid<T, N>(
-            r1, n1, half_l1, r2, n2, half_l2, R, d12, s, t, E0, gamma, ellip_table,
-            project_tol, project_max_iter, imag_tol, aberth_tol
+            r1_, n1_, half_l1, r2_, n2_, half_l2, R, d12_, s, t, E0, gamma,
+            ellip_table, project_tol, project_max_iter, imag_tol, aberth_tol
         );
         T radius = sqrt(area / boost::math::constants::pi<T>()); 
 
