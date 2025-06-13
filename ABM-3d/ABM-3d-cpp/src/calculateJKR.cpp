@@ -16,26 +16,20 @@
 #include <Eigen/Dense>
 #include <boost/multiprecision/mpfr.hpp>
 #include <boost/random.hpp>
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Point_3.h>
-#include <CGAL/Vector_3.h>
-#include <CGAL/Polyhedron_3.h>
-#include <CGAL/Subdivision_method_3.h>
+#include <CGAL/Kd_tree.h>
+#include "../include/utils.hpp"
+#include "../include/distances.hpp"
 #include "../include/adhesion.hpp"
 #include "../include/jkr.hpp"
 
 using boost::multiprecision::abs;
+using std::sqrt; 
 using boost::multiprecision::sqrt;
-using boost::multiprecision::log10; 
+using boost::multiprecision::log10;
+using std::pow; 
 using boost::multiprecision::pow; 
 
 typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<100> > PreciseType;
-typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
-typedef K::Point_3 Point_3;
-typedef K::Vector_3 Vector_3; 
-typedef CGAL::Polyhedron_3<K> Polyhedron_3;
-typedef Polyhedron_3::Vertex_handle Vertex_handle;
-typedef Polyhedron_3::HalfedgeDS HalfedgeDS;
 
 /**
  * Calculate the Hertz-JKR equilibrium cell-cell distance for the given
@@ -74,19 +68,25 @@ T jkrEquilibriumDistance(const T R, const T E, const T gamma, const T delta_min,
         // Compute the contact radius for each overlap in the mesh
         T radius = jkrContactRadius<T>(delta, R, E, gamma, imag_tol, aberth_tol).second;
 
-        // Compute the corresponding force 
-        T f_hertz = (4. / 3.) * E * radius * radius * radius / R; 
-        T f_jkr = 4 * sqrt(boost::math::constants::pi<T>() * gamma * E) * pow(radius, 1.5);
+        // Compute the corresponding force
+        T prefactor1 = static_cast<T>(4) / static_cast<T>(3) * E / R;
+        T prefactor2 = 4 * sqrt(boost::math::constants::pi<T>() * gamma * E); 
+        T f_hertz = prefactor1 * radius * radius * radius; 
+        T f_jkr = prefactor2 * pow(radius, 1.5); 
         T force = f_hertz - f_jkr;
 
         // Estimate the derivative of this force w.r.t the overlap
-        T radius_plus = jkrContactRadius<T>(delta + d_delta, R, E, gamma, imag_tol, aberth_tol).second;
-        T radius_minus = jkrContactRadius<T>(delta - d_delta, R, E, gamma, imag_tol, aberth_tol).second;
-        T f_hertz_plus = (4. / 3.) * E * radius_plus * radius_plus * radius_plus / R; 
-        T f_jkr_plus = 4 * sqrt(boost::math::constants::pi<T>() * gamma * E) * pow(radius_plus, 1.5); 
+        T radius_plus = jkrContactRadius<T>(
+            delta + d_delta, R, E, gamma, imag_tol, aberth_tol
+        ).second;
+        T radius_minus = jkrContactRadius<T>(
+            delta - d_delta, R, E, gamma, imag_tol, aberth_tol
+        ).second;
+        T f_hertz_plus = prefactor1 * radius_plus * radius_plus * radius_plus; 
+        T f_jkr_plus = prefactor2 * pow(radius_plus, 1.5); 
         T force_plus = f_hertz_plus - f_jkr_plus; 
-        T f_hertz_minus = (4. / 3.) * E * radius_minus * radius_minus * radius_minus / R; 
-        T f_jkr_minus = 4 * sqrt(boost::math::constants::pi<T>() * gamma * E) * pow(radius_minus, 1.5); 
+        T f_hertz_minus = prefactor1 * radius_minus * radius_minus * radius_minus; 
+        T f_jkr_minus = prefactor2 * pow(radius_minus, 1.5); 
         T force_minus = f_hertz_minus - f_jkr_minus;
         T deriv = (force_plus - force_minus) / (2 * d_delta);
 
@@ -240,146 +240,139 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E, const T deq_target,
 }
 
 /**
- * Generate a uniform mesh of points on the unit sphere, obtained by iteratively
- * subdividing a regular icosahedral mesh. 
+ * Calculate JKR forces for a given collection of cell-cell configurations.
  *
- * @param n Minimum number of points to be included in the final mesh. 
- * @returns Nearly uniform mesh of points on the unit sphere. 
+ * Each cell-cell configuration involves one cell at the origin, parallel to
+ * the x-axis, with half-length half_l1, and another cell with center r2,
+ * orientation n2 and half-length half_l2.  
  */
-template <typename T>
-Matrix<T, Dynamic, 3> uniformMeshSphere(const int n)
+template <typename T, int Dim>
+using ForceTable = std::unordered_map<std::tuple<int, int, int, int>,
+                                      Array<T, 2, 2 * Dim>,
+                                      boost::hash<std::tuple<int, int, int, int> > >;
+
+template <typename T, int Dim>
+ForceTable<double, Dim> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& half_l,
+                                               const Ref<const Matrix<T, Dynamic, Dim> >& r2, 
+                                               const Ref<const Matrix<T, Dynamic, Dim> >& n2,
+                                               const T R, const T E0, const T gamma, 
+                                               const JKRMode mode,
+                                               const int n_ellip_table = 200,
+                                               const T project_tol = 1e-6,
+                                               const int project_max_iter = 100,
+                                               const T imag_tol = 1e-8,
+                                               const T aberth_tol = 1e-20)
 {
-    // Create an initial icosahedral mesh
-    //
-    // These coordinates are taken from:
-    // https://math.stackexchange.com/questions/2174594/
-    // co-ordinates-of-the-vertices-an-icosahedron-relative-to-its-centroid
-    std::vector<Point_3> vertices;
-    double a = 1 / std::sqrt(5); 
-    double b = (5 - std::sqrt(5)) / 10; 
-    double c = (5 + std::sqrt(5)) / 10; 
-    double d = -b;    // -5 + sqrt(5) / 10 
-    double e = -c;    // -5 - sqrt(5) / 10
-    vertices.push_back(Point_3(1, 0, 0)); 
-    vertices.push_back(Point_3(a, 2 * a, 0)); 
-    vertices.push_back(Point_3(a, b, sqrt(c))); 
-    vertices.push_back(Point_3(a, e, sqrt(b))); 
-    vertices.push_back(Point_3(a, e, -sqrt(b))); 
-    vertices.push_back(Point_3(a, b, -sqrt(c))); 
-    vertices.push_back(Point_3(-1, 0, 0)); 
-    vertices.push_back(Point_3(-a, -2 * a, 0)); 
-    vertices.push_back(Point_3(-a, d, -sqrt(c))); 
-    vertices.push_back(Point_3(-a, c, -sqrt(b))); 
-    vertices.push_back(Point_3(-a, c, sqrt(b))); 
-    vertices.push_back(Point_3(-a, d, sqrt(c)));
+    const double BIGNUM = 1e+8; 
+    K kernel; 
+    Matrix<T, Dim, 1> r1 = Matrix<T, Dim, 1>::Zero();
+    Matrix<T, Dim, 1> n1 = Matrix<T, Dim, 1>::Zero(); 
+    n1(0) = 1;
+    Matrix<T, Dynamic, 4> ellip_table = getEllipticIntegralTable<T>(n_ellip_table);  
+    ForceTable<double, Dim> forces;
 
-    // Store the edges in an adjacency matrix 
-    Matrix<int, Dynamic, Dynamic> edges = Matrix<int, Dynamic, Dynamic>(12, 12);
-    for (int i = 1; i < 6; ++i)
+    #pragma omp parallel for 
+    for (int i = 0; i < half_l.size(); ++i)
     {
-        edges(0, i) = 1;
-        edges(i, 0) = 1; 
-        edges(i, 2 + i % 5 - 1) = 1; 
-        edges(i, 2 + (i + 3) % 5 - 1) = 1; 
-        edges(i, 8 + (i + 1) % 5 - 1) = 1; 
-        edges(i, 8 + (i + 2) % 5 - 1) = 1; 
-    }
-    for (int i = 6; i < 12; ++i)
-    {
-        edges(6, i) = 1; 
-        edges(i, 6) = 1; 
-        edges(i, 8 + (i - 1) % 5 - 1) = 1; 
-        edges(i, 8 + (i + 2) % 5 - 1) = 1; 
-        edges(i, 2 + i % 5 - 1) = 1; 
-        edges(i, 2 + (i + 1) % 5 - 1) = 1; 
-    }
-
-    // Get the faces from the adjacency matrix
-    std::vector<std::vector<int> > faces; 
-    for (int i = 0; i < 12; ++i)
-    {
-        for (int j = i + 1; j < 12; ++j)
+        for (int j = 0; j < r2.rows(); ++j)
         {
-            if (edges(i, j))
+            for (int k = 0; k < n2.rows(); ++k)
             {
-                for (int k = j + 1; k < 12; ++k)
+                for (int m = i; m < half_l.size(); ++m)
                 {
-                    if (edges(j, k) && edges(i, k))
+                    Matrix<double, 3, 1> r1_, n1_, r2_, n2_; 
+                    if (Dim == 2)
                     {
-                        // The face is (i, j, k)
-                        //
-                        // First find a normal vector to the face 
-                        Vector_3 u(vertices[i], vertices[j]); 
-                        Vector_3 v(vertices[i], vertices[k]); 
-                        Vector_3 cross = CGAL::cross_product(u, v);
-
-                        // Calculate the dot product of this normal vector
-                        // with an inward-pointing vector (towards the origin)
-                        Vector_3 center(
-                            (vertices[i].x() + vertices[j].x() + vertices[k].x()) / 3,
-                            (vertices[i].y() + vertices[j].y() + vertices[k].y()) / 3,
-                            (vertices[i].z() + vertices[j].z() + vertices[k].z()) / 3
-                        );  
-                        double dot = CGAL::scalar_product(cross, center);
-                        if (dot < 0)    // Normal points outward
-                            faces.push_back({i, j, k});
-                        else            // Normal points inward
-                            faces.push_back({i, k, j}); 
-                        std::cout << i << " " << j << " " << k << std::endl;  
+                        r1_ << static_cast<double>(r1(0)),
+                               static_cast<double>(r1(1)),
+                               0; 
+                        n1_ << static_cast<double>(n1(0)),
+                               static_cast<double>(n1(1)),
+                               0; 
+                        r2_ << static_cast<double>(r2(j, 0)),
+                               static_cast<double>(r2(j, 1)),
+                               0;
+                        n2_ << static_cast<double>(n2(k, 0)),
+                               static_cast<double>(n2(k, 1)),
+                               0;  
                     }
+                    else 
+                    {
+                        r1_ << static_cast<double>(r1(0)),
+                               static_cast<double>(r1(1)),
+                               static_cast<double>(r1(2));  
+                        n1_ << static_cast<double>(n1(0)),
+                               static_cast<double>(n1(1)),
+                               static_cast<double>(n1(2));
+                        r2_ << static_cast<double>(r2(j, 0)),
+                               static_cast<double>(r2(j, 1)),
+                               static_cast<double>(r2(j, 2));
+                        n2_ << static_cast<double>(n2(k, 0)),
+                               static_cast<double>(n2(k, 1)),
+                               static_cast<double>(n2(k, 2));
+                    }
+                    Segment_3 cell1 = generateSegment<double>(
+                        r1_, n1_, static_cast<double>(half_l(i))
+                    );  
+                    Segment_3 cell2 = generateSegment<double>(
+                        r2_, n2_, static_cast<double>(half_l(m))
+                    ); 
+                    auto result = distBetweenCells<double>(
+                        cell1, cell2, 0, r1_, n1_, static_cast<double>(half_l(i)),
+                        1, r2_, n2_, static_cast<double>(half_l(m)), kernel
+                    );
+                    Matrix<T, Dim, 1> d12;
+                    if (Dim == 2)
+                        d12 << static_cast<T>(std::get<0>(result)(0)), 
+                               static_cast<T>(std::get<0>(result)(1)); 
+                    else    // Dim == 3
+                        d12 << static_cast<T>(std::get<0>(result)(0)), 
+                               static_cast<T>(std::get<0>(result)(1)),
+                               static_cast<T>(std::get<0>(result)(2)); 
+                    T s = static_cast<T>(std::get<1>(result)); 
+                    T t = static_cast<T>(std::get<2>(result));
+
+                    // Check that the distance is nonzero
+                    if (d12.norm() > 1e-8)
+                    {
+                        Array<T, 2, 2 * Dim> forces_ijkm; 
+                        if (mode == JKRMode::ISOTROPIC)
+                        {
+                            forces_ijkm = forcesIsotropicJKRLagrange<T, Dim>(
+                                n1, n2.row(k), d12, R, E0, gamma, s, t, true,
+                                imag_tol, aberth_tol
+                            ); 
+                        }
+                        else    // mode == JKRMode::ANISOTROPIC
+                        {
+                            forces_ijkm = forcesAnisotropicJKRLagrange<T, Dim>(
+                                r1, n1, half_l(i), r2.row(j), n2.row(k),
+                                half_l(m), d12, R, E0, gamma, s, t, ellip_table,
+                                true, project_tol, project_max_iter, imag_tol,
+                                aberth_tol
+                            ); 
+                        }
+                        forces[std::make_tuple(i, j, k, m)] = forces_ijkm.template cast<double>();
+                    }
+                    else    // Otherwise, add an array of large constants 
+                    {
+                        forces[std::make_tuple(i, j, k, m)] = BIGNUM * Array<double, 2, 2 * Dim>::Ones(); 
+                    } 
                 }
             }
         }
     }
 
-    // Define the icosahedron 
-    Polyhedron_3 poly;
-    CGAL::Polyhedron_incremental_builder_3<HalfedgeDS> builder(poly.hds(), true);
-    builder.begin_surface(vertices.size(), faces.size()); 
-    for (const Point_3& v : vertices)
-        builder.add_vertex(v); 
-    for (int i = 0; i < faces.size(); ++i)
-    {
-        builder.begin_facet(); 
-        builder.add_vertex_to_facet(faces[i][0]);
-        builder.add_vertex_to_facet(faces[i][1]);
-        builder.add_vertex_to_facet(faces[i][2]); 
-        builder.end_facet(); 
-    }
-    builder.end_surface();
-
-    // Subdivide the polyhedron using the Loop subdivision method
-    int n_vertices = poly.size_of_vertices(); 
-    while (n_vertices < n)
-    {
-        CGAL::Subdivision_method_3::Loop_subdivision(poly, 1);
-        n_vertices = poly.size_of_vertices(); 
-    }
-
-    // Extract the vertices in the subdivided mesh and normalize each 
-    Matrix<T, Dynamic, 3> mesh(poly.size_of_vertices(), 3);
-    int i = 0; 
-    for (auto it = poly.vertices_begin(); it != poly.vertices_end(); ++it)
-    {
-        Point_3 p = it->point();
-        T x = static_cast<T>(p.x()); 
-        T y = static_cast<T>(p.y()); 
-        T z = static_cast<T>(p.z());  
-        T norm = sqrt(x * x + y * y + z * z);
-        mesh(i, 0) = x / norm; 
-        mesh(i, 1) = y / norm; 
-        mesh(i, 2) = z / norm; 
-        i++; 
-    }
-
-    return mesh; 
-}
+    return forces;
+} 
 
 int main(int argc, char** argv)
 {
     const PreciseType R = 0.8;
     const PreciseType Rcell = 0.5; 
-    const PreciseType E = 3900.0;
+    const PreciseType E0 = 3900.0;
+    const PreciseType lmin = 1.0; 
+    const PreciseType lmax = 3.6; 
     const PreciseType gamma_min = 100.0; 
     const PreciseType gamma_max = 1000.0;
     const PreciseType delta_min = 0.0;
@@ -391,27 +384,152 @@ int main(int argc, char** argv)
     const PreciseType d_delta = 1e-8;
     const PreciseType newton_tol = 1e-8;
     const PreciseType imag_tol = 1e-8; 
-    const PreciseType aberth_tol = 1e-20; 
+    const PreciseType aberth_tol = 1e-20;
+    const PreciseType project_tol = 1e-6; 
+    const int project_max_iter = 100; 
     const bool verbose = true;
-    
-    PreciseType deq_target = 1.3;    // Surface separation of 300 nm 
-    jkrOptimalSurfaceEnergyDensity<PreciseType>(
-        R, E, deq_target, gamma_min, gamma_max, delta_min, delta_max, rng, tol,
-        d_log_gamma, max_learn_rate, d_delta, newton_tol, imag_tol, aberth_tol,
-        verbose
-    );
-    deq_target = 1.2;                // Surface separation of 200 nm 
-    jkrOptimalSurfaceEnergyDensity<PreciseType>(
-        R, E, deq_target, gamma_min, gamma_max, delta_min, delta_max, rng, tol,
-        d_log_gamma, max_learn_rate, d_delta, newton_tol, imag_tol, aberth_tol,
-        verbose
-    ); 
-    deq_target = 1.1;                // Surface separation of 100 nm 
-    jkrOptimalSurfaceEnergyDensity<PreciseType>(
-        R, E, deq_target, gamma_min, gamma_max, delta_min, delta_max, rng, tol,
-        d_log_gamma, max_learn_rate, d_delta, newton_tol, imag_tol, aberth_tol,
-        verbose
+
+    // Generate a uniform mesh of points on the unit sphere
+    const int nmin_sphere_mesh = 10;
+    const bool restrict_zpos = true; 
+    Matrix<PreciseType, Dynamic, 3> sphere_mesh = uniformMeshSphere<PreciseType>(
+        nmin_sphere_mesh, restrict_zpos
     );
 
-    uniformMeshSphere<PreciseType>(200); 
+    // Generate a uniform mesh of points on the unit circle containing the 
+    // square root of N points, where N is the size of the spherical mesh
+    const int nmin_circle_mesh = static_cast<int>(
+        sqrt(static_cast<double>(sphere_mesh.rows()))
+    );
+    const bool restrict_ypos = true;  
+    Matrix<PreciseType, Dynamic, 2> circle_mesh = uniformMeshCircle<PreciseType>(
+        nmin_circle_mesh, restrict_ypos
+    );
+
+    // Generate a uniform lattice of cell centers in 2-D containing at least
+    // N points 
+    const int nmin_lattice2 = sphere_mesh.rows();
+    const PreciseType dmin = 2 * Rcell - 0.2; 
+    const PreciseType dmax = 2 * R + 0.2; 
+    Matrix<PreciseType, Dynamic, 2> lattice2 = uniformLattice<PreciseType, 2>(
+        nmin_lattice2, dmin, dmax, lmax
+    );
+
+    // Generate a uniform lattice of cell centers in 3-D containing at least
+    // N^(3/2) points
+    const int nmin_lattice3 = static_cast<int>(
+        pow(static_cast<double>(sphere_mesh.rows()), 1.5)
+    ); 
+    Matrix<PreciseType, Dynamic, 3> lattice3 = uniformLattice<PreciseType, 3>(
+        nmin_lattice3, dmin, dmax, lmax
+    );
+
+    // Generate a uniform mesh of cell half-lengths 
+    const int n_half_l = static_cast<int>(
+        sqrt(static_cast<double>(sphere_mesh.rows()))
+    ); 
+    Matrix<PreciseType, Dynamic, 1> half_l
+        = Matrix<PreciseType, Dynamic, 1>::LinSpaced(n_half_l, lmin, lmax); 
+   
+    // Identify optimal values of gamma for achieving the below surface 
+    // separations
+    const PreciseType surface_sep = static_cast<PreciseType>(std::stod(argv[1])); 
+    const PreciseType opt_gamma = jkrOptimalSurfaceEnergyDensity<PreciseType>(  
+        R, E0, surface_sep, gamma_min, gamma_max, delta_min, delta_max, rng,
+        tol, d_log_gamma, max_learn_rate, d_delta, newton_tol, imag_tol,
+        aberth_tol, verbose
+    );
+    auto forces_2d = calculateJKRForceTable<PreciseType, 2>(
+        half_l, lattice2, circle_mesh, R, E0, opt_gamma, JKRMode::ISOTROPIC,
+        200, project_tol, project_max_iter, imag_tol, aberth_tol
+    );
+    auto forces_3d = calculateJKRForceTable<PreciseType, 3>(
+        half_l, lattice3, sphere_mesh, R, E0, opt_gamma, JKRMode::ISOTROPIC,
+        200, project_tol, project_max_iter, imag_tol, aberth_tol
+    );
+
+    // Output meshes and forces to file 
+    std::ofstream outfile_lattice2d(argv[2]); 
+    std::ofstream outfile_lattice3d(argv[3]);
+    std::ofstream outfile_circle(argv[4]);
+    std::ofstream outfile_sphere(argv[5]); 
+    std::ofstream outfile_half_l(argv[6]); 
+    std::ofstream outfile_forces2d(argv[7]); 
+    std::ofstream outfile_forces3d(argv[8]);
+    outfile_lattice2d << std::setprecision(10); 
+    outfile_lattice3d << std::setprecision(10); 
+    outfile_circle << std::setprecision(10); 
+    outfile_sphere << std::setprecision(10); 
+    outfile_half_l << std::setprecision(10); 
+    outfile_forces2d << std::setprecision(10); 
+    outfile_forces3d << std::setprecision(10);
+
+    // Start with the meshes ... 
+    for (int i = 0; i < n_half_l; ++i)
+        outfile_half_l << half_l(i) << std::endl; 
+    for (int j = 0; j < lattice2d.rows(); ++j)
+        outfile_lattice2d << lattice2d(j, 0) << '\t'
+                          << lattice2d(j, 1) << std::endl;
+    for (int j = 0; j < lattice3d.rows(); ++j)
+        outfile_lattice3d << lattice3d(j, 0) << '\t'
+                          << lattice3d(j, 1) << '\t'
+                          << lattice3d(j, 2) << std::endl;
+    for (int k = 0; k < circle_mesh.rows(); ++k)
+        outfile_circle << circle_mesh(k, 0) << '\t'
+                       << circle_mesh(k, 1) << std::endl; 
+    for (int k = 0; k < sphere_mesh.rows(); ++k)
+        outfile_sphere << sphere_mesh(k, 0) << '\t'
+                       << sphere_mesh(k, 1) << '\t'
+                       << sphere_mesh(k, 2) << std::endl;
+
+    // ... then output the forces
+    const double BIGNUM = 1e+8;
+    Array<double, 2, 4> na_forces2d = BIGNUM * Array<double, 2, 4>::Ones(); 
+    Array<double, 2, 6> na_forces3d = BIGNUM * Array<double, 2, 6>::Ones(); 
+    for (int i = 0; i < n_half_l; ++i)
+    {
+        for (int j = 0; j < lattice2.rows(); ++j)
+        {
+            for (int k = 0; k < circle_mesh.rows(); ++k)
+            {
+                for (int m = i; m < n_half_l; ++m)
+                {
+                    Array<double, 2, 4> forces = forces_2d[std::make_tuple(i, j, k, m)];
+                    if ((forces - na_forces2d).abs().sum() < 1e-8)
+                        outfile_forces2d << i << '\t' << j << '\t' << k << '\t' << m << '\t'
+                                         << "NA\tNA\tNA\tNA\tNA\tNA\tNA\tNA" << std::endl; 
+                    else  
+                        outfile_forces2d << i << '\t' << j << '\t' << k << '\t' << m << '\t'
+                                         << forces(0, 0) << '\t' << forces(0, 1) << '\t'
+                                         << forces(0, 2) << '\t' << forces(0, 3) << '\t'
+                                         << forces(1, 0) << '\t' << forces(1, 1) << '\t'
+                                         << forces(1, 2) << '\t' << forces(1, 3) << std::endl; 
+                }
+            }
+        }
+    }
+    for (int i = 0; i < n_half_l; ++i)
+    {
+        for (int j = 0; j < lattice3.rows(); ++j)
+        {
+            for (int k = 0; k < sphere_mesh.rows(); ++k)
+            {
+                for (int m = i; m < n_half_l; ++m)
+                {
+                    Array<double, 2, 6> forces = forces_3d[std::make_tuple(i, j, k, m)];
+                    if ((forces - na_forces3d).abs().sum() < 1e-8)
+                        outfile_forces3d << i << '\t' << j << '\t' << k << '\t' << m << '\t'
+                                         << "NA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA" << std::endl; 
+                    else  
+                        outfile_forces3d << i << '\t' << j << '\t' << k << '\t' << m << '\t'
+                                         << forces(0, 0) << '\t' << forces(0, 1) << '\t'
+                                         << forces(0, 2) << '\t' << forces(0, 3) << '\t'
+                                         << forces(0, 4) << '\t' << forces(0, 5) << '\t'
+                                         << forces(1, 0) << '\t' << forces(1, 1) << '\t'
+                                         << forces(1, 2) << '\t' << forces(1, 3) << '\t'
+                                         << forces(1, 4) << '\t' << forces(1, 5) << std::endl; 
+                }
+            }
+        }
+    }
 }
