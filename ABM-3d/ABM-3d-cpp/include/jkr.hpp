@@ -29,6 +29,15 @@ using std::sqrt;
 using boost::multiprecision::sqrt;
 
 /**
+ * An enum that enumerates the different JKR force types. 
+ */
+enum class JKRMode
+{
+    ISOTROPIC = 0,
+    ANISOTROPIC = 1
+};
+
+/**
  * Solve for the Hertzian contact area between two contacting ellipsoidal
  * bodies.
  *
