@@ -181,14 +181,14 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E, const T deq_target,
         update = -learn_rate * deriv;
 
         // Check if the proposed update exceeds the given bounds  
-        if (pow(10.0, log_gamma + update) < gamma_min)
+        if (pow(10.0, log_gamma + update) < min_gamma)
         {
-            update = log10(gamma_min) - log_gamma;
+            update = log10(min_gamma) - log_gamma;
             learn_rate = -update / deriv; 
         }
-        else if (pow(10.0, log_gamma + update) > gamma_max)
+        else if (pow(10.0, log_gamma + update) > max_gamma)
         {
-            update = log10(gamma_max) - log_gamma;
+            update = log10(max_gamma) - log_gamma;
             learn_rate = -update / deriv; 
         }
 
@@ -208,14 +208,14 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E, const T deq_target,
             update = -learn_rate * deriv;
 
             // Check if the proposed update exceeds the given bounds  
-            if (pow(10.0, log_gamma + update) < gamma_min)
+            if (pow(10.0, log_gamma + update) < min_gamma)
             {
-                update = log10(gamma_min) - log_gamma;
+                update = log10(min_gamma) - log_gamma;
                 learn_rate = -update / deriv; 
             }
-            else if (pow(10.0, log_gamma + update) > gamma_max)
+            else if (pow(10.0, log_gamma + update) > max_gamma)
             {
-                update = log10(gamma_max) - log_gamma;
+                update = log10(max_gamma) - log_gamma;
                 learn_rate = -update / deriv; 
             }
             
@@ -408,8 +408,8 @@ int main(int argc, char** argv)
     const PreciseType E0 = static_cast<PreciseType>(json_data["E0"].as_double());
     const PreciseType lmin = static_cast<PreciseType>(json_data["lmin"].as_double());
     const PreciseType lmax = 2 * lmin + 2 * R;
-    const PreciseType gamma_min = static_cast<PreciseType>(json_data["gamma_min"].as_double());
-    const PreciseType gamma_max = static_cast<PreciseType>(json_data["gamma_max"].as_double());
+    const PreciseType min_gamma = static_cast<PreciseType>(json_data["min_gamma"].as_double());
+    const PreciseType max_gamma = static_cast<PreciseType>(json_data["max_gamma"].as_double());
     const PreciseType min_overlap = 0.0;
     const PreciseType max_overlap = 2 * R - 2 * Rcell;
     const PreciseType tol = static_cast<PreciseType>(json_data["opt_tol"].as_double()); 
@@ -465,7 +465,7 @@ int main(int argc, char** argv)
     // separations
     const PreciseType deq_target = static_cast<PreciseType>(json_data["eqdist_target"].as_double()); 
     const PreciseType opt_gamma = jkrOptimalSurfaceEnergyDensity<PreciseType>(  
-        R, E0, deq_target, gamma_min, gamma_max, min_overlap, max_overlap, rng,
+        R, E0, deq_target, min_gamma, max_gamma, min_overlap, max_overlap, rng,
         tol, d_log_gamma, max_learn_rate, d_overlap, newton_tol, imag_tol,
         aberth_tol, verbose
     );
