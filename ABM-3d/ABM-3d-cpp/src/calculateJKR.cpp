@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/11/2025
+ *     6/18/2025
  */
 #include <iostream>
 #include <fstream>
@@ -14,6 +14,7 @@
 #include <iomanip>
 #include <utility>
 #include <Eigen/Dense>
+#include <boost/json/src.hpp>
 #include <boost/multiprecision/mpfr.hpp>
 #include <boost/random.hpp>
 #include <CGAL/Kd_tree.h>
@@ -38,27 +39,28 @@ typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<
  * @param R Cell radius (including the EPS). 
  * @param E Elastic modulus.
  * @param gamma Surface energy density. 
- * @param delta_min Minimum overlap distance. 
- * @param delta_max Maximum overlap distance.
+ * @param min_overlap Minimum overlap distance. 
+ * @param max_overlap Maximum overlap distance.
  * @param rng Random number generator.  
- * @param d_delta Increment for finite differences approximation.
+ * @param d_overlap Increment for finite differences approximation.
  * @param tol Tolerance for Newton's method.  
  * @param imag_tol Tolerance for determining whether a root for the the JKR
  *                 contact radius polynomial is real.
- * @param aberth_tol Tolerance for Aberth-Ehrlich method. 
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method.
+ * @returns Equilibrium cell-cell distance.  
  */
 template <typename T>
-T jkrEquilibriumDistance(const T R, const T E, const T gamma, const T delta_min, 
-                         const T delta_max, boost::random::mt19937& rng,
-                         const T d_delta = 1e-8, const T tol = 1e-8, 
+T jkrEquilibriumDistance(const T R, const T E, const T gamma, const T min_overlap,
+                         const T max_overlap, boost::random::mt19937& rng,
+                         const T d_overlap = 1e-8, const T tol = 1e-8, 
                          const T imag_tol = 1e-8, const T aberth_tol = 1e-20)
 {
     // Get an initial cell-cell distance
-    T dmin = 2 * R - delta_max;
-    T dmax = 2 * R - delta_min;
+    T dmin = 2 * R - max_overlap; 
+    T dmax = 2 * R - min_overlap;
     boost::random::uniform_01<> uniform_dist;  
     T dist = dmin + (dmax - dmin) * uniform_dist(rng);
-    T delta = 2 * R - dist;  
+    T overlap = 2 * R - dist;  
     T update = std::numeric_limits<T>::infinity();
 
     // While the update between consecutive overlaps is larger than the 
@@ -66,7 +68,7 @@ T jkrEquilibriumDistance(const T R, const T E, const T gamma, const T delta_min,
     while (abs(update) > tol)
     {
         // Compute the contact radius for each overlap in the mesh
-        T radius = jkrContactRadius<T>(delta, R, E, gamma, imag_tol, aberth_tol).second;
+        T radius = jkrContactRadius<T>(overlap, R, E, gamma, imag_tol, aberth_tol).second;
 
         // Compute the corresponding force
         T prefactor1 = static_cast<T>(4) / static_cast<T>(3) * E / R;
@@ -77,10 +79,10 @@ T jkrEquilibriumDistance(const T R, const T E, const T gamma, const T delta_min,
 
         // Estimate the derivative of this force w.r.t the overlap
         T radius_plus = jkrContactRadius<T>(
-            delta + d_delta, R, E, gamma, imag_tol, aberth_tol
+            overlap + d_overlap, R, E, gamma, imag_tol, aberth_tol
         ).second;
         T radius_minus = jkrContactRadius<T>(
-            delta - d_delta, R, E, gamma, imag_tol, aberth_tol
+            overlap - d_overlap, R, E, gamma, imag_tol, aberth_tol
         ).second;
         T f_hertz_plus = prefactor1 * radius_plus * radius_plus * radius_plus; 
         T f_jkr_plus = prefactor2 * pow(radius_plus, 1.5); 
@@ -88,14 +90,14 @@ T jkrEquilibriumDistance(const T R, const T E, const T gamma, const T delta_min,
         T f_hertz_minus = prefactor1 * radius_minus * radius_minus * radius_minus; 
         T f_jkr_minus = prefactor2 * pow(radius_minus, 1.5); 
         T force_minus = f_hertz_minus - f_jkr_minus;
-        T deriv = (force_plus - force_minus) / (2 * d_delta);
+        T deriv = (force_plus - force_minus) / (2 * d_overlap);
 
         // Update the overlap according to Newton's method 
         update = -force / deriv;
-        delta += update;
+        overlap += update;
     }
 
-    return 2 * R - delta;  
+    return 2 * R - overlap; 
 }
 
 /**
@@ -105,37 +107,39 @@ T jkrEquilibriumDistance(const T R, const T E, const T gamma, const T delta_min,
  * @param R Cell radius (including the EPS). 
  * @param E Elastic modulus.
  * @param deq_target Target equilibrium cell-cell distance. 
- * @param gamma_min Minimum surface energy density.
- * @param gamma_max Maximum surface energy density.  
- * @param delta_min Minimum overlap distance. 
- * @param delta_max Maximum overlap distance.
+ * @param min_gamma Minimum surface energy density.
+ * @param max_gamma Maximum surface energy density.  
+ * @param min_overlap Minimum overlap distance. 
+ * @param max_overlap Maximum overlap distance.
  * @param rng Random number generator.
  * @param tol Tolerance for (steepest) gradient descent.
  * @param d_log_gamma Increment for finite differences approximation w.r.t.
  *                    log10(gamma) during gradient descent. 
  * @param max_learn_rate Maximum learning rate.
- * @param d_delta Increment for finite differences approximation w.r.t. 
- *                overlap in jkrEquilibriumDistance().
+ * @param d_overlap Increment for finite differences approximation w.r.t. 
+ *                  overlap in jkrEquilibriumDistance().
  * @param newton_tol Tolerance for Newton's method in jkrEquilibriumDistance().  
  * @param imag_tol Tolerance for determining whether a root for the the JKR
  *                 contact radius polynomial is real.
  * @param aberth_tol Tolerance for Aberth-Ehrlich method.
- * @param verbose If true, print iteration details to stdout.  
+ * @param verbose If true, print iteration details to stdout.
+ * @returns Optimal surface energy density for the desired equilibrium 
+ *          cell-cell distance.  
  */
 template <typename T>
 T jkrOptimalSurfaceEnergyDensity(const T R, const T E, const T deq_target, 
-                                 const T gamma_min, const T gamma_max,
-                                 const T delta_min, const T delta_max,
+                                 const T min_gamma, const T max_gamma,
+                                 const T min_overlap, const T max_overlap,
                                  boost::random::mt19937& rng, const T tol = 1e-8,
                                  const T d_log_gamma = 1e-6,
                                  const T max_learn_rate = 1.0,  
-                                 const T d_delta = 1e-8, const T newton_tol = 1e-8,
+                                 const T d_overlap = 1e-8, const T newton_tol = 1e-8,
                                  const T imag_tol = 1e-8, const T aberth_tol = 1e-20,
                                  const bool verbose = false)
 {
     // Get an initial value for gamma
     boost::random::uniform_01<> dist;  
-    T log_gamma = log10(gamma_min) + (log10(gamma_max) - log10(gamma_min)) * dist(rng);
+    T log_gamma = log10(min_gamma) + (log10(max_gamma) - log10(min_gamma)) * dist(rng);
     T gamma = pow(10.0, log_gamma); 
     T update = std::numeric_limits<T>::infinity();
     int iter = 0; 
@@ -145,7 +149,7 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E, const T deq_target,
     // Calculate the deviation of the current equilibrium distance from
     // the target equilibrium distance 
     T deq = jkrEquilibriumDistance<T>(
-        R, E, gamma, delta_min, delta_max, rng, d_delta, newton_tol,
+        R, E, gamma, min_overlap, max_overlap, rng, d_overlap, newton_tol,
         imag_tol, aberth_tol
     );
     T error = abs(deq - deq_target);
@@ -158,13 +162,13 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E, const T deq_target,
         T gamma_plus = pow(10.0, log_gamma + d_log_gamma);
         T gamma_minus = pow(10.0, log_gamma - d_log_gamma);  
         T deq_plus = jkrEquilibriumDistance<T>(
-            R, E, gamma_plus, delta_min, delta_max, rng, d_delta, newton_tol,
-            imag_tol, aberth_tol
+            R, E, gamma_plus, min_overlap, max_overlap, rng, d_overlap,
+            newton_tol, imag_tol, aberth_tol
         );
         T error_plus = abs(deq_plus - deq_target);  
         T deq_minus = jkrEquilibriumDistance<T>(
-            R, E, gamma_minus, delta_min, delta_max, rng, d_delta, newton_tol,
-            imag_tol, aberth_tol
+            R, E, gamma_minus, min_overlap, max_overlap, rng, d_overlap,
+            newton_tol, imag_tol, aberth_tol
         );
         T error_minus = abs(deq_minus - deq_target);  
         T deriv = (error_plus - error_minus) / (2 * d_log_gamma);
@@ -190,8 +194,8 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E, const T deq_target,
 
         // Compute the new cell-cell equilibrium distance 
         T deq_new = jkrEquilibriumDistance<T>(
-            R, E, pow(10.0, log_gamma + update), delta_min, delta_max, rng,
-            d_delta, newton_tol, imag_tol, aberth_tol
+            R, E, pow(10.0, log_gamma + update), min_overlap, max_overlap, rng,
+            d_overlap, newton_tol, imag_tol, aberth_tol
         );
         T error_new = abs(deq_new - deq_target);
 
@@ -217,8 +221,8 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E, const T deq_target,
             
             // Compute the new cell-cell equilibrium distance 
             deq_new = jkrEquilibriumDistance<T>(
-                R, E, pow(10.0, log_gamma + update), delta_min, delta_max, rng,
-                d_delta, newton_tol, imag_tol, aberth_tol
+                R, E, pow(10.0, log_gamma + update), min_overlap, max_overlap,
+                rng, d_overlap, newton_tol, imag_tol, aberth_tol
             );
             error_new = abs(deq_new - deq_target); 
         }
@@ -243,20 +247,47 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E, const T deq_target,
  * Calculate JKR forces for a given collection of cell-cell configurations.
  *
  * Each cell-cell configuration involves one cell at the origin, parallel to
- * the x-axis, with half-length half_l1, and another cell with center r2,
- * orientation n2 and half-length half_l2.  
+ * the x-axis, with variable half-length, and another cell with variable
+ * center, orientation, and half-length.
+ *
+ * The returned table maps the indices (i, j, k, l) to the corresponding 
+ * JKR force, where:
+ *
+ * - half_l(i) is the half-length of cell 1.
+ * - r2.row(j) is the center of cell 2.
+ * - n2.row(k) is the orientation of cell 2.
+ * - half_l(l) is the half-length of cell 2.
+ *
+ * @param half_l Mesh of cell half-lengths. 
+ * @param r2 Lattice of cell 2 centers. 
+ * @param n2 Mesh of cell 2 orientations. 
+ * @param R Cell radius (including the EPS). 
+ * @param E0 Elastic modulus.
+ * @param gamma Surface energy density.
+ * @param dmin Minimum cell-cell distance at which to calculate JKR forces. 
+ *             If the cell-cell distance is less than this value, this function
+ *             returns nan's (encoded as a large float) for the forces. 
+ * @param JKRMode JKR force mode (either isotropic or anisotropic). 
+ * @param n_ellip_table Number of values to calculate for the elliptic integral
+ *                      function used to calculate contact areas.
+ * @param project_tol Tolerance for the ellipsoid projection method. 
+ * @param project_max_iter Maximum number of iterations for the ellipsoid
+ *                         projection method. 
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method.
+ * @returns Table of calculated JKR forces. 
  */
 template <typename T, int Dim>
 using ForceTable = std::unordered_map<std::tuple<int, int, int, int>,
                                       Array<T, 2, 2 * Dim>,
                                       boost::hash<std::tuple<int, int, int, int> > >;
-
 template <typename T, int Dim>
 ForceTable<double, Dim> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& half_l,
                                                const Ref<const Matrix<T, Dynamic, Dim> >& r2, 
                                                const Ref<const Matrix<T, Dynamic, Dim> >& n2,
                                                const T R, const T E0, const T gamma, 
-                                               const JKRMode mode,
+                                               const T dmin, const JKRMode mode,
                                                const int n_ellip_table = 200,
                                                const T project_tol = 1e-6,
                                                const int project_max_iter = 100,
@@ -333,7 +364,7 @@ ForceTable<double, Dim> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic
                     T t = static_cast<T>(std::get<2>(result));
 
                     // Check that the distance is nonzero
-                    if (d12.norm() > 1e-8)
+                    if (d12.norm() > dmin)
                     {
                         Array<T, 2, 2 * Dim> forces_ijkm; 
                         if (mode == JKRMode::ISOTROPIC)
@@ -368,29 +399,33 @@ ForceTable<double, Dim> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic
 
 int main(int argc, char** argv)
 {
-    const PreciseType R = 0.8;
-    const PreciseType Rcell = 0.5; 
-    const PreciseType E0 = 3900.0;
-    const PreciseType lmin = 1.0; 
-    const PreciseType lmax = 3.6; 
-    const PreciseType gamma_min = 100.0; 
-    const PreciseType gamma_max = 1000.0;
-    const PreciseType delta_min = 0.0;
-    const PreciseType delta_max = 2 * R - 2 * Rcell;
-    boost::random::mt19937 rng(1234567890);
-    const PreciseType tol = 1e-8; 
-    const PreciseType d_log_gamma = 1e-8;  
-    const PreciseType max_learn_rate = 1.0;
-    const PreciseType d_delta = 1e-8;
-    const PreciseType newton_tol = 1e-8;
-    const PreciseType imag_tol = 1e-8; 
-    const PreciseType aberth_tol = 1e-20;
-    const PreciseType project_tol = 1e-6; 
-    const int project_max_iter = 100; 
+    // Parse input json file 
+    boost::json::object json_data = parseConfigFile(argv[1]).as_object();
+
+    // Define required input parameters
+    const PreciseType R = static_cast<PreciseType>(json_data["R"].as_double());
+    const PreciseType Rcell = static_cast<PreciseType>(json_data["Rcell"].as_double());
+    const PreciseType E0 = static_cast<PreciseType>(json_data["E0"].as_double());
+    const PreciseType lmin = static_cast<PreciseType>(json_data["lmin"].as_double());
+    const PreciseType lmax = 2 * lmin + 2 * R;
+    const PreciseType gamma_min = static_cast<PreciseType>(json_data["gamma_min"].as_double());
+    const PreciseType gamma_max = static_cast<PreciseType>(json_data["gamma_max"].as_double());
+    const PreciseType min_overlap = 0.0;
+    const PreciseType max_overlap = 2 * R - 2 * Rcell;
+    const PreciseType tol = static_cast<PreciseType>(json_data["opt_tol"].as_double()); 
+    const PreciseType d_log_gamma = static_cast<PreciseType>(json_data["delta_log_gamma"].as_double()); 
+    const PreciseType max_learn_rate = static_cast<PreciseType>(json_data["max_learn_rate"].as_double()); 
+    const PreciseType d_overlap = static_cast<PreciseType>(json_data["delta_overlap"].as_double()); 
+    const PreciseType newton_tol = static_cast<PreciseType>(json_data["eqdist_newton_tol"].as_double()); 
+    const PreciseType imag_tol = static_cast<PreciseType>(json_data["imag_tol"].as_double()); 
+    const PreciseType aberth_tol = static_cast<PreciseType>(json_data["aberth_tol"].as_double()); 
+    const PreciseType project_tol = static_cast<PreciseType>(json_data["project_tol"].as_double());
+    const int project_max_iter = json_data["project_max_iter"].as_int64();
     const bool verbose = true;
+    boost::random::mt19937 rng(json_data["rng_seed"].as_int64()); 
 
     // Generate a uniform mesh of points on the unit sphere
-    const int nmin_sphere_mesh = 10;
+    const int nmin_sphere_mesh = json_data["nmin_sphere_mesh"].as_int64();
     const bool restrict_zpos = true; 
     Matrix<PreciseType, Dynamic, 3> sphere_mesh = uniformMeshSphere<PreciseType>(
         nmin_sphere_mesh, restrict_zpos
@@ -398,9 +433,8 @@ int main(int argc, char** argv)
 
     // Generate a uniform mesh of points on the unit circle containing the 
     // square root of N points, where N is the size of the spherical mesh
-    const int nmin_circle_mesh = static_cast<int>(
-        sqrt(static_cast<double>(sphere_mesh.rows()))
-    );
+    const double nsphere_mesh = static_cast<double>(sphere_mesh.rows()); 
+    const int nmin_circle_mesh = static_cast<int>(sqrt(nsphere_mesh)); 
     const bool restrict_ypos = true;  
     Matrix<PreciseType, Dynamic, 2> circle_mesh = uniformMeshCircle<PreciseType>(
         nmin_circle_mesh, restrict_ypos
@@ -408,54 +442,52 @@ int main(int argc, char** argv)
 
     // Generate a uniform lattice of cell centers in 2-D containing at least
     // N points 
-    const int nmin_lattice2 = sphere_mesh.rows();
-    const PreciseType dmin = 2 * Rcell - 0.2; 
-    const PreciseType dmax = 2 * R + 0.2; 
-    Matrix<PreciseType, Dynamic, 2> lattice2 = uniformLattice<PreciseType, 2>(
-        nmin_lattice2, dmin, dmax, lmax
+    const int nmin_lattice_2d = sphere_mesh.rows();
+    const PreciseType dmin = static_cast<PreciseType>(json_data["lattice_dmin"].as_double()); 
+    const PreciseType dmax = static_cast<PreciseType>(json_data["lattice_dmax"].as_double()); 
+    Matrix<PreciseType, Dynamic, 2> lattice_2d = uniformLattice<PreciseType, 2>(
+        nmin_lattice_2d, dmin, dmax, lmax
     );
 
     // Generate a uniform lattice of cell centers in 3-D containing at least
     // N^(3/2) points
-    const int nmin_lattice3 = static_cast<int>(
-        pow(static_cast<double>(sphere_mesh.rows()), 1.5)
-    ); 
-    Matrix<PreciseType, Dynamic, 3> lattice3 = uniformLattice<PreciseType, 3>(
-        nmin_lattice3, dmin, dmax, lmax
+    const int nmin_lattice_3d = static_cast<int>(pow(nsphere_mesh, 1.5)); 
+    Matrix<PreciseType, Dynamic, 3> lattice_3d = uniformLattice<PreciseType, 3>(
+        nmin_lattice_3d, dmin, dmax, lmax
     );
 
     // Generate a uniform mesh of cell half-lengths 
-    const int n_half_l = static_cast<int>(
-        sqrt(static_cast<double>(sphere_mesh.rows()))
-    ); 
+    const int n_half_l = static_cast<int>(sqrt(nsphere_mesh)); 
     Matrix<PreciseType, Dynamic, 1> half_l
         = Matrix<PreciseType, Dynamic, 1>::LinSpaced(n_half_l, lmin, lmax); 
    
     // Identify optimal values of gamma for achieving the below surface 
     // separations
-    const PreciseType surface_sep = static_cast<PreciseType>(std::stod(argv[1])); 
+    const PreciseType deq_target = static_cast<PreciseType>(json_data["eqdist_target"].as_double()); 
     const PreciseType opt_gamma = jkrOptimalSurfaceEnergyDensity<PreciseType>(  
-        R, E0, surface_sep, gamma_min, gamma_max, delta_min, delta_max, rng,
-        tol, d_log_gamma, max_learn_rate, d_delta, newton_tol, imag_tol,
+        R, E0, deq_target, gamma_min, gamma_max, min_overlap, max_overlap, rng,
+        tol, d_log_gamma, max_learn_rate, d_overlap, newton_tol, imag_tol,
         aberth_tol, verbose
     );
     auto forces_2d = calculateJKRForceTable<PreciseType, 2>(
-        half_l, lattice2, circle_mesh, R, E0, opt_gamma, JKRMode::ISOTROPIC,
+        half_l, lattice_2d, circle_mesh, R, E0, opt_gamma, 1e-8, JKRMode::ISOTROPIC,
         200, project_tol, project_max_iter, imag_tol, aberth_tol
     );
     auto forces_3d = calculateJKRForceTable<PreciseType, 3>(
-        half_l, lattice3, sphere_mesh, R, E0, opt_gamma, JKRMode::ISOTROPIC,
+        half_l, lattice_3d, sphere_mesh, R, E0, opt_gamma, 1e-8, JKRMode::ISOTROPIC,
         200, project_tol, project_max_iter, imag_tol, aberth_tol
     );
 
-    // Output meshes and forces to file 
-    std::ofstream outfile_lattice2d(argv[2]); 
-    std::ofstream outfile_lattice3d(argv[3]);
-    std::ofstream outfile_circle(argv[4]);
-    std::ofstream outfile_sphere(argv[5]); 
-    std::ofstream outfile_half_l(argv[6]); 
-    std::ofstream outfile_forces2d(argv[7]); 
-    std::ofstream outfile_forces3d(argv[8]);
+    // Output meshes and forces to file
+    //
+    // First parse the output file paths from the input JSON file 
+    std::ofstream outfile_lattice2d(json_data["outfile_mesh_lattice2d"].as_string().c_str());
+    std::ofstream outfile_lattice3d(json_data["outfile_mesh_lattice3d"].as_string().c_str()); 
+    std::ofstream outfile_circle(json_data["outfile_mesh_orientations2d"].as_string().c_str()); 
+    std::ofstream outfile_sphere(json_data["outfile_mesh_orientations3d"].as_string().c_str());
+    std::ofstream outfile_half_l(json_data["outfile_mesh_half_l"].as_string().c_str());
+    std::ofstream outfile_forces2d(json_data["outfile_forces_2d"].as_string().c_str()); 
+    std::ofstream outfile_forces3d(json_data["outfile_forces_3d"].as_string().c_str()); 
     outfile_lattice2d << std::setprecision(10); 
     outfile_lattice3d << std::setprecision(10); 
     outfile_circle << std::setprecision(10); 
@@ -467,13 +499,13 @@ int main(int argc, char** argv)
     // Start with the meshes ... 
     for (int i = 0; i < n_half_l; ++i)
         outfile_half_l << half_l(i) << std::endl; 
-    for (int j = 0; j < lattice2d.rows(); ++j)
-        outfile_lattice2d << lattice2d(j, 0) << '\t'
-                          << lattice2d(j, 1) << std::endl;
-    for (int j = 0; j < lattice3d.rows(); ++j)
-        outfile_lattice3d << lattice3d(j, 0) << '\t'
-                          << lattice3d(j, 1) << '\t'
-                          << lattice3d(j, 2) << std::endl;
+    for (int j = 0; j < lattice_2d.rows(); ++j)
+        outfile_lattice2d << lattice_2d(j, 0) << '\t'
+                          << lattice_2d(j, 1) << std::endl;
+    for (int j = 0; j < lattice_3d.rows(); ++j)
+        outfile_lattice3d << lattice_3d(j, 0) << '\t'
+                          << lattice_3d(j, 1) << '\t'
+                          << lattice_3d(j, 2) << std::endl;
     for (int k = 0; k < circle_mesh.rows(); ++k)
         outfile_circle << circle_mesh(k, 0) << '\t'
                        << circle_mesh(k, 1) << std::endl; 
@@ -488,7 +520,7 @@ int main(int argc, char** argv)
     Array<double, 2, 6> na_forces3d = BIGNUM * Array<double, 2, 6>::Ones(); 
     for (int i = 0; i < n_half_l; ++i)
     {
-        for (int j = 0; j < lattice2.rows(); ++j)
+        for (int j = 0; j < lattice_2d.rows(); ++j)
         {
             for (int k = 0; k < circle_mesh.rows(); ++k)
             {
@@ -510,7 +542,7 @@ int main(int argc, char** argv)
     }
     for (int i = 0; i < n_half_l; ++i)
     {
-        for (int j = 0; j < lattice3.rows(); ++j)
+        for (int j = 0; j < lattice_3d.rows(); ++j)
         {
             for (int k = 0; k < sphere_mesh.rows(); ++k)
             {
@@ -532,4 +564,14 @@ int main(int argc, char** argv)
             }
         }
     }
+
+    outfile_lattice2d.close(); 
+    outfile_lattice3d.close(); 
+    outfile_circle.close(); 
+    outfile_sphere.close(); 
+    outfile_half_l.close(); 
+    outfile_forces2d.close(); 
+    outfile_forces3d.close();
+
+    return 0;
 }
