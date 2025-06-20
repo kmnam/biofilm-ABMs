@@ -1,5 +1,5 @@
 /**
- * Test module for `hertzContactArea()`. 
+ * Test module for contact area functions in `jkr.hpp`.
  *
  * Authors:
  *     Kee-Myoung Nam
