@@ -219,7 +219,8 @@ template <typename T>
 std::pair<T, T> getPrincipalRadiiOfCurvature(const Ref<const Matrix<T, 3, 1> >& n, 
                                              const T R, 
                                              const T half_l, 
-                                             const Ref<const Matrix<T, 3, 1> >& x)
+                                             const Ref<const Matrix<T, 3, 1> >& x,
+                                             const T umbilic_tol = 1e-8)
 {
     // Get the rotation matrix that maps the orientation vector to (1, 0, 0)
     Matrix<T, 3, 3> rot = rotationToXUnitVector<T>(n);
@@ -255,9 +256,22 @@ std::pair<T, T> getPrincipalRadiiOfCurvature(const Ref<const Matrix<T, 3, 1> >& 
     mean_numer *= a * a * c; 
     T mean = mean_numer / (8 * pow(gauss_term2 + gauss_term3, 1.5));
     
-    // ... from which we can calculate the principal radii of curvature 
-    T principal1 = mean + sqrt(mean * mean - gauss);    // Maximum curvature 
-    T principal2 = mean - sqrt(mean * mean - gauss);    // Minimum curvature
+    // ... from which we can calculate the principal radii of curvature
+    //
+    // If the square mean curvature and Gaussian curvature are very close
+    // (i.e., x is an umbilic point), then the two principal curvatures are 
+    // the same (the mean curvature)
+    T principal1, principal2;
+    if (abs(mean * mean - gauss) < umbilic_tol)
+    {
+        principal1 = mean; 
+        principal2 = mean;
+    }
+    else 
+    {
+        principal1 = mean + sqrt(mean * mean - gauss);    // Maximum curvature 
+        principal2 = mean - sqrt(mean * mean - gauss);    // Minimum curvature
+    }
    
     // Return as (maximum radius of curvature, minimum radius of curvature) 
     return std::make_pair(1.0 / principal2, 1.0 / principal1);   
