@@ -357,8 +357,8 @@ TEST_CASE("Tests for projection function", "[projectOntoEllipsoid()]")
 {
     const double tol = 1e-8;
     const T inclusion_tol = 1e-8; 
-    const T project_tol = 1e-20;  
-    const int max_iter = 10000; 
+    const T project_tol = 1e-20; 
+    const int max_iter = 100; 
 
     // Case 1: Ellipsoid with long axis parallel to the x-axis 
     Matrix<T, 3, 1> r, n, a; 
