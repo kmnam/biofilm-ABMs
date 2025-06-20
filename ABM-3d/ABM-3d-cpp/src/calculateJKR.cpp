@@ -287,8 +287,9 @@ ForceTable<double, Dim> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic
                                                const Ref<const Matrix<T, Dynamic, Dim> >& r2, 
                                                const Ref<const Matrix<T, Dynamic, Dim> >& n2,
                                                const T R, const T E0, const T gamma, 
-                                               const T dmin, const JKRMode mode,
-                                               const int n_ellip_table = 200,
+                                               const T dmin, const T dmax, 
+                                               const JKRMode mode,
+                                               const int n_ellip_table = 100,
                                                const T project_tol = 1e-6,
                                                const int project_max_iter = 100,
                                                const T imag_tol = 1e-8,
@@ -359,12 +360,12 @@ ForceTable<double, Dim> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic
                     else    // Dim == 3
                         d12 << static_cast<T>(std::get<0>(result)(0)), 
                                static_cast<T>(std::get<0>(result)(1)),
-                               static_cast<T>(std::get<0>(result)(2)); 
+                               static_cast<T>(std::get<0>(result)(2));
                     T s = static_cast<T>(std::get<1>(result)); 
                     T t = static_cast<T>(std::get<2>(result));
 
                     // Check that the distance is nonzero
-                    if (d12.norm() > dmin)
+                    if (d12.norm() > dmin && d12.norm() < dmax)
                     {
                         Array<T, 2, 2 * Dim> forces_ijkm; 
                         if (mode == JKRMode::ISOTROPIC)
@@ -459,23 +460,24 @@ int main(int argc, char** argv)
     // Generate a uniform mesh of cell half-lengths 
     const int n_half_l = static_cast<int>(sqrt(nsphere_mesh)); 
     Matrix<PreciseType, Dynamic, 1> half_l
-        = Matrix<PreciseType, Dynamic, 1>::LinSpaced(n_half_l, lmin, lmax); 
+        = Matrix<PreciseType, Dynamic, 1>::LinSpaced(n_half_l, 0.5 * lmin, 0.5 * lmax); 
    
     // Identify optimal values of gamma for achieving the below surface 
     // separations
-    const PreciseType deq_target = static_cast<PreciseType>(json_data["eqdist_target"].as_double()); 
+    const PreciseType deq_target = static_cast<PreciseType>(json_data["eqdist_target"].as_double());
+    const JKRMode jkr_mode = static_cast<JKRMode>(json_data["jkr_mode"].as_int64());  
     const PreciseType opt_gamma = jkrOptimalSurfaceEnergyDensity<PreciseType>(  
         R, E0, deq_target, min_gamma, max_gamma, min_overlap, max_overlap, rng,
         tol, d_log_gamma, max_learn_rate, d_overlap, newton_tol, imag_tol,
         aberth_tol, verbose
     );
     auto forces_2d = calculateJKRForceTable<PreciseType, 2>(
-        half_l, lattice_2d, circle_mesh, R, E0, opt_gamma, 1e-8, JKRMode::ISOTROPIC,
-        200, project_tol, project_max_iter, imag_tol, aberth_tol
+        half_l, lattice_2d, circle_mesh, R, E0, opt_gamma, dmin, dmax, jkr_mode,
+        100, project_tol, project_max_iter, imag_tol, aberth_tol
     );
     auto forces_3d = calculateJKRForceTable<PreciseType, 3>(
-        half_l, lattice_3d, sphere_mesh, R, E0, opt_gamma, 1e-8, JKRMode::ISOTROPIC,
-        200, project_tol, project_max_iter, imag_tol, aberth_tol
+        half_l, lattice_3d, sphere_mesh, R, E0, opt_gamma, dmin, dmax, jkr_mode,
+        100, project_tol, project_max_iter, imag_tol, aberth_tol
     );
 
     // Output meshes and forces to file
