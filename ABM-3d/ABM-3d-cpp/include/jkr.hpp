@@ -272,12 +272,12 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
     Matrix<T, 3, 1> b2 = std::get<1>(form2); 
     T c2 = std::get<2>(form2); 
     std::function<bool(const Ref<const Matrix<T, 3, 1> >&)> in_ellipsoid1
-        = [&A1, &b1, &c1](const Ref<const Matrix<T, 3, 1> >& q)
+        = [&A1, &b1, &c1](const Ref<const Matrix<T, 3, 1> >& q) -> bool
         {
             return (q.dot(A1 * q) + 2 * b1.dot(q) <= c1); 
         };
     std::function<bool(const Ref<const Matrix<T, 3, 1> >&)> in_ellipsoid2
-        = [&A2, &b2, &c2](const Ref<const Matrix<T, 3, 1> >& q)
+        = [&A2, &b2, &c2](const Ref<const Matrix<T, 3, 1> >& q) -> bool
         {
             return (q.dot(A2 * q) + 2 * b2.dot(q) <= c2); 
         };
