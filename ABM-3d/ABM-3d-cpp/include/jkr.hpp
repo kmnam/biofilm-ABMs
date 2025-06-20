@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/7/2025
+ *     6/20/2025
  */
 
 #ifndef BIOFILM_JKR_HPP
@@ -265,19 +265,21 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
     // the two cells 
     auto form1 = getEllipsoidQuadraticForm<T>(r1, n1, R, half_l1); 
     auto form2 = getEllipsoidQuadraticForm<T>(r2, n2, R, half_l2);
-    Matrix<T, 3, 3> A1 = form1.first;
-    Matrix<T, 3, 1> b1 = form1.second;
-    Matrix<T, 3, 3> A2 = form2.first;
-    Matrix<T, 3, 1> b2 = form2.second; 
+    Matrix<T, 3, 3> A1 = std::get<0>(form1);
+    Matrix<T, 3, 1> b1 = std::get<1>(form1);
+    T c1 = std::get<2>(form1); 
+    Matrix<T, 3, 3> A2 = std::get<0>(form2);
+    Matrix<T, 3, 1> b2 = std::get<1>(form2); 
+    T c2 = std::get<2>(form2); 
     std::function<bool(const Ref<const Matrix<T, 3, 1> >&)> in_ellipsoid1
-        = [&A1, &b1](const Ref<const Matrix<T, 3, 1> >& q)
+        = [&A1, &b1, &c1](const Ref<const Matrix<T, 3, 1> >& q)
         {
-            return (q.dot(A1 * q) + b1.dot(q) <= 1.0); 
+            return (q.dot(A1 * q) + 2 * b1.dot(q) <= c1); 
         };
     std::function<bool(const Ref<const Matrix<T, 3, 1> >&)> in_ellipsoid2
-        = [&A2, &b2](const Ref<const Matrix<T, 3, 1> >& q)
+        = [&A2, &b2, &c2](const Ref<const Matrix<T, 3, 1> >& q)
         {
-            return (q.dot(A2 * q) + b2.dot(q) <= 1.0); 
+            return (q.dot(A2 * q) + 2 * b2.dot(q) <= c2); 
         };
     Matrix<T, 3, 1> u1 = r1 + s * n1 + R * d12n; 
     Matrix<T, 3, 1> u2 = r2 + t * n2 - R * d12n;
@@ -287,8 +289,8 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
         u2 -= 0.1 * d12n;
 
     // Now project these points onto the ellipsoid surfaces 
-    u1 = projectOntoEllipsoid<T>(u1, A1, b1, project_tol, project_max_iter); 
-    u2 = projectOntoEllipsoid<T>(u2, A2, b2, project_tol, project_max_iter);
+    u1 = projectOntoEllipsoid<T>(u1, A1, b1, c1, project_tol, project_max_iter);
+    u2 = projectOntoEllipsoid<T>(u2, A2, b2, c2, project_tol, project_max_iter);
 
     // Compute the principal radii of curvature at these points 
     auto radii1 = getPrincipalRadiiOfCurvature<T>(n1, R, half_l1, u1); 
@@ -296,7 +298,7 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
     T Ry1 = radii1.second; 
     auto radii2 = getPrincipalRadiiOfCurvature<T>(n2, R, half_l2, u2); 
     T Rx2 = radii2.first; 
-    T Ry2 = radii2.second;  
+    T Ry2 = radii2.second;
     
     // Compute the expected contact area for a Hertzian contact 
     T area = hertzContactArea<T>(delta, Rx1, Ry1, Rx2, Ry2, n1, n2, ellip_table);
