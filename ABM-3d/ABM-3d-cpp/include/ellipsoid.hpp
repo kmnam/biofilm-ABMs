@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/4/2025
+ *     6/20/2025
  */
 
 #ifndef BIOFILM_ELLIPSOID_HPP
@@ -66,16 +66,18 @@ Matrix<T, 3, 3> rotationToXUnitVector(const Ref<const Matrix<T, 3, 1> >& n)
  * given center, orientation (long axis), radius (semi-minor axis length), and 
  * centerline half-length (semi-major axis length minus radius).
  *
- * This function returns the matrix A and vector b such that the ellipsoid
- * is given by the equation, 
+ * This function returns the matrix A, vector b, and scalar c such that the
+ * ellipsoid is given by the equation, 
  *
- * x.T * A * x + b.T * x = 1. 
+ * x.T * A * x + 2 * b.T * x = c.
+ *
+ * The interior of the ellipsoid satisfies x.T * A * x + b.T * x <= c.
  */
 template <typename T>
-std::pair<Matrix<T, 3, 3>, Matrix<T, 3, 1> > getEllipsoidQuadraticForm(const Ref<const Matrix<T, 3, 1> >& r,
-                                                                       const Ref<const Matrix<T, 3, 1> >& n, 
-                                                                       const T R, 
-                                                                       const T half_l)
+std::tuple<Matrix<T, 3, 3>, Matrix<T, 3, 1>, T> getEllipsoidQuadraticForm(const Ref<const Matrix<T, 3, 1> >& r,
+                                                                          const Ref<const Matrix<T, 3, 1> >& n, 
+                                                                          const T R, 
+                                                                          const T half_l)
 {
     T a = half_l + R;    // Semi-major axis length
     T b = R;             // Semi-minor axis length
@@ -89,18 +91,20 @@ std::pair<Matrix<T, 3, 3>, Matrix<T, 3, 1> > getEllipsoidQuadraticForm(const Ref
                      0, 1.0 / (b * b),             0,
                      0,             0, 1.0 / (b * b);
     B = rot.transpose() * A * rot;
-    Matrix<T, 3, 1> v = -2 * B * r; 
+    Matrix<T, 3, 1> v = -B * r - B.transpose() * r; 
     T c = 1.0 - r.dot(B * r);
-    B /= c; 
-    v /= c; 
 
-    return std::make_pair(B, v); 
+    return std::make_tuple(B, 0.5 * v, c); 
 }
 
 /**
  * Project the given query point, a, onto the surface of the given ellipsoid
- * (given by matrix A and vector b), using the alternating direction method 
- * of multipliers method (ADMM) algorithm proposed by:
+ * given by the quadratic form components A, b, c, as
+ *
+ * x.T * A * x + 2 * b.T * x <= c,
+ *
+ * using the alternating direction method of multipliers method (ADMM)
+ * algorithm proposed by (Algorithm 6):
  *
  * Jia et al., Comparison of several fast algorithms for projection onto an
  * ellipsoid, J. Comput. Appl. Math. (2017) 319, 320-337. 
@@ -109,35 +113,48 @@ template <typename T>
 Matrix<T, 3, 1> projectOntoEllipsoid(const Ref<const Matrix<T, 3, 1> >& a,
                                      const Ref<const Matrix<T, 3, 3> >& A, 
                                      const Ref<const Matrix<T, 3, 1> >& b,
-                                     const T tol, const int max_iter,
+                                     const T c, const T tol, const int max_iter,
                                      const bool verbose = false)
 {
     int k = 0; 
     Matrix<T, 3, 1> x = a / sqrt(a.norm());         // Initialize as suggested by Jia et al. 
     Matrix<T, 3, 1> l = Matrix<T, 3, 1>::Ones();    // Initialize to all-ones vector
     
-    // Set theta to 1 / sqrt(cond), where cond is the condition number of A 
+    // Set theta to 1 / sqrt(cond), where cond is the condition number of A
     JacobiSVD<Matrix<T, 3, 3> > svd(A);
     T max_singval = svd.singularValues()(0);
     T min_singval = svd.singularValues()(2);
     T theta = 1.0 / sqrt(max_singval / min_singval);  
 
     // Calculate auxiliary matrices and vectors that are fixed throughout
-    // the optimization 
+    // the optimization
     Matrix<T, 3, 3> B = A.llt().matrixL();
     Matrix<T, 3, 1> bbar = (-B.transpose()).fullPivLu().solve(b);
-    const T r = sqrt(1.0 + pow(bbar.norm(), 2));
+    const T r = sqrt(c + bbar.squaredNorm()); 
     Matrix<T, 3, 3> inv_Abar = Matrix<T, 3, 3>::Identity() + theta * B.transpose() * B;
-    FullPivLU<Matrix<T, 3, 3> > Abar_decomp(inv_Abar); 
+    FullPivLU<Matrix<T, 3, 3> > inv_Abar_decomp(inv_Abar); 
 
     // Initialize and calculate the initial residual
-    Matrix<T, 3, 1> y = B * x - bbar;
+    //
+    // The residual vector depends on the solution iterate x, the subproblem
+    // solution iterate y, and the Lagrange multiplier lambda (= l), as 
+    //
+    // res[0:3] = x - a - B.T * l
+    // res[3:6] = y - P[y - l], where P[] is a projection 
+    // res[6:9] = B * x - y - bbar
+    Matrix<T, 3, 1> y = B * x - bbar;   // Definition of y (above Eqn. 2.10)
     Matrix<T, 9, 1> res; 
     res(Eigen::seq(0, 2)) = x - a - B.transpose() * l;
-    if ((y - l).norm() <= r)
-        res(Eigen::seq(3, 5)) = l; 
-    else 
-        res(Eigen::seq(3, 5)) = y - (y - l) / (y - l).norm() * r; 
+    std::function<Matrix<T, 3, 1>(const Ref<const Matrix<T, 3, 1> >&)> project
+        = [&r](const Ref<const Matrix<T, 3, 1> >& q) -> Matrix<T, 3, 1>
+        {
+            T norm = q.norm(); 
+            if (norm <= r)
+                return q; 
+            else 
+                return r * (q / norm); 
+        };
+    res(Eigen::seq(3, 5)) = y - project(y - l); 
     res(Eigen::seq(6, 8)) = B * x - y - bbar;
 
     // Print initial iterate, if desired 
@@ -160,21 +177,20 @@ Matrix<T, 3, 1> projectOntoEllipsoid(const Ref<const Matrix<T, 3, 1> >& a,
     // Calculate the next iterate ... 
     while (k < max_iter && res.norm() > tol)
     {
+        // Step 3: Calculate u_k and x_{k+1}
         Matrix<T, 3, 1> u = a + B.transpose() * l + theta * B.transpose() * (y + bbar); 
-        x = Abar_decomp.solve(u);
+        x = inv_Abar_decomp.solve(u); 
+
+        // Step 4: Calculate w_k and y_{k+1}
         Matrix<T, 3, 1> w = B * x - l / theta - bbar;
-        if (w.norm() <= r) 
-            y = w; 
-        else 
-            y = r * w / w.norm();
+        y = project(w);
+
+        // Step 5: Calculate the Lagrange multiplier, l_{k+1} 
         l -= theta * (B * x - y - bbar);
 
         // Calculate residual for the new iterate 
         res(Eigen::seq(0, 2)) = x - a - B.transpose() * l;
-        if ((y - l).norm() <= r)
-            res(Eigen::seq(3, 5)) = l; 
-        else 
-            res(Eigen::seq(3, 5)) = y - (y - l) / (y - l).norm() * r; 
+        res(Eigen::seq(3, 5)) = y - project(y - l); 
         res(Eigen::seq(6, 8)) = B * x - y - bbar;  
         k++;
 
