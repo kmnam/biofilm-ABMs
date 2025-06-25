@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/12/2025
+ *     6/25/2025
  */
 
 #ifndef BIOFILM_UTILS_3D_HPP
@@ -24,7 +24,7 @@
 #include <CGAL/Point_3.h>
 #include <CGAL/Vector_3.h>
 #include <CGAL/Polyhedron_3.h>
-#include <CGAL/Subdivision_method_3.h>
+#include <CGAL/subdivision_method_3.h>
 #include "indices.hpp"
 #include "distances.hpp"
 
