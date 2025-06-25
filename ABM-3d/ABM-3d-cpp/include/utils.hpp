@@ -16,6 +16,8 @@
 #include <iomanip>
 #include <cmath>
 #include <map>
+#include <vector>
+#include <stack>
 #include <boost/json/src.hpp>
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
@@ -825,6 +827,98 @@ int nearestValue(const Ref<const Matrix<T, Dynamic, 1> >& values, const T x)
     }
 
     return nearest_idx; 
+}
+
+/**
+ * Get the binomial coefficient, n choose k.
+ *
+ * @param n Total number of items.
+ * @param k Number of items to choose. 
+ * @returns n choose k. 
+ */
+int binom(const int n, const int k)
+{
+    if (n < k)
+        return 0; 
+    else if (k == 0 || n == k)
+        return 1; 
+    else 
+        return binom(n - 1, k - 1) + binom(n - 1, k); 
+}
+
+/**
+ * A simple quasi-recursive function for getting the power set of an ordered
+ * set (i.e., a vector).
+ *
+ * @param vec Input ordered set. 
+ * @param nonempty If true, skip the empty set. 
+ * @returns Power set of input set. 
+ */
+std::vector<std::vector<int> > getPowerset(const std::vector<int>& vec, 
+                                           const bool nonempty = true)
+{
+    std::vector<std::vector<int> > powerset;
+    const int n = vec.size();  
+
+    // Maintain a stack of sub-vectors 
+    std::stack<std::pair<int, std::vector<int> > > stack;
+    stack.push(std::make_pair(0, std::vector<int>({})));
+    while (!stack.empty())
+    {
+        auto next = stack.top();
+        stack.pop(); 
+        int start = next.first; 
+        std::vector<int> subset = next.second;
+        if (!nonempty || subset.size() > 0)
+            powerset.push_back(subset); 
+        for (int i = start; i < n; ++i)
+        {
+            std::vector<int> new_subset(subset);
+            new_subset.push_back(vec[i]);  
+            stack.push(std::make_pair(i + 1, new_subset)); 
+        } 
+    }
+
+    return powerset; 
+}
+
+/**
+ * A simple quasi-recursive function for getting all k-combinations of an
+ * ordered set (i.e., a vector). 
+ *
+ * @param vec Input ordered set. 
+ * @param k Number of items to choose per combination. 
+ * @returns All k-combinations of input set. 
+ */
+std::vector<std::vector<int> > getCombinations(const std::vector<int>& vec, 
+                                               const int k)
+{
+    std::vector<std::vector<int> > combinations;
+    const int n = vec.size();
+
+    // Maintain a stack of sub-vectors 
+    std::stack<std::pair<int, std::vector<int> > > stack;
+    stack.push(std::make_pair(0, std::vector<int>({})));  
+    while (!stack.empty())
+    {
+        auto next = stack.top();
+        stack.pop(); 
+        int start = next.first; 
+        std::vector<int> path = next.second; 
+        if (path.size() == k)
+        {
+            combinations.push_back(path); 
+            continue; 
+        }
+        for (int i = start; i < n; ++i)
+        {
+            std::vector<int> newpath(path); 
+            newpath.push_back(vec[i]); 
+            stack.push(std::make_pair(i + 1, newpath)); 
+        } 
+    }
+
+    return combinations;  
 }
 
 #endif
