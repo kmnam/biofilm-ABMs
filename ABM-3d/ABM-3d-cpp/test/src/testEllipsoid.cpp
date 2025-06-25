@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/20/2025
+ *     6/25/2025
  */
 #include <iostream>
 #include <cmath>
@@ -17,6 +17,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "../../include/ellipsoid.hpp"
+#include "../../include/utils.hpp"
 
 using namespace Eigen; 
 
@@ -351,6 +352,187 @@ TEST_CASE("Tests for ellipsoid quadratic form function", "[getEllipsoidQuadratic
 }
 
 /**
+ * A series of tests for getPrincipalRadiiOfCurvature(). 
+ */
+TEST_CASE("Tests for principal radii of curvature", "[getPrincipalRadiiOfCurvature()]")
+{
+    const double tol = 1e-8; 
+    Matrix<T, 3, 1> n, x; 
+    const T R = 0.8;
+    boost::random::mt19937 rng(1234567890);
+    boost::random::uniform_01<> dist; 
+
+    // Case 1: Get principal radii of curvature on a sphere
+    n << 1, 0, 0;      // Dummy orientation 
+    T half_l = 0.0;
+
+    // Sample points on the sphere and calculate radii 
+    for (int i = 0; i < 100; ++i)
+    {
+        x << standardNormal<T>(rng, dist),
+             standardNormal<T>(rng, dist),
+             standardNormal<T>(rng, dist); 
+        x *= (R / x.norm());
+        std::pair<T, T> radii = getPrincipalRadiiOfCurvature<T>(n, R, half_l, x);
+        REQUIRE_THAT(
+            static_cast<double>(radii.first),
+            Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(radii.second),
+            Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
+        ); 
+    }
+
+    // Case 2: Get principal radii of curvature on an ellipsoid
+    //
+    // For this, we implement a numerical estimation method for the principal
+    // radii of curvature as eigenvalues of the shape operator 
+    half_l = 0.5;
+    T a = R + half_l; 
+    T b = R; 
+    std::function<Matrix<T, 3, 1>(const Ref<const Matrix<T, 3, 1> >&)> grad
+        = [&a, &b](const Ref<const Matrix<T, 3, 1> >& x) -> Matrix<T, 3, 1>
+        {
+            // Gradient of (x[0] / a)^2 + (x[1] / b)^2 + (x[2] / b)^2 - 1
+            Matrix<T, 3, 1> g; 
+            g << 2 * x(0) / (a * a), 2 * x(1) / (b * b), 2 * x(2) / (b * b); 
+            return g; 
+        };
+    std::function<Matrix<T, 3, 3>(const Ref<const Matrix<T, 3, 1> >&)> hessian
+        = [&a, &b](const Ref<const Matrix<T, 3, 1> >& x) -> Matrix<T, 3, 3>
+        {
+            // Second partial derivatives of (x[0] / a)^2 + (x[1] / b)^2 + (x[2] / b)^2 - 1
+            Matrix<T, 3, 3> H; 
+            H << 2 / (a * a),           0,           0, 
+                           0, 2 / (b * b),           0,
+                           0,           0, 2 / (b * b);
+            return H;  
+        };
+
+    // Simple function for calculating determinants of 4x4 matrices 
+    std::function<T(const Ref<const Matrix<T, 4, 4> >&)> determinant
+        = [](const Ref<const Matrix<T, 4, 4> >& A) -> T
+        {
+            // Initialize the determinant of the 4x4 matrix 
+            T det = 0; 
+
+            // Apply the Laplace expansion: For each column ...  
+            for (int i = 0; i < 4; ++i)
+            {
+                // Get the submatrix obtained by removing row 0 and column i
+                std::vector<int> cols;
+                for (int j = 0; j < 4; ++j)
+                {
+                    if (i != j)
+                        cols.push_back(j); 
+                } 
+                Matrix<T, 3, 3> sub_i = A(Eigen::seq(1, 3), cols);
+
+                // Calculate the determinant of this 3x3 submatrix, again 
+                // by applying the Laplace expansion  
+                T det_i = 0;
+
+                // For each column of the submatrix ...  
+                for (int j = 0; j < 3; ++j)
+                {
+                    // Get the determinant of the submatrix obtained by 
+                    // removing row 0 and column j
+                    std::vector<int> cols2; 
+                    for (int k = 0; k < 3; ++k)
+                    {
+                        if (j != k)
+                            cols2.push_back(k); 
+                    } 
+                    T det_ij = (
+                        sub_i(1, cols2[0]) * sub_i(2, cols2[1]) -
+                        sub_i(1, cols2[1]) * sub_i(2, cols2[0])
+                    );
+
+                    // Update the 3x3 determinant
+                    det_i += pow(-1, j) * sub_i(0, j) * det_ij;  
+                }
+
+                // Update the 4x4 determinant
+                det += pow(-1, i) * A(0, i) * det_i;  
+            }
+
+            return det; 
+        };
+
+    // Sample points on the ellipsoid and calculate radii
+    T dtheta = 1e-8;  
+    for (int i = 0; i < 100; ++i)
+    {
+        // Sample a point from the ellipsoid using spherical coordinates
+        T theta = boost::math::constants::pi<T>() * static_cast<T>(dist(rng));
+        T phi = boost::math::constants::two_pi<T>() * static_cast<T>(dist(rng));
+        Matrix<T, 3, 1> x;  
+        x << (R + half_l) * sin(theta) * cos(phi),
+             R * sin(theta) * sin(phi),
+             R * cos(theta);
+
+        // Calculate the principal radii of curvature 
+        std::pair<T, T> radii = getPrincipalRadiiOfCurvature<T>(n, R, half_l, x);
+        T curvature1 = 1.0 / radii.first; 
+        T curvature2 = 1.0 / radii.second;  
+
+        // Calculate the gradient, and check that it is normal to a tangent
+        // vector at x
+        //
+        // This tangent vector is obtained along the curve with constant phi
+        Matrix<T, 3, 1> grad_x = grad(x);
+        Matrix<T, 3, 1> normal = grad_x / grad_x.norm(); 
+        Matrix<T, 3, 1> x1, x2; 
+        x1 << (R + half_l) * sin(theta + dtheta) * cos(phi), 
+              R * sin(theta + dtheta) * sin(phi), 
+              R * cos(theta + dtheta); 
+        x2 << (R + half_l) * sin(theta - dtheta) * cos(phi),
+              R * sin(theta - dtheta) * sin(phi),
+              R * cos(theta - dtheta); 
+        Matrix<T, 3, 1> tangent_x = (x1 - x2) / (2 * theta);
+        tangent_x /= tangent_x.norm();  
+        REQUIRE(static_cast<double>(abs(normal.dot(tangent_x))) < tol);
+
+        // Calculate the mean curvature from the divergence of the normal,
+        // which is the trace of the Hessian divided by the norm of the
+        // gradient
+        //
+        // See Cor. 4.5 in Goldman, Computer Aided Geometric Design (2005)
+        Matrix<T, 3, 3> hess_x = hessian(x); 
+        T mean = hess_x.trace() / grad_x.norm();
+        mean -= (
+            8 * (x(0) * x(0) / pow(a, 6) + x(1) * x(1) / pow(b, 6) + x(2) * x(2) / pow(b, 6))
+            * pow(grad_x.squaredNorm(), -1.5)
+        );
+        mean /= 2;
+
+        // Check that this mean curvature is close to the mean of the 
+        // principal curvatures
+        REQUIRE_THAT(
+            static_cast<double>(mean), 
+            Catch::Matchers::WithinAbs(0.5 * static_cast<double>(curvature1 + curvature2), tol)
+        );
+
+        // Calculate the Gaussian curvature from the Hessian and normal
+        //
+        // See Cor. 4.2 in Goldman, Computer Aided Geometric Design (2005)
+        Matrix<T, 4, 4> M = Matrix<T, 4, 4>::Zero();  
+        M(Eigen::seq(0, 2), Eigen::seq(0, 2)) = hess_x; 
+        M(Eigen::seq(0, 2), 3) = grad_x; 
+        M(3, Eigen::seq(0, 2)) = grad_x.transpose(); 
+        T gauss = -determinant(M) / pow(grad_x.squaredNorm(), 2);
+
+        // Check that this mean curvature is close to the mean of the 
+        // principal curvatures
+        REQUIRE_THAT(
+            static_cast<double>(gauss), 
+            Catch::Matchers::WithinAbs(static_cast<double>(curvature1 * curvature2), tol)
+        );
+    }
+}
+
+/**
  * A series of tests for projectOntoEllipsoid().
  */
 TEST_CASE("Tests for projection function", "[projectOntoEllipsoid()]")
@@ -432,7 +614,7 @@ TEST_CASE("Tests for projection function", "[projectOntoEllipsoid()]")
     boost::random::uniform_01<> dist;  
     a << static_cast<T>(dist(rng)),
          static_cast<T>(dist(rng)), 
-         static_cast<T>(dist(rng)), 
+         static_cast<T>(dist(rng)); 
     a *= (5 * R / a.norm());    // Ensure that the point lies outside the ellipsoid
     REQUIRE(!in_ellipsoid_fuzzy(a)); 
     x = projectOntoEllipsoid<T>(a, A, b, c, project_tol, max_iter, true);
