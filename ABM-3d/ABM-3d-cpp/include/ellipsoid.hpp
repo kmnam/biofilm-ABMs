@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/20/2025
+ *     6/25/2025
  */
 
 #ifndef BIOFILM_ELLIPSOID_HPP
@@ -241,14 +241,23 @@ std::pair<T, T> getPrincipalRadiiOfCurvature(const Ref<const Matrix<T, 3, 1> >& 
     // entire range of [0, 2\pi), since the curvature is symmetric across each
     // axis 
     T a = R; 
-    T c = half_l + R; 
-    T v = acos(y(2) / c);
-    T u = acos(y(0) / (sin(v) * a));
+    T c = half_l + R;
+
+    // Calculate sin^2(u), cos^2(u), sin^2(v), cos^2(v)
+    T cosv = y(0) / c;      // This is the coordinate corresponding to the long axis, c
+    T cos2v = cosv * cosv; 
+    T sin2v = 1 - cos2v;
+    T v = acos(cosv); 
+    T sinv = sin(v); 
+    T cosu = y(2) / (a * sinv);
+    T cos2u = cosu * cosu; 
+    T sin2u = 1 - cos2u;
+    T u = acos(cosu);  
     
     // Then calculate the Gaussian curvature ...
     T gauss_term1 = a * a * a * a * c * c; 
-    T gauss_term2 = a * a * a * a * cos(v) * cos(v);
-    T gauss_term3 = c * c * a * a * sin(v) * sin(v); 
+    T gauss_term2 = a * a * a * a * cos2v; 
+    T gauss_term3 = c * c * a * a * sin2v; 
     T gauss = gauss_term1 / pow(gauss_term2 + gauss_term3, 2);
 
     // ... and the mean curvature ... 
