@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     4/19/2025
+ *     6/26/2025
  */
 
 #ifndef SIMPLICIAL_COMPLEXES_3D_HPP
@@ -361,106 +361,15 @@ void writeGraph(const Graph& graph, std::vector<int>& components,
 }
 
 /** ------------------------------------------------------------------- //
- *                         SIMPLICIAL COMPLEXES                         //
+ *                                 TRIES                                //
  *  ------------------------------------------------------------------- */
-/**
- * Get the binomial coefficient, n choose k.
- *
- * @param n Total number of items.
- * @param k Number of items to choose. 
- * @returns n choose k. 
- */
-int binom(const int n, const int k)
-{
-    if (n < k)
-        return 0; 
-    else if (k == 0 || n == k)
-        return 1; 
-    else 
-        return binom(n - 1, k - 1) + binom(n - 1, k); 
-}
-
-/**
- * A simple quasi-recursive function for getting the power set of an ordered
- * set (i.e., a vector).
- *
- * @param vec Input ordered set. 
- * @param nonempty If true, skip the empty set. 
- * @returns Power set of input set. 
- */
-std::vector<std::vector<int> > getPowerset(const std::vector<int>& vec, 
-                                           const bool nonempty = true)
-{
-    std::vector<std::vector<int> > powerset;
-    const int n = vec.size();  
-
-    // Maintain a stack of sub-vectors 
-    std::stack<std::pair<int, std::vector<int> > > stack;
-    stack.push(std::make_pair(0, std::vector<int>({})));
-    while (!stack.empty())
-    {
-        auto next = stack.top();
-        stack.pop(); 
-        int start = next.first; 
-        std::vector<int> subset = next.second;
-        if (!nonempty || subset.size() > 0)
-            powerset.push_back(subset); 
-        for (int i = start; i < n; ++i)
-        {
-            std::vector<int> new_subset(subset);
-            new_subset.push_back(vec[i]);  
-            stack.push(std::make_pair(i + 1, new_subset)); 
-        } 
-    }
-
-    return powerset; 
-}
-
-/**
- * A simple quasi-recursive function for getting all k-combinations of an
- * ordered set (i.e., a vector). 
- *
- * @param vec Input ordered set. 
- * @param k Number of items to choose per combination. 
- * @returns All k-combinations of input set. 
- */
-std::vector<std::vector<int> > getCombinations(const std::vector<int>& vec, 
-                                               const int k)
-{
-    std::vector<std::vector<int> > combinations;
-    const int n = vec.size();
-
-    // Maintain a stack of sub-vectors 
-    std::stack<std::pair<int, std::vector<int> > > stack;
-    stack.push(std::make_pair(0, std::vector<int>({})));  
-    while (!stack.empty())
-    {
-        auto next = stack.top();
-        stack.pop(); 
-        int start = next.first; 
-        std::vector<int> path = next.second; 
-        if (path.size() == k)
-        {
-            combinations.push_back(path); 
-            continue; 
-        }
-        for (int i = start; i < n; ++i)
-        {
-            std::vector<int> newpath(path); 
-            newpath.push_back(vec[i]); 
-            stack.push(std::make_pair(i + 1, newpath)); 
-        } 
-    }
-
-    return combinations;  
-}
-
 /**
  * A simple implementation of a trie. 
  */
 struct TrieNode
 {
     int letter;
+    int level;      // Length of string corresponding to the node  
     std::shared_ptr<TrieNode> parent; 
     std::vector<std::shared_ptr<TrieNode> > children;  
 };
@@ -476,18 +385,18 @@ class Trie
          *
          * The node is assumed to lie within the trie.  
          */
-        std::vector<int> getValue(const std::shared_ptr<TrieNode>& ptr) const 
+        std::vector<int> getString(const std::shared_ptr<TrieNode>& ptr) const 
         {
             // Travel up the trie from the node to get the value 
-            std::vector<int> value;
+            std::vector<int> string;
             std::shared_ptr<TrieNode> curr = ptr;  
             while (curr != this->root)
             {
-                value.insert(value.begin(), curr->letter); 
+                string.insert(string.begin(), curr->letter); 
                 curr = curr->parent; 
             }
 
-            return value; 
+            return string; 
         } 
 
     public:
@@ -498,6 +407,7 @@ class Trie
         {
             TrieNode node;
             node.letter = -1;
+            node.level = 0; 
             node.parent = nullptr;
             this->nodes.push_back(node);
             this->root = std::make_shared<TrieNode>(node); 
@@ -510,12 +420,12 @@ class Trie
         /**
          * Return true if the trie contains a node for the full string/value.
          */
-        bool containsValue(std::vector<int> value) const 
+        bool containsString(std::vector<int> string) const 
         {
             // Travel down the tree from the root, looking for a node that 
-            // contains each successive entry in the value
+            // contains each successive entry in the string
             std::shared_ptr<TrieNode> curr = this->root;
-            for (int i = 0; i < value.size(); ++i)
+            for (int i = 0; i < string.size(); ++i)
             {
                 // For each child node ... 
                 std::vector<std::shared_ptr<TrieNode> > children = curr->children;
@@ -524,7 +434,7 @@ class Trie
                 {
                     // ... check that the letter matches the corresponding
                     // letter for the child node 
-                    if (ptr->letter == value[i])
+                    if (ptr->letter == string[i])
                     {
                         found_matching_child = true; 
                         curr = ptr; 
@@ -539,20 +449,25 @@ class Trie
         }
 
         /**
-         * Clear the trie. 
+         * Clear the trie.
+         *
+         * The result is not an empty trie, but rather a one-node trie. 
          */
         void clear()
         {
             this->nodes.clear();
             TrieNode node;
             node.letter = -1;
+            node.level = 0; 
             node.parent = nullptr;
             this->nodes.push_back(node);
             this->root = std::make_shared<TrieNode>(node); 
         }
 
         /**
-         * Get the number of nodes in the trie. 
+         * Get the number of nodes in the trie.
+         *
+         * @returns Number of nodes in the trie.  
          */
         int getNumNodes() const 
         {
@@ -560,7 +475,10 @@ class Trie
         }
 
         /**
-         * Get the height of the trie. 
+         * Get the height of the trie (defined as the length of the longest
+         * string).
+         *
+         * @returns Height of the trie. 
          */ 
         int getHeight() const
         {
@@ -583,60 +501,76 @@ class Trie
                 for (auto& ptr : curr->children) 
                     queue.push(ptr);
 
-                // Get the value of this node 
-                std::vector<int> value = this->getValue(curr);
-                if (height < value.size())
-                    height = value.size();  
+                // Get the string stored in this node
+                std::vector<int> string = this->getString(curr);
+                if (height < string.size())
+                    height = string.size();  
             }
 
             return height; 
         }
 
         /**
-         * Insert the string/value into the trie. 
+         * Insert the given string/value into the trie.
+         *
+         * @param string Input string. 
          */ 
-        void insert(std::vector<int> value)
+        void insert(std::vector<int> string)
         {
             // Travel down the tree from the root, looking for the first 
-            // letter at which the value deviates from the trie
-            std::shared_ptr<TrieNode> curr = this->root; 
-            for (int i = 0; i < value.size(); ++i)
+            // letter at which the string deviates from the trie
+            std::shared_ptr<TrieNode> curr_ptr = this->root;
+            int curr_idx = 0;
+            int first_mismatch = -1;  
+            while (curr_idx < string.size()) 
             {
                 // For each child node ... 
-                std::vector<std::shared_ptr<TrieNode> > children = curr->children;
+                std::vector<std::shared_ptr<TrieNode> > children = curr_ptr->children;
                 bool found_matching_child = false; 
                 for (auto& ptr : children)
                 {
                     // ... check that the letter matches the corresponding
-                    // letter for the child node 
-                    if (ptr->letter == value[i])
+                    // letter for the child node
+                    if (ptr->letter == string[curr_idx])
                     {
                         found_matching_child = true; 
-                        curr = ptr; 
+                        curr_ptr = ptr;
                         break;  
                     }
                 }
 
-                // If there is no such node, add new nodes to cover the 
-                // remaining values
+                // Continue looping through the string if a matching child
+                // node was found, but break if not 
                 if (!found_matching_child)
                 {
-                    for (int j = i; j < value.size(); ++j)
-                    {
-                        // Define the new node and set its parent node  
-                        TrieNode node; 
-                        node.letter = value[j]; 
-                        node.parent = curr; 
-                        std::shared_ptr<TrieNode> ptr = std::make_shared<TrieNode>(node);
-                        this->nodes.push_back(node);
+                    first_mismatch = curr_idx;
+                    break;
+                }
+                else 
+                {
+                    curr_idx++; 
+                }
+            }
 
-                        // Also update the children of its parent node  
-                        curr->children.push_back(ptr);
+            // If only a substring of the string is in the trie, add new
+            // nodes to cover the remaining letters
+            if (first_mismatch != -1)
+            {
+                for (int j = first_mismatch; j < string.size(); ++j)
+                {
+                    // Define the new node and set its parent node  
+                    TrieNode node; 
+                    node.letter = string[j];
+                    node.level = j + 1; 
+                    node.parent = curr_ptr; 
+                    std::shared_ptr<TrieNode> ptr = std::make_shared<TrieNode>(node);
+                    this->nodes.push_back(node);
 
-                        // Move on to the next node 
-                        curr = ptr;  
-                    }
-                    break; 
+                    // Also update the children of its parent node  
+                    curr_ptr->children.push_back(ptr);
+
+                    // Move on to the next node 
+                    curr_ptr = ptr;  
                 }
             }
         }
@@ -645,189 +579,234 @@ class Trie
          * Insert the string/value into the trie. 
          */
         template <int Dim> 
-        void insert(const Ref<const Array<int, Dim, 1> >& value)
+        void insert(const Ref<const Array<int, Dim, 1> >& string)
         {
             // Travel down the tree from the root, looking for the first 
-            // letter at which the value deviates from the trie
-            std::shared_ptr<TrieNode> curr = this->root; 
-            for (int i = 0; i < Dim; ++i)
+            // letter at which the string deviates from the trie
+            std::shared_ptr<TrieNode> curr_ptr = this->root;
+            int curr_idx = 0;
+            int first_mismatch = -1;
+            while (curr_idx < string.size()) 
             {
                 // For each child node ... 
-                std::vector<std::shared_ptr<TrieNode> > children = curr->children;
+                std::vector<std::shared_ptr<TrieNode> > children = curr_ptr->children;
                 bool found_matching_child = false; 
                 for (auto& ptr : children)
                 {
                     // ... check that the letter matches the corresponding
                     // letter for the child node 
-                    if (ptr->letter == value(i))
+                    if (ptr->letter == string(curr_idx))
                     {
                         found_matching_child = true; 
-                        curr = ptr; 
+                        curr_ptr = ptr; 
                         break;  
                     }
                 }
 
-                // If there is no such node, add new nodes to cover the 
-                // remaining values
+                // Continue looping through the string if a matching child
+                // node was found, but break if not 
                 if (!found_matching_child)
                 {
-                    for (int j = i; j < Dim; ++j)
-                    {
-                        // Define the new node and set its parent node  
-                        TrieNode node; 
-                        node.letter = value(j); 
-                        node.parent = curr; 
-                        std::shared_ptr<TrieNode> ptr = std::make_shared<TrieNode>(node);
-                        this->nodes.push_back(node);
+                    first_mismatch = curr_idx;
+                    break;
+                }
+                else 
+                {
+                    curr_idx++; 
+                }
+            }
 
-                        // Also update the children of its parent node  
-                        curr->children.push_back(ptr);
+            // If only a substring of the string is in the trie, add new
+            // nodes to cover the remaining letters
+            if (first_mismatch != -1)
+            {
+                for (int j = first_mismatch; j < Dim; ++j)
+                {
+                    // Define the new node and set its parent node  
+                    TrieNode node; 
+                    node.letter = string(j);
+                    node.level = j + 1; 
+                    node.parent = curr_ptr; 
+                    std::shared_ptr<TrieNode> ptr = std::make_shared<TrieNode>(node);
+                    this->nodes.push_back(node);
 
-                        // Move on to the next node 
-                        curr = ptr;  
-                    }
-                    break; 
+                    // Also update the children of its parent node  
+                    curr_ptr->children.push_back(ptr);
+
+                    // Move on to the next node 
+                    curr_ptr = ptr;  
                 }
             }
         }
 
         /**
+         * Returns a vector of all the strings stored in the trie.
          *
+         * @param sort If true, sort in lexicographic order.
+         * @param nonempty If true, skip over the empty string. 
+         * @param length If nonnegative, return only the strings with this 
+         *               length. 
+         * @returns All strings stored in the trie. 
          */
-        std::vector<std::vector<int> > getSubstrings(const int length = -1) const 
+        std::vector<std::vector<int> > getStrings(const bool sort = true,
+                                                  const bool nonempty = true,
+                                                  const int length = -1) const 
         {
             // Keep track of nodes to be visited using a queue (for BFS), 
             // starting with the root 
             std::queue<std::shared_ptr<TrieNode> > queue;
             queue.push(this->root); 
             int nvisited = 0;
-            std::unordered_set<std::vector<int>, boost::hash<std::vector<int> > > substrings;
-            std::vector<std::vector<int> > substrings_longer; 
+            std::vector<std::vector<int> > strings; 
             
             // While we have nodes left to visit ...
             while (nvisited < this->nodes.size()) 
             {
                 // Pop the next node from the queue 
-                std::shared_ptr<TrieNode> curr = queue.front(); 
+                std::shared_ptr<TrieNode> curr_ptr = queue.front();
                 queue.pop();
                 nvisited++;
 
-                // Push the children of this node onto the queue 
-                for (auto& ptr : curr->children) 
-                    queue.push(ptr);
+                // Push the children of this node onto the queue
+                //
+                // Skip over this if the current node has level less than 
+                // the desired length, in which case we don't need to traverse
+                // further down the trie 
+                if (length == -1 || curr_ptr->level < length)
+                { 
+                    for (auto& ptr : curr_ptr->children) 
+                        queue.push(ptr);
+                }
 
-                // Collect the value of this node if it has the desired 
-                // length or more
-                std::vector<int> value = this->getValue(curr); 
-                if (length == -1 || value.size() >= length)
-                    substrings_longer.push_back(value); 
+                // Collect the string corresponding to this node if it has
+                // the desired length
+                int curr_length = curr_ptr->level;
+                if (length == -1)
+                {
+                    if (!nonempty || curr_length > 0)
+                        strings.push_back(this->getString(curr_ptr)); 
+                }
+                else if (curr_length == length)
+                {
+                    strings.push_back(this->getString(curr_ptr)); 
+                } 
             }
 
-            // Run through each string ...
-            for (auto&& substring : substrings_longer)
+            // Sort in lexicographical order and return 
+            //
+            // Note that neither DFS nor BFS are guaranteed to return the
+            // strings in this order, since the nodes in each level may not
+            // be properly ordered
+            if (sort) 
+                std::sort(strings.begin(), strings.end());
+
+            return strings;  
+        }
+
+        /**
+         * Returns a vector of all substrings of the strings stored in the
+         * trie.
+         *
+         * A substring of a string (s1, ..., sN) may be any subset of the 
+         * string that respects the ordering, but need not be contiguous. 
+         * Therefore, (s1, s3) is a substring, but (s2, s1) is not. 
+         *
+         * @param nonempty If true, skip over the empty string. 
+         * @param length If nonnegative, return only the strings with this 
+         *               length.
+         * @returns All strings stored in the trie. 
+         */
+        std::vector<std::vector<int> > getSubstrings(const bool nonempty = true,
+                                                     const int length = -1) const 
+        {
+            // First get all strings in the trie
+            std::vector<std::vector<int> > strings = this->getStrings(false, nonempty, -1);
+
+            // For each string ... 
+            std::unordered_set<std::vector<int>, boost::hash<std::vector<int> > > substrings;
+            for (auto&& string : strings)
             {
                 // Collect all possible substrings of the string
-                int n = substring.size();
+                int n = string.size();
                 if (n == length)
                 {
-                    substrings.insert(substring);
+                    substrings.insert(string);
                 } 
-                else    // n > length
+                else if (n > length)
                 {
                     // If a particular length of substring is desired, only 
                     // run through the substrings of that length 
                     if (length != -1)
                     {
-                        for (auto&& combination : getCombinations(substring, length))
+                        for (auto&& combination : getCombinations(string, length))
                             substrings.insert(combination);
                     }
                     // Otherwise, get all possible substrings 
                     else 
                     {
-                        for (auto&& substring2 : getPowerset(substring))
-                            substrings.insert(substring2); 
+                        for (auto&& substring : getPowerset(string, nonempty))
+                            substrings.insert(substring);
                     } 
                 }
             }
 
-            // Sort the set of collected substrings
-            std::vector<std::vector<int> > substrings_sorted; 
-            for (auto&& substring : substrings)
-                substrings_sorted.push_back(substring);
+            // Sort the substrings in lexicographic order 
+            std::vector<std::vector<int> > substrings_sorted(
+                substrings.begin(), substrings.end()
+            );
             std::sort(substrings_sorted.begin(), substrings_sorted.end());
 
             return substrings_sorted;  
         }
 
         /**
+         * Returns a vector of all strings stored in the trie that contain 
+         * the given substring. 
          *
+         * A substring of a string (s1, ..., sN) may be any subset of the 
+         * string that respects the ordering, but need not be contiguous. 
+         * Therefore, (s1, s3) is a substring, but (s2, s1) is not.
          */
-        std::vector<std::vector<int> > getSuperstrings(const std::vector<int>& value,
+        std::vector<std::vector<int> > getSuperstrings(const std::vector<int>& substring,
                                                        const int length = -1) const 
         {
-            if (length != -1 && length < value.size())
-                throw std::runtime_error("Invalid length specified"); 
+            // If the length is given, it must be at least the length of 
+            // the substring
+            if (length != -1 && length < substring.size())
+                throw std::runtime_error("Invalid length specified");
 
-            // Keep track of nodes to be visited using a queue (for BFS), 
-            // starting with the root 
-            std::queue<std::shared_ptr<TrieNode> > queue;
-            queue.push(this->root); 
-            int nvisited = 0;
-            std::unordered_set<std::vector<int>, boost::hash<std::vector<int> > > superstrings; 
-            std::vector<std::vector<int> > superstrings_longer; 
-            
-            // While we have nodes left to visit ...
-            while (nvisited < this->nodes.size()) 
+            // First get all strings in the trie
+            std::vector<std::vector<int> > strings = this->getStrings(false, true, -1);
+
+            // For each string ... 
+            std::vector<std::vector<int> > superstrings;
+            for (auto&& string : strings)
             {
-                // Pop the next node from the queue 
-                std::shared_ptr<TrieNode> curr = queue.front(); 
-                queue.pop();
-                nvisited++;
-
-                // Push the children of this node onto the queue 
-                for (auto& ptr : curr->children) 
-                    queue.push(ptr);
-
-                // Collect the value of this node if it has the desired 
-                // length or more
-                std::vector<int> curr_value = this->getValue(curr); 
-                if (length == -1)
+                // If the string has the desired length ... 
+                if ((length != -1 && string.size() == length) ||
+                    (length == -1 && string.size() >= substring.size()))
                 {
-                    if (curr_value.size() >= value.size())
-                        superstrings_longer.push_back(curr_value); 
-                }
-                else 
-                {
-                    if (curr_value.size() == length)
-                        superstrings_longer.push_back(curr_value); 
-                }
-            }
-
-            // Run through each string ...
-            for (auto&& superstring : superstrings_longer)
-            {
-                // Does this string contain the query string?
-                std::unordered_set<int> set(superstring.begin(), superstring.end());
-                bool contains = true; 
-                for (int i = 0; i < value.size(); ++i)
-                {
-                    if (set.count(value[i]) == 0)
+                    // Run through the string ... 
+                    std::vector<int> idx; 
+                    int i = 0;    // Index of current character in substring
+                    int j = 0;    // Index of current character in string
+                    while (i < substring.size() && j < string.size())
                     {
-                        contains = false; 
-                        break; 
+                        // Is the j-th character in the string the same as 
+                        // the i-th character in the substring? 
+                        if (string[j] == substring[i])
+                            i++;
+                        j++; 
                     }
-                }
-                if (contains)
-                    superstrings.insert(superstring); 
+                    if (i == substring.size())
+                        superstrings.push_back(string);
+                } 
             }
 
-            // Sort the set of collected superstrings
-            std::vector<std::vector<int> > superstrings_sorted; 
-            for (auto&& superstring : superstrings)
-                superstrings_sorted.push_back(superstring); 
-            std::sort(superstrings_sorted.begin(), superstrings_sorted.end());
+            // Sort the superstrings in lexicographic order 
+            std::sort(superstrings.begin(), superstrings.end());
 
-            return superstrings_sorted;
+            return superstrings;
         }
 };
 
@@ -945,7 +924,11 @@ class SimplicialComplex3D
         }
 
         /**
-         * Return the dimension of the complex. 
+         * Return the dimension of the complex.
+         *
+         * This is the dimension of the highest-dimensional simplex in 
+         * the complex, which is one minus the length of the longest
+         * tuple/string in the trie.
          *
          * @returns Dimension of the complex. 
          */
@@ -963,8 +946,12 @@ class SimplicialComplex3D
         template <int Dim>
         Array<int, Dynamic, Dim + 1> getSimplices() const
         {
-            // Get the simplices of the desired dimension 
-            std::vector<std::vector<int> > simplices_ = this->tree.getSubstrings(Dim + 1);
+            // Get the simplices of the desired dimension
+            //
+            // These are the tuples/strings with length (Dim + 1) 
+            std::vector<std::vector<int> > simplices_ = this->tree.getSubstrings(
+                true, Dim + 1
+            );
 
             // Re-organize as an array and return  
             Array<int, Dynamic, Dim + 1> simplices(simplices_.size(), Dim + 1);
@@ -1010,18 +997,20 @@ class SimplicialComplex3D
                 this->tree.template insert<4>(tetrahedra.row(i).transpose()); 
         }
 
+        // TODO Unnecessary?
         int getNumFullDimCofaces(std::vector<int>& simplex) const
         {
-            return this->tree.getSuperstrings(simplex).size(); 
+            return this->tree.getSuperstrings(simplex, this->dimension()).size(); 
         }
 
+        // TODO Unnecessary?
         int getNumFullDimCofaces(const Ref<const Array<int, Dynamic, 1> >& simplex) const
         {
             std::vector<int> simplex_;
             for (int i = 0; i < simplex.size(); ++i)
                 simplex_.push_back(simplex(i));
 
-            return this->tree.getSuperstrings(simplex_).size(); 
+            return this->tree.getSuperstrings(simplex_, this->dimension()).size(); 
         }
 
         /**
@@ -1035,7 +1024,8 @@ class SimplicialComplex3D
         SimplicialComplex3D<T> getBoundary() const 
         {
             int maxdim = this->dimension();
-            Array<int, Dynamic, 1> points_in_boundary = Array<int, Dynamic, 1>::Zero(this->points.rows());
+            Array<int, Dynamic, 1> points_in_boundary
+                = Array<int, Dynamic, 1>::Zero(this->points.rows());
             Trie tree_boundary;
 
             // If the simplicial complex is 0-dimensional, return it as is 
@@ -1053,12 +1043,16 @@ class SimplicialComplex3D
             // Run through all non-full-dimensional simplices in the tree ...
             for (int dim = 0; dim < maxdim; ++dim)
             {
-                std::vector<std::vector<int> > simplices = this->tree.getSubstrings(dim + 1);
+                // Simplices of dimension dim are strings of dimension dim + 1
+                std::vector<std::vector<int> > simplices = this->tree.getSubstrings(
+                    true, dim + 1
+                );
                 for (int i = 0; i < simplices.size(); ++i)
                 {
                     // ... and check the number of full-dimensional simplices that 
                     // have this simplex as a face 
-                    std::vector<std::vector<int> > cofaces = this->tree.getSuperstrings(simplices[i], maxdim + 1); 
+                    std::vector<std::vector<int> > cofaces
+                        = this->tree.getSuperstrings(simplices[i], maxdim + 1); 
 
                     // If this number is 0 or 1, include as part of the boundary 
                     if (cofaces.size() < 2)
@@ -1103,8 +1097,8 @@ class SimplicialComplex3D
 
             // Get the k- and (k-1)-faces in the complex, where k = Dim, 
             // with all vertices sorted in ascending order
-            std::vector<std::vector<int> > faces1 = this->tree.getSubstrings(Dim + 1);
-            std::vector<std::vector<int> > faces2 = this->tree.getSubstrings(Dim);  
+            std::vector<std::vector<int> > faces1 = this->tree.getSubstrings(true, Dim + 1);
+            std::vector<std::vector<int> > faces2 = this->tree.getSubstrings(true, Dim);  
 
             // This is an m-by-n matrix, where m is the number of (k-1)-faces
             // and n is the number of k-faces
@@ -1145,7 +1139,7 @@ class SimplicialComplex3D
         Matrix<T, Dynamic, Dynamic> getCombinatorialLaplacian() const
         {
             // Get the number of simplices of the given dimension 
-            std::vector<std::vector<int> > simplices = this->tree.getSubstrings(Dim + 1); 
+            std::vector<std::vector<int> > simplices = this->tree.getSubstrings(true, Dim + 1); 
             int ndim = simplices.size();  
             Matrix<T, Dynamic, Dynamic> laplacian = Matrix<T, Dynamic, Dynamic>::Zero(ndim, ndim);
 
@@ -1159,7 +1153,8 @@ class SimplicialComplex3D
                     // a face 
                     if (i == j)
                     {
-                        std::vector<std::vector<int> > cofaces = this->tree.getSuperstrings(simplices[i], Dim + 2); 
+                        std::vector<std::vector<int> > cofaces
+                            = this->tree.getSuperstrings(simplices[i], Dim + 2); 
                         laplacian(i, j) = cofaces.size(); 
                     }
                     // Otherwise, set the entry to -1 if the two simplices
@@ -1167,11 +1162,15 @@ class SimplicialComplex3D
                     else 
                     {
                         // Run through the cofaces of simplex i ...
-                        bool found_common_coface = false;  
-                        for (auto& simplex1 : this->tree.getSuperstrings(simplices[i], Dim + 2))
+                        bool found_common_coface = false;
+                        std::vector<std::vector<int> > cofaces_i
+                            = this->tree.getSuperstrings(simplices[i], Dim + 2);   
+                        for (auto& simplex1 : cofaces_i)
                         {
-                            // Run through the cofaces of simplex j ... 
-                            for (auto& simplex2 : this->tree.getSuperstrings(simplices[j], Dim + 2))
+                            // Run through the cofaces of simplex j ...
+                            std::vector<std::vector<int> > cofaces_j
+                                = this->tree.getSuperstrings(simplices[j], Dim + 2);  
+                            for (auto& simplex2 : cofaces_j)
                             {
                                 bool match = true; 
                                 for (int k = 0; k < Dim + 2; ++k)
