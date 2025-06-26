@@ -413,6 +413,9 @@ class Trie
             this->root = std::make_shared<TrieNode>(node); 
         }
 
+        /**
+         * Trivial destructor. 
+         */
         ~Trie()
         {
         }
@@ -1024,59 +1027,59 @@ class SimplicialComplex3D
         SimplicialComplex3D<T> getBoundary() const 
         {
             int maxdim = this->dimension();
-            Array<int, Dynamic, 1> points_in_boundary
+            Array<int, Dynamic, 1> boundary_indicator
                 = Array<int, Dynamic, 1>::Zero(this->points.rows());
-            Trie tree_boundary;
+            Array<T, Dynamic, 3> boundary_points; 
+            Trie boundary_tree;
 
-            // If the simplicial complex is 0-dimensional, return it as is 
+            // If the simplicial complex is 0-dimensional (there are only 
+            // isolated points), return it as is 
             if (maxdim == 0)
             {
-                Array<T, Dynamic, 3> bpoints(this->points.rows(), 3);
+                boundary_indicator = Array<int, Dynamic, 1>::Ones(this->points.rows());
                 for (int i = 0; i < this->points.rows(); ++i)
-                {
-                    bpoints.row(i) = this->points.row(i);
-                    tree_boundary.insert({i}); 
-                }
-                return SimplicialComplex3D<T>(bpoints, tree_boundary); 
+                    boundary_tree.insert({i}); 
             } 
-
-            // Run through all non-full-dimensional simplices in the tree ...
-            for (int dim = 0; dim < maxdim; ++dim)
+            else     // Otherwise ... 
             {
-                // Simplices of dimension dim are strings of dimension dim + 1
-                std::vector<std::vector<int> > simplices = this->tree.getSubstrings(
-                    true, dim + 1
-                );
-                for (int i = 0; i < simplices.size(); ++i)
-                {
-                    // ... and check the number of full-dimensional simplices that 
-                    // have this simplex as a face 
-                    std::vector<std::vector<int> > cofaces
-                        = this->tree.getSuperstrings(simplices[i], maxdim + 1); 
+                // Get all simplices in the complex 
+                std::vector<std::vector<int> > simplices = this->tree.getSubstrings(true); 
 
-                    // If this number is 0 or 1, include as part of the boundary 
-                    if (cofaces.size() < 2)
+                // Run through all non-full-dimensional simplices in the tree ...
+                for (auto&& simplex : simplices)
+                {
+                    if (simplex.size() < maxdim)
                     {
-                        for (int j = 0; j < simplices[i].size(); ++j)
-                            points_in_boundary(simplices[i][j]) = 1;
-                        tree_boundary.insert(simplices[i]); 
-                    } 
-                } 
+                        // Generate all full-dimensional simplices that have 
+                        // this simplex as a face 
+                        std::vector<std::vector<int> > cofaces
+                            = this->tree.getSuperstrings(simplex, maxdim + 1);
+
+                        // If this number is 0 or 1, include as part of the 
+                        // boundary 
+                        if (cofaces.size() < 2)
+                        {
+                            for (int i = 0; i < simplex.size(); ++i)
+                                boundary_indicator(simplex[i]) = 1;
+                            boundary_tree.insert(simplex); 
+                        } 
+                    }
+                }
             }
           
             // Get the subset of points that lie within the boundary 
-            Array<T, Dynamic, 3> bpoints(points_in_boundary.sum(), 3);
+            boundary_points.resize(boundary_indicator.sum(), 3); 
             int i = 0;
-            for (int j = 0; j < points.rows(); ++j)
+            for (int j = 0; j < this->points.rows(); ++j)
             {
-                if (points_in_boundary(j))
+                if (boundary_indicator(j))
                 {
-                    bpoints.row(i) = points.row(j); 
+                    boundary_points.row(i) = this->points.row(j); 
                     i++;
                 }
             } 
 
-            return SimplicialComplex3D<T>(bpoints, tree_boundary); 
+            return SimplicialComplex3D<T>(boundary_points, boundary_tree); 
         }
 
         /**
