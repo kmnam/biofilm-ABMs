@@ -38,24 +38,37 @@ TEST_CASE("Tests for Trie methods", "[Trie]")
     // Here, we map letters to numbers in the standard way, as t = 20,
     // o = 15, e = 5, a = 1, A = 27, d = 4, n = 14, i = 9
     Trie trie;
-    std::vector<std::vector<int> > values = {
-        {20, 15},      // "to"
-        {20, 5, 1},    // "tea"
-        {20, 5, 4},    // "ted"
-        {20, 5, 14},   // "ten"
-        {9, 14, 14},   // "inn"
-        {27}           // "A"
-    };     
-    for (auto& value : values)
-        trie.insert(value);  
-   
-    // The trie should have height 3 (excluding the root) and 11 nodes  
+    trie.insert({20, 15});    // "to"
+    trie.insert({27});        // "A"
+    trie.insert({9, 14});     // "in"
+
+    // The trie should now have height 2 (excluding the root) and 6 nodes
+    REQUIRE(trie.getHeight() == 2);
+    REQUIRE(trie.getNumNodes() == 6);
+
+    // Insert "tea" and "ted" 
+    trie.insert({20, 5, 1});
+    trie.insert({20, 5, 4});
+
+    // The trie should now have height 3 (excluding the root) and 9 nodes 
+    REQUIRE(trie.getHeight() == 3);
+    REQUIRE(trie.getNumNodes() == 9);
+
+    // Insert "ten" and "inn" 
+    trie.insert({20, 5, 14});
+    trie.insert({9, 14, 14});
+
+    // The trie should now have height 3 (excluding the root) and 11 nodes 
     REQUIRE(trie.getHeight() == 3);
     REQUIRE(trie.getNumNodes() == 11); 
 
-    // The trie should contain all the input values 
-    for (auto&& value : values)
-        REQUIRE(trie.containsString(value));
+    // The trie should contain all the input strings 
+    REQUIRE(trie.containsString({20, 15}));       // "to"
+    REQUIRE(trie.containsString({27}));           // "A"
+    REQUIRE(trie.containsString({20, 5, 1}));     // "tea"
+    REQUIRE(trie.containsString({20, 5, 4}));     // "ted"
+    REQUIRE(trie.containsString({20, 5, 14}));    // "ten"
+    REQUIRE(trie.containsString({9, 14, 14}));    // "inn"
 
     // The trie should also contain substrings 
     REQUIRE(trie.containsString({20}));        // "t"
@@ -136,4 +149,9 @@ TEST_CASE("Tests for Trie methods", "[Trie]")
     REQUIRE(superstrings.size() == superstrings_target.size()); 
     for (int i = 0; i < superstrings.size(); ++i)
         REQUIRE(compareVectors(superstrings[i], superstrings_target[i]));
+
+    // Clear the trie and check that it only has one node 
+    trie.clear();
+    REQUIRE(trie.getHeight() == 0);  
+    REQUIRE(trie.getNumNodes() == 1); 
 } 
