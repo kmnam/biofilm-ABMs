@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/26/2025
+ *     6/27/2025
  */
 
 #ifndef SIMPLICIAL_COMPLEXES_3D_HPP
@@ -927,6 +927,16 @@ class SimplicialComplex3D
         }
 
         /**
+         * Return the number of points. 
+         *
+         * @returns Number of points. 
+         */
+        int getNumPoints() const 
+        {
+            return this->points.rows(); 
+        }
+
+        /**
          * Return the dimension of the complex.
          *
          * This is the dimension of the highest-dimensional simplex in 
@@ -938,6 +948,31 @@ class SimplicialComplex3D
         int dimension() const 
         {
             return this->tree.getHeight() - 1; 
+        }
+
+        /**
+         * Return the number of simplices of the given dimension. 
+         *
+         * An exception is thrown if the given dimension exceeds the 
+         * dimension of the complex. 
+         *
+         * @returns Number of simplices of the given dimension. 
+         */
+        int getNumSimplices(const int dim = -1) const 
+        {
+            if (dim > this->dimension())
+                throw std::runtime_error(
+                    "Input dimension exceeds maximum dimension"
+                );
+            
+            // Count the number of simplices of the given dimension, which
+            // is the number of substrings of length (dim + 1)
+            //
+            // If dim == -1, then count the total number of simplices 
+            if (dim == -1)
+                return this->tree.getSubstrings(true).size();
+            else 
+                return this->tree.getSubstrings(true, dim + 1).size();  
         }
 
         /**
@@ -1000,22 +1035,6 @@ class SimplicialComplex3D
                 this->tree.template insert<4>(tetrahedra.row(i).transpose()); 
         }
 
-        // TODO Unnecessary?
-        int getNumFullDimCofaces(std::vector<int>& simplex) const
-        {
-            return this->tree.getSuperstrings(simplex, this->dimension()).size(); 
-        }
-
-        // TODO Unnecessary?
-        int getNumFullDimCofaces(const Ref<const Array<int, Dynamic, 1> >& simplex) const
-        {
-            std::vector<int> simplex_;
-            for (int i = 0; i < simplex.size(); ++i)
-                simplex_.push_back(simplex(i));
-
-            return this->tree.getSuperstrings(simplex_, this->dimension()).size(); 
-        }
-
         /**
          * Return the topological boundary of the simplicial complex.
          *
@@ -1048,7 +1067,8 @@ class SimplicialComplex3D
                 // Run through all non-full-dimensional simplices in the tree ...
                 for (auto&& simplex : simplices)
                 {
-                    if (simplex.size() < maxdim)
+                    int dim = simplex.size() - 1; 
+                    if (dim < maxdim)
                     {
                         // Generate all full-dimensional simplices that have 
                         // this simplex as a face 
@@ -1083,52 +1103,58 @@ class SimplicialComplex3D
         }
 
         /**
-         * Get the given boundary homomorphism as a matrix.
+         * Return the given boundary homomorphism, which (following Munkres,
+         * Elements of Algebraic Topology) calculates the boundaries of
+         * simplices of the given dimension as a linear combination of
+         * simplices of the given dimension minus one. 
          */
-        template <int Dim>
-        Matrix<T, Dynamic, Dynamic> getBoundaryHomomorphism() const
+        Matrix<T, Dynamic, Dynamic> getBoundaryHomomorphism(const int dim) const
         {
-            // If the dimension is zero, then this is the zero map
-            if (Dim == 0)
-                return Matrix<T, Dynamic, Dynamic>::Zero(1, this->points.rows()); 
+            // If the dimension is zero or greater than the maximum dimension,
+            // then raise an exception 
+            if (dim == 0 || dim > this->dimension())
+                throw std::runtime_error(
+                    "Invalid input dimension for boundary homomorphism"
+                );
 
-            // If the dimension exceeds the maximal dimension of the complex,
-            // then this is again the zero map
-            const int maxdim = this->tree.getHeight() - 1;  
-            if (Dim > maxdim)
-                return Matrix<T, Dynamic, Dynamic>::Zero(0, 0);  
+            // Get a sorted list of the simplices with the appropriate dimensions
+            std::vector<std::vector<int> > faces1 = this->tree.getSubstrings(true, dim + 1);
+            std::vector<std::vector<int> > faces2 = this->tree.getSubstrings(true, dim);
+            const int n1 = faces1.size(); 
+            const int n2 = faces2.size();  
 
-            // Get the k- and (k-1)-faces in the complex, where k = Dim, 
-            // with all vertices sorted in ascending order
-            std::vector<std::vector<int> > faces1 = this->tree.getSubstrings(true, Dim + 1);
-            std::vector<std::vector<int> > faces2 = this->tree.getSubstrings(true, Dim);  
+            // Initialize the matrix with the appropriate dimensions
+            Matrix<T, Dynamic, Dynamic> del = Matrix<T, Dynamic, Dynamic>::Zero(n2, n1); 
 
-            // This is an m-by-n matrix, where m is the number of (k-1)-faces
-            // and n is the number of k-faces
-            const int n = faces1.size();
-            const int m = faces2.size();
-            Matrix<T, Dynamic, Dynamic> del = Matrix<T, Dynamic, Dynamic>::Zero(m, n);
-
-            // Store the indices of the (k-1)-faces in the above ordering
+            // Store the indices of the output faces in the above ordering as 
+            // a dictionary 
             std::unordered_map<std::vector<int>, int, boost::hash<std::vector<int> > > indices; 
-            for (int i = 0; i < m; ++i)
+            for (int i = 0; i < n2; ++i)
                 indices[faces2[i]] = i;  
 
-            // For each k-face ...
-            for (int i = 0; i < n; ++i)
+            // For each face in the domain ...
+            for (int i = 0; i < n1; ++i)
             {
-                // Get all the (k-1)-dimensional faces of the k-face
-                std::vector<std::vector<int> > subfaces = getCombinations(faces1[i], Dim);
-                int j = 0; 
-                for (auto& subface : subfaces)
+                std::vector<int> face = faces1[i]; 
+
+                // Get all codimension-one subfaces
+                //
+                // Each face in the domain consists of dim + 1 points, so 
+                // each subface arises from excluding each point 
+                for (int j = 0; j < dim + 1; ++j)
                 {
-                    for (int k = 0; k < Dim; ++k)
-                        std::cout << subface[k] << " ";
-                    std::cout << std::endl; 
-                    // The corresponding entry is the sign of the permutation
-                    // (0, ..., j), which is (-1)^j
-                    del(i, indices[subface]) = (j % 2 == 0 ? 1 : -1);
-                    j++;  
+                    std::vector<int> subface; 
+                    for (int k = 0; k < dim + 1; ++k)
+                    {
+                        if (j != k)
+                            subface.push_back(face[k]); 
+                    }
+
+                    // Get the index of the subface in the ordering 
+                    int idx = indices[subface]; 
+
+                    // The corresponding entry in the matrix is (-1)^j
+                    del(idx, i) = (j % 2 == 0 ? 1 : -1);   
                 }
             }
 
@@ -1136,91 +1162,91 @@ class SimplicialComplex3D
         } 
 
         /**
-         * Get the combinatorial Laplacian. 
+         * Returns the combinatorial Laplacian. 
          */
-        template <int Dim> 
-        Matrix<T, Dynamic, Dynamic> getCombinatorialLaplacian() const
+        Matrix<T, Dynamic, Dynamic> getCombinatorialLaplacian(const int dim) const
         {
-            // Get the number of simplices of the given dimension 
-            std::vector<std::vector<int> > simplices = this->tree.getSubstrings(true, Dim + 1); 
-            int ndim = simplices.size();  
-            Matrix<T, Dynamic, Dynamic> laplacian = Matrix<T, Dynamic, Dynamic>::Zero(ndim, ndim);
-
-            // Populate the matrix ... 
-            for (int i = 0; i < ndim; ++i)
+            // Get the boundary homomorphisms 
+            //
+            // If dim equals the dimension of the complex, then set del1 = 0 
+            //
+            // Similarly, if dim == 0, then set del2 = 0
+            const int maxdim = this->dimension(); 
+            if (dim < 0 || dim > this->dimension())
             {
-                for (int j = 0; j < ndim; ++j)
-                {
-                    // If i == j, then set the entry to the number of
-                    // (Dim + 1)-simplices that contain this simplex as 
-                    // a face 
-                    if (i == j)
-                    {
-                        std::vector<std::vector<int> > cofaces
-                            = this->tree.getSuperstrings(simplices[i], Dim + 2); 
-                        laplacian(i, j) = cofaces.size(); 
-                    }
-                    // Otherwise, set the entry to -1 if the two simplices
-                    // share a common coface
-                    else 
-                    {
-                        // Run through the cofaces of simplex i ...
-                        bool found_common_coface = false;
-                        std::vector<std::vector<int> > cofaces_i
-                            = this->tree.getSuperstrings(simplices[i], Dim + 2);   
-                        for (auto& simplex1 : cofaces_i)
-                        {
-                            // Run through the cofaces of simplex j ...
-                            std::vector<std::vector<int> > cofaces_j
-                                = this->tree.getSuperstrings(simplices[j], Dim + 2);  
-                            for (auto& simplex2 : cofaces_j)
-                            {
-                                bool match = true; 
-                                for (int k = 0; k < Dim + 2; ++k)
-                                {
-                                    if (simplex1[k] != simplex2[k])
-                                        match = false; 
-                                }
-                                if (match)
-                                {
-                                    laplacian(i, j) = -1;
-                                    found_common_coface = true; 
-                                    break; 
-                                }
-                            }
-                            if (found_common_coface)
-                                break; 
-                        }
-                    } 
-                }
+                throw std::runtime_error(
+                    "Invalid input dimension for combinatorial Laplacian"
+                ); 
             }
+            else if (dim == 0 && maxdim == 0)
+            {
+                const int n = this->points.rows(); 
+                return Matrix<T, Dynamic, Dynamic>::Zero(n, n); 
+            }
+            else if (dim == 0)        // maxdim != 0
+            {
+                Matrix<T, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism(1);
+                return del1 * del1.transpose(); 
+            }
+            else if (dim == maxdim)   // dim, maxdim != 0
+            {
+                Matrix<T, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism(dim);
+                return del2.transpose() * del2; 
+            }
+            else     // Otherwise, get both boundary homomorphisms  
+            { 
+                Matrix<T, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism(dim + 1); 
+                Matrix<T, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism(dim); 
 
-            return laplacian; 
+                // Note that del1 has shape (n2, n1) and del2 has shape (n3, n2),
+                // where n1 = # (dim + 1)-simplices, n2 = # (dim)-simplices, 
+                // n3 = # (dim - 1)-simplices
+                //
+                // Therefore, the Laplacian has shape (n2, n2)
+                return del1 * del1.transpose() + del2.transpose() * del2;
+            }
         }
 
         /**
          * Get the vector of Betti numbers for the simplicial complex. 
          *
-         * @param p Characteristic of coefficient field. 
          * @returns Betti numbers of the simplicial complex. 
          */
-        Array<int, Dynamic, 1> getBettiNumbers(const int p = 2)
+        Array<int, Dynamic, 1> getBettiNumbers(const T tol = 1e-8)
         {
-            /*
-            // Compute the homology groups of the simplicial complex in the
-            // given coefficient field  
-            Persistent_cohomology pcoh(this->tree, true);
-            pcoh.init_coefficients(p); 
-            pcoh.compute_persistent_cohomology();
+            Array<int, Dynamic, 1> betti = Array<int, Dynamic, 1>::Zero(4);
+            const int maxdim = this->dimension(); 
 
-            // Collect the Betti numbers 
-            Array<int, Dynamic, 1> betti(4);
-            for (int i = 0; i < 4; ++i)
-                betti(i) = pcoh.betti_number(i); 
-            
-            return betti; 
-            */
-            return Array<int, Dynamic, 1>::Zero(4);  
+            // If the complex dimension is zero, then simply return the 
+            // number of points as the 0-th Betti number
+            if (maxdim == 0)
+            {
+                betti(0) = this->points.rows(); 
+                return betti; 
+            }
+            // If not, then compute each combinatorial Laplacian 
+            else 
+            {
+                // For each dimension ... 
+                for (int i = 0; i <= maxdim; ++i)
+                {
+                    // ... calculate the combinatorial Laplacian (this should 
+                    // never raise an exception)  
+                    Matrix<T, Dynamic, Dynamic> lap = this->getCombinatorialLaplacian(i); 
+
+                    // Count the multiplicity of the zero singular values to 
+                    // get the dimension of the kernel  
+                    JacobiSVD<Matrix<T, Dynamic, Dynamic> > svd(lap);
+                    Matrix<T, Dynamic, 1> singvals = svd.singularValues(); 
+                    for (int j = 0; j < singvals.size(); ++j)
+                    {
+                        if (abs(singvals(j)) < tol)
+                            betti(i)++; 
+                    }
+                }
+
+                return betti; 
+            }
         }
 
         /**
