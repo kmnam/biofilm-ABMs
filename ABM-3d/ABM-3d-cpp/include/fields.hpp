@@ -5,6 +5,9 @@
  * Last updated:
  *     6/30/2025
  */
+#ifndef FIELDS_OF_ARBITRARY_CHARACTERISTIC_HPP
+#define FIELDS_OF_ARBITRARY_CHARACTERISTIC_HPP
+
 #include <iostream>
 #include <Eigen/Dense>
 #include <boost/multiprecision/gmp.hpp>
@@ -327,8 +330,4 @@ Fp<p> operator/(const Fp<p>& x, const Fp<p>& y)
     return Fp<p>(x_ * t);  
 }
 
-template <>
-Fp<0>::Fp(const boost::multiprecision::mpq_rational x)
-{
-    this->value = x; 
-}
+#endif
