@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/25/2025
+ *     6/30/2025
  */
 
 #ifndef BIOFILM_UTILS_3D_HPP
@@ -919,6 +919,175 @@ std::vector<std::vector<int> > getCombinations(const std::vector<int>& vec,
     }
 
     return combinations;  
+}
+
+/**
+ * A simple algorithm for finding the kernel of a matrix with exact numerical
+ * types via Gaussian elimination.
+ *
+ * We assume that the underlying field is the rationals or a field of finite
+ * characteristic.
+ */
+template <typename T>
+Matrix<T, Dynamic, Dynamic> kernel(const Ref<const Matrix<T, Dynamic, Dynamic> >& A)
+{
+    // Initialize pivot row index 
+    const int nrows = A.rows(); 
+    const int ncols = A.cols();
+    Matrix<T, Dynamic, Dynamic> A_reduced(A);  
+    int pivot_row = 0;
+    int pivot_col = 0;  
+
+    while (pivot_row < nrows && pivot_col < ncols)
+    {
+        // Find the pivot, which is the entry A(i, pivot_col), for
+        // i >= pivot_row, with the largest absolute value
+        int max_i = pivot_row;
+        for (int i = pivot_row + 1; i < nrows; ++i)
+        {
+            if (abs(A_reduced(i, pivot_col)) > abs(A_reduced(max_i, pivot_col)))
+                max_i = i; 
+        }
+
+        // If the maximal entry is zero, then move onto the next column
+        if (A(max_i, pivot_col) == 0)
+        {
+            pivot_col++; 
+            continue; 
+        }
+
+        // Otherwise, swap the chosen row with the pivot row 
+        Matrix<T, 1, Dynamic> row = A_reduced.row(max_i); 
+        A_reduced.row(max_i) = A_reduced.row(pivot_row); 
+        A_reduced.row(pivot_row) = row;
+
+        // For all rows below the (new) pivot row, subtract the appropriate
+        // multiple of the pivot row 
+        for (int i = pivot_row + 1; i < nrows; ++i)
+        {
+            T mult = A_reduced(i, pivot_col) / A_reduced(pivot_row, pivot_col);
+            A_reduced(i, pivot_col) = 0;
+            for (int j = pivot_col + 1; j < ncols; ++j)
+                A_reduced(i, j) -= mult * A_reduced(pivot_row, j);  
+        }
+
+        // Move onto the next row and column 
+        pivot_row++;
+        pivot_col++;  
+    }
+
+    // Now that the matrix is in row-reduced form, find the pivots ...
+    Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(nrows);
+    for (int i = 0; i < nrows; ++i)
+    {
+        for (int j = 0; j < ncols; ++j)
+        {
+            if (A_reduced(i, j) != 0)
+            {
+                pivots(i) = j;
+                break; 
+            }
+        }
+    }
+
+    // ... and the basic and free variables
+    //
+    // Store, for each row i, the tuple (pivots(i), i), depending on whether
+    // pivots(i) represents a basic or free variable
+    Matrix<int, Dynamic, 1> basic_vars = Matrix<int, Dynamic, 1>::Zero(ncols);
+    std::unordered_map<int, int> basic_constraints; 
+    basic_vars(pivots(0)) = 1;  
+    basic_constraints[pivots(0)] = 0;
+    for (int i = 1; i < nrows; ++i)
+    {
+        if (!(pivots(i) == -1 || pivots(i) == pivots(i - 1)))
+        {
+            basic_vars(pivots(i)) = 1;
+            basic_constraints[pivots(i)] = i;
+        } 
+    }
+    Matrix<int, Dynamic, 1> free_vars = Matrix<int, Dynamic, 1>::Ones(ncols) - basic_vars;
+
+    // Maintain index lookups for the free and basic variables
+    //
+    // That is, if x_k is a free variable, then free_idx[k] = index of k
+    // among the free variables  
+    std::unordered_map<int, int> free_idx, basic_idx;
+    int basic_i = 0; 
+    int free_i = 0; 
+    for (int i = 0; i < ncols; ++i)
+    {
+        if (basic_vars(i))
+        {
+            basic_idx[i] = basic_i;
+            basic_i++; 
+        }
+        else 
+        {
+            free_idx[i] = free_i; 
+            free_i++; 
+        }
+    } 
+
+    // Now run through the basic variables in reverse and express them in 
+    // terms of the free variables
+    const int nbasic = basic_vars.sum();
+    const int nfree = free_vars.sum();
+    Matrix<T, Dynamic, Dynamic> basic_in_terms_of_free(nbasic, nfree);
+    for (int i = ncols - 1; i >= 0; --i)
+    {
+        if (basic_vars(i)) 
+        {
+            int j = basic_idx[i];           // Index of basic variable  
+            int k = basic_constraints[i];   // Index of determining equation 
+            
+            // For each subsequent variable in the k-th equation ... 
+            for (int m = j + 1; m < ncols; ++m)
+            {
+                // Is it a basic variable or a free variable? 
+                if (free_idx.find(m) != free_idx.end())
+                {
+                    // If free, then set the coefficient accordingly
+                    //
+                    // xi = j-th basic variable
+                    // xm = free variable
+                    // k = constraint in which xi is the pivot  
+                    basic_in_terms_of_free(j, free_idx[m])
+                        -= A_reduced(k, m) / A_reduced(k, i); 
+                }
+                else 
+                {
+                    // Otherwise, the m-th variable must be expressed as 
+                    // a linear combination of free variables that must 
+                    // have already been processed
+                    //
+                    // xi = j-th basic variable
+                    // xm = current basic variable 
+                    // k = constraint in which xi is the pivot  
+                    int m_idx = basic_idx[m];
+                    basic_in_terms_of_free.row(j)
+                        -= A_reduced(k, m) * basic_in_terms_of_free.row(m_idx) / A_reduced(k, i);  
+                }
+            }
+        }
+    }
+
+    // Now generate the kernel basis vectors ... 
+    Matrix<T, Dynamic, Dynamic> kernel = Matrix<T, Dynamic, Dynamic>::Zero(nfree, ncols);
+    for (int i = 0; i < ncols; ++i)
+    {
+        if (free_vars(i))
+        {
+            kernel(free_idx[i], i) = 1;
+            for (int j = 0; j < ncols; ++j)
+            {
+                if (basic_vars(j))
+                    kernel(free_idx[i], j) = basic_in_terms_of_free(basic_idx[j], free_idx[i]); 
+            }
+        }
+    }
+
+    return kernel; 
 }
 
 #endif
