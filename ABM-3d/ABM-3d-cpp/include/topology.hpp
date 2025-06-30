@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/27/2025
+ *     6/29/2025
  */
 
 #ifndef SIMPLICIAL_COMPLEXES_3D_HPP
@@ -18,14 +18,21 @@
 #include <Eigen/Dense>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/connected_components.hpp>
+#include <CGAL/Gmpz.h>
+#include <CGAL/QP_models.h>
+#include <CGAL/QP_functions.h>
 #include "distances.hpp"
 #include "mechanics.hpp"
+#include "fields.hpp"
 #include "utils.hpp"
 
 using namespace Eigen;
 
 typedef boost::property<boost::edge_weight_t, double> EdgeProperty; 
-typedef boost::adjacency_list<boost::hash_setS, boost::vecS, boost::undirectedS, boost::no_property, EdgeProperty> Graph; 
+typedef boost::adjacency_list<boost::hash_setS, boost::vecS, boost::undirectedS, boost::no_property, EdgeProperty> Graph;
+typedef CGAL::Gmpz ET; 
+typedef CGAL::Quadratic_program<int> Program;
+typedef CGAL::Quadratic_program_solution<ET> Solution; 
 
 /** ------------------------------------------------------------------- //
  *                            GRAPH UTILITIES                           //
@@ -1106,9 +1113,14 @@ class SimplicialComplex3D
          * Return the given boundary homomorphism, which (following Munkres,
          * Elements of Algebraic Topology) calculates the boundaries of
          * simplices of the given dimension as a linear combination of
-         * simplices of the given dimension minus one. 
+         * simplices of the given dimension minus one.
+         *
+         * @param dim Input dimension.
+         * @returns Boundary homomorphism from the group of (dim)-chains to 
+         *          to the group of (dim - 1)-chains. 
          */
-        Matrix<T, Dynamic, Dynamic> getBoundaryHomomorphism(const int dim) const
+        template <int p = 0>
+        Matrix<Fp<p>, Dynamic, Dynamic> getBoundaryHomomorphism(const int dim) const 
         {
             // If the dimension is zero or greater than the maximum dimension,
             // then raise an exception 
@@ -1124,7 +1136,7 @@ class SimplicialComplex3D
             const int n2 = faces2.size();  
 
             // Initialize the matrix with the appropriate dimensions
-            Matrix<T, Dynamic, Dynamic> del = Matrix<T, Dynamic, Dynamic>::Zero(n2, n1); 
+            Matrix<Fp<p>, Dynamic, Dynamic> del = Matrix<Fp<p>, Dynamic, Dynamic>::Zero(n2, n1); 
 
             // Store the indices of the output faces in the above ordering as 
             // a dictionary 
@@ -1154,7 +1166,7 @@ class SimplicialComplex3D
                     int idx = indices[subface]; 
 
                     // The corresponding entry in the matrix is (-1)^j
-                    del(idx, i) = (j % 2 == 0 ? 1 : -1);   
+                    del(idx, i) = Fp<p>(j % 2 == 0 ? 1 : -1);   
                 }
             }
 
@@ -1162,16 +1174,21 @@ class SimplicialComplex3D
         } 
 
         /**
-         * Returns the combinatorial Laplacian. 
+         * Returns the combinatorial Laplacian.
+         *
+         * @param dim Input dimension.
+         * @returns Combinatorial Laplacian matrix.  
          */
-        Matrix<T, Dynamic, Dynamic> getCombinatorialLaplacian(const int dim) const
+        template <int p = 0>
+        Matrix<Fp<p>, Dynamic, Dynamic> getCombinatorialLaplacian(const int dim) const 
         {
             // Get the boundary homomorphisms 
             //
             // If dim equals the dimension of the complex, then set del1 = 0 
             //
             // Similarly, if dim == 0, then set del2 = 0
-            const int maxdim = this->dimension(); 
+            const int maxdim = this->dimension();
+            Matrix<Fp<p>, Dynamic, Dynamic> lap;  
             if (dim < 0 || dim > this->dimension())
             {
                 throw std::runtime_error(
@@ -1181,30 +1198,32 @@ class SimplicialComplex3D
             else if (dim == 0 && maxdim == 0)
             {
                 const int n = this->points.rows(); 
-                return Matrix<T, Dynamic, Dynamic>::Zero(n, n); 
+                return Matrix<Fp<p>, Dynamic, Dynamic>::Zero(n, n); 
             }
             else if (dim == 0)        // maxdim != 0
             {
-                Matrix<T, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism(1);
-                return del1 * del1.transpose(); 
+                Matrix<Fp<p>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<p>(1);
+                lap = del1 * del1.transpose(); 
             }
             else if (dim == maxdim)   // dim, maxdim != 0
             {
-                Matrix<T, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism(dim);
-                return del2.transpose() * del2; 
+                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim);
+                lap = del2.transpose() * del2; 
             }
             else     // Otherwise, get both boundary homomorphisms  
             { 
-                Matrix<T, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism(dim + 1); 
-                Matrix<T, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism(dim); 
+                Matrix<Fp<p>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<p>(dim + 1); 
+                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim); 
 
                 // Note that del1 has shape (n2, n1) and del2 has shape (n3, n2),
                 // where n1 = # (dim + 1)-simplices, n2 = # (dim)-simplices, 
                 // n3 = # (dim - 1)-simplices
                 //
                 // Therefore, the Laplacian has shape (n2, n2)
-                return del1 * del1.transpose() + del2.transpose() * del2;
+                lap = del1 * del1.transpose() + del2.transpose() * del2;
             }
+            
+            return lap; 
         }
 
         /**
@@ -1212,7 +1231,8 @@ class SimplicialComplex3D
          *
          * @returns Betti numbers of the simplicial complex. 
          */
-        Array<int, Dynamic, 1> getBettiNumbers(const T tol = 1e-8)
+        template <int p = 0>
+        Array<int, Dynamic, 1> getBettiNumbers() const
         {
             Array<int, Dynamic, 1> betti = Array<int, Dynamic, 1>::Zero(4);
             const int maxdim = this->dimension(); 
@@ -1232,17 +1252,11 @@ class SimplicialComplex3D
                 {
                     // ... calculate the combinatorial Laplacian (this should 
                     // never raise an exception)  
-                    Matrix<T, Dynamic, Dynamic> lap = this->getCombinatorialLaplacian(i); 
+                    Matrix<Fp<p>, Dynamic, Dynamic> lap = this->getCombinatorialLaplacian<p>(i);
 
-                    // Count the multiplicity of the zero singular values to 
-                    // get the dimension of the kernel  
-                    JacobiSVD<Matrix<T, Dynamic, Dynamic> > svd(lap);
-                    Matrix<T, Dynamic, 1> singvals = svd.singularValues(); 
-                    for (int j = 0; j < singvals.size(); ++j)
-                    {
-                        if (abs(singvals(j)) < tol)
-                            betti(i)++; 
-                    }
+                    // Get the dimension of the kernel
+                    Matrix<Fp<p>, Dynamic, Dynamic> ker = ::kernel<Fp<p> >(lap); 
+                    betti(i) = ker.rows();  
                 }
 
                 return betti; 
@@ -1253,12 +1267,125 @@ class SimplicialComplex3D
          * Get a collection of representative cycles for the simplicial 
          * complex.
          *
-         * @param p Characteristic of coefficient field. 
+         * @param dim Input dimension. 
          * @returns Collection of representative cycles.  
          */
-        /*
-        void getRepresentativeCycles(const int p = 2)
+        template <int p = 0>
+        void getMinimalCycles(const int dim)
         {
+            if (dim < 0 || dim > this->dimension())
+            {
+                throw std::runtime_error(
+                    "Invalid input dimension for minimal cycle calculation"
+                ); 
+            }
+
+            // First get a basis for the kernel of the combinatorial Laplacian
+            // by calculating the SVD
+            Matrix<Fp<p>, Dynamic, Dynamic> lap = this->getCombinatorialLaplacian<p>(dim);
+            Matrix<Fp<p>, Dynamic, Dynamic> ker = ::kernel<Fp<p> >(lap); 
+            std::cout << ker << std::endl << "--" << std::endl;
+
+            // If the input dimension is maximal, then optimization is not 
+            // necessary
+            if (dim < this->dimension())
+            {
+                // TODO
+            }
+            // Otherwise ... 
+            else 
+            {
+                // Get the boundary homomorphism from the (dim + 1)-th chain group
+                Matrix<Fp<p>, Dynamic, Dynamic> del = this->getBoundaryHomomorphism<p>(dim + 1);
+                const int n1 = del.cols();    // Number of (dim + 1)-simplices
+                const int n2 = del.rows();    // Number of (dim)-simplices
+                std::cout << del << std::endl;
+                std::cout << n1 << " " << n2 << std::endl;  
+
+                // For each cycle, solve the corresponding linear programming
+                // problem 
+                //
+                // We follow the approach of Obayashi, SIAM J Appl Algebra
+                // Geometry (2018) (see Eqn. 9)
+                for (int j = 0; j < ker.rows(); ++j)
+                {
+                    // We must minimize the 1-norm of z = z1 + \del w, where 
+                    // z1 is the basic cycle and w is any (dim + 1)-chain
+                    Matrix<Fp<p>, Dynamic, 1> cycle = ker.row(j); 
+                    std::cout << j << std::endl; 
+                    std::cout << cycle.transpose() << std::endl;  
+
+                    // Define the linear program in standard format:
+                    // minimize c.T * x, subject to A * x <= b
+                    //
+                    // To do this, we define the vector 
+                    //
+                    // x = (u, w^+, w^-)
+                    //
+                    // where:
+                    //
+                    // - u represents the absolute value of z (dimension n2)
+                    // - w^+ - w^- is the decomposition of the (dim + 1)-chain
+                    //   w into nonnegative vectors (dimension n1)
+                    //
+                    // Therefore, we need 
+                    //
+                    // -u <= D * w + z1 <= u
+                    // ==> D * w + z1 <= u, -D * w - z1 <= u
+                    // ==> D * (w^+ - w^-) + z1 <= u, -D * (w^+ - w^-) - z1 <= u,
+                    //
+                    // where D is the boundary homomorphism matrix
+                    const int n_constraints = 2 * n2;
+                    const int n_variables = n2 + 2 * n1; 
+                    Matrix<Fp<p>, Dynamic, Dynamic> A
+                        = Matrix<Fp<p>, Dynamic, Dynamic>::Zero(n_constraints, n_variables);
+                    Matrix<Fp<p>, Dynamic, 1> b = Matrix<Fp<p>, Dynamic, 1>::Zero(n_constraints); 
+                    Matrix<Fp<p>, Dynamic, 1> c = Matrix<Fp<p>, Dynamic, 1>::Zero(n_variables);
+                    ArithmeticSequence rows1 = Eigen::seq(0, n2 - 1); 
+                    ArithmeticSequence rows2 = Eigen::seq(n2, 2 * n2 - 1);
+                    ArithmeticSequence cols1 = Eigen::seq(0, n2 - 1); 
+                    ArithmeticSequence cols2 = Eigen::seq(n2, n2 + n1 - 1); 
+                    ArithmeticSequence cols3 = Eigen::seq(n2 + n1, n2 + 2 * n1 - 1);  
+                    A(rows1, cols1) = -Matrix<Fp<p>, Dynamic, Dynamic>::Identity(n2, n2); 
+                    A(rows1, cols2) = del; 
+                    A(rows1, cols3) = -del;
+                    A(rows2, cols1) = -Matrix<Fp<p>, Dynamic, Dynamic>::Identity(n2, n2);
+                    A(rows2, cols2) = -del; 
+                    A(rows2, cols3) = del;
+                    b.head(n2) = -cycle; 
+                    b.tail(n2) = cycle;
+                    c.head(n2) = Matrix<Fp<p>, Dynamic, 1>::Ones(n2);
+                    Program lp(CGAL::SMALLER, true, 0, false, 0);
+                    for (int k = 0; k < n_constraints; ++k)      // k-th constraint
+                    {
+                        for (int m = 0; m < n_variables; ++m)    // m-th variable 
+                        {
+                            if (p == 0)
+                                lp.set_a(m, k, static_cast<double>(A(k, m).value));
+                            else 
+                                lp.set_a(m, k, static_cast<int>(A(k, m).value));  
+                        }
+                        if (p == 0)
+                            lp.set_b(k, static_cast<double>(b(k).value));
+                        else 
+                            lp.set_b(k, static_cast<int>(b(k).value));  
+                    }
+                    for (int m = 0; m < n_variables; ++m)
+                    {
+                        if (p == 0)
+                            lp.set_c(m, static_cast<double>(c(m).value));
+                        else 
+                            lp.set_c(m, static_cast<int>(c(m).value)); 
+                    }
+                    lp.set_c0(0);
+
+                    // Solve the linear program
+                    Solution solution = CGAL::solve_linear_program(lp, ET());
+                    std::cout << solution << std::endl; 
+                }
+            } 
+
+            /*
             // Reset the filtration 
             this->tree.clear_filtration();  
             
@@ -1319,8 +1446,8 @@ class SimplicialComplex3D
                 }
                 std::cout << std::endl; 
             }
+            */
         }
-        */
 };
 
 /**
