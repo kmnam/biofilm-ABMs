@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/30/2025
+ *     7/1/2025
  */
 
 #ifndef BIOFILM_UTILS_3D_HPP
@@ -980,6 +980,37 @@ Matrix<T, Dynamic, Dynamic> rowEchelonForm(const Ref<const Matrix<T, Dynamic, Dy
 }
 
 /**
+ * Given a matrix in row echelon form, return the pivots in each row.
+ *
+ * This function returns an array of coordinates, pivots(i) = j, where j is
+ * the column containing the pivot in the i-th row. 
+ *
+ * If the i-th row does not have a nonzero entry (and therefore has no pivot),
+ * then pivots(i) == -1. 
+ */
+template <typename T>
+Matrix<int, Dynamic, 1> getPivots(const Ref<const Matrix<T, Dynamic, Dynamic> >& A_reduced)
+{
+    const int nrows = A_reduced.rows();
+    const int ncols = A_reduced.cols();  
+    Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(nrows);
+    for (int i = 0; i < nrows; ++i)
+    {
+        for (int j = 0; j < ncols; ++j)
+        {
+            // Identify the first nonzero entry in each row
+            if (A_reduced(i, j) != 0)
+            {
+                pivots(i) = j;
+                break; 
+            }
+        }
+    }
+
+    return pivots; 
+}
+
+/**
  * Get a basis for the image (column space) of a matrix with exact numerical
  * types via Gaussian elimination.
  *
@@ -993,18 +1024,7 @@ Matrix<T, Dynamic, Dynamic> columnSpace(const Ref<const Matrix<T, Dynamic, Dynam
     Matrix<T, Dynamic, Dynamic> A_reduced = rowEchelonForm<T>(A); 
 
     // Now that the matrix is in row-reduced form, find the pivots ... 
-    Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(nrows);
-    for (int i = 0; i < nrows; ++i)
-    {
-        for (int j = 0; j < ncols; ++j)
-        {
-            if (A_reduced(i, j) != 0)
-            {
-                pivots(i) = j;
-                break; 
-            }
-        }
-    }
+    Matrix<int, Dynamic, 1> pivots = getPivots<T>(A_reduced);
 
     // ... and the basic variables 
     std::vector<int> basic_vars; 
@@ -1037,18 +1057,7 @@ Matrix<T, Dynamic, Dynamic> kernel(const Ref<const Matrix<T, Dynamic, Dynamic> >
     Matrix<T, Dynamic, Dynamic> A_reduced = rowEchelonForm<T>(A); 
 
     // Now that the matrix is in row-reduced form, find the pivots ...
-    Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(nrows);
-    for (int i = 0; i < nrows; ++i)
-    {
-        for (int j = 0; j < ncols; ++j)
-        {
-            if (A_reduced(i, j) != 0)
-            {
-                pivots(i) = j;
-                break; 
-            }
-        }
-    }
+    Matrix<int, Dynamic, 1> pivots = getPivots<T>(A_reduced); 
 
     // ... and the basic and free variables
     //
@@ -1161,29 +1170,19 @@ template <typename T>
 Matrix<T, Dynamic, Dynamic> solve(const Ref<const Matrix<T, Dynamic, Dynamic> >& A,
                                   const Ref<const Matrix<T, Dynamic, Dynamic> >& B)
 {
-    // Row-reduce the given linear system 
-    Matrix<T, Dynamic, Dynamic> system(A.rows(), A.cols() + B.cols()); 
-    system(Eigen::all, Eigen::seq(0, A.cols() - 1)) = A;
-    system(Eigen::all, Eigen::seq(A.cols(), A.cols() + B.cols() - 1)) = B;  
+    // Row-reduce the given linear system
+    const int nrows = A.rows(); 
+    const int ncols = A.cols();
+    const int nvecs = B.cols(); 
+    Matrix<T, Dynamic, Dynamic> system(nrows, ncols + nvecs);
+    system(Eigen::all, Eigen::seq(0, ncols - 1)) = A;
+    system(Eigen::all, Eigen::seq(ncols, ncols + nvecs - 1)) = B;  
     Matrix<T, Dynamic, Dynamic> reduced = rowEchelonForm<T>(system);
-    Matrix<T, Dynamic, Dynamic> A_reduced = reduced(Eigen::all, Eigen::seq(0, A.cols() - 1)); 
-    Matrix<T, Dynamic, Dynamic> B_reduced = reduced(Eigen::all, Eigen::seq(A.cols(), A.cols() + B.cols() - 1)); 
+    Matrix<T, Dynamic, Dynamic> A_reduced = reduced(Eigen::all, Eigen::seq(0, ncols - 1)); 
+    Matrix<T, Dynamic, Dynamic> B_reduced = reduced(Eigen::all, Eigen::seq(ncols, ncols + nvecs - 1)); 
 
     // Now that the matrix is in row-reduced form, find the pivots ...
-    const int nrows = A.rows(); 
-    const int ncols = A.cols();  
-    Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(nrows);
-    for (int i = 0; i < nrows; ++i)
-    {
-        for (int j = 0; j < ncols; ++j)
-        {
-            if (A_reduced(i, j) != 0)
-            {
-                pivots(i) = j;
-                break; 
-            }
-        }
-    }
+    Matrix<int, Dynamic, 1> pivots = getPivots<T>(A_reduced); 
 
     // Get the basic variables 
     //
@@ -1211,8 +1210,8 @@ Matrix<T, Dynamic, Dynamic> solve(const Ref<const Matrix<T, Dynamic, Dynamic> >&
 
     // Now back-substitute to get the entries of the solution vector, x,
     // for each column in B
-    Matrix<T, Dynamic, Dynamic> x(ncols, B.cols());
-    for (int idx = 0; idx < B.cols(); ++idx)
+    Matrix<T, Dynamic, Dynamic> x(ncols, nvecs); 
+    for (int idx = 0; idx < nvecs; ++idx)
     { 
         for (int j = ncols - 1; j >= 0; --j)
         {
