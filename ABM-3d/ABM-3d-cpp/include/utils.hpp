@@ -1230,13 +1230,53 @@ Matrix<T, Dynamic, Dynamic> solve(const Ref<const Matrix<T, Dynamic, Dynamic> >&
 }
 
 /**
+ * Get a basis for the complement of the span of the given basis, with respect
+ * to the ambient vector space. 
+ *
  * We assume that the underlying field is the rationals or a field of finite
  * characteristic.
  */
 template <typename T>
-Matrix<T, Dynamic, Dynamic> extendBasis(const Ref<const Matrix<T, Dynamic, Dynamic> >& basis)
+Matrix<T, Dynamic, Dynamic> complement(const Ref<const Matrix<T, Dynamic, Dynamic> >& basis)
 {
-    // TODO
+    const int dim = basis.rows();      // Note that dim is the ambient dimension
+    const int nvecs = basis.cols();    // In contrast, nvecs is the dimension of the basis
+    
+    // Construct linear system, one for each standard basis vector
+    Matrix<T, Dynamic, Dynamic> system(dim, nvecs + dim); 
+    system(Eigen::all, Eigen::seq(0, nvecs - 1)) = basis; 
+    system(Eigen::all, Eigen::seq(nvecs, nvecs + dim - 1))
+        = Matrix<T, Dynamic, Dynamic>::Identity(dim, dim);  
+
+    // Get row echelon form 
+    Matrix<T, Dynamic, Dynamic> system_reduced = rowEchelonForm<T>(system);
+
+    // Which rows are zero?
+    std::vector<int> complement_coords; 
+    for (int i = 0; i < dim; ++i)
+    {
+        bool is_zero = (system_reduced.row(i).head(nvecs).array() == 0).all();
+        if (is_zero)    // If the i-th row is zero, check for inconsistencies 
+        {
+            for (int j = 0; j < dim; ++j)
+            {
+                if (system_reduced(i, nvecs + j) != 0)
+                {
+                    // There is an inconsistency with respect to the j-th 
+                    // basis vector, so this vector lies in the complement 
+                    complement_coords.push_back(j); 
+                }
+            }
+        }
+    }
+
+    // Return the standard basis vectors within the complement 
+    Matrix<T, Dynamic, Dynamic> complement
+        = Matrix<T, Dynamic, Dynamic>::Zero(dim, complement_coords.size()); 
+    for (int i = 0; i < complement_coords.size(); ++i)
+        complement(complement_coords[i], i) = 1; 
+
+    return complement;  
 }
 
 /**
