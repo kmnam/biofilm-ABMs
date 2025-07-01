@@ -1024,6 +1024,80 @@ Matrix<T, Dynamic, Dynamic> columnSpace(const Ref<const Matrix<T, Dynamic, Dynam
 }
 
 /**
+ * Solve the linear system, A * x = b, given that A is full rank, via
+ * Gaussian elimination.
+ *
+ * We assume that the underlying field is the rationals or a field of finite
+ * characteristic.
+ */
+template <typename T>
+Matrix<T, Dynamic, 1> solve(const Ref<const Matrix<T, Dynamic, Dynamic> >& A,
+                            const Ref<const Matrix<T, Dynamic, 1> >& b)
+{
+    // Row-reduce the given linear system 
+    Matrix<T, Dynamic, Dynamic> system(A.rows(), A.cols() + 1); 
+    system(Eigen::all, Eigen::seq(0, A.cols() - 1)) = A; 
+    system.col(A.cols()) = b;
+    Matrix<T, Dynamic, Dynamic> reduced = rowEchelonForm<T>(system);
+    Matrix<T, Dynamic, Dynamic> A_reduced = reduced(Eigen::all, Eigen::seq(0, A.cols() - 1)); 
+    Matrix<T, Dynamic, 1> b_reduced = reduced.col(A.cols());  
+
+    // Now that the matrix is in row-reduced form, find the pivots ... 
+    Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(nrows);
+    for (int i = 0; i < nrows; ++i)
+    {
+        for (int j = 0; j < ncols; ++j)
+        {
+            if (A_reduced(i, j) != 0)
+            {
+                pivots(i) = j;
+                break; 
+            }
+        }
+    }
+
+    // Get the basic variables 
+    //
+    // Store, for each row i, the tuple (pivots(i), i), depending on whether
+    // pivots(i) represents a basic or free variable
+    Matrix<int, Dynamic, 1> basic_vars = Matrix<int, Dynamic, 1>::Zero(ncols);
+    std::unordered_map<int, int> basic_constraints; 
+    basic_vars(pivots(0)) = 1;  
+    basic_constraints[pivots(0)] = 0;
+    for (int i = 1; i < nrows; ++i)
+    {
+        if (!(pivots(i) == -1 || pivots(i) == pivots(i - 1)))
+        {
+            basic_vars(pivots(i)) = 1;
+            basic_constraints[pivots(i)] = i;
+        } 
+    }
+
+    // Check that every variable is basic 
+    if (basic_vars.sum() < ncols)
+        throw std::runtime_error(
+            "Found non-basic variables, meaning that input matrix is not of "
+            "full rank"
+        );
+
+    // Now back-substitute to get the entries of the solution vector, x
+    Matrix<T, Dynamic, 1> x(ncols); 
+    for (int j = ncols - 1; j >= 0; --j)
+    {
+        // Get the corresponding constraint
+        int i = basic_constraints[j];
+        
+        // Solve for the value of the j-th variable
+        x(j) = b_reduced(i); 
+        for (int k = j + 1; k < ncols; ++k)
+            x(j) -= A_reduced(i, k) * x(k);
+        x(j) /= A_reduced(i, j);  
+    }
+    
+    return x;
+}
+
+/**
  * Get a basis for the kernel of a matrix with exact numerical types via
  * Gaussian elimination.
  *
@@ -1149,5 +1223,139 @@ Matrix<T, Dynamic, Dynamic> kernel(const Ref<const Matrix<T, Dynamic, Dynamic> >
 
     return kernel; 
 }
+
+/**
+ * Get a basis for the quotient space, ker(A) / im(B), given that im(B) is 
+ * a subspace of ker(A), using Gaussian elimination. 
+ *
+ * We assume that the underlying field is the rationals or a field of finite
+ * characteristic.
+ */
+template <typename T>
+Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dynamic> >& A,
+                                          const Ref<const Matrix<T, Dynamic, Dynamic> >& B)
+{
+    // Get bases for the kernel of A and the image of B
+    Matrix<T, Dynamic, Dynamic> kerA = ::kernel<T>(A); 
+    Matrix<T, Dynamic, Dynamic> imB = ::columnSpace<T>(B); 
+
+    // Row-reduce the given matrix 
+    Matrix<T, Dynamic, Dynamic> A_reduced = rowEchelonForm<T>(A); 
+
+    // Now that the matrix is in row-reduced form, find the pivots ...
+    Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(nrows);
+    for (int i = 0; i < nrows; ++i)
+    {
+        for (int j = 0; j < ncols; ++j)
+        {
+            if (A_reduced(i, j) != 0)
+            {
+                pivots(i) = j;
+                break; 
+            }
+        }
+    }
+
+    // ... and the basic and free variables
+    //
+    // Store, for each row i, the tuple (pivots(i), i), depending on whether
+    // pivots(i) represents a basic or free variable
+    Matrix<int, Dynamic, 1> basic_vars = Matrix<int, Dynamic, 1>::Zero(ncols);
+    std::unordered_map<int, int> basic_constraints; 
+    basic_vars(pivots(0)) = 1;  
+    basic_constraints[pivots(0)] = 0;
+    for (int i = 1; i < nrows; ++i)
+    {
+        if (!(pivots(i) == -1 || pivots(i) == pivots(i - 1)))
+        {
+            basic_vars(pivots(i)) = 1;
+            basic_constraints[pivots(i)] = i;
+        } 
+    }
+    Matrix<int, Dynamic, 1> free_vars = Matrix<int, Dynamic, 1>::Ones(ncols) - basic_vars;
+
+    // Maintain index lookups for the free and basic variables
+    //
+    // That is, if x_k is a free variable, then free_idx[k] = index of k
+    // among the free variables  
+    std::unordered_map<int, int> free_idx, basic_idx;
+    int basic_i = 0; 
+    int free_i = 0; 
+    for (int i = 0; i < ncols; ++i)
+    {
+        if (basic_vars(i))
+        {
+            basic_idx[i] = basic_i;
+            basic_i++; 
+        }
+        else 
+        {
+            free_idx[i] = free_i; 
+            free_i++; 
+        }
+    } 
+
+    // Now run through the basic variables in reverse and express them in 
+    // terms of the free variables
+    const int nbasic = basic_vars.sum();
+    const int nfree = free_vars.sum();
+    Matrix<T, Dynamic, Dynamic> basic_in_terms_of_free(nbasic, nfree);
+    for (int i = ncols - 1; i >= 0; --i)
+    {
+        if (basic_vars(i)) 
+        {
+            int j = basic_idx[i];           // Index of basic variable  
+            int k = basic_constraints[i];   // Index of determining equation 
+            
+            // For each subsequent variable in the k-th equation ... 
+            for (int m = j + 1; m < ncols; ++m)
+            {
+                // Is it a basic variable or a free variable? 
+                if (free_idx.find(m) != free_idx.end())
+                {
+                    // If free, then set the coefficient accordingly
+                    //
+                    // xi = j-th basic variable
+                    // xm = free variable
+                    // k = constraint in which xi is the pivot  
+                    basic_in_terms_of_free(j, free_idx[m])
+                        -= A_reduced(k, m) / A_reduced(k, i); 
+                }
+                else 
+                {
+                    // Otherwise, the m-th variable must be expressed as 
+                    // a linear combination of free variables that must 
+                    // have already been processed
+                    //
+                    // xi = j-th basic variable
+                    // xm = current basic variable 
+                    // k = constraint in which xi is the pivot  
+                    int m_idx = basic_idx[m];
+                    basic_in_terms_of_free.row(j)
+                        -= A_reduced(k, m) * basic_in_terms_of_free.row(m_idx) / A_reduced(k, i);  
+                }
+            }
+        }
+    }
+
+    // Now generate the kernel basis vectors ... 
+    Matrix<T, Dynamic, Dynamic> kernel = Matrix<T, Dynamic, Dynamic>::Zero(nfree, ncols);
+    for (int i = 0; i < ncols; ++i)
+    {
+        if (free_vars(i))
+        {
+            kernel(free_idx[i], i) = 1;
+            for (int j = 0; j < ncols; ++j)
+            {
+                if (basic_vars(j))
+                    kernel(free_idx[i], j) = basic_in_terms_of_free(basic_idx[j], free_idx[i]); 
+            }
+        }
+    }
+
+    return kernel; 
+}
+
+
 
 #endif
