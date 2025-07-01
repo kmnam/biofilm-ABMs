@@ -13,8 +13,20 @@
 #include <Eigen/Dense>
 #include <boost/multiprecision/gmp.hpp>
 
+typedef boost::multiprecision::mpq_rational Rational; 
+
 using std::abs; 
-using boost::multiprecision::abs; 
+using boost::multiprecision::abs;
+
+/**
+ * A type-agnostic modulo operator that returns a value between 0 and p - 1
+ * (inclusive). 
+ */
+template <typename T, int p>
+int mod(const T x)
+{
+    return (x < 0 ? static_cast<int>(-x) % p : static_cast<int>(x) % p);
+}
 
 /**
  * Given integers y and p, find a number t such that (y * t) mod p = 1,
@@ -49,8 +61,15 @@ int getMultiplicativeInverse(const int y)
 template <int p>
 class Fp
 {
+    private:
+        void reset()
+        {
+            if (p != 0 && (this->value < 0 || this->value >= p))
+                this->value = Rational(mod<Rational, p>(this->value));
+        } 
+
     public:
-        boost::multiprecision::mpq_rational value;
+        Rational value; 
 
         Fp()
         {
@@ -60,17 +79,17 @@ class Fp
         Fp(const int x)
         {
             if (p == 0)
-                this->value = static_cast<boost::multiprecision::mpq_rational>(x);
+                this->value = static_cast<Rational>(x); 
             else 
-                this->value = static_cast<boost::multiprecision::mpq_rational>(x % p);  
+                this->value = static_cast<Rational>(mod<int, p>(x)); 
         }
 
-        Fp(const boost::multiprecision::mpq_rational x)
+        Fp(const Rational x)
         {
             if (p == 0)
                 this->value = x; 
             else if (boost::multiprecision::denominator(x) == 1)
-                this->value = static_cast<int>(boost::multiprecision::numerator(x)) % p; 
+                this->value = mod<Rational, p>(x); 
             else    // x is not an integer and p is nonzero 
                 throw std::runtime_error(
                     "Cannot assign non-integer value in field of finite "
@@ -95,7 +114,7 @@ class Fp
             if (p == 0)
                 this->value = x;
             else
-                this->value = x % p;
+                this->value = mod<int, p>(x); 
             return *this;  
         }
         
@@ -113,13 +132,10 @@ class Fp
             if (p == 0)
                 return (this->value == x); 
             else
-            { 
-                int a = static_cast<int>(this->value); 
-                return ((a - x) % p == 0);
-            }
+                return (mod<Rational, p>(this->value - x) == 0); 
         }
 
-        bool operator==(const boost::multiprecision::mpq_rational& x) const
+        bool operator==(const Rational& x) const 
         {
             if (p == 0)
             {
@@ -130,26 +146,16 @@ class Fp
                 if (boost::multiprecision::denominator(x) != 1)
                     return false;
                 else  
-                {
-                    int a = static_cast<int>(this->value); 
-                    int b = static_cast<int>(x); 
-                    return ((a - b) % p == 0); 
-                }
+                    return (mod<Rational, p>(this->value - x) == 0); 
             } 
         }
 
         bool operator==(const Fp<p>& x) const
         {
             if (p == 0)
-            {
                 return (this->value == x.value);
-            } 
             else 
-            {
-                int a = static_cast<int>(this->value); 
-                int b = static_cast<int>(x.value); 
-                return ((a - b) % p == 0);
-            } 
+                return (mod<Rational, p>(this->value - x.value) == 0); 
         }
 
         bool operator!=(const int& x) const 
@@ -157,7 +163,7 @@ class Fp
             return !(*this == x); 
         }
 
-        bool operator!=(const boost::multiprecision::mpq_rational& x) const 
+        bool operator!=(const Rational& x) const 
         {
             return !(*this == x); 
         }
@@ -223,111 +229,77 @@ class Fp
         Fp<p>& operator+=(const int& y)
         {
             this->value += y; 
-            if (p != 0)
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
-                ); 
             return *this; 
         }
 
-        Fp<p>& operator+=(const boost::multiprecision::mpq_rational& y)
+        Fp<p>& operator+=(const Rational& y)
         {
-            #ifdef CHECK_FP_RATIONAL_NONINTEGER
-                if (p != 0 && boost::multiprecision::denominator(y) != 1)
-                    throw std::runtime_error(
-                        "Cannot add non-integer number to number in field of "
-                        "finite characteristic"
-                    ); 
-            #endif
-            this->value += y; 
-            if (p != 0)
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
+            if (p != 0 && boost::multiprecision::denominator(y) != 1)
+                throw std::runtime_error(
+                    "Cannot add non-integer number to number in field of "
+                    "finite characteristic"
                 ); 
+            this->value += y;
+            this->reset();  
             return *this; 
         }
 
         Fp<p>& operator+=(const Fp<p>& y)
         {
             this->value += y.value;
-            if (p != 0)
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
-                ); 
+            this->reset(); 
             return *this;  
         }
 
         Fp<p>& operator-=(const int& y)
         {
-            this->value -= y; 
-            if (p != 0)
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
-                ); 
+            this->value -= y;
+            this->reset();  
             return *this; 
         }
 
-        Fp<p>& operator-=(const boost::multiprecision::mpq_rational& y)
+        Fp<p>& operator-=(const Rational& y)
         {
-            #ifdef CHECK_FP_RATIONAL_NONINTEGER
-                if (p != 0 && boost::multiprecision::denominator(y) != 1)
-                    throw std::runtime_error(
-                        "Cannot subtract non-integer number from number in "
-                        "field of finite characteristic"
-                    ); 
-            #endif
-            this->value -= y; 
-            if (p != 0)
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
+            if (p != 0 && boost::multiprecision::denominator(y) != 1)
+                throw std::runtime_error(
+                    "Cannot subtract non-integer number from number in "
+                    "field of finite characteristic"
                 ); 
+            this->value -= y;
+            this->reset();  
             return *this; 
         }
 
         Fp<p>& operator-=(const Fp<p>& y)
         {
             this->value -= y.value;
-            if (p != 0)
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
-                ); 
+            this->reset(); 
             return *this; 
         }
 
         Fp<p>& operator*=(const int& y)
         {
-            this->value *= y; 
-            if (p != 0)
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
-                ); 
+            this->value *= y;
+            this->reset();  
             return *this; 
         }
 
-        Fp<p>& operator*=(const boost::multiprecision::mpq_rational& y)
+        Fp<p>& operator*=(const Rational& y)
         {
-            #ifdef CHECK_FP_RATIONAL_NONINTEGER
-                if (p != 0 && boost::multiprecision::denominator(y) != 1)
-                    throw std::runtime_error(
-                        "Cannot subtract non-integer number from number in "
-                        "field of finite characteristic"
-                    ); 
-            #endif
-            this->value *= y; 
-            if (p != 0)
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
+            if (p != 0 && boost::multiprecision::denominator(y) != 1)
+                throw std::runtime_error(
+                    "Cannot multiply number by non-integer number in field "
+                    "of finite characteristic"
                 ); 
+            this->value *= y;
+            this->reset();  
             return *this; 
         }
 
         Fp<p>& operator*=(const Fp<p>& y)
         {
             this->value *= y.value;
-            if (p != 0)
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
-                ); 
+            this->reset();
             return *this;  
         }
 
@@ -344,24 +316,20 @@ class Fp
             }
             else    // Otherwise, multiply x by the multiplicative inverse of y
             {
-                int t = getMultiplicativeInverse<p>(y % p); 
+                int t = getMultiplicativeInverse<p>(mod<int, p>(y)); 
                 this->value *= t;
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
-                ); 
+                this->reset(); 
             }
             return *this;  
         }
 
-        Fp<p>& operator/=(const boost::multiprecision::mpq_rational& y)
+        Fp<p>& operator/=(const Rational& y)
         {
-            #ifdef CHECK_FP_RATIONAL_NONINTEGER
-                if (p != 0 && boost::multiprecision::denominator(y) != 1)
-                    throw std::runtime_error(
-                        "Cannot subtract non-integer number from number in "
-                        "field of finite characteristic"
-                    ); 
-            #endif
+            if (p != 0 && boost::multiprecision::denominator(y) != 1)
+                throw std::runtime_error(
+                    "Cannot divide number by non-integer number in field of "
+                    "finite characteristic"
+                ); 
             
             // Check that y is nonzero
             if (y == 0)
@@ -374,13 +342,9 @@ class Fp
             }
             else    // Otherwise, multiply x by the multiplicative inverse of y
             {
-                int t = getMultiplicativeInverse<p>(
-                    static_cast<int>(boost::multiprecision::numerator(y) % p)
-                ); 
+                int t = getMultiplicativeInverse<p>(mod<Rational, p>(y)); 
                 this->value *= t;
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
-                ); 
+                this->reset(); 
             }
             return *this;  
         }
@@ -398,13 +362,9 @@ class Fp
             }
             else    // Otherwise, multiply x by the multiplicative inverse of y
             {
-                int t = getMultiplicativeInverse<p>(
-                    static_cast<int>(boost::multiprecision::numerator(y.value))
-                ); 
+                int t = getMultiplicativeInverse<p>(mod<Rational, p>(y.value)); 
                 this->value *= t;
-                this->value = boost::multiprecision::mpq_rational(
-                    static_cast<int>(this->value) % p
-                ); 
+                this->reset(); 
             }
             return *this;  
         } 
@@ -417,7 +377,7 @@ Fp<p> operator+(const Fp<p>& x, const int& y)
 }
 
 template <int p>
-Fp<p> operator+(const Fp<p>& x, const boost::multiprecision::mpq_rational& y)
+Fp<p> operator+(const Fp<p>& x, const Rational& y)
 {
     return Fp<p>(x.value + y); 
 }
@@ -429,7 +389,7 @@ Fp<p> operator+(const int& x, const Fp<p>& y)
 }
 
 template <int p>
-Fp<p> operator+(const boost::multiprecision::mpq_rational& x, const Fp<p>& y)
+Fp<p> operator+(const Rational& x, const Fp<p>& y)
 {
     return y + x; 
 }
@@ -447,7 +407,7 @@ Fp<p> operator-(const Fp<p>& x, const int& y)
 }
 
 template <int p>
-Fp<p> operator-(const Fp<p>& x, const boost::multiprecision::mpq_rational& y)
+Fp<p> operator-(const Fp<p>& x, const Rational& y)
 {
     return Fp<p>(x.value - y); 
 }
@@ -459,7 +419,7 @@ Fp<p> operator-(const int& x, const Fp<p>& y)
 }
 
 template <int p>
-Fp<p> operator-(const boost::multiprecision::mpq_rational& x, const Fp<p>& y)
+Fp<p> operator-(const Rational& x, const Fp<p>& y)
 {
     return y - x; 
 }
@@ -483,13 +443,13 @@ Fp<p> operator*(const int& x, const Fp<p>& y)
 }
 
 template <int p>
-Fp<p> operator*(const boost::multiprecision::mpq_rational& x, const Fp<p>& y)
+Fp<p> operator*(const Rational& x, const Fp<p>& y)
 {
     return y * x; 
 }
 
 template <int p>
-Fp<p> operator*(const Fp<p>& x, const boost::multiprecision::mpq_rational& y)
+Fp<p> operator*(const Fp<p>& x, const Rational& y)
 {
     return Fp<p>(x.value * y); 
 }
@@ -514,13 +474,13 @@ Fp<p> operator/(const Fp<p>& x, const int& y)
     }
     else    // Otherwise, multiply x by the multiplicative inverse of y
     {
-        int t = getMultiplicativeInverse<p>(y % p); 
+        int t = getMultiplicativeInverse<p>(mod<int, p>(y)); 
         return Fp<p>(x.value * t);
     } 
 }
 
 template <int p>
-Fp<p> operator/(const Fp<p>& x, const boost::multiprecision::mpq_rational& y)
+Fp<p> operator/(const Fp<p>& x, const Rational& y)
 {
     if (p != 0 && boost::multiprecision::denominator(y) != 1)
         throw std::runtime_error(
@@ -539,7 +499,7 @@ Fp<p> operator/(const Fp<p>& x, const boost::multiprecision::mpq_rational& y)
     }
     else    // Otherwise, multiply x by the multiplicative inverse of y
     {
-        int t = getMultiplicativeInverse<p>(static_cast<int>(y) % p);
+        int t = getMultiplicativeInverse<p>(mod<Rational, p>(y)); 
         return Fp<p>(x.value * t);
     } 
 }
@@ -578,7 +538,7 @@ Fp<p> abs(const Fp<p>& x)
 namespace Eigen {
 
 template <>
-struct NumTraits<Fp<0> > : NumTraits<boost::multiprecision::mpq_rational>
+struct NumTraits<Fp<0> > : NumTraits<Rational>
 {
     typedef Fp<0> Real; 
     typedef Fp<0> NonInteger; 
