@@ -1299,8 +1299,15 @@ Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dyn
     const int dim_imB = imB.cols(); 
     Matrix<T, Dynamic, Dynamic> imB_kernel_basis = ::solve<T>(kerA, imB); 
 
-    // Row-reduce the matrix of new basis vectors, which span im(B)
-    // TODO
+    // Get the complement of im(B) with respect to the kernel basis 
+    Matrix<T, Dynamic, Dynamic> imB_complement = ::complement<T>(imB_kernel_basis);
+
+    // Map back into the original ambient space 
+    Matrix<T, Dynamic, Dynamic> quotient_basis(kerA.rows(), imB_complement.cols()); 
+    for (int j = 0; j < imB_complement.cols(); ++j)
+        quotient_basis.col(j) = kerA * imB_complement.col(j);
+
+    return quotient_basis;  
 }
 
 #endif
