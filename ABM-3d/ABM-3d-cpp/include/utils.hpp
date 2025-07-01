@@ -922,14 +922,14 @@ std::vector<std::vector<int> > getCombinations(const std::vector<int>& vec,
 }
 
 /**
- * A simple algorithm for finding the kernel of a matrix with exact numerical
- * types via Gaussian elimination.
+ * Get a row echelon form for the given matrix with exact numerical types
+ * via Gaussian elimination. 
  *
  * We assume that the underlying field is the rationals or a field of finite
  * characteristic.
  */
 template <typename T>
-Matrix<T, Dynamic, Dynamic> kernel(const Ref<const Matrix<T, Dynamic, Dynamic> >& A)
+Matrix<T, Dynamic, Dynamic> rowEchelonForm(const Ref<const Matrix<T, Dynamic, Dynamic> >& A)
 {
     // Initialize pivot row index 
     const int nrows = A.rows(); 
@@ -975,6 +975,66 @@ Matrix<T, Dynamic, Dynamic> kernel(const Ref<const Matrix<T, Dynamic, Dynamic> >
         pivot_row++;
         pivot_col++;  
     }
+
+    return A_reduced; 
+}
+
+/**
+ * Get a basis for the image (column space) of a matrix with exact numerical
+ * types via Gaussian elimination.
+ *
+ * We assume that the underlying field is the rationals or a field of finite
+ * characteristic.
+ */
+template <typename T>
+Matrix<T, Dynamic, Dynamic> columnSpace(const Ref<const Matrix<T, Dynamic, Dynamic> >& A)
+{
+    // Row-reduce the given matrix 
+    Matrix<T, Dynamic, Dynamic> A_reduced = rowEchelonForm<T>(A); 
+
+    // Now that the matrix is in row-reduced form, find the pivots ... 
+    Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(nrows);
+    for (int i = 0; i < nrows; ++i)
+    {
+        for (int j = 0; j < ncols; ++j)
+        {
+            if (A_reduced(i, j) != 0)
+            {
+                pivots(i) = j;
+                break; 
+            }
+        }
+    }
+
+    // ... and the basic variables 
+    std::vector<int> basic_vars; 
+    basic_vars.push_back(pivots(0)); 
+    for (int i = 1; i < nrows; ++i)
+    {
+        if (!(pivots(i) == -1 || pivots(i) == pivots(i - 1)))
+            basic_vars.push_back(pivots(i));
+    }
+
+    // Return the columns corresponding to the basic variables 
+    Matrix<T, Dynamic, Dynamic> colspace(basic_vars.size(), nrows);
+    for (int i = 0; i < basic_vars.size(); ++i)
+        colspace.row(i) = A.col(basic_vars[i]); 
+
+    return colspace; 
+}
+
+/**
+ * Get a basis for the kernel of a matrix with exact numerical types via
+ * Gaussian elimination.
+ *
+ * We assume that the underlying field is the rationals or a field of finite
+ * characteristic.
+ */
+template <typename T>
+Matrix<T, Dynamic, Dynamic> kernel(const Ref<const Matrix<T, Dynamic, Dynamic> >& A)
+{
+    // Row-reduce the given matrix 
+    Matrix<T, Dynamic, Dynamic> A_reduced = rowEchelonForm<T>(A); 
 
     // Now that the matrix is in row-reduced form, find the pivots ...
     Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(nrows);
