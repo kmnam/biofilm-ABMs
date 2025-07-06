@@ -929,14 +929,15 @@ std::vector<std::vector<int> > getCombinations(const std::vector<int>& vec,
  * characteristic.
  */
 template <typename T>
-Matrix<T, Dynamic, Dynamic> rowEchelonForm(const Ref<const Matrix<T, Dynamic, Dynamic> >& A)
+Matrix<T, Dynamic, Dynamic> rowEchelonForm(const Ref<const Matrix<T, Dynamic, Dynamic> >& A,
+                                           const bool rref = false)
 {
     // Initialize pivot row index 
     const int nrows = A.rows(); 
     const int ncols = A.cols();
     Matrix<T, Dynamic, Dynamic> A_reduced(A);  
     int pivot_row = 0;
-    int pivot_col = 0;  
+    int pivot_col = 0;
 
     while (pivot_row < nrows && pivot_col < ncols)
     {
@@ -946,18 +947,18 @@ Matrix<T, Dynamic, Dynamic> rowEchelonForm(const Ref<const Matrix<T, Dynamic, Dy
         for (int i = pivot_row + 1; i < nrows; ++i)
         {
             if (abs(A_reduced(i, pivot_col)) > abs(A_reduced(max_i, pivot_col)))
-                max_i = i; 
+                max_i = i;
         }
 
         // If the maximal entry is zero, then move onto the next column
-        if (A(max_i, pivot_col) == 0)
+        if (A_reduced(max_i, pivot_col) == 0)
         {
             pivot_col++; 
             continue; 
         }
 
         // Otherwise, swap the chosen row with the pivot row 
-        Matrix<T, 1, Dynamic> row = A_reduced.row(max_i); 
+        Matrix<T, 1, Dynamic> row(A_reduced.row(max_i)); 
         A_reduced.row(max_i) = A_reduced.row(pivot_row); 
         A_reduced.row(pivot_row) = row;
 
@@ -974,6 +975,44 @@ Matrix<T, Dynamic, Dynamic> rowEchelonForm(const Ref<const Matrix<T, Dynamic, Dy
         // Move onto the next row and column 
         pivot_row++;
         pivot_col++;  
+    }
+
+    // Get the reduced row echelon form, if desired 
+    if (rref)
+    {
+        // Get the pivots in each row 
+        Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(nrows);
+        for (int i = 0; i < nrows; ++i)
+        {
+            for (int j = 0; j < ncols; ++j)
+            {
+                // Identify the first nonzero entry in each row
+                if (A_reduced(i, j) != 0)
+                {
+                    pivots(i) = j;
+                    break; 
+                }
+            }
+        }
+
+        // For each row, starting from the bottom ... 
+        for (int i = nrows - 1; i >= 0; --i)
+        {
+            // If that row contains a pivot ...
+            if (pivots(i) != -1)
+            {
+                // For each row above the i-th row, subtract a multiple 
+                // of the i-th row
+                for (int j = i - 1; j >= 0; --j)
+                {
+                    T mult = A_reduced(j, pivots(i)) / A_reduced(i, pivots(i)); 
+                    A_reduced.row(j) -= mult * A_reduced.row(i); 
+                }
+
+                // Divide the i-th row by the pivot entry 
+                A_reduced.row(i) /= A_reduced(i, pivots(i)); 
+            }
+        }
     }
 
     return A_reduced; 
@@ -1028,7 +1067,8 @@ Matrix<T, Dynamic, Dynamic> columnSpace(const Ref<const Matrix<T, Dynamic, Dynam
 
     // ... and the basic variables 
     std::vector<int> basic_vars; 
-    basic_vars.push_back(pivots(0)); 
+    basic_vars.push_back(pivots(0));
+    const int nrows = A.rows();  
     for (int i = 1; i < nrows; ++i)
     {
         if (!(pivots(i) == -1 || pivots(i) == pivots(i - 1)))
@@ -1063,6 +1103,8 @@ Matrix<T, Dynamic, Dynamic> kernel(const Ref<const Matrix<T, Dynamic, Dynamic> >
     //
     // Store, for each row i, the tuple (pivots(i), i), depending on whether
     // pivots(i) represents a basic or free variable
+    const int nrows = A.rows(); 
+    const int ncols = A.cols(); 
     Matrix<int, Dynamic, 1> basic_vars = Matrix<int, Dynamic, 1>::Zero(ncols);
     std::unordered_map<int, int> basic_constraints; 
     basic_vars(pivots(0)) = 1;  
@@ -1295,8 +1337,8 @@ Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dyn
     Matrix<T, Dynamic, Dynamic> imB = ::columnSpace<T>(B).transpose();
 
     // For each vector b in the column space of B, solve for kerA * x = b
-    const int dim_kerA = kerA.cols(); 
-    const int dim_imB = imB.cols(); 
+    //const int dim_kerA = kerA.cols(); 
+    //const int dim_imB = imB.cols(); 
     Matrix<T, Dynamic, Dynamic> imB_kernel_basis = ::solve<T>(kerA, imB); 
 
     // Get the complement of im(B) with respect to the kernel basis 
