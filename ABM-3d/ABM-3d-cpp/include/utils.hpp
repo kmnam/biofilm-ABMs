@@ -1089,6 +1089,8 @@ Matrix<int, Dynamic, 1> getPivotCols(const Ref<const Matrix<T, Dynamic, Dynamic>
  *
  * We assume that the underlying field is the rationals or a field of finite
  * characteristic.
+ *
+ * Each *column* in the returned matrix is a basis vector for the kernel. 
  */
 template <typename T>
 Matrix<T, Dynamic, Dynamic> columnSpace(const Ref<const Matrix<T, Dynamic, Dynamic> >& A)
@@ -1110,9 +1112,9 @@ Matrix<T, Dynamic, Dynamic> columnSpace(const Ref<const Matrix<T, Dynamic, Dynam
     }
 
     // Return the columns corresponding to the basic variables 
-    Matrix<T, Dynamic, Dynamic> colspace(basic_vars.size(), nrows);
+    Matrix<T, Dynamic, Dynamic> colspace(nrows, basic_vars.size());
     for (int i = 0; i < basic_vars.size(); ++i)
-        colspace.row(i) = A.col(basic_vars[i]); 
+        colspace.col(i) = A.col(basic_vars[i]); 
 
     return colspace; 
 }
@@ -1123,6 +1125,8 @@ Matrix<T, Dynamic, Dynamic> columnSpace(const Ref<const Matrix<T, Dynamic, Dynam
  *
  * We assume that the underlying field is the rationals or a field of finite
  * characteristic.
+ *
+ * Each *column* in the returned matrix is a basis vector for the kernel. 
  */
 template <typename T>
 Matrix<T, Dynamic, Dynamic> kernel(const Ref<const Matrix<T, Dynamic, Dynamic> >& A)
@@ -1232,7 +1236,7 @@ Matrix<T, Dynamic, Dynamic> kernel(const Ref<const Matrix<T, Dynamic, Dynamic> >
         }
     }
 
-    return kernel; 
+    return kernel.transpose(); 
 }
 
 /**
@@ -1364,10 +1368,10 @@ template <typename T>
 Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dynamic> >& B)
 {
     // Get a basis for the image of B
-    Matrix<T, Dynamic, Dynamic> imB = ::columnSpace<T>(B).transpose();
+    Matrix<T, Dynamic, Dynamic> imB = ::columnSpace<T>(B);
     
     // Get the complement of im(B) with respect to the standard basis 
-    Matrix<T, Dynamic, Dynamic> imB_complement = ::complement<T>(imB); 
+    Matrix<T, Dynamic, Dynamic> imB_complement = ::complement<T>(imB);
 
     return imB_complement; 
 }
@@ -1384,8 +1388,8 @@ Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dyn
                                           const Ref<const Matrix<T, Dynamic, Dynamic> >& B)
 {
     // Get bases for the kernel of A and the image of B
-    Matrix<T, Dynamic, Dynamic> kerA = ::kernel<T>(A).transpose(); 
-    Matrix<T, Dynamic, Dynamic> imB = ::columnSpace<T>(B).transpose();
+    Matrix<T, Dynamic, Dynamic> kerA = ::kernel<T>(A);
+    Matrix<T, Dynamic, Dynamic> imB = ::columnSpace<T>(B);
 
     // For each vector b in the column space of B, solve for kerA * x = b
     Matrix<T, Dynamic, Dynamic> imB_kernel_basis = ::solve<T>(kerA, imB); 
