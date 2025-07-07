@@ -313,6 +313,69 @@ TEST_CASE("Tests for solve function", "[solve()]")
     REQUIRE(solutions.cols() == 1); 
     REQUIRE(solutions(0) == -15); 
     REQUIRE(solutions(1) == 8); 
-    REQUIRE(solutions(2) == 2);  
+    REQUIRE(solutions(2) == 2);
+
+    // Example taken from:
+    // https://math.libretexts.org/Bookshelves/Linear_Algebra/
+    // Fundamentals_of_Matrix_Algebra_(Hartman)/02%3A_Matrix_Arithmetic/
+    // 2.05%3A_Solving_Matrix_Equations_AXB
+    A.resize(2, 2); 
+    B.resize(2, 3); 
+    A << 1, -1,
+         5,  3; 
+    B << -8, -13,  1,
+         32, -17, 21; 
+    solutions = ::solve<Rational>(A, B); 
+    REQUIRE(solutions.rows() == 2); 
+    REQUIRE(solutions.cols() == 3); 
+    REQUIRE(solutions(0, 0) == 1); 
+    REQUIRE(solutions(1, 0) == 9); 
+    REQUIRE(solutions(0, 1) == -7); 
+    REQUIRE(solutions(1, 1) == 6); 
+    REQUIRE(solutions(0, 2) == 3); 
+    REQUIRE(solutions(1, 2) == 2);
+
+    // Another example taken from:
+    // https://math.libretexts.org/Bookshelves/Linear_Algebra/
+    // Fundamentals_of_Matrix_Algebra_(Hartman)/02%3A_Matrix_Arithmetic/
+    // 2.05%3A_Solving_Matrix_Equations_AXB
+    A.resize(3, 3); 
+    B.resize(3, 2); 
+    A << 1,  0,  2,
+         0, -1, -2,
+         2, -1,  0; 
+    B << -1,  2,
+          2, -6,
+          2, -4;
+    solutions = ::solve<Rational>(A, B);
+    REQUIRE(solutions.rows() == 3); 
+    REQUIRE(solutions.cols() == 2);
+    REQUIRE(solutions(0, 0) == 1); 
+    REQUIRE(solutions(1, 0) == 0);
+    REQUIRE(solutions(2, 0) == -1); 
+    REQUIRE(solutions(0, 1) == 0); 
+    REQUIRE(solutions(1, 1) == 4); 
+    REQUIRE(solutions(2, 1) == 1);
+
+    // Another example taken from:
+    // https://math.libretexts.org/Bookshelves/Linear_Algebra/
+    // Fundamentals_of_Matrix_Algebra_(Hartman)/02%3A_Matrix_Arithmetic/
+    // 2.05%3A_Solving_Matrix_Equations_AXB
+    A.resize(2, 2); 
+    B.resize(2, 3); 
+    A << 1, 2,
+         3, 4;
+    B << 3, 1, 17,
+         7, 1, 39;
+    solutions = ::solve<Rational>(A, B);
+    REQUIRE(solutions.rows() == 2); 
+    REQUIRE(solutions.cols() == 3);
+    REQUIRE(solutions(0, 0) == 1); 
+    REQUIRE(solutions(1, 0) == 1);
+    REQUIRE(solutions(0, 1) == -1); 
+    REQUIRE(solutions(1, 1) == 1); 
+    REQUIRE(solutions(0, 2) == 5); 
+    REQUIRE(solutions(1, 2) == 6);
+
 }
 
