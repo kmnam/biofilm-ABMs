@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/1/2025
+ *     7/6/2025
  */
 
 #ifndef BIOFILM_UTILS_3D_HPP
@@ -1322,6 +1322,26 @@ Matrix<T, Dynamic, Dynamic> complement(const Ref<const Matrix<T, Dynamic, Dynami
 }
 
 /**
+ * Get a basis for the quotient space, T^d / im(B), where T is the underlying
+ * field and d is the dimension (number of rows in B), using Gaussian
+ * elimination. 
+ *
+ * We assume that the underlying field is the rationals or a field of finite
+ * characteristic.
+ */
+template <typename T>
+Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dynamic> >& B)
+{
+    // Get a basis for the image of B
+    Matrix<T, Dynamic, Dynamic> imB = ::columnSpace<T>(B).transpose();
+    
+    // Get the complement of im(B) with respect to the standard basis 
+    Matrix<T, Dynamic, Dynamic> imB_complement = ::complement<T>(imB); 
+
+    return imB_complement; 
+}
+
+/**
  * Get a basis for the quotient space, ker(A) / im(B), given that im(B) is 
  * a subspace of ker(A), using Gaussian elimination. 
  *
@@ -1337,8 +1357,6 @@ Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dyn
     Matrix<T, Dynamic, Dynamic> imB = ::columnSpace<T>(B).transpose();
 
     // For each vector b in the column space of B, solve for kerA * x = b
-    //const int dim_kerA = kerA.cols(); 
-    //const int dim_imB = imB.cols(); 
     Matrix<T, Dynamic, Dynamic> imB_kernel_basis = ::solve<T>(kerA, imB); 
 
     // Get the complement of im(B) with respect to the kernel basis 
