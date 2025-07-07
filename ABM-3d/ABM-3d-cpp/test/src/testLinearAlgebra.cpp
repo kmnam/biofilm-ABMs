@@ -204,10 +204,10 @@ TEST_CASE("Tests for kernel function", "[kernel()]")
     A <<  2, 3, 5, 
          -4, 2, 3;
     Matrix<Rational, Dynamic, Dynamic> kerA = ::kernel<Rational>(A);
-    REQUIRE(kerA.rows() == 1);     // #rows = dim(ker A)
-    REQUIRE(kerA.cols() == 3); 
-    for (int i = 0; i < kerA.rows(); ++i)
-        REQUIRE(((A * kerA.row(i).transpose()).array() == 0).all());
+    REQUIRE(kerA.cols() == 1);     // #cols = dim(ker A)
+    REQUIRE(kerA.rows() == 3); 
+    for (int i = 0; i < kerA.cols(); ++i)
+        REQUIRE(((A * kerA.col(i)).array() == 0).all());
 
     // Another example taken from Wikipedia 
     A.resize(4, 6);
@@ -216,10 +216,10 @@ TEST_CASE("Tests for kernel function", "[kernel()]")
          0, 0,  0, 1,  7, -9,
          0, 0,  0, 0,  0,  0; 
     kerA = ::kernel<Rational>(A);
-    REQUIRE(kerA.rows() == 3);     // #rows = dim(ker A)
-    REQUIRE(kerA.cols() == 6); 
-    for (int i = 0; i < kerA.rows(); ++i)
-        REQUIRE(((A * kerA.row(i).transpose()).array() == 0).all());
+    REQUIRE(kerA.cols() == 3);     // #cols = dim(ker A)
+    REQUIRE(kerA.rows() == 6); 
+    for (int i = 0; i < kerA.cols(); ++i)
+        REQUIRE(((A * kerA.col(i)).array() == 0).all());
 
     // Convert the second example into Z/2Z
     Matrix<Fp<2>, Dynamic, Dynamic> B(4, 6);
@@ -228,8 +228,8 @@ TEST_CASE("Tests for kernel function", "[kernel()]")
          0, 0, 0, 1, 1, 1,
          0, 0, 0, 0, 0, 0;
     Matrix<Fp<2>, Dynamic, Dynamic> kerB = ::kernel<Fp<2> >(B);
-    for (int i = 0; i < kerB.rows(); ++i)
-        REQUIRE(((B * kerB.row(i).transpose()).array() == 0).all());
+    for (int i = 0; i < kerB.cols(); ++i)
+        REQUIRE(((B * kerB.col(i)).array() == 0).all());
 
     // Another example taken from Wikipedia:
     // https://en.wikipedia.org/wiki/Row_and_column_spaces
@@ -239,9 +239,9 @@ TEST_CASE("Tests for kernel function", "[kernel()]")
           1,  6, 2, 2, 2,
           3,  6, 2, 5, 1; 
     kerA = ::kernel<Rational>(A); 
-    REQUIRE(kerA.rows() == 1);     // #rows = dim(ker A)
-    REQUIRE(kerA.cols() == 5);
-    REQUIRE(((A * kerA.row(0).transpose()).array() == 0).all());
+    REQUIRE(kerA.cols() == 1);     // #cols = dim(ker A)
+    REQUIRE(kerA.rows() == 5);
+    REQUIRE(((A * kerA.col(0)).array() == 0).all());
     Rational c = 6 / kerA(0, 0); 
     REQUIRE(kerA(0) * c == 6); 
     REQUIRE(kerA(1) * c == -1); 
@@ -258,10 +258,11 @@ TEST_CASE("Tests for column space function", "[columnSpace()]")
     A <<  2,  4, 1, 3, 2,
          -1, -2, 1, 0, 5,
           1,  6, 2, 2, 2,
-          3,  6, 2, 5, 1; 
-    Matrix<Rational, Dynamic, Dynamic> imA = ::columnSpace<Rational>(A.transpose());
-    REQUIRE(imA.rows() == 4);    // #rows = dim(im A)
-    REQUIRE(imA.cols() == 5); 
+          3,  6, 2, 5, 1;
+    A = A.transpose();  
+    Matrix<Rational, Dynamic, Dynamic> imA = ::columnSpace<Rational>(A); 
+    REQUIRE(imA.cols() == 4);    // #cols = dim(im A)
+    REQUIRE(imA.rows() == 5); 
     REQUIRE(imA == A); 
 
     // Another example taken from Wikipedia 
@@ -270,9 +271,9 @@ TEST_CASE("Tests for column space function", "[columnSpace()]")
          0, 1,
          2, 0;
     imA = ::columnSpace<Rational>(A); 
-    REQUIRE(imA.rows() == 2);    // #rows = dim(im A)
-    REQUIRE(imA.cols() == 3); 
-    REQUIRE(imA == A.transpose());
+    REQUIRE(imA.cols() == 2);    // #cols = dim(im A)
+    REQUIRE(imA.rows() == 3); 
+    REQUIRE(imA == A); 
 
     // Another example taken from Wikipedia
     A.resize(4, 4); 
@@ -281,22 +282,23 @@ TEST_CASE("Tests for column space function", "[columnSpace()]")
          1, 5, 3, 1,
          1, 2, 0, 8; 
     imA = ::columnSpace<Rational>(A); 
-    REQUIRE(imA.rows() == 3);    // #rows = dim(im A)
-    REQUIRE(imA.cols() == 4); 
-    REQUIRE(imA.row(0) == A.col(0)); 
-    REQUIRE(imA.row(1) == A.col(1)); 
-    REQUIRE(imA.row(2) == A.col(3));
+    REQUIRE(imA.cols() == 3);    // #cols = dim(im A)
+    REQUIRE(imA.rows() == 4); 
+    REQUIRE(imA.col(0) == A.col(0)); 
+    REQUIRE(imA.col(1) == A.col(1)); 
+    REQUIRE(imA.col(2) == A.col(3));
 
     // Another example taken from Wikipedia
     A.resize(3, 3); 
     A << 1, 3, 2, 
          2, 7, 4, 
-         1, 5, 2; 
-    imA = ::columnSpace<Rational>(A.transpose());
-    REQUIRE(imA.rows() == 2);     // #rows = dim(im A)
-    REQUIRE(imA.cols() == 3); 
-    REQUIRE(imA.row(0) == A.row(0)); 
-    REQUIRE(imA.row(1) == A.row(1));  
+         1, 5, 2;
+    A = A.transpose();  
+    imA = ::columnSpace<Rational>(A); 
+    REQUIRE(imA.cols() == 2);     // #cols = dim(im A)
+    REQUIRE(imA.rows() == 3); 
+    REQUIRE(imA.col(0) == A.col(0)); 
+    REQUIRE(imA.col(1) == A.col(1));  
 }
 
 TEST_CASE("Tests for solve function", "[solve()]")
