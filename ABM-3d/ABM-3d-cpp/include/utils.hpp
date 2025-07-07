@@ -1035,12 +1035,46 @@ Matrix<int, Dynamic, 1> getPivots(const Ref<const Matrix<T, Dynamic, Dynamic> >&
     Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(nrows);
     for (int i = 0; i < nrows; ++i)
     {
+        // Identify the first nonzero entry in each row
         for (int j = 0; j < ncols; ++j)
         {
-            // Identify the first nonzero entry in each row
             if (A_reduced(i, j) != 0)
             {
                 pivots(i) = j;
+                break; 
+            }
+        }
+    }
+
+    return pivots; 
+}
+
+/**
+ * Given a matrix in row echelon form, return the pivot columns in each row.
+ *
+ * This function returns an array of coordinates, pivots(i) = j, where j is
+ * the row containing the pivot in the i-th column. 
+ *
+ * If the i-th column does not have a nonzero entry (and therefore has no
+ * pivot), then pivots(i) == -1. 
+ */
+template <typename T>
+Matrix<int, Dynamic, 1> getPivotCols(const Ref<const Matrix<T, Dynamic, Dynamic> >& A_reduced)
+{
+    const int nrows = A_reduced.rows();
+    const int ncols = A_reduced.cols();  
+    Matrix<int, Dynamic, 1> pivots = -Matrix<int, Dynamic, 1>::Ones(ncols);
+    for (int i = 0; i < ncols; ++i)
+    {
+        // Identify the final nonzero entry in each column 
+        for (int j = nrows - 1; j >= 0; --j)
+        {
+            if (A_reduced(j, i) != 0)
+            {
+                // If the first nonzero entry is in a *lower* row than any 
+                // preceding pivot entry, then this counts as a pivot
+                if (i == 0 || (pivots.head(i).array() < j).all())
+                    pivots(i) = j; 
                 break; 
             }
         }
@@ -1207,6 +1241,9 @@ Matrix<T, Dynamic, Dynamic> kernel(const Ref<const Matrix<T, Dynamic, Dynamic> >
  *
  * We assume that the underlying field is the rationals or a field of finite
  * characteristic.
+ *
+ * Each *column* is a solution to the linear system A * x = b, where b is
+ * a *column* of B. 
  */
 template <typename T>
 Matrix<T, Dynamic, Dynamic> solve(const Ref<const Matrix<T, Dynamic, Dynamic> >& A,
@@ -1277,6 +1314,9 @@ Matrix<T, Dynamic, Dynamic> solve(const Ref<const Matrix<T, Dynamic, Dynamic> >&
  *
  * We assume that the underlying field is the rationals or a field of finite
  * characteristic.
+ *
+ * Each *column* of the given matrix is assumed to be a basis vector, and 
+ * each *column* of the output matrix is a basis vector for the complement.
  */
 template <typename T>
 Matrix<T, Dynamic, Dynamic> complement(const Ref<const Matrix<T, Dynamic, Dynamic> >& basis)
@@ -1288,35 +1328,26 @@ Matrix<T, Dynamic, Dynamic> complement(const Ref<const Matrix<T, Dynamic, Dynami
     Matrix<T, Dynamic, Dynamic> system(dim, nvecs + dim); 
     system(Eigen::all, Eigen::seq(0, nvecs - 1)) = basis; 
     system(Eigen::all, Eigen::seq(nvecs, nvecs + dim - 1))
-        = Matrix<T, Dynamic, Dynamic>::Identity(dim, dim);  
+        = Matrix<T, Dynamic, Dynamic>::Identity(dim, dim); 
 
     // Get row echelon form 
     Matrix<T, Dynamic, Dynamic> system_reduced = rowEchelonForm<T>(system);
 
-    // Which rows are zero?
-    std::vector<int> complement_coords; 
-    for (int i = 0; i < dim; ++i)
-    {
-        bool is_zero = (system_reduced.row(i).head(nvecs).array() == 0).all();
-        if (is_zero)    // If the i-th row is zero, check for inconsistencies 
-        {
-            for (int j = 0; j < dim; ++j)
-            {
-                if (system_reduced(i, nvecs + j) != 0)
-                {
-                    // There is an inconsistency with respect to the j-th 
-                    // basis vector, so this vector lies in the complement 
-                    complement_coords.push_back(j); 
-                }
-            }
-        }
-    }
+    // Get the pivot columns 
+    Matrix<int, Dynamic, 1> pivots = getPivotCols<T>(system_reduced); 
 
-    // Return the standard basis vectors within the complement 
+    // Return the columns corresponding to the pivots among the last dim
+    // columns
+    std::vector<int> pivot_cols; 
+    for (int i = nvecs; i < nvecs + dim; ++i)
+    {
+        if (pivots(i) != -1)
+            pivot_cols.push_back(i); 
+    }
     Matrix<T, Dynamic, Dynamic> complement
-        = Matrix<T, Dynamic, Dynamic>::Zero(dim, complement_coords.size()); 
-    for (int i = 0; i < complement_coords.size(); ++i)
-        complement(complement_coords[i], i) = 1; 
+        = Matrix<T, Dynamic, Dynamic>::Zero(dim, pivot_cols.size());
+    for (int i = 0; i < pivot_cols.size(); ++i)
+        complement.col(i) = system_reduced.col(pivot_cols[i]); 
 
     return complement;  
 }
