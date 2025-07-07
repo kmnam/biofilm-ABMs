@@ -376,6 +376,49 @@ TEST_CASE("Tests for solve function", "[solve()]")
     REQUIRE(solutions(1, 1) == 1); 
     REQUIRE(solutions(0, 2) == 5); 
     REQUIRE(solutions(1, 2) == 6);
+}
 
+TEST_CASE("Tests for complement functions", "[complement()]")
+{
+    // Example taken from Wikipedia:
+    // https://en.wikipedia.org/wiki/Quotient_space_(linear_algebra)
+    Matrix<Rational, Dynamic, Dynamic> B(2, 1);
+    B << 1, 2;  
+    Matrix<Rational, Dynamic, Dynamic> complement = ::complement<Rational>(B);
+    REQUIRE(complement.cols() == 1);
+    REQUIRE((
+        complement(0) == 0 || complement(1) == 0 ||
+        complement(0) / complement(1) != Rational(1, 2) 
+    )); 
+
+    // Example taken from:
+    // https://math.stackexchange.com/questions/2554408/
+    // how-to-find-the-basis-of-a-quotient-space
+    B.resize(4, 2); 
+    B <<  2,  0,
+         -1,  0,
+          0,  3,
+          0, -1;
+    complement = ::complement<Rational>(B); 
+    REQUIRE(complement.cols() == 2);
+    for (int i = 0; i < complement.cols(); ++i)
+    {
+        Matrix<Rational, Dynamic, Dynamic> Bv(B.rows(), B.cols() + 1); 
+        Bv(Eigen::all, Eigen::seq(0, B.cols() - 1)) = B; 
+        Bv.col(B.cols()) = complement.col(i); 
+        Matrix<Rational, Dynamic, Dynamic> Bv_reduced = ::rowEchelonForm<Rational>(Bv, true);
+
+        // Look for an inconsistency in the row echelon form 
+        bool found_inconsistency = false;
+        for (int j = 0; j < B.rows(); ++j)
+        {
+            if ((Bv_reduced.row(j).head(B.cols()).array() == 0).all() && Bv_reduced(j, B.cols()) != 0)
+            {
+                found_inconsistency = true; 
+                break;
+            }
+        }
+        REQUIRE(found_inconsistency); 
+    } 
 }
 
