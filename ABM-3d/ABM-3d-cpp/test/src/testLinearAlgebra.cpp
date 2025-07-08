@@ -106,6 +106,26 @@ TEST_CASE("Tests for Fp class with p == 2", "[Fp]")
     REQUIRE(x * 4 == 0); 
     REQUIRE(5 * x == 1); 
     REQUIRE(x * 5 == 1);
+    REQUIRE_THROWS(1 / z);   // Division 
+    REQUIRE(z / 1 == 0); 
+    REQUIRE_THROWS(2 / z); 
+    REQUIRE_THROWS(z / 2); 
+    REQUIRE_THROWS(3 / z); 
+    REQUIRE(z / 3 == 0); 
+    REQUIRE_THROWS(4 / z); 
+    REQUIRE_THROWS(z / 4); 
+    REQUIRE_THROWS(5 / z); 
+    REQUIRE(z / 5 == 0); 
+    REQUIRE(1 / x == 1); 
+    REQUIRE(x / 1 == 1); 
+    REQUIRE(2 / x == 0); 
+    REQUIRE_THROWS(x / 2);
+    REQUIRE(3 / x == 1); 
+    REQUIRE(x / 3 == 1); 
+    REQUIRE(4 / x == 0); 
+    REQUIRE_THROWS(x / 4);
+    REQUIRE(5 / x == 1); 
+    REQUIRE(x / 5 == 1);
 
     // Test modular equivalence
     REQUIRE(z != 1);  
