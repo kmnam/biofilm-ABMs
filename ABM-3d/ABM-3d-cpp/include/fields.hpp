@@ -308,18 +308,21 @@ class Fp
 
         Fp<p>& operator/=(const int& y)
         {
-            // Check that y is nonzero 
-            if (y == 0)
-                throw std::runtime_error("Cannot divide by zero");
-
             // If p == 0, then simply return x / y
             if (p == 0)
             {
+                // Check that y is nonzero 
+                if (y == 0)
+                    throw std::runtime_error("Cannot divide by zero");
                 this->value /= y;
             }
             else    // Otherwise, multiply x by the multiplicative inverse of y
             {
-                int t = getMultiplicativeInverse<p>(mod<int, p>(y)); 
+                // Check that y falls within the range 0, ..., p - 1 and is nonzero
+                int y_ = ((y < 0 || y >= p) ? mod<int, p>(y) : y);
+                if (y_ == 0)
+                    throw std::runtime_error("Cannot divide by zero"); 
+                int t = getMultiplicativeInverse<p>(y_); 
                 this->value *= t;
                 this->reset(); 
             }
@@ -328,24 +331,26 @@ class Fp
 
         Fp<p>& operator/=(const Rational& y)
         {
-            if (p != 0 && boost::multiprecision::denominator(y) != 1)
-                throw std::runtime_error(
-                    "Cannot divide with non-integer number in field of "
-                    "finite characteristic"
-                ); 
-            
-            // Check that y is nonzero
-            if (y == 0)
-                throw std::runtime_error("Cannot divide by zero");
-
             // If p == 0, then simply return x / y
             if (p == 0)
             {
+                // Check that y is nonzero
+                if (y == 0)
+                    throw std::runtime_error("Cannot divide by zero");
                 this->value /= y;
             }
             else    // Otherwise, multiply x by the multiplicative inverse of y
             {
-                int t = getMultiplicativeInverse<p>(mod<Rational, p>(y)); 
+                // Check that y is an integer and falls within the range 1, ..., p - 1
+                if (boost::multiprecision::denominator(y) != 1)
+                    throw std::runtime_error(
+                        "Cannot divide with non-integer number in field of "
+                        "finite characteristic"
+                    ); 
+                int y_ = ((y < 0 || y >= p) ? mod<Rational, p>(y) : static_cast<int>(y));
+                if (y_ == 0)
+                    throw std::runtime_error("Cannot divide by zero"); 
+                int t = getMultiplicativeInverse<p>(y_); 
                 this->value *= t;
                 this->reset(); 
             }
@@ -365,7 +370,7 @@ class Fp
             }
             else    // Otherwise, multiply x by the multiplicative inverse of y
             {
-                int t = getMultiplicativeInverse<p>(mod<Rational, p>(y.value)); 
+                int t = getMultiplicativeInverse<p>(static_cast<int>(y.value)); 
                 this->value *= t;
                 this->reset(); 
             }
