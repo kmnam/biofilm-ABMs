@@ -82,9 +82,9 @@ class Fp
         Fp(const int x)
         {
             if (p == 0)
-                this->value = static_cast<Rational>(x); 
+                this->value = Rational(x); 
             else 
-                this->value = static_cast<Rational>(mod<int, p>(x)); 
+                this->value = Rational(mod<int, p>(x)); 
         }
 
         Fp(const Rational x)
@@ -92,7 +92,7 @@ class Fp
             if (p == 0)
                 this->value = x; 
             else if (boost::multiprecision::denominator(x) == 1)
-                this->value = mod<Rational, p>(x); 
+                this->value = Rational(mod<Rational, p>(x)); 
             else    // x is not an integer and p is nonzero 
                 throw std::runtime_error(
                     "Cannot assign non-integer value in field of finite "
