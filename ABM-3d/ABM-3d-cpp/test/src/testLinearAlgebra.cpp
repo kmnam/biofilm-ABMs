@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/6/2025
+ *     7/8/2025
  */
 #include <iostream>
 #include <functional>
@@ -44,6 +44,68 @@ TEST_CASE("Tests for Fp class with p == 2", "[Fp]")
     REQUIRE(x - x == 0);
     REQUIRE(x * x == 1); 
     REQUIRE(x / x == 1);
+
+    // Test all binary arithmetic with integers
+    REQUIRE(1 + z == 1);     // Addition
+    REQUIRE(z + 1 == 1); 
+    REQUIRE(2 + z == 0); 
+    REQUIRE(z + 2 == 0);
+    REQUIRE(3 + z == 1); 
+    REQUIRE(z + 3 == 1); 
+    REQUIRE(4 + z == 0); 
+    REQUIRE(z + 4 == 0); 
+    REQUIRE(5 + z == 1); 
+    REQUIRE(z + 5 == 1); 
+    REQUIRE(1 + x == 0); 
+    REQUIRE(x + 1 == 0); 
+    REQUIRE(2 + x == 1); 
+    REQUIRE(x + 2 == 1);
+    REQUIRE(3 + x == 0); 
+    REQUIRE(x + 3 == 0); 
+    REQUIRE(4 + x == 1); 
+    REQUIRE(x + 4 == 1); 
+    REQUIRE(5 + x == 0); 
+    REQUIRE(x + 5 == 0);
+    REQUIRE(1 - z == 1);     // Subtraction
+    REQUIRE(z - 1 == 1); 
+    REQUIRE(2 - z == 0); 
+    REQUIRE(z - 2 == 0);
+    REQUIRE(3 - z == 1); 
+    REQUIRE(z - 3 == 1); 
+    REQUIRE(4 - z == 0); 
+    REQUIRE(z - 4 == 0); 
+    REQUIRE(5 - z == 1); 
+    REQUIRE(z - 5 == 1); 
+    REQUIRE(1 - x == 0); 
+    REQUIRE(x - 1 == 0); 
+    REQUIRE(2 - x == 1); 
+    REQUIRE(x - 2 == 1);
+    REQUIRE(3 - x == 0); 
+    REQUIRE(x - 3 == 0); 
+    REQUIRE(4 - x == 1); 
+    REQUIRE(x - 4 == 1); 
+    REQUIRE(5 - x == 0); 
+    REQUIRE(x - 5 == 0);
+    REQUIRE(1 * z == 0);     // Multiplication 
+    REQUIRE(z * 1 == 0); 
+    REQUIRE(2 * z == 0); 
+    REQUIRE(z * 2 == 0);
+    REQUIRE(3 * z == 0); 
+    REQUIRE(z * 3 == 0); 
+    REQUIRE(4 * z == 0); 
+    REQUIRE(z * 4 == 0); 
+    REQUIRE(5 * z == 0); 
+    REQUIRE(z * 5 == 0); 
+    REQUIRE(1 * x == 1); 
+    REQUIRE(x * 1 == 1); 
+    REQUIRE(2 * x == 0); 
+    REQUIRE(x * 2 == 0);
+    REQUIRE(3 * x == 1); 
+    REQUIRE(x * 3 == 1); 
+    REQUIRE(4 * x == 0); 
+    REQUIRE(x * 4 == 0); 
+    REQUIRE(5 * x == 1); 
+    REQUIRE(x * 5 == 1);
 
     // Test modular equivalence
     REQUIRE(z != 1);  
