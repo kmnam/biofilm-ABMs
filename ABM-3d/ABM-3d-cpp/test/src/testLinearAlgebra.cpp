@@ -5,12 +5,13 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/8/2025
+ *     7/9/2025
  */
 #include <iostream>
 #include <functional>
 #include <Eigen/Dense>
 #include <boost/multiprecision/gmp.hpp>
+#include <boost/random.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "../../include/utils.hpp"
@@ -19,6 +20,94 @@
 using namespace Eigen;
 
 typedef boost::multiprecision::mpq_rational Rational;
+
+/**
+ * Return true if there is no solution to the linear system A * x = b, by 
+ * checking whether there is an inconsistency in the row echelon form. 
+ *
+ * @param A Input matrix. 
+ * @param b Input vector. 
+ * @returns True if there is no solution to the linear system A * x = b. 
+ */
+template <typename T>
+bool containsInconsistency(const Ref<const Matrix<T, Dynamic, Dynamic> >& A,
+                           const Ref<const Matrix<T, Dynamic, 1> >& b)
+{
+    Matrix<T, Dynamic, Dynamic> system(A.rows(), A.cols() + 1); 
+    system(Eigen::all, Eigen::seq(0, A.cols() - 1)) = A; 
+    system.col(A.cols()) = b; 
+    system = ::rowEchelonForm<T>(system); 
+    bool found_inconsistency = false; 
+    for (int i = 0; i < A.rows(); ++i)
+    {
+        if ((system.row(i).head(A.cols()).array() == 0).all() && system(i, A.cols()) != 0)
+        {
+            found_inconsistency = true;
+            break; 
+        }
+    }
+
+    return found_inconsistency; 
+}
+
+/**
+ * Generate a random rational matrix with a given shape and rank.
+ *
+ * @param nrows Number of rows. 
+ * @param ncols Number of columns. 
+ * @param rank Desired rank. 
+ * @param minval Minimum value. 
+ * @param maxval Maximum value.
+ * @param zero_prob Probability of sampling a zero entry in one of the two
+ *                  matrices being multiplied (see below). 
+ * @param rng Random number generator. 
+ * @returns Sampled matrix.  
+ */
+Matrix<Rational, Dynamic, Dynamic> sampleByRank(const int nrows, const int ncols,
+                                                const int rank,
+                                                const double minval, 
+                                                const double maxval,
+                                                const double zero_prob,
+                                                boost::random::mt19937& rng)
+{
+    Matrix<Rational, Dynamic, Dynamic> A(nrows, rank); 
+    Matrix<Rational, Dynamic, Dynamic> B(rank, ncols);
+    boost::random::uniform_01<> dist;  
+
+    // Make A a full-rank matrix
+    for (int i = 0; i < nrows; ++i)
+    {
+        for (int j = 0; j < rank; ++j)
+        {
+            double value = minval + (maxval - minval) * dist(rng); 
+            A(i, j) = Rational(static_cast<int>(std::round(value * 10)), 10); 
+        }
+    }
+
+    // Generate another matrix B with greater rank than A, possibly with
+    // some zero entries
+    //
+    // To ensure that the rank is at least rank(A), we restrict zero sampling
+    // to a subset of the columns 
+    for (int i = 0; i < rank; ++i)
+    {
+        for (int j = 0; j < ncols; ++j)
+        {
+            double r = (j >= rank ? dist(rng) : 1); 
+            if (r < zero_prob)
+            {
+                B(i, j) = 0; 
+            }
+            else 
+            {
+                double value = minval + (maxval - minval) * dist(rng); 
+                B(i, j) = Rational(static_cast<int>(std::round(value * 10)), 10); 
+            }
+        }
+    }
+
+    return A * B; 
+}
 
 TEST_CASE("Tests for Fp class with p == 2", "[Fp]")
 {
@@ -329,7 +418,20 @@ TEST_CASE("Tests for kernel function", "[kernel()]")
     REQUIRE(kerA(1) * c == -1); 
     REQUIRE(kerA(2) * c == 4); 
     REQUIRE(kerA(3) * c == -4); 
-    REQUIRE(kerA(4) * c == 0); 
+    REQUIRE(kerA(4) * c == 0);
+
+    // Generate a 20x30 matrix of rank 13
+    boost::random::mt19937 rng(1234567890); 
+    A = sampleByRank(20, 30, 13, -5, 5, 0.5, rng);
+    kerA = ::kernel<Rational>(A);
+
+    // Check that the nullity is correctly calculated (30 - 13 = 17) 
+    REQUIRE(kerA.cols() == 17);    // #cols = dim(ker A)
+    REQUIRE(kerA.rows() == 30);
+
+    // Check that each basis vector indeed lies in the kernel of A
+    for (int i = 0; i < kerA.cols(); ++i)
+        REQUIRE(((A * kerA.col(i)).array() == 0).all()); 
 }
 
 TEST_CASE("Tests for column space function", "[columnSpace()]")
@@ -380,7 +482,32 @@ TEST_CASE("Tests for column space function", "[columnSpace()]")
     REQUIRE(imA.cols() == 2);     // #cols = dim(im A)
     REQUIRE(imA.rows() == 3); 
     REQUIRE(imA.col(0) == A.col(0)); 
-    REQUIRE(imA.col(1) == A.col(1));  
+    REQUIRE(imA.col(1) == A.col(1));
+
+    // Generate a 20x30 matrix of rank 13
+    boost::random::mt19937 rng(1234567890); 
+    A = sampleByRank(20, 30, 13, -5, 5, 0.5, rng);
+    imA = ::columnSpace<Rational>(A);
+
+    // Test that the rank is correct 
+    REQUIRE(imA.cols() == 13);    // #cols = dim(im A)
+    REQUIRE(imA.rows() == 20);
+
+    // Test that each column in the column space is linearly independent 
+    // of the others 
+    for (int i = 0; i < imA.cols(); ++i)
+    {
+        Matrix<Rational, Dynamic, Dynamic> B(imA.rows(), imA.cols() - 1);
+        B(Eigen::all, Eigen::seq(0, i - 1)) = imA(Eigen::all, Eigen::seq(0, i - 1));
+        B(Eigen::all, Eigen::seq(i, imA.cols() - 2))
+            = imA(Eigen::all, Eigen::seq(i + 1, imA.cols() - 1));
+        REQUIRE(containsInconsistency<Rational>(B, imA.col(i)));  
+    }
+
+    // Test that each column in A that does not lie within the basis is 
+    // spanned by the basis vectors
+    for (int i = 0; i < A.cols(); ++i)
+        REQUIRE_NOTHROW(::solve<Rational>(imA, A.col(i))); 
 }
 
 TEST_CASE("Tests for solve function", "[solve()]")
