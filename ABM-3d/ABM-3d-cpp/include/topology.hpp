@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/29/2025
+ *     7/10/2025
  */
 
 #ifndef SIMPLICIAL_COMPLEXES_3D_HPP
@@ -1176,11 +1176,13 @@ class SimplicialComplex3D
         /**
          * Returns the combinatorial Laplacian.
          *
+         * This function assumes that the underlying field is the rationals
+         * (characteristic zero). 
+         *
          * @param dim Input dimension.
          * @returns Combinatorial Laplacian matrix.  
          */
-        template <int p = 0>
-        Matrix<Fp<p>, Dynamic, Dynamic> getCombinatorialLaplacian(const int dim) const 
+        Matrix<Fp<0>, Dynamic, Dynamic> getCombinatorialLaplacian(const int dim) const 
         {
             // Get the boundary homomorphisms 
             //
@@ -1188,7 +1190,7 @@ class SimplicialComplex3D
             //
             // Similarly, if dim == 0, then set del2 = 0
             const int maxdim = this->dimension();
-            Matrix<Fp<p>, Dynamic, Dynamic> lap;  
+            Matrix<Fp<0>, Dynamic, Dynamic> lap;  
             if (dim < 0 || dim > this->dimension())
             {
                 throw std::runtime_error(
@@ -1198,22 +1200,22 @@ class SimplicialComplex3D
             else if (dim == 0 && maxdim == 0)
             {
                 const int n = this->points.rows(); 
-                return Matrix<Fp<p>, Dynamic, Dynamic>::Zero(n, n); 
+                return Matrix<Fp<0>, Dynamic, Dynamic>::Zero(n, n); 
             }
             else if (dim == 0)        // maxdim != 0
             {
-                Matrix<Fp<p>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<p>(1);
+                Matrix<Fp<0>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<0>(1);
                 lap = del1 * del1.transpose(); 
             }
             else if (dim == maxdim)   // dim, maxdim != 0
             {
-                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim);
+                Matrix<Fp<0>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<0>(dim);
                 lap = del2.transpose() * del2; 
             }
             else     // Otherwise, get both boundary homomorphisms  
             { 
-                Matrix<Fp<p>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<p>(dim + 1); 
-                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim); 
+                Matrix<Fp<0>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<0>(dim + 1); 
+                Matrix<Fp<0>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<0>(dim); 
 
                 // Note that del1 has shape (n2, n1) and del2 has shape (n3, n2),
                 // where n1 = # (dim + 1)-simplices, n2 = # (dim)-simplices, 
@@ -1227,12 +1229,78 @@ class SimplicialComplex3D
         }
 
         /**
-         * Get the vector of Betti numbers for the simplicial complex. 
+         * Get a basis of cycles for the homology group over rational
+         * coefficients of the given dimension. 
+         *
+         * @param dim Input dimension.
+         * @returns Basis of cycles for the homology group. 
+         */
+        Matrix<Fp<0>, Dynamic, Dynamic> getZeroCharHomology(const int dim) const 
+        {
+            return ::kernel<Fp<0> >(this->getCombinatorialLaplacian(dim)); 
+        }
+
+        /**
+         * Get a basis of cycles for the homology group over a field of 
+         * characteristic p > 0 of the given dimension.
+         *
+         * This function should also work with p == 0, but is less 
+         * efficient that computing the kernel of the combinatorial
+         * Laplacian. 
+         *
+         * @param dim Input dimension.
+         * @returns Basis of cycles for the homology group. 
+         */
+        template <int p = 2>
+        Matrix<Fp<p>, Dynamic, Dynamic> getPrimeCharHomology(const int dim) const 
+        {
+            Matrix<Fp<p>, Dynamic, Dynamic> cycles; 
+            if (dim > 0 && dim < this->dimension())
+            {
+                // Get the boundary homomorphisms and the corresponding
+                // quotient space basis 
+                Matrix<Fp<p>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<p>(dim + 1);
+                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim);
+                cycles = ::quotientSpace<Fp<p> >(del2, del1); 
+            }
+            else if (dim == 0)
+            {
+                // In this case, the kernel of the 0-th boundary homomorphism
+                // is all of F^d, where F is the field and d is the number 
+                // of 0-simplices
+                if (this->dimension() == 0)
+                {
+                    // In this case, the image of the 1st boundary homomorphism
+                    // is zero, so the quotient is all of F^d
+                    int n = this->points.rows(); 
+                    cycles = Matrix<Fp<p>, Dynamic, Dynamic>::Identity(n, n); 
+                }
+                else 
+                {
+                    // In this case, the image of the 1st boundary homomorphism 
+                    // may be nontrivial, and the quotient is F^d modulo the image
+                    Matrix<Fp<p>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<p>(dim + 1);
+                    cycles = ::quotientSpace<Fp<p> >(del1);
+                } 
+            }
+            else    // dim != 0 and dim == this->dimension() 
+            {
+                // In this case, the image of the (dim + 1)-th boundary 
+                // homomorphism is zero
+                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim); 
+                cycles = ::kernel<Fp<p> >(del2); 
+            }
+
+            return cycles; 
+        }
+
+        /**
+         * Get the vector of Betti numbers over rational coefficients for
+         * the simplicial complex. 
          *
          * @returns Betti numbers of the simplicial complex. 
          */
-        template <int p = 0>
-        Array<int, Dynamic, 1> getBettiNumbers() const
+        Array<int, Dynamic, 1> getZeroCharBettiNumbers() const 
         {
             Array<int, Dynamic, 1> betti = Array<int, Dynamic, 1>::Zero(4);
             const int maxdim = this->dimension(); 
@@ -1247,31 +1315,119 @@ class SimplicialComplex3D
             // If not, then compute each combinatorial Laplacian 
             else 
             {
-                // For each dimension ... 
+                // Calculate the dimension of each homology group
                 for (int i = 0; i <= maxdim; ++i)
                 {
-                    // ... calculate the combinatorial Laplacian (this should 
-                    // never raise an exception)  
-                    Matrix<Fp<p>, Dynamic, Dynamic> lap = this->getCombinatorialLaplacian<p>(i);
-
-                    // Get the dimension of the kernel
-                    Matrix<Fp<p>, Dynamic, Dynamic> ker = ::kernel<Fp<p> >(lap); 
-                    betti(i) = ker.rows();  
+                    Matrix<Fp<0>, Dynamic, Dynamic> cycles = this->getZeroCharHomology(i); 
+                    betti(i) = cycles.cols(); 
                 }
-
                 return betti; 
             }
         }
 
         /**
-         * Get a collection of representative cycles for the simplicial 
-         * complex.
+         * Get the vector of Betti numbers over a field of characteristic 
+         * p > 0 for the simplicial complex. 
+         *
+         * @returns Betti numbers of the simplicial complex. 
+         */
+        template <int p = 2>
+        Array<int, Dynamic, 1> getPrimeCharBettiNumbers() const 
+        {
+            Array<int, Dynamic, 1> betti = Array<int, Dynamic, 1>::Zero(4);
+            const int maxdim = this->dimension(); 
+
+            // If the complex dimension is zero, then simply return the 
+            // number of points as the 0-th Betti number
+            if (maxdim == 0)
+            {
+                betti(0) = this->points.rows(); 
+                return betti; 
+            }
+            // If not, then compute each combinatorial Laplacian 
+            else 
+            {
+                // Calculate the dimension of each homology group
+                for (int i = 0; i <= maxdim; ++i)
+                {
+                    Matrix<Fp<p>, Dynamic, Dynamic> cycles = this->getPrimeCharHomology<p>(i); 
+                    betti(i) = cycles.cols(); 
+                }
+                return betti; 
+            }
+        }
+
+        /**
+         * Return true if the two cycles are (1) indeed cycles, meaning 
+         * they lie in the kernel of the appropriate boundary homomorphism,
+         * and (2) are homologous. 
+         */
+        template <int p = 2>
+        bool areHomologous(const Ref<const Matrix<Fp<p>, Dynamic, 1> >& v1, 
+                           const Ref<const Matrix<Fp<p>, Dynamic, 1> >& v2, 
+                           const int dim)
+        {
+            // Check that the dimensions of the two vectors are correct 
+            if (dim < 0 || dim > this->dimension())
+                throw std::runtime_error(
+                    "Invalid input dimension for homology calculation"
+                ); 
+            else if (v1.size() != this->getNumSimplices(dim))
+                throw std::runtime_error(
+                    "Input vector does not represent chain of given dimension"
+                );
+            else if (v2.size() != this->getNumSimplices(dim))
+                throw std::runtime_error(
+                    "Input vector does not represent chain of given dimension"
+                );
+
+            // Are the two vectors in the kernel of the boundary homomorphism?
+            if (dim > 0)    // If dim == 0, then all vectors are in the kernel
+            {
+                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim); 
+                if (!((del2 * v1).array() == 0).all())
+                    return false; 
+                if (!((del2 * v2).array() == 0).all())
+                    return false;
+            } 
+
+            // If so, are the two vectors homologous?
+            if (dim < this->dimension)    // If dim is maximal, then all cycles are homologous
+            {
+                Matrix<Fp<p>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<p>(dim + 1);
+                Matrix<Fp<p>, Dynamic, Dynamic> colspace = ::columnSpace<Fp<p> >(del1); 
+                Matrix<Fp<p>, Dynamic, Dynamic> system(colspace.rows(), colspace.cols() + 2); 
+                system(Eigen::all, Eigen::seq(0, colspace.cols() - 1)) = colspace; 
+                system.col(colspace.cols()) = -v2;
+                system.col(colspace.cols() + 1) = v1; 
+                system = ::rowEchelonForm<Fp<p> >(system);
+
+                // If there is an inconsistency in the row echelon form, this
+                // means that v1 cannot be written as a linear combination of 
+                // the column space of \del and v2, which means that v1 and 
+                // v2 are non-homologous  
+                for (int i = 0; i < system.rows(); ++i)
+                {
+                    if ((system.row(i).head(colspace.cols()).array() == 0).all() &&
+                        system(i, colspace.cols()) != 0)
+                    {
+                        return false; 
+                    }
+                } 
+            }
+
+            return true;  
+        }
+
+        /**
+         * Get a collection of minimal cycles for the simplicial complex 
+         * over rational coefficients.  
          *
          * @param dim Input dimension. 
-         * @returns Collection of representative cycles.  
+         * @returns Collection of minimal cycles. 
          */
-        template <int p = 0>
-        void getMinimalCycles(const int dim)
+        template <int p = 2>
+        Matrix<double, Dynamic, Dynamic> getPrimeCharMinimalCycles(const int dim)
         {
             if (dim < 0 || dim > this->dimension())
             {
@@ -1279,18 +1435,20 @@ class SimplicialComplex3D
                     "Invalid input dimension for minimal cycle calculation"
                 ); 
             }
-
-            // First get a basis for the kernel of the combinatorial Laplacian
-            // by calculating the SVD
-            Matrix<Fp<p>, Dynamic, Dynamic> lap = this->getCombinatorialLaplacian<p>(dim);
-            Matrix<Fp<p>, Dynamic, Dynamic> ker = ::kernel<Fp<p> >(lap); 
-            std::cout << ker << std::endl << "--" << std::endl;
+            Matrix<Fp<p>, Dynamic, Dynamic> cycles = this->getPrimeCharHomology<p>(dim);
+            Matrix<double, Dynamic, Dynamic> opt_cycles(cycles.rows(), cycles.cols()); 
 
             // If the input dimension is maximal, then optimization is not 
             // necessary
-            if (dim < this->dimension())
+            if (dim == this->dimension())
             {
-                // TODO
+                for (int i = 0; i < cycles.rows(); ++i)
+                {
+                    for (int j = 0; j < cycles.cols(); ++j)
+                    {
+                        opt_cycles(i, j) = static_cast<double>(cycles(i, j).value); 
+                    }
+                } 
             }
             // Otherwise ... 
             else 
@@ -1299,154 +1457,46 @@ class SimplicialComplex3D
                 Matrix<Fp<p>, Dynamic, Dynamic> del = this->getBoundaryHomomorphism<p>(dim + 1);
                 const int n1 = del.cols();    // Number of (dim + 1)-simplices
                 const int n2 = del.rows();    // Number of (dim)-simplices
-                std::cout << del << std::endl;
-                std::cout << n1 << " " << n2 << std::endl;  
 
                 // For each cycle, solve the corresponding linear programming
                 // problem 
                 //
                 // We follow the approach of Obayashi, SIAM J Appl Algebra
                 // Geometry (2018) (see Eqn. 9)
-                for (int j = 0; j < ker.rows(); ++j)
+                for (int j = 0; j < cycles.cols(); ++j)
                 {
                     // We must minimize the 1-norm of z = z1 + \del w, where 
                     // z1 is the basic cycle and w is any (dim + 1)-chain
-                    Matrix<Fp<p>, Dynamic, 1> cycle = ker.row(j); 
-                    std::cout << j << std::endl; 
-                    std::cout << cycle.transpose() << std::endl;  
+                    Matrix<Fp<p>, Dynamic, 1> cycle = cycles.col(j); 
 
-                    // Define the linear program in standard format:
-                    // minimize c.T * x, subject to A * x <= b
-                    //
-                    // To do this, we define the vector 
-                    //
-                    // x = (u, w^+, w^-)
-                    //
-                    // where:
-                    //
-                    // - u represents the absolute value of z (dimension n2)
-                    // - w^+ - w^- is the decomposition of the (dim + 1)-chain
-                    //   w into nonnegative vectors (dimension n1)
-                    //
-                    // Therefore, we need 
-                    //
-                    // -u <= D * w + z1 <= u
-                    // ==> D * w + z1 <= u, -D * w - z1 <= u
-                    // ==> D * (w^+ - w^-) + z1 <= u, -D * (w^+ - w^-) - z1 <= u,
-                    //
-                    // where D is the boundary homomorphism matrix
-                    const int n_constraints = 2 * n2;
-                    const int n_variables = n2 + 2 * n1; 
-                    Matrix<Fp<p>, Dynamic, Dynamic> A
-                        = Matrix<Fp<p>, Dynamic, Dynamic>::Zero(n_constraints, n_variables);
-                    Matrix<Fp<p>, Dynamic, 1> b = Matrix<Fp<p>, Dynamic, 1>::Zero(n_constraints); 
-                    Matrix<Fp<p>, Dynamic, 1> c = Matrix<Fp<p>, Dynamic, 1>::Zero(n_variables);
-                    ArithmeticSequence rows1 = Eigen::seq(0, n2 - 1); 
-                    ArithmeticSequence rows2 = Eigen::seq(n2, 2 * n2 - 1);
-                    ArithmeticSequence cols1 = Eigen::seq(0, n2 - 1); 
-                    ArithmeticSequence cols2 = Eigen::seq(n2, n2 + n1 - 1); 
-                    ArithmeticSequence cols3 = Eigen::seq(n2 + n1, n2 + 2 * n1 - 1);  
-                    A(rows1, cols1) = -Matrix<Fp<p>, Dynamic, Dynamic>::Identity(n2, n2); 
-                    A(rows1, cols2) = del; 
-                    A(rows1, cols3) = -del;
-                    A(rows2, cols1) = -Matrix<Fp<p>, Dynamic, Dynamic>::Identity(n2, n2);
-                    A(rows2, cols2) = -del; 
-                    A(rows2, cols3) = del;
-                    b.head(n2) = -cycle; 
-                    b.tail(n2) = cycle;
-                    c.head(n2) = Matrix<Fp<p>, Dynamic, 1>::Ones(n2);
-                    Program lp(CGAL::SMALLER, true, 0, false, 0);
-                    for (int k = 0; k < n_constraints; ++k)      // k-th constraint
+                    // Define the linear program in standard format, and 
+                    // solve for the minimal cycle
+                    Matrix<double, Dynamic, Dynamic> A(n2, n1 + n2);
+                    Matrix<double, Dynamic, 1> b(n2);
+                    A(Eigen::all, Eigen::seq(0, n2 - 1))
+                        = Matrix<double, Dynamic, Dynamic>::Identity(n2, n2);
+                    for (int i = 0; i < n2; ++i)
                     {
-                        for (int m = 0; m < n_variables; ++m)    // m-th variable 
+                        for (int j = n2; j < n1 + n2; ++j)
                         {
-                            if (p == 0)
-                                lp.set_a(m, k, static_cast<double>(A(k, m).value));
-                            else 
-                                lp.set_a(m, k, static_cast<int>(A(k, m).value));  
+                            A(i, j) = -static_cast<double>(del(i, j - n2).value); 
                         }
-                        if (p == 0)
-                            lp.set_b(k, static_cast<double>(b(k).value));
-                        else 
-                            lp.set_b(k, static_cast<int>(b(k).value));  
+                        b(i) = static_cast<double>(cycle(i).value); 
                     }
-                    for (int m = 0; m < n_variables; ++m)
-                    {
-                        if (p == 0)
-                            lp.set_c(m, static_cast<double>(c(m).value));
-                        else 
-                            lp.set_c(m, static_cast<int>(c(m).value)); 
-                    }
-                    lp.set_c0(0);
-
-                    // Solve the linear program
+                    CGAL::Quadratic_program<int> lp = defineL1LinearProgram(n2, A, b); 
                     Solution solution = CGAL::solve_linear_program(lp, ET());
-                    std::cout << solution << std::endl; 
-                }
-            } 
-
-            /*
-            // Reset the filtration 
-            this->tree.clear_filtration();  
-            
-            // Define an chain matrix decomposition
-            Chain_matrix chain(this->tree.num_simplices());
-
-            // Assign keys to each simplex 
-            int simplex_id = 0;
-            std::vector<std::vector<int> > simplices_sorted; 
-            for (int dim = 0; dim <= this->tree.dimension(); ++dim)
-            {
-                for (auto& simplex : this->tree.skeleton_simplex_range(dim))
-                {
-                    if (this->tree.dimension(simplex) == dim)
+                    int i = 0; 
+                    for (auto it = solution.variable_values_begin(); it != solution.variable_values_end(); ++it)
                     {
-                        this->tree.assign_key(simplex, simplex_id);
-                        std::vector<int> simplex_vertices; 
-                        for (auto vertex : this->tree.simplex_vertex_range(simplex))
-                            simplex_vertices.push_back(vertex); 
-                        simplex_id++;
-                        simplices_sorted.push_back(simplex_vertices); 
-                    } 
+                        opt_cycles(i, j) = CGAL::to_double(*it);  
+                        i++;
+                        if (i == n2)
+                            break; 
+                    }
                 }
             }
-
-            // Initialize the trivial filtration
-            this->tree.initialize_filtration(); 
-
-            // For each simplex ...
-            std::vector<std::vector<int> > boundaries; 
-            for (auto it = simplices_sorted.begin(); it != simplices_sorted.end(); ++it)
-            {
-                auto simplex = this->tree.find(*it); 
-
-                // Collect the boundary faces of this simplex
-                std::vector<int> boundary; 
-                for (auto& bd : this->tree.boundary_simplex_range(simplex))
-                    boundary.push_back(this->tree.key(bd));
-                std::sort(boundary.begin(), boundary.end());
-                boundaries.push_back(boundary);
-                
-                // Insert into the matrix
-                chain.insert_boundary(boundary);
-            }
-
-            // Get representative cycles 
-            auto cycles = chain.get_representative_cycles();
-            for (auto& cycle : cycles)
-            {
-                std::cout << chain.get_column_dimension(cycle[0]) << "-cycle: ";
-                for (auto index : cycle)
-                {
-                    std::cout << "[" << index << ":";
-                    auto simplex = this->tree.find(simplices_sorted[index]);  
-                    for (auto vertex : this->tree.simplex_vertex_range(simplex))
-                        std::cout << vertex << ",";
-                    std::cout << "];";
-                }
-                std::cout << std::endl; 
-            }
-            */
+            
+            return opt_cycles; 
         }
 };
 
