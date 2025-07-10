@@ -2417,12 +2417,51 @@ TEST_CASE("Tests for minimal cycle calculations", "[getMinimalCycles()]")
     // ------------------------------------------------------------- // 
     SimplicialComplex3D<T> cplex = complex_cycle();
     opt_cycles = cplex.getPrimeCharMinimalCycles<2>(1);
-    std::cout << opt_cycles << "\n--\n";
+
+    // Check that the nonzero entries correspond to the minimal cycle, 
+    // which contain all the edges
+    REQUIRE(opt_cycles.rows() == cplex.getNumSimplices(1)); 
+    REQUIRE(opt_cycles.cols() == 1);  
+    REQUIRE(opt_cycles(0) != 0); 
+    REQUIRE(opt_cycles(1) != 0); 
+    REQUIRE(opt_cycles(2) != 0); 
+
+    // ------------------------------------------------------------- // 
+    // Test for 2-D mesh with hole 
+    // ------------------------------------------------------------- // 
+    cplex = complex_2d_mesh_with_hole();
+    opt_cycles = cplex.getPrimeCharMinimalCycles<2>(1);
+
+    // Check that the nonzero entries correspond to the minimal cycle, 
+    // which contain edges 3, 4, 7, 9, corresponding to the cycle 
+    // [v1,v3], [v3,v4], [v4,v2], [v2,v1]
+    REQUIRE(opt_cycles.rows() == cplex.getNumSimplices(1)); 
+    REQUIRE(opt_cycles.cols() == 1);
+    for (int i = 0; i < opt_cycles.rows(); ++i)
+    {
+        if (i == 3 || i == 4 || i == 7 || i == 9)
+            REQUIRE(opt_cycles(i) != 0); 
+        else 
+            REQUIRE(opt_cycles(i) == 0); 
+    } 
     
     // ------------------------------------------------------------- // 
     // Test for annulus 
     // ------------------------------------------------------------- //
     cplex = complex_annulus(); 
     opt_cycles = cplex.getPrimeCharMinimalCycles<2>(1);
-    std::cout << opt_cycles << "\n--\n";
+    
+    // Check that the nonzero entries correspond to the minimal cycle, 
+    // which contain the last six edges (18, 19, 20, 21, 22, 23),
+    // corresponding to the cycle [v6,v7], [v7,v8], [v8,v9], [v9,v10],
+    // [v10,v11], [v11,v6]
+    REQUIRE(opt_cycles.rows() == cplex.getNumSimplices(1)); 
+    REQUIRE(opt_cycles.cols() == 1);
+    for (int i = 0; i < opt_cycles.rows(); ++i)
+    {
+        if (i == 18 || i == 19 || i == 20 || i == 21 || i == 22 || i == 23)
+            REQUIRE(opt_cycles(i) != 0); 
+        else 
+            REQUIRE(opt_cycles(i) == 0); 
+    } 
 }
