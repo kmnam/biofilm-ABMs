@@ -1416,4 +1416,98 @@ Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dyn
     return quotient_basis; 
 }
 
+/**
+ * Convert a linear program that minimizes the 1-norm of a vector, z, 
+ * subject to A * x = b, where x includes the variables in z, into
+ * standard form.
+ *
+ * We assume that the first nvars_obj variables feature in the objective.  
+ */
+CGAL::Quadratic_program<int> defineL1LinearProgram(const int nvars_obj,
+                                                   const Ref<const Matrix<double, Dynamic, Dynamic> >& A, 
+                                                   const Ref<const Matrix<double, Dynamic, 1> >& b)
+{
+    const int nconstraints = A.rows(); 
+    const int nvars_total = A.cols();
+
+    // The standardization procedure is as follows:
+    //
+    // - For each variable zk in the objective, we first define an auxiliary
+    //   variable uk >= 0 such that -uk <= zk <= uk
+    //
+    // - Each such pair of inequalities can be rewritten as:
+    //   1) zk - uk <= 0    [right]
+    //   2) -zk - uk <= 0   [left]
+    //
+    // - To convert each pair of inequalities into equalities, we define 
+    //   slack variables sk1 and sk2 such that 
+    //   1) zk - uk + sk1 = 0
+    //   2) -zk - uk + sk2 = 0
+    //
+    // So, in all, if d = nvars_obj is the number of variables in the objective,
+    // we seek to minimize 
+    //
+    // u1 + ... + ud
+    //
+    // such that 
+    //
+    // zk - uk + sk1 = 0 for all k = 1, ..., d
+    // -zk - uk + sk2 = 0 for all k = 1, ..., d
+    // A * x = b
+    // 
+    // and uk, sk1, sk2 are all non-negative, but the input variables x, which
+    // include the zk, may not be
+    const int m = nconstraints + 2 * nvars_obj;   // Number of constraints in standard form
+    const int n = nvars_total + 3 * nvars_obj;    // Number of variables in standard form 
+    CGAL::Quadratic_program<int> lp(
+        CGAL::EQUAL,    // Equality constraints
+        false,          // No lower bounds by default 
+        0,              // Meaningless
+        false,          // No upper bounds by default
+        0               // Meaningless
+    );
+
+    // First incorporate the linear constraints A * x = b
+    for (int i = 0; i < nconstraints; ++i)
+    {
+        for (int j = 0; j < nvars_total; ++j)
+        {
+            lp.set_a(j, i, static_cast<int>(A(i, j))); 
+        }
+        lp.set_b(i, static_cast<int>(b(i))); 
+    }
+
+    // Then incorporate the additional constraints, including non-negativity
+    // of the new variables  
+    for (int k = 0; k < nvars_obj; ++k)
+    {
+        int zk_idx = k; 
+        int uk_idx = nvars_total + k; 
+        int sk1_idx = nvars_total + nvars_obj + k; 
+        int sk2_idx = nvars_total + 2 * nvars_obj + k;
+        int con1_idx = nconstraints + k; 
+        int con2_idx = nconstraints + nvars_obj + k;
+        lp.set_a(zk_idx, con1_idx, 1); 
+        lp.set_a(uk_idx, con1_idx, -1); 
+        lp.set_a(sk1_idx, con1_idx, 1);
+        lp.set_b(con1_idx, 0);
+        lp.set_a(zk_idx, con2_idx, -1); 
+        lp.set_a(uk_idx, con2_idx, -1); 
+        lp.set_a(sk2_idx, con2_idx, 1);
+        lp.set_b(con2_idx, 0);
+        lp.set_l(uk_idx, true, 0);
+        lp.set_l(sk1_idx, true, 0); 
+        lp.set_l(sk2_idx, true, 0);   
+    }
+
+    // Finally define the objective function
+    for (int k = 0; k < nvars_obj; ++k)
+    {
+        int uk_idx = nvars_total + k; 
+        lp.set_c(uk_idx, 1);
+    } 
+
+    return lp;  
+} 
+
 #endif
