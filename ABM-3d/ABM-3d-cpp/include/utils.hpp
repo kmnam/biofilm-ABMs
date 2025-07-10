@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/6/2025
+ *     7/10/2025
  */
 
 #ifndef BIOFILM_UTILS_3D_HPP
@@ -1390,19 +1390,30 @@ Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dyn
     // Get bases for the kernel of A and the image of B
     Matrix<T, Dynamic, Dynamic> kerA = ::kernel<T>(A);
     Matrix<T, Dynamic, Dynamic> imB = ::columnSpace<T>(B);
+    
+    // Form the augmented matrix 
+    Matrix<T, Dynamic, Dynamic> system(kerA.rows(), kerA.cols() + imB.cols());
+    system(Eigen::all, Eigen::seq(0, imB.cols() - 1)) = imB; 
+    system(Eigen::all, Eigen::seq(imB.cols(), imB.cols() + kerA.cols() - 1)) = kerA;
 
-    // For each vector b in the column space of B, solve for kerA * x = b
-    Matrix<T, Dynamic, Dynamic> imB_kernel_basis = ::solve<T>(kerA, imB); 
+    // Get the row echelon form and pivot columns  
+    system = ::rowEchelonForm<T>(system);
+    Matrix<int, Dynamic, 1> pivots = ::getPivotCols<T>(system);
 
-    // Get the complement of im(B) with respect to the kernel basis 
-    Matrix<T, Dynamic, Dynamic> imB_complement = ::complement<T>(imB_kernel_basis);
+    // Return the vectors that do not correspond to the pivot columns
+    int n_quotient_basis = (pivots.tail(kerA.cols()).array() != -1).sum(); 
+    Matrix<T, Dynamic, Dynamic> quotient_basis(kerA.rows(), n_quotient_basis);
+    int j = 0;  
+    for (int i = imB.cols(); i < pivots.size(); ++i)
+    {
+        if (pivots(i) != -1)
+        {
+            quotient_basis.col(j) = kerA.col(i - imB.cols());
+            j++; 
+        }
+    }
 
-    // Map back into the original ambient space 
-    Matrix<T, Dynamic, Dynamic> quotient_basis(kerA.rows(), imB_complement.cols()); 
-    for (int j = 0; j < imB_complement.cols(); ++j)
-        quotient_basis.col(j) = kerA * imB_complement.col(j);
-
-    return quotient_basis;  
+    return quotient_basis; 
 }
 
 #endif
