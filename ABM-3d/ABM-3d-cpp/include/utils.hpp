@@ -1357,26 +1357,6 @@ Matrix<T, Dynamic, Dynamic> complement(const Ref<const Matrix<T, Dynamic, Dynami
 }
 
 /**
- * Get a basis for the quotient space, T^d / im(B), where T is the underlying
- * field and d is the dimension (number of rows in B), using Gaussian
- * elimination. 
- *
- * We assume that the underlying field is the rationals or a field of finite
- * characteristic.
- */
-template <typename T>
-Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dynamic> >& B)
-{
-    // Get a basis for the image of B
-    Matrix<T, Dynamic, Dynamic> imB = ::columnSpace<T>(B);
-    
-    // Get the complement of im(B) with respect to the standard basis 
-    Matrix<T, Dynamic, Dynamic> imB_complement = ::complement<T>(imB);
-
-    return imB_complement; 
-}
-
-/**
  * Get a basis for the quotient space, ker(A) / im(B), given that im(B) is 
  * a subspace of ker(A), using Gaussian elimination. 
  *
@@ -1414,6 +1394,26 @@ Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dyn
     }
 
     return quotient_basis; 
+}
+
+/**
+ * Get a basis for the quotient space, T^d / im(B), where T is the underlying
+ * field and d is the dimension (number of rows in B), using Gaussian
+ * elimination. 
+ *
+ * We assume that the underlying field is the rationals or a field of finite
+ * characteristic.
+ */
+template <typename T>
+Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dynamic> >& B)
+{
+    // Get a basis for the image of B
+    Matrix<T, Dynamic, Dynamic> imB = ::columnSpace<T>(B);
+    
+    // Get the complement of im(B) with respect to the standard basis 
+    Matrix<T, Dynamic, Dynamic> imB_complement = ::complement<T>(imB);
+
+    return imB_complement;
 }
 
 /**

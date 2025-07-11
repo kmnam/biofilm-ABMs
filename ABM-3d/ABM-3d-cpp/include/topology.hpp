@@ -1254,7 +1254,7 @@ class SimplicialComplex3D
         template <int p = 2>
         Matrix<Fp<p>, Dynamic, Dynamic> getPrimeCharHomology(const int dim) const 
         {
-            Matrix<Fp<p>, Dynamic, Dynamic> cycles; 
+            Matrix<Fp<p>, Dynamic, Dynamic> cycles;
             if (dim > 0 && dim < this->dimension())
             {
                 // Get the boundary homomorphisms and the corresponding
@@ -1287,8 +1287,8 @@ class SimplicialComplex3D
             {
                 // In this case, the image of the (dim + 1)-th boundary 
                 // homomorphism is zero
-                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim); 
-                cycles = ::kernel<Fp<p> >(del2); 
+                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim);
+                cycles = ::kernel<Fp<p> >(del2);
             }
 
             return cycles; 
