@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/27/2025
+ *     7/11/2025
  */
 #include <iostream>
 #include <cstdlib>
@@ -47,7 +47,7 @@ bool containsInconsistency(const Ref<const Matrix<T, Dynamic, Dynamic> >& A,
     Matrix<T, Dynamic, Dynamic> system(A.rows(), A.cols() + 1); 
     system(Eigen::all, Eigen::seq(0, A.cols() - 1)) = A; 
     system.col(A.cols()) = b; 
-    system = ::rowEchelonForm<T>(system); 
+    system = ::rowEchelonForm<T>(system);
     bool found_inconsistency = false; 
     for (int i = 0; i < A.rows(); ++i)
     {
@@ -236,7 +236,7 @@ SimplicialComplex3D<T> complex_2d_mesh_with_hole()
  */
 SimplicialComplex3D<T> complex_annulus()
 {
-    Array<T, Dynamic, 3> points(12, 3); 
+    Array<T, Dynamic, 3> points = Array<T, Dynamic, 3>::Zero(12, 3); 
     Array<int, Dynamic, 2> edges(24, 2); 
     Array<int, Dynamic, 3> triangles(12, 3); 
     Array<int, Dynamic, 4> tetrahedra(0, 4);
@@ -248,10 +248,10 @@ SimplicialComplex3D<T> complex_annulus()
             boost::math::constants::half_pi<T>() -
             (i / 6) * boost::math::constants::two_pi<T>()
         ); 
-        points(i, 0) = r1 * cos(theta); 
-        points(i, 1) = r1 * sin(theta);
-        points(6 + i, 0) = r2 * cos(theta); 
-        points(6 + i, 1) = r2 * sin(theta);  
+        points(i, 0) = r2 * cos(theta); 
+        points(i, 1) = r2 * sin(theta);
+        points(6 + i, 0) = r1 * cos(theta); 
+        points(6 + i, 1) = r1 * sin(theta);  
     }
     edges <<  0,  1,
               0,  5,
@@ -289,6 +289,120 @@ SimplicialComplex3D<T> complex_annulus()
                  4,  5, 10,
                  4,  9, 10,
                  5, 10, 11;
+    return SimplicialComplex3D<T>(points, edges, triangles, tetrahedra); 
+}
+
+/**
+ * Generate a two-dimensional triangulation of a two-holed annulus. 
+ */
+SimplicialComplex3D<T> complex_annulus_two_holes()
+{
+    Array<T, Dynamic, 3> points = Array<T, Dynamic, 3>::Zero(22, 3); 
+    Array<int, Dynamic, 2> edges(47, 2); 
+    Array<int, Dynamic, 3> triangles(24, 3); 
+    Array<int, Dynamic, 4> tetrahedra(0, 4);
+    const T r1 = 1.0; 
+    const T r2 = 2.0;
+    const T c = 2 * r2 * cos(boost::math::constants::sixth_pi<T>());
+    for (int i = 0; i < 6; ++i)     // Points for left annulus
+    { 
+        T theta = (
+            boost::math::constants::half_pi<T>() -
+            (i / 6) * boost::math::constants::two_pi<T>()
+        ); 
+        points(i, 0) = r2 * cos(theta); 
+        points(i, 1) = r2 * sin(theta);
+        points(6 + i, 0) = r1 * cos(theta); 
+        points(6 + i, 1) = r1 * sin(theta);
+    }
+    points(12, 0) = c;              // Outer points for right annulus
+    points(12, 1) = points(0, 1);
+    points(13, 0) = c + r2 * cos(boost::math::constants::sixth_pi<T>());
+    points(13, 1) = points(1, 1);
+    points(14, 0) = c + r2 * cos(boost::math::constants::sixth_pi<T>());
+    points(14, 1) = points(2, 1); 
+    points(15, 0) = c; 
+    points(15, 1) = points(3, 1);
+    for (int i = 0; i < 6; ++i)     // Inner points for right annulus
+    {
+        T theta = (
+            boost::math::constants::half_pi<T>() -
+            (i / 6) * boost::math::constants::two_pi<T>()
+        ); 
+        points(16 + i, 0) = c + r1 * cos(theta); 
+        points(16 + i, 1) = r1 * sin(theta);
+    }
+    edges <<  0,  1,
+              0,  5,
+              0,  6,
+              0, 11,
+              1,  2,   // 4
+              1,  6, 
+              1,  7, 
+              1, 12,
+              1, 20,
+              1, 21,   // 9
+              2,  3, 
+              2,  7,
+              2,  8,
+              2, 15,
+              2, 19,   // 14
+              2, 20,
+              3,  4, 
+              3,  8,
+              3,  9,
+              4,  5,   // 19
+              4,  9,
+              4, 10,
+              5, 10,
+              5, 11,
+              6,  7,   // 24
+              6, 11,
+              7,  8,
+              8,  9,
+              9, 10,
+             10, 11,   // 29
+             12, 13,
+             12, 16,
+             12, 21,
+             13, 14,
+             13, 16,   // 34
+             13, 17,
+             14, 15,
+             14, 17,
+             14, 18,
+             15, 18,   // 39
+             15, 19,
+             16, 17, 
+             16, 21,
+             17, 18,
+             18, 19,   // 44
+             19, 20,
+             20, 21;
+    triangles <<  0,  1,  6,
+                  0,  5, 11,
+                  0,  6, 11,
+                  1,  2,  7,
+                  1,  2, 20,
+                  1,  6,  7,
+                  1, 12, 21,
+                  1, 20, 21,
+                  2,  3,  8,
+                  2,  7,  8,
+                  2, 15, 19,
+                  2, 19, 20,
+                  3,  4,  9,
+                  3,  8,  9,
+                  4,  5, 10,
+                  4,  9, 10,
+                  5, 10, 11,
+                 12, 13, 16,
+                 12, 16, 21,
+                 13, 14, 17,
+                 13, 16, 17,
+                 14, 15, 18,
+                 14, 17, 18,
+                 15, 18, 19;
     return SimplicialComplex3D<T>(points, edges, triangles, tetrahedra); 
 }
 
@@ -607,6 +721,310 @@ TEST_CASE("Tests for basic methods", "[SimplicialComplex3D]")
     REQUIRE(simplices2(5, 1) == 4);
     REQUIRE(simplices2(5, 2) == 6);
 
+    // ------------------------------------------------------------- // 
+    // Test for annulus
+    // ------------------------------------------------------------- // 
+    cplex = complex_annulus(); 
+
+    // Check the dimension of the complex 
+    REQUIRE(cplex.dimension() == 2);
+
+    // Check the number of simplices in the complex
+    REQUIRE(cplex.getNumPoints() == 12);  
+    REQUIRE(cplex.getNumSimplices() == 12 + 24 + 12); 
+    REQUIRE(cplex.getNumSimplices(0) == 12);
+    REQUIRE(cplex.getNumSimplices(1) == 24);
+    REQUIRE(cplex.getNumSimplices(2) == 12);
+    REQUIRE_THROWS(cplex.getNumSimplices(3)); 
+
+    // Get the simplices in the complex, for each dimension ... 
+    simplices0 = cplex.getSimplices<0>();
+    REQUIRE(simplices0.size() == 12);
+    for (int i = 0; i < 12; ++i)
+        REQUIRE(simplices0(i) == i);    // 0, ..., 11
+    simplices1 = cplex.getSimplices<1>();
+    REQUIRE(simplices1.rows() == 24);
+    REQUIRE(simplices1(0, 0) == 0);     // (0, 1)
+    REQUIRE(simplices1(0, 1) == 1); 
+    REQUIRE(simplices1(1, 0) == 0);     // (0, 5)
+    REQUIRE(simplices1(1, 1) == 5); 
+    REQUIRE(simplices1(2, 0) == 0);     // (0, 6)
+    REQUIRE(simplices1(2, 1) == 6);
+    REQUIRE(simplices1(3, 0) == 0);     // (0, 11)
+    REQUIRE(simplices1(3, 1) == 11);
+    REQUIRE(simplices1(4, 0) == 1);     // (1, 2)
+    REQUIRE(simplices1(4, 1) == 2);
+    REQUIRE(simplices1(5, 0) == 1);     // (1, 6)
+    REQUIRE(simplices1(5, 1) == 6);
+    REQUIRE(simplices1(6, 0) == 1);     // (1, 7)
+    REQUIRE(simplices1(6, 1) == 7);
+    REQUIRE(simplices1(7, 0) == 2);     // (2, 3)
+    REQUIRE(simplices1(7, 1) == 3);
+    REQUIRE(simplices1(8, 0) == 2);     // (2, 7)
+    REQUIRE(simplices1(8, 1) == 7);
+    REQUIRE(simplices1(9, 0) == 2);     // (2, 8)
+    REQUIRE(simplices1(9, 1) == 8);
+    REQUIRE(simplices1(10, 0) == 3);    // (3, 4)
+    REQUIRE(simplices1(10, 1) == 4);
+    REQUIRE(simplices1(11, 0) == 3);    // (3, 8)
+    REQUIRE(simplices1(11, 1) == 8);
+    REQUIRE(simplices1(12, 0) == 3);    // (3, 9)
+    REQUIRE(simplices1(12, 1) == 9);
+    REQUIRE(simplices1(13, 0) == 4);    // (4, 5)
+    REQUIRE(simplices1(13, 1) == 5);
+    REQUIRE(simplices1(14, 0) == 4);    // (4, 9)
+    REQUIRE(simplices1(14, 1) == 9);
+    REQUIRE(simplices1(15, 0) == 4);    // (4, 10)
+    REQUIRE(simplices1(15, 1) == 10);
+    REQUIRE(simplices1(16, 0) == 5);    // (5, 10)
+    REQUIRE(simplices1(16, 1) == 10);
+    REQUIRE(simplices1(17, 0) == 5);    // (5, 11)
+    REQUIRE(simplices1(17, 1) == 11);
+    REQUIRE(simplices1(18, 0) == 6);    // (6, 7)
+    REQUIRE(simplices1(18, 1) == 7);
+    REQUIRE(simplices1(19, 0) == 6);    // (6, 11)
+    REQUIRE(simplices1(19, 1) == 11);
+    REQUIRE(simplices1(20, 0) == 7);    // (7, 8)
+    REQUIRE(simplices1(20, 1) == 8);
+    REQUIRE(simplices1(21, 0) == 8);    // (8, 9)
+    REQUIRE(simplices1(21, 1) == 9);
+    REQUIRE(simplices1(22, 0) == 9);    // (9, 10)
+    REQUIRE(simplices1(22, 1) == 10);
+    REQUIRE(simplices1(23, 0) == 10);   // (10, 11)
+    REQUIRE(simplices1(23, 1) == 11);
+
+    simplices2 = cplex.getSimplices<2>();
+    REQUIRE(simplices2.rows() == 12);
+    REQUIRE(simplices2(0, 0) == 0);     // (0, 1, 6)
+    REQUIRE(simplices2(0, 1) == 1);
+    REQUIRE(simplices2(0, 2) == 6);
+    REQUIRE(simplices2(1, 0) == 0);     // (0, 5, 11)
+    REQUIRE(simplices2(1, 1) == 5);
+    REQUIRE(simplices2(1, 2) == 11);
+    REQUIRE(simplices2(2, 0) == 0);     // (0, 6, 11)
+    REQUIRE(simplices2(2, 1) == 6);
+    REQUIRE(simplices2(2, 2) == 11);
+    REQUIRE(simplices2(3, 0) == 1);     // (1, 2, 7)
+    REQUIRE(simplices2(3, 1) == 2);
+    REQUIRE(simplices2(3, 2) == 7);
+    REQUIRE(simplices2(4, 0) == 1);     // (1, 6, 7)
+    REQUIRE(simplices2(4, 1) == 6);
+    REQUIRE(simplices2(4, 2) == 7);
+    REQUIRE(simplices2(5, 0) == 2);     // (2, 3, 8)
+    REQUIRE(simplices2(5, 1) == 3);
+    REQUIRE(simplices2(5, 2) == 8);
+    REQUIRE(simplices2(6, 0) == 2);     // (2, 7, 8)
+    REQUIRE(simplices2(6, 1) == 7);
+    REQUIRE(simplices2(6, 2) == 8);
+    REQUIRE(simplices2(7, 0) == 3);     // (3, 4, 9)
+    REQUIRE(simplices2(7, 1) == 4);
+    REQUIRE(simplices2(7, 2) == 9);
+    REQUIRE(simplices2(8, 0) == 3);     // (3, 8, 9)
+    REQUIRE(simplices2(8, 1) == 8);
+    REQUIRE(simplices2(8, 2) == 9);
+    REQUIRE(simplices2(9, 0) == 4);     // (4, 5, 10)
+    REQUIRE(simplices2(9, 1) == 5);
+    REQUIRE(simplices2(9, 2) == 10);
+    REQUIRE(simplices2(10, 0) == 4);    // (4, 9, 10)
+    REQUIRE(simplices2(10, 1) == 9);
+    REQUIRE(simplices2(10, 2) == 10);
+    REQUIRE(simplices2(11, 0) == 5);    // (5, 10, 11)
+    REQUIRE(simplices2(11, 1) == 10);
+    REQUIRE(simplices2(11, 2) == 11);
+
+    // ------------------------------------------------------------- // 
+    // Test for two-holed annulus
+    // ------------------------------------------------------------- // 
+    cplex = complex_annulus_two_holes(); 
+
+    // Check the dimension of the complex 
+    REQUIRE(cplex.dimension() == 2);
+
+    // Check the number of simplices in the complex
+    REQUIRE(cplex.getNumPoints() == 22);  
+    REQUIRE(cplex.getNumSimplices() == 22 + 47 + 24); 
+    REQUIRE(cplex.getNumSimplices(0) == 22);
+    REQUIRE(cplex.getNumSimplices(1) == 47);
+    REQUIRE(cplex.getNumSimplices(2) == 24);
+    REQUIRE_THROWS(cplex.getNumSimplices(3)); 
+
+    // Get the simplices in the complex, for each dimension ... 
+    simplices0 = cplex.getSimplices<0>();
+    REQUIRE(simplices0.size() == 22);
+    for (int i = 0; i < 22; ++i)
+        REQUIRE(simplices0(i) == i);    // 0, ..., 21
+    simplices1 = cplex.getSimplices<1>();
+    REQUIRE(simplices1.rows() == 47);
+    REQUIRE(simplices1(0, 0) == 0);     // (0, 1)
+    REQUIRE(simplices1(0, 1) == 1); 
+    REQUIRE(simplices1(1, 0) == 0);     // (0, 5)
+    REQUIRE(simplices1(1, 1) == 5); 
+    REQUIRE(simplices1(2, 0) == 0);     // (0, 6)
+    REQUIRE(simplices1(2, 1) == 6);
+    REQUIRE(simplices1(3, 0) == 0);     // (0, 11)
+    REQUIRE(simplices1(3, 1) == 11);
+    REQUIRE(simplices1(4, 0) == 1);     // (1, 2)
+    REQUIRE(simplices1(4, 1) == 2);
+    REQUIRE(simplices1(5, 0) == 1);     // (1, 6)
+    REQUIRE(simplices1(5, 1) == 6);
+    REQUIRE(simplices1(6, 0) == 1);     // (1, 7)
+    REQUIRE(simplices1(6, 1) == 7);
+    REQUIRE(simplices1(7, 0) == 1);     // (1, 12)
+    REQUIRE(simplices1(7, 1) == 12);
+    REQUIRE(simplices1(8, 0) == 1);     // (1, 20)
+    REQUIRE(simplices1(8, 1) == 20);
+    REQUIRE(simplices1(9, 0) == 1);     // (1, 21)
+    REQUIRE(simplices1(9, 1) == 21);
+    REQUIRE(simplices1(10, 0) == 2);    // (2, 3)
+    REQUIRE(simplices1(10, 1) == 3);
+    REQUIRE(simplices1(11, 0) == 2);    // (2, 7)
+    REQUIRE(simplices1(11, 1) == 7);
+    REQUIRE(simplices1(12, 0) == 2);    // (2, 8)
+    REQUIRE(simplices1(12, 1) == 8);
+    REQUIRE(simplices1(13, 0) == 2);    // (2, 15)
+    REQUIRE(simplices1(13, 1) == 15);
+    REQUIRE(simplices1(14, 0) == 2);    // (2, 19)
+    REQUIRE(simplices1(14, 1) == 19);
+    REQUIRE(simplices1(15, 0) == 2);    // (2, 20)
+    REQUIRE(simplices1(15, 1) == 20);
+    REQUIRE(simplices1(16, 0) == 3);    // (3, 4)
+    REQUIRE(simplices1(16, 1) == 4);
+    REQUIRE(simplices1(17, 0) == 3);    // (3, 8)
+    REQUIRE(simplices1(17, 1) == 8);
+    REQUIRE(simplices1(18, 0) == 3);    // (3, 9)
+    REQUIRE(simplices1(18, 1) == 9);
+    REQUIRE(simplices1(19, 0) == 4);    // (4, 5)
+    REQUIRE(simplices1(19, 1) == 5);
+    REQUIRE(simplices1(20, 0) == 4);    // (4, 9)
+    REQUIRE(simplices1(20, 1) == 9);
+    REQUIRE(simplices1(21, 0) == 4);    // (4, 10)
+    REQUIRE(simplices1(21, 1) == 10);
+    REQUIRE(simplices1(22, 0) == 5);    // (5, 10)
+    REQUIRE(simplices1(22, 1) == 10);
+    REQUIRE(simplices1(23, 0) == 5);    // (5, 11)
+    REQUIRE(simplices1(23, 1) == 11);
+    REQUIRE(simplices1(24, 0) == 6);    // (6, 7)
+    REQUIRE(simplices1(24, 1) == 7);
+    REQUIRE(simplices1(25, 0) == 6);    // (6, 11)
+    REQUIRE(simplices1(25, 1) == 11);
+    REQUIRE(simplices1(26, 0) == 7);    // (7, 8)
+    REQUIRE(simplices1(26, 1) == 8);
+    REQUIRE(simplices1(27, 0) == 8);    // (8, 9)
+    REQUIRE(simplices1(27, 1) == 9);
+    REQUIRE(simplices1(28, 0) == 9);    // (9, 10)
+    REQUIRE(simplices1(28, 1) == 10);
+    REQUIRE(simplices1(29, 0) == 10);   // (10, 11)
+    REQUIRE(simplices1(29, 1) == 11);
+    REQUIRE(simplices1(30, 0) == 12);   // (12, 13)
+    REQUIRE(simplices1(30, 1) == 13);
+    REQUIRE(simplices1(31, 0) == 12);   // (12, 16)
+    REQUIRE(simplices1(31, 1) == 16);
+    REQUIRE(simplices1(32, 0) == 12);   // (12, 21)
+    REQUIRE(simplices1(32, 1) == 21);
+    REQUIRE(simplices1(33, 0) == 13);   // (13, 14)
+    REQUIRE(simplices1(33, 1) == 14);
+    REQUIRE(simplices1(34, 0) == 13);   // (13, 16)
+    REQUIRE(simplices1(34, 1) == 16);
+    REQUIRE(simplices1(35, 0) == 13);   // (13, 17)
+    REQUIRE(simplices1(35, 1) == 17);
+    REQUIRE(simplices1(36, 0) == 14);   // (14, 15)
+    REQUIRE(simplices1(36, 1) == 15);
+    REQUIRE(simplices1(37, 0) == 14);   // (14, 17)
+    REQUIRE(simplices1(37, 1) == 17);
+    REQUIRE(simplices1(38, 0) == 14);   // (14, 18)
+    REQUIRE(simplices1(38, 1) == 18);
+    REQUIRE(simplices1(39, 0) == 15);   // (15, 18)
+    REQUIRE(simplices1(39, 1) == 18);
+    REQUIRE(simplices1(40, 0) == 15);   // (15, 19)
+    REQUIRE(simplices1(40, 1) == 19);
+    REQUIRE(simplices1(41, 0) == 16);   // (16, 17)
+    REQUIRE(simplices1(41, 1) == 17);
+    REQUIRE(simplices1(42, 0) == 16);   // (16, 21)
+    REQUIRE(simplices1(42, 1) == 21);
+    REQUIRE(simplices1(43, 0) == 17);   // (17, 18)
+    REQUIRE(simplices1(43, 1) == 18);
+    REQUIRE(simplices1(44, 0) == 18);   // (18, 19)
+    REQUIRE(simplices1(44, 1) == 19);
+    REQUIRE(simplices1(45, 0) == 19);   // (19, 20)
+    REQUIRE(simplices1(45, 1) == 20);
+    REQUIRE(simplices1(46, 0) == 20);   // (20, 21)
+    REQUIRE(simplices1(46, 1) == 21);
+
+    simplices2 = cplex.getSimplices<2>();
+    REQUIRE(simplices2.rows() == 24);
+    REQUIRE(simplices2(0, 0) == 0);     // (0, 1, 6)
+    REQUIRE(simplices2(0, 1) == 1);
+    REQUIRE(simplices2(0, 2) == 6);
+    REQUIRE(simplices2(1, 0) == 0);     // (0, 5, 11)
+    REQUIRE(simplices2(1, 1) == 5);
+    REQUIRE(simplices2(1, 2) == 11);
+    REQUIRE(simplices2(2, 0) == 0);     // (0, 6, 11)
+    REQUIRE(simplices2(2, 1) == 6);
+    REQUIRE(simplices2(2, 2) == 11);
+    REQUIRE(simplices2(3, 0) == 1);     // (1, 2, 7)
+    REQUIRE(simplices2(3, 1) == 2);
+    REQUIRE(simplices2(3, 2) == 7);
+    REQUIRE(simplices2(4, 0) == 1);     // (1, 2, 20)
+    REQUIRE(simplices2(4, 1) == 2);
+    REQUIRE(simplices2(4, 2) == 20);
+    REQUIRE(simplices2(5, 0) == 1);     // (1, 6, 7)
+    REQUIRE(simplices2(5, 1) == 6);
+    REQUIRE(simplices2(5, 2) == 7);
+    REQUIRE(simplices2(6, 0) == 1);     // (1, 12, 21)
+    REQUIRE(simplices2(6, 1) == 12);
+    REQUIRE(simplices2(6, 2) == 21);
+    REQUIRE(simplices2(7, 0) == 1);     // (1, 20, 21)
+    REQUIRE(simplices2(7, 1) == 20);
+    REQUIRE(simplices2(7, 2) == 21);
+    REQUIRE(simplices2(8, 0) == 2);     // (2, 3, 8)
+    REQUIRE(simplices2(8, 1) == 3);
+    REQUIRE(simplices2(8, 2) == 8);
+    REQUIRE(simplices2(9, 0) == 2);     // (2, 7, 8)
+    REQUIRE(simplices2(9, 1) == 7);
+    REQUIRE(simplices2(9, 2) == 8);
+    REQUIRE(simplices2(10, 0) == 2);    // (2, 15, 19)
+    REQUIRE(simplices2(10, 1) == 15);
+    REQUIRE(simplices2(10, 2) == 19);
+    REQUIRE(simplices2(11, 0) == 2);    // (2, 19, 20)
+    REQUIRE(simplices2(11, 1) == 19);
+    REQUIRE(simplices2(11, 2) == 20);
+    REQUIRE(simplices2(12, 0) == 3);    // (3, 4, 9)
+    REQUIRE(simplices2(12, 1) == 4);
+    REQUIRE(simplices2(12, 2) == 9);
+    REQUIRE(simplices2(13, 0) == 3);    // (3, 8, 9)
+    REQUIRE(simplices2(13, 1) == 8);
+    REQUIRE(simplices2(13, 2) == 9);
+    REQUIRE(simplices2(14, 0) == 4);    // (4, 5, 10)
+    REQUIRE(simplices2(14, 1) == 5);
+    REQUIRE(simplices2(14, 2) == 10);
+    REQUIRE(simplices2(15, 0) == 4);    // (4, 9, 10)
+    REQUIRE(simplices2(15, 1) == 9);
+    REQUIRE(simplices2(15, 2) == 10);
+    REQUIRE(simplices2(16, 0) == 5);    // (5, 10, 11)
+    REQUIRE(simplices2(16, 1) == 10);
+    REQUIRE(simplices2(16, 2) == 11);
+    REQUIRE(simplices2(17, 0) == 12);   // (12, 13, 16)
+    REQUIRE(simplices2(17, 1) == 13);
+    REQUIRE(simplices2(17, 2) == 16);
+    REQUIRE(simplices2(18, 0) == 12);   // (12, 16, 21)
+    REQUIRE(simplices2(18, 1) == 16);
+    REQUIRE(simplices2(18, 2) == 21);
+    REQUIRE(simplices2(19, 0) == 13);   // (13, 14, 17)
+    REQUIRE(simplices2(19, 1) == 14);
+    REQUIRE(simplices2(19, 2) == 17);
+    REQUIRE(simplices2(20, 0) == 13);   // (13, 16, 17)
+    REQUIRE(simplices2(20, 1) == 16);
+    REQUIRE(simplices2(20, 2) == 17);
+    REQUIRE(simplices2(21, 0) == 14);   // (14, 15, 18)
+    REQUIRE(simplices2(21, 1) == 15);
+    REQUIRE(simplices2(21, 2) == 18);
+    REQUIRE(simplices2(22, 0) == 14);   // (14, 17, 18)
+    REQUIRE(simplices2(22, 1) == 17);
+    REQUIRE(simplices2(22, 2) == 18);
+    REQUIRE(simplices2(23, 0) == 15);   // (15, 18, 19)
+    REQUIRE(simplices2(23, 1) == 18);
+    REQUIRE(simplices2(23, 2) == 19);
+    
     // ------------------------------------------------------------- // 
     // Test for tetrahedron 
     // ------------------------------------------------------------- // 
@@ -1406,6 +1824,237 @@ TEST_CASE(
     REQUIRE(((del1_p2 * del2_p2).array() == 0).all());
 
     // ------------------------------------------------------------- // 
+    // Test for two-holed annulus
+    // ------------------------------------------------------------- // 
+    cplex = complex_annulus_two_holes(); 
+    
+    // Get the boundary homomorphism from C_2 to C_1
+    //
+    // Here, the map should send [v0, v1, v2] to [v1, v2] - [v0, v2] + [v0, v1]
+    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    REQUIRE(del2.rows() == cplex.getNumSimplices(1));    // = 47
+    REQUIRE(del2.cols() == cplex.getNumSimplices(2));    // = 24
+    for (int i = 0; i < del2.rows(); ++i)
+    {
+        for (int j = 0; j < del2.cols(); ++j)
+        {
+            if ((j == 0 && (i == 0 || i == 5)) ||        // [0, 1, 6] 
+                (j == 1 && (i == 1 || i == 23)) ||       // [0, 5, 11]
+                (j == 2 && (i == 2 || i == 25)) ||       // [0, 6, 11]
+                (j == 3 && (i == 4 || i == 11)) ||       // [1, 2, 7]
+                (j == 4 && (i == 4 || i == 15)) ||       // [1, 2, 20]
+                (j == 5 && (i == 5 || i == 24)) ||       // [1, 6, 7]
+                (j == 6 && (i == 7 || i == 32)) ||       // [1, 12, 21]
+                (j == 7 && (i == 8 || i == 46)) ||       // [1, 20, 21] 
+                (j == 8 && (i == 10 || i == 17)) ||      // [2, 3, 8]
+                (j == 9 && (i == 11 || i == 26)) ||      // [2, 7, 8] 
+                (j == 10 && (i == 13 || i == 40)) ||     // [2, 15, 19]
+                (j == 11 && (i == 14 || i == 45)) ||     // [2, 19, 20]
+                (j == 12 && (i == 16 || i == 20)) ||     // [3, 4, 9]
+                (j == 13 && (i == 17 || i == 27)) ||     // [3, 8, 9]
+                (j == 14 && (i == 19 || i == 22)) ||     // [4, 5, 10]
+                (j == 15 && (i == 20 || i == 28)) ||     // [4, 9, 10]
+                (j == 16 && (i == 22 || i == 29)) ||     // [5, 10, 11]
+                (j == 17 && (i == 30 || i == 34)) ||     // [12, 13, 16]
+                (j == 18 && (i == 31 || i == 42)) ||     // [12, 16, 21]
+                (j == 19 && (i == 33 || i == 37)) ||     // [13, 14, 17]
+                (j == 20 && (i == 34 || i == 41)) ||     // [13, 16, 17]
+                (j == 21 && (i == 36 || i == 39)) ||     // [14, 15, 18]
+                (j == 22 && (i == 37 || i == 43)) ||     // [14, 17, 18]
+                (j == 23 && (i == 39 || i == 44))        // [15, 18, 19]
+            )
+            {
+                REQUIRE(del2(i, j) == 1); 
+            }
+            else if (
+                (j == 0 && i == 2) ||      // [0, 1, 6] -> [0, 6]
+                (j == 1 && i == 3) ||      // [0, 5, 11] -> [0, 11]
+                (j == 2 && i == 3) ||      // [0, 6, 11] -> [0, 11]
+                (j == 3 && i == 6) ||      // [1, 2, 7] -> [1, 7]
+                (j == 4 && i == 8) ||      // [1, 2, 20] -> [1, 20]
+                (j == 5 && i == 6) ||      // [1, 6, 7] -> [1, 7]
+                (j == 6 && i == 9) ||      // [1, 12, 21] -> [1, 21]
+                (j == 7 && i == 9) ||      // [1, 20, 21] -> [1, 21]
+                (j == 8 && i == 12) ||     // [2, 3, 8] -> [2, 8]
+                (j == 9 && i == 12) ||     // [2, 7, 8] -> [2, 8] 
+                (j == 10 && i == 14) ||    // [2, 15, 19] -> [2, 19]
+                (j == 11 && i == 15) ||    // [2, 19, 20] -> [2, 20]
+                (j == 12 && i == 18) ||    // [3, 4, 9] -> [3, 9]
+                (j == 13 && i == 18) ||    // [3, 8, 9] -> [3, 9]
+                (j == 14 && i == 21) ||    // [4, 5, 10] -> [4, 10]
+                (j == 15 && i == 21) ||    // [4, 9, 10] -> [4, 10]
+                (j == 16 && i == 23) ||    // [5, 10, 11] -> [5, 11]
+                (j == 17 && i == 31) ||    // [12, 13, 16] -> [12, 16]
+                (j == 18 && i == 32) ||    // [12, 16, 21] -> [12, 21]
+                (j == 19 && i == 35) ||    // [13, 14, 17] -> [13, 17]
+                (j == 20 && i == 35) ||    // [13, 16, 17] -> [13, 17]
+                (j == 21 && i == 38) ||    // [14, 15, 18] -> [14, 18]
+                (j == 22 && i == 38) ||    // [14, 17, 18] -> [14, 18]
+                (j == 23 && i == 40)       // [15, 18, 19] -> [15, 19]
+            )
+            {
+                REQUIRE(del2(i, j) == -1); 
+            }
+            else 
+            {
+                REQUIRE(del2(i, j) == 0); 
+            }
+        }
+    }
+
+    // Get the boundary homomorphism from C_1 to C_0
+    //
+    // Here, the map should send each [v0, v1] to [v1] - [v0] 
+    del1 = cplex.getBoundaryHomomorphism<0>(1); 
+    REQUIRE(del1.rows() == cplex.getNumSimplices(0));    // = 22
+    REQUIRE(del1.cols() == cplex.getNumSimplices(1));    // = 47
+    for (int i = 0; i < del1.rows(); ++i)
+    {
+        for (int j = 0; j < del1.cols(); ++j)
+        {
+            if ((j == 0 && i == 0) ||
+                (j == 1 && i == 0) ||
+                (j == 2 && i == 0) ||
+                (j == 3 && i == 0) ||
+                (j == 4 && i == 1) ||
+                (j == 5 && i == 1) ||
+                (j == 6 && i == 1) ||
+                (j == 7 && i == 1) ||
+                (j == 8 && i == 1) ||
+                (j == 9 && i == 1) ||
+                (j == 10 && i == 2) ||
+                (j == 11 && i == 2) || 
+                (j == 12 && i == 2) ||
+                (j == 13 && i == 2) ||
+                (j == 14 && i == 2) ||
+                (j == 15 && i == 2) ||
+                (j == 16 && i == 3) ||
+                (j == 17 && i == 3) ||
+                (j == 18 && i == 3) ||
+                (j == 19 && i == 4) ||
+                (j == 20 && i == 4) || 
+                (j == 21 && i == 4) ||
+                (j == 22 && i == 5) ||
+                (j == 23 && i == 5) ||
+                (j == 24 && i == 6) ||
+                (j == 25 && i == 6) ||
+                (j == 26 && i == 7) ||
+                (j == 27 && i == 8) ||
+                (j == 28 && i == 9) ||
+                (j == 29 && i == 10) ||
+                (j == 30 && i == 12) ||
+                (j == 31 && i == 12) ||
+                (j == 32 && i == 12) ||
+                (j == 33 && i == 13) ||
+                (j == 34 && i == 13) ||
+                (j == 35 && i == 13) ||
+                (j == 36 && i == 14) ||
+                (j == 37 && i == 14) ||
+                (j == 38 && i == 14) ||
+                (j == 39 && i == 15) ||
+                (j == 40 && i == 15) ||
+                (j == 41 && i == 16) ||
+                (j == 42 && i == 16) ||
+                (j == 43 && i == 17) ||
+                (j == 44 && i == 18) ||
+                (j == 45 && i == 19) ||
+                (j == 46 && i == 20)
+            )
+            {
+                REQUIRE(del1(i, j) == -1); 
+            }
+            else if (
+                (j == 0 && i == 1) ||
+                (j == 1 && i == 5) ||
+                (j == 2 && i == 6) ||
+                (j == 3 && i == 11) ||
+                (j == 4 && i == 2) ||
+                (j == 5 && i == 6) ||
+                (j == 6 && i == 7) ||
+                (j == 7 && i == 12) ||
+                (j == 8 && i == 20) ||
+                (j == 9 && i == 21) ||
+                (j == 10 && i == 3) ||
+                (j == 11 && i == 7) || 
+                (j == 12 && i == 8) ||
+                (j == 13 && i == 15) ||
+                (j == 14 && i == 19) ||
+                (j == 15 && i == 20) ||
+                (j == 16 && i == 4) ||
+                (j == 17 && i == 8) ||
+                (j == 18 && i == 9) ||
+                (j == 19 && i == 5) ||
+                (j == 20 && i == 9) || 
+                (j == 21 && i == 10) ||
+                (j == 22 && i == 10) ||
+                (j == 23 && i == 11) ||
+                (j == 24 && i == 7) ||
+                (j == 25 && i == 11) ||
+                (j == 26 && i == 8) ||
+                (j == 27 && i == 9) ||
+                (j == 28 && i == 10) ||
+                (j == 29 && i == 11) ||
+                (j == 30 && i == 13) ||
+                (j == 31 && i == 16) ||
+                (j == 32 && i == 21) ||
+                (j == 33 && i == 14) ||
+                (j == 34 && i == 16) ||
+                (j == 35 && i == 17) ||
+                (j == 36 && i == 15) ||
+                (j == 37 && i == 17) ||
+                (j == 38 && i == 18) ||
+                (j == 39 && i == 18) ||
+                (j == 40 && i == 19) ||
+                (j == 41 && i == 17) ||
+                (j == 42 && i == 21) ||
+                (j == 43 && i == 18) ||
+                (j == 44 && i == 19) ||
+                (j == 45 && i == 20) ||
+                (j == 46 && i == 21)
+            )
+            {
+                REQUIRE(del1(i, j) == 1); 
+            }
+            else 
+            {
+                REQUIRE(del1(i, j) == 0); 
+            }
+        }
+    }
+
+    // Check that the composition of the two homomorphisms is zero
+    REQUIRE(((del1 * del2).array() == 0).all());
+
+    // Compare against the boundary homomorphisms mod 2
+    del2_p2 = cplex.getBoundaryHomomorphism<2>(2); 
+    del1_p2 = cplex.getBoundaryHomomorphism<2>(1);
+    REQUIRE(del2_p2.rows() == del2.rows()); 
+    REQUIRE(del2_p2.cols() == del2.cols()); 
+    for (int i = 0; i < del2_p2.rows(); ++i)
+    {
+        for (int j = 0; j < del2_p2.cols(); ++j)
+        {
+            if (del2(i, j) == -1 || del2(i, j) == 1)
+                REQUIRE(del2_p2(i, j) == 1); 
+            else    // del2(i, j) == 0
+                REQUIRE(del2_p2(i, j) == 0); 
+        }
+    }
+    REQUIRE(del1_p2.rows() == del1.rows()); 
+    REQUIRE(del1_p2.cols() == del1.cols()); 
+    for (int i = 0; i < del1_p2.rows(); ++i)
+    {
+        for (int j = 0; j < del1_p2.cols(); ++j)
+        {
+            if (del1(i, j) == -1 || del1(i, j) == 1)
+                REQUIRE(del1_p2(i, j) == 1); 
+            else    // del1(i, j) == 0
+                REQUIRE(del1_p2(i, j) == 0); 
+        }
+    }
+    REQUIRE(((del1_p2 * del2_p2).array() == 0).all());
+
+    // ------------------------------------------------------------- // 
     // Test for tetrahedron
     // ------------------------------------------------------------- // 
     cplex = complex_tetrahedron();
@@ -1671,6 +2320,28 @@ TEST_CASE(
     REQUIRE(L2.determinant() != 0);
 
     // ------------------------------------------------------------- // 
+    // Test for two-holed annulus
+    // ------------------------------------------------------------- //
+    cplex = complex_annulus_two_holes(); 
+    L0 = cplex.getCombinatorialLaplacian(0);
+    L1 = cplex.getCombinatorialLaplacian(1); 
+    L2 = cplex.getCombinatorialLaplacian(2); 
+
+    // This complex is still connected but *not* simply connected, and has
+    // two holes (1-D cycle)
+    REQUIRE(L0.rows() == 22); 
+    REQUIRE(L0.cols() == 22);
+    kerL0 = ::kernel<Fp<0> >(L0); 
+    REQUIRE(kerL0.cols() == 1); 
+    REQUIRE(L1.rows() == 47); 
+    REQUIRE(L1.cols() == 47); 
+    kerL1 = ::kernel<Fp<0> >(L1); 
+    REQUIRE(kerL1.cols() == 2); 
+    REQUIRE(L2.rows() == 24); 
+    REQUIRE(L2.cols() == 24); 
+    REQUIRE(L2.determinant() != 0);
+
+    // ------------------------------------------------------------- // 
     // Test for tetrahedron
     // ------------------------------------------------------------- // 
     cplex = complex_tetrahedron();
@@ -1745,7 +2416,7 @@ TEST_CASE(
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
 
     // Get bases for the homology groups over the rationals, but with
     // getPrimeCharHomology()
@@ -1759,7 +2430,7 @@ TEST_CASE(
     // Again check that the basis vector for H0 is homologous to the 
     // all-ones vector
     aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
 
     // Check the Betti numbers 
     betti = cplex.getZeroCharBettiNumbers(); 
@@ -1789,7 +2460,7 @@ TEST_CASE(
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
 
     // Check that the basis vector for H1 is a scalar multiple of the vector
     // (1, -1, 1), corresponding to the cycle [v0,v1], [v2,v0], [v1,v2]
@@ -1809,7 +2480,7 @@ TEST_CASE(
     // Again check that the basis vector for H0 is homologous to the 
     // all-ones vector
     aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
 
     // Again check that the basis vector for H1 is a scalar multiple of the
     // vector (1, -1, 1)
@@ -1846,7 +2517,7 @@ TEST_CASE(
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
 
     // Get bases for the homology groups over the rationals, but with
     // getPrimeCharHomology()
@@ -1860,7 +2531,7 @@ TEST_CASE(
     // Again check that the basis vector for H0 is homologous to the 
     // all-ones vector
     aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
 
     // Check the Betti numbers 
     betti = cplex.getZeroCharBettiNumbers(); 
@@ -1892,7 +2563,7 @@ TEST_CASE(
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0;
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
 
     // Get bases for the homology groups over the rationals, but with
     // getPrimeCharHomology()
@@ -1906,7 +2577,7 @@ TEST_CASE(
     // Again check that the basis vector for H0 is homologous to the 
     // all-ones vector
     aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
 
     // Check the Betti numbers 
     betti = cplex.getZeroCharBettiNumbers(); 
@@ -2052,6 +2723,240 @@ TEST_CASE(
     REQUIRE(betti(1) == 1); 
     REQUIRE(betti(2) == 0);
     REQUIRE(betti(3) == 0);
+
+    // ------------------------------------------------------------- // 
+    // Test for two-holed annulus
+    // ------------------------------------------------------------- //
+    cplex = complex_annulus_two_holes(); 
+
+    // Get bases for the homology groups over the rationals 
+    H0_p0 = cplex.getZeroCharHomology(0);
+    H1_p0 = cplex.getZeroCharHomology(1); 
+    H2_p0 = cplex.getZeroCharHomology(2);
+    REQUIRE(H0_p0.cols() == 1);
+    REQUIRE(H1_p0.cols() == 2); 
+    REQUIRE(H2_p0.cols() == 0);
+
+    // Check that the basis vector for H0 is homologous to the all-ones
+    // vector
+    //
+    // Since \del_0 is the zero map, this means that the difference lies
+    // in the image of \del_1
+    v1 = Matrix<Fp<0>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getBoundaryHomomorphism<0>(1);
+    aug1.resize(del1.rows(), del1.cols() + 1); 
+    aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
+    aug1.col(del1.cols()) = H0_p0;
+    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
+
+    // Check that the two basis vectors for H1 are not homologous to each other
+    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    REQUIRE(((del1 * H1_p0.col(0)).array() == 0).all());
+    REQUIRE(((del1 * H1_p0.col(1)).array() == 0).all());
+    aug2.resize(del2.rows(), del2.cols() + 1);
+    aug2(Eigen::all, Eigen::seq(0, del2.cols() - 1)) = del2;
+    aug2.col(del2.cols()) = H1_p0.col(0);
+    REQUIRE(containsInconsistency<Fp<0> >(aug2, H1_p0.col(1))); 
+
+    // Consider 11 different cycles ...  
+    Matrix<Fp<0>, Dynamic, Dynamic> cycles(cplex.getNumSimplices(1), 11);
+
+    // Left hole, small: [v6,v7], [v7,v8], [v8,v9], [v9,v10], [v10,v11],
+    //                   [v11,v6]
+    cycles(24, 0) = 1;
+    cycles(25, 0) = -1; 
+    cycles(26, 0) = 1; 
+    cycles(27, 0) = 1;
+    cycles(28, 0) = 1;
+    cycles(29, 0) = 1;
+    // Left hole, large: [v0,v1], [v1,v2], [v2,v3], [v3,v4], [v4,v5], [v5,v0]
+    cycles(0, 1) = 1;
+    cycles(1, 1) = -1;
+    cycles(4, 1) = 1; 
+    cycles(10, 1) = 1; 
+    cycles(16, 1) = 1; 
+    cycles(19, 1) = 1;
+    // Right hole, small: [v16,v17], [v17,v18], [v18,v19], [v19,v20], [v20,v21],
+    //                    [v21,v16]
+    cycles(41, 2) = 1;
+    cycles(42, 2) = -1;
+    cycles(43, 2) = 1; 
+    cycles(44, 2) = 1; 
+    cycles(45, 2) = 1; 
+    cycles(46, 2) = 1;
+    // Right hole, large: [v12,v13], [v13,v14], [v14,v15], [v15,v2], [v2,v1],
+    //                    [v1,v12]
+    cycles(30, 3) = 1;
+    cycles(33, 3) = 1; 
+    cycles(36, 3) = 1; 
+    cycles(13, 3) = -1; 
+    cycles(4, 3) = -1; 
+    cycles(7, 3) = 1; 
+    // Both holes, small: [v6,v7], [v7,v1], [v1,v21], [v21,v16], [v16,v17],
+    //                    [v17,v18], [v18,v19], [v19,v20], [v20,v2], [v2,v8],
+    //                    [v8,v9], [v9,v10], [v10,v11], [v11,v6]
+    cycles(24, 4) = 1; 
+    cycles(6, 4) = -1; 
+    cycles(9, 4) = 1; 
+    cycles(42, 4) = -1;
+    cycles(41, 4) = 1;
+    cycles(43, 4) = 1;
+    cycles(44, 4) = 1;
+    cycles(45, 4) = 1;
+    cycles(15, 4) = -1; 
+    cycles(12, 4) = 1;
+    cycles(27, 4) = 1;
+    cycles(28, 4) = 1;
+    cycles(29, 4) = 1;
+    cycles(25, 4) = -1;
+    // Both holes, large: [v0,v1], [v1,v12], [v12,v13], [v13,v14], [v14,v15],
+    //                    [v15,v2], [v2,v3], [v3,v4], [v4,v5], [v5,v0]
+    cycles(0, 5) = 1; 
+    cycles(7, 5) = 1; 
+    cycles(30, 5) = 1; 
+    cycles(33, 5) = 1;
+    cycles(36, 5) = 1;
+    cycles(13, 5) = -1;
+    cycles(10, 5) = 1;
+    cycles(16, 5) = 1;
+    cycles(19, 5) = 1;
+    cycles(1, 5) = -1;
+    // Left hole, twice 1: [v0,v1], [v1,v2], [v2,v3], [v3,v4], [v4,v5],
+    //                     [v5,v11], [v11,v0], [v0,v6], [v6,v1], [v1,v7],
+    //                     [v7,v2], [v2,v8], [v8,v3], [v3,v9], [v9,v4],
+    //                     [v4,v10], [v10,v5], [v5,v0]
+    cycles(0, 6) = 1; 
+    cycles(4, 6) = 1; 
+    cycles(10, 6) = 1; 
+    cycles(16, 6) = 1; 
+    cycles(19, 6) = 1;
+    cycles(23, 6) = 1; 
+    cycles(3, 6) = -1; 
+    cycles(2, 6) = 1;
+    cycles(5, 6) = -1;
+    cycles(6, 6) = 1;
+    cycles(11, 6) = -1;
+    cycles(12, 6) = 1; 
+    cycles(17, 6) = -1;
+    cycles(18, 6) = 1;
+    cycles(20, 6) = -1;
+    cycles(21, 6) = 1;
+    cycles(22, 6) = -1; 
+    cycles(1, 6) = -1;
+    // Left hole, twice 2: [v0,v1], [v1,v2], [v2,v3], [v3,v4], [v4,v5],
+    //                     [v5,v11], [v11,v6], [v6,v7], [v7,v8], [v8,v9],
+    //                     [v9,v10], [v10,v11], [v11,v0]
+    cycles(0, 7) = 1; 
+    cycles(4, 7) = 1; 
+    cycles(10, 7) = 1; 
+    cycles(16, 7) = 1; 
+    cycles(19, 7) = 1;
+    cycles(23, 7) = 1;
+    cycles(25, 7) = -1;
+    cycles(24, 7) = 1;
+    cycles(26, 7) = 1;
+    cycles(27, 7) = 1;
+    cycles(28, 7) = 1;
+    cycles(29, 7) = 1;
+    cycles(3, 7) = -1;
+    // Right hole, twice 1: [v12,v13], [v13,v14], [v14,v15], [v15,v2],
+    //                      [v2,v1], [v1,v21], [v21,v12], [v12,v16],
+    //                      [v16,v13], [v13,v17], [v17,v14], [v14,v18],
+    //                      [v18,v15], [v15,v19], [v19,v2], [v2,v20],
+    //                      [v20,v1], [v1,v12]
+    cycles(30, 8) = 1;
+    cycles(33, 8) = 1; 
+    cycles(36, 8) = 1;
+    cycles(13, 8) = -1; 
+    cycles(4, 8) = -1;
+    cycles(9, 8) = 1;
+    cycles(32, 8) = -1;
+    cycles(31, 8) = 1;
+    cycles(34, 8) = -1; 
+    cycles(35, 8) = 1;
+    cycles(37, 8) = -1;
+    cycles(38, 8) = 1;
+    cycles(39, 8) = -1;
+    cycles(40, 8) = 1;
+    cycles(14, 8) = -1;
+    cycles(15, 8) = 1;
+    cycles(8, 8) = -1; 
+    cycles(7, 8) = 1;
+    // Right hole, twice 2: [v12,v13], [v13,v14], [v14,v15], [v15,v2],
+    //                      [v2,v1], [v1,v21], [v21,v16], [v16,v17],
+    //                      [v17,v18], [v18,v19], [v19,v20], [v20,v21],
+    //                      [v21,v12]
+    cycles(30, 9) = 1;
+    cycles(33, 9) = 1; 
+    cycles(36, 9) = 1;
+    cycles(13, 9) = -1; 
+    cycles(4, 9) = -1;
+    cycles(9, 9) = 1;
+    cycles(42, 9) = -1;
+    cycles(41, 9) = 1;
+    cycles(43, 9) = 1; 
+    cycles(44, 9) = 1;
+    cycles(45, 9) = 1;
+    cycles(46, 9) = 1;
+    cycles(32, 9) = -1;
+    // Figure eight: [v0,v1], [v1,v20], [v20,v19], [v19,v18], [v18,v17],
+    //               [v17,v16], [v16,v21], [v21,v20], [v20,v2], [v2,v3],
+    //               [v3,v4], [v4,v5], [v5,v0]
+    cycles(0, 10) = 1;
+    cycles(8, 10) = 1;
+    cycles(45, 10) = -1;
+    cycles(44, 10) = -1;
+    cycles(43, 10) = -1; 
+    cycles(41, 10) = -1;
+    cycles(42, 10) = 1;
+    cycles(46, 10) = -1;
+    cycles(15, 10) = -1;
+    cycles(10, 10) = 1;
+    cycles(16, 10) = 1;
+    cycles(19, 10) = 1;
+    cycles(1, 10) = -1;
+
+    // Check that all 11 cycles are indeed cycles 
+    for (int i = 0; i < 11; ++i)
+        REQUIRE(((del1 * cycles.col(i)).array() == 0).all());
+    
+    // Check the homology of each cycle
+    for (int i = 0; i < 11; ++i)
+    {
+        for (int j = i + 1; j < 11; ++j)
+        {
+            if (i == 0 && j == 1)          // Left holes 
+                REQUIRE(!containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j)));
+            else if (i == 2 && j == 3)     // Right holes
+                REQUIRE(!containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j)));
+            else if (i == 4 && j == 5)     // Both holes
+                REQUIRE(!containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j)));
+            else if (i == 6 && j == 7)     // Left hole, twice around
+                REQUIRE(!containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j)));
+            else if (i == 8 && j == 9)     // Right hole, twice around
+                REQUIRE(!containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j)));
+            else    // Figure eight should not be homologous to any other cycle
+                REQUIRE(containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j))); 
+        }
+    }
+
+    // Check that each cycle belongs to a homology class that lies within 
+    // the span of the two basis vectors
+    aug2.resize(del2.rows(), del2.cols() + 2);
+    aug2(Eigen::all, Eigen::seq(0, del2.cols() - 1)) = del2; 
+    aug2.col(del2.cols()) = H1_p0.col(0);
+    aug2.col(del2.cols() + 1) = H1_p0.col(1);
+    for (int i = 0; i < 11; ++i)
+        REQUIRE(!containsInconsistency<Fp<0> >(aug2, cycles.col(i)));
+
+    // Get bases for the homology groups over the rationals, but with
+    // getPrimeCharHomology()
+    H0_p0 = cplex.getPrimeCharHomology<0>(0); 
+    H1_p0 = cplex.getPrimeCharHomology<0>(1); 
+    H2_p0 = cplex.getPrimeCharHomology<0>(2);
+    REQUIRE(H0_p0.cols() == 1);
+    REQUIRE(H1_p0.cols() == 2); 
+    REQUIRE(H2_p0.cols() == 0);
 
     // ------------------------------------------------------------- // 
     // Test for tetrahedron
@@ -2373,6 +3278,82 @@ TEST_CASE(
     REQUIRE(betti(2) == 0);
     REQUIRE(betti(3) == 0);
 
+    // ------------------------------------------------------------- // 
+    // Test for two-holed annulus
+    // ------------------------------------------------------------- //
+    cplex = complex_annulus_two_holes();
+
+    // Get bases for the homology groups over Z/2Z
+    H0_p2 = cplex.getPrimeCharHomology<2>(0);
+    /*
+    H1_p2 = cplex.getPrimeCharHomology<2>(1);
+    H2_p2 = cplex.getPrimeCharHomology<2>(2);
+    std::cout << H0_p2 << "\n--\n"; 
+    std::cout << H1_p2 << "\n--\n"; 
+    REQUIRE(H0_p2.cols() == 1);
+    REQUIRE(H1_p2.cols() == 2); 
+    REQUIRE(H2_p2.cols() == 0);
+
+    // Check that the basis vector for H0 is homologous to the all-ones
+    // vector
+    //
+    // Since \del_0 is the zero map, this means that the difference lies
+    // in the image of \del_1
+    v1 = Matrix<Fp<2>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getBoundaryHomomorphism<2>(1);
+    aug1.resize(del1.rows(), del1.cols() + 1); 
+    aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
+    aug1.col(del1.cols()) = H0_p2;
+    REQUIRE(!containsInconsistency<Fp<2> >(aug1, v1));
+
+    // - Check that one basis vector for H1 is homologous to the cycle [v6,v7], 
+    //   [v7,v8], [v8,v9], [v9,v10], [v10,v11], [v11,v6]
+    // - Check that one basis vector for H1 is homologous to the cycle [v16,v17],
+    //   [v17,v18], [v18,v19], [v19,v20], [v20,v21], [v21,v16]
+    v2 = Matrix<Fp<2>, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
+    v2(24) = 1; 
+    v2(25) = 1; 
+    v2(26) = 1; 
+    v2(27) = 1;
+    v2(28) = 1;
+    v2(29) = 1;
+    Matrix<Fp<2>, Dynamic, 1> v3 = Matrix<Fp<2>, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
+    v3(41) = 1; 
+    v3(42) = 1;
+    v3(43) = 1; 
+    v3(44) = 1; 
+    v3(45) = 1; 
+    v3(46) = 1;
+    REQUIRE(((del1 * v2).array() == 0).all());
+    REQUIRE(((del1 * v3).array() == 0).all());
+    REQUIRE(((del1 * H1_p2.col(0)).array() == 0).all());
+    REQUIRE(((del1 * H1_p2.col(1)).array() == 0).all());
+    del2 = cplex.getBoundaryHomomorphism<2>(2);
+    aug2.resize(del2.rows(), del2.cols() + 1);
+    aug2(Eigen::all, Eigen::seq(0, del2.cols() - 1)) = del2;
+    aug2.col(del2.cols()) = H1_p2.col(0);     // Check first basis vector 
+    REQUIRE((!containsInconsistency<Fp<2> >(aug2, v2) || !containsInconsistency<Fp<2> >(aug2, v3)));
+    if (!containsInconsistency<Fp<2> >(aug2, v2))
+    {
+        // If the first basis vector is homologous to v2 ... 
+        aug2.col(del2.cols()) = H1_p2.col(1); 
+        REQUIRE(!containsInconsistency<Fp<2> >(aug2, v3));
+    }
+    else
+    {
+        // If the first basis vector is homologous to v3 ... 
+        aug2.col(del2.cols()) = H1_p2.col(1); 
+        REQUIRE(!containsInconsistency<Fp<2> >(aug2, v2));
+    }
+
+    // Check the Betti numbers mod 2 
+    betti = cplex.getPrimeCharBettiNumbers<2>(); 
+    REQUIRE(betti(0) == 1); 
+    REQUIRE(betti(1) == 2); 
+    REQUIRE(betti(2) == 0);
+    REQUIRE(betti(3) == 0);
+    */
+    
     // ------------------------------------------------------------- // 
     // Test for tetrahedron
     // ------------------------------------------------------------- // 
