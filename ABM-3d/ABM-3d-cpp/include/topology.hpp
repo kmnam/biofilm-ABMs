@@ -1489,8 +1489,8 @@ class SimplicialComplex3D
          * @returns True if the chain is a boundary, false otherwise.  
          */
         template <int p = 2>
-        bool areBoundaries(const Ref<const Matrix<Fp<p>, Dynamic, Dynamic> >& chains, 
-                           const int dim)
+        Matrix<int, Dynamic, 1> areBoundaries(const Ref<const Matrix<Fp<p>, Dynamic, Dynamic> >& chains, 
+                                              const int dim)
         {
             // Check that the dimension of the input vectors is correct
             if (dim < 0 || dim > this->dimension())
@@ -1529,8 +1529,8 @@ class SimplicialComplex3D
             } 
             else    // If dim is maximal, then only the zero vector is in the image
             {
-                for (int i = 0; i < chains.cols(); ++i)
-                    are_boundaries(i) = (chains.col(i).array() == 0).all(); 
+                for (int j = 0; j < chains.cols(); ++j)
+                    are_boundaries(j) = (chains.col(j).array() == 0).all(); 
             }
 
             return are_boundaries; 
