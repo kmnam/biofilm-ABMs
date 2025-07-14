@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/10/2025
+ *     7/13/2025
  */
 
 #ifndef SIMPLICIAL_COMPLEXES_3D_HPP
@@ -1463,8 +1463,9 @@ class SimplicialComplex3D
         }
 
         /**
-         * Get a collection of minimal cycles for the simplicial complex 
-         * over rational coefficients.  
+         * Calculate a basis of homology classes for the given dimension and 
+         * minimize each homology class representative according to its 1-norm
+         * using linear programming. 
          *
          * @param dim Input dimension. 
          * @returns Collection of minimal cycles. 
