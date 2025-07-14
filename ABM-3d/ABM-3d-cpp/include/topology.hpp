@@ -1390,6 +1390,43 @@ class SimplicialComplex3D
         }
 
         /**
+         * Return a boolean vector that encodes, for each column in the given
+         * matrix, whether the corresponding chain of simplices is a cycle 
+         * of the given dimension. 
+         *
+         * @param chains Array of input chains, each as a vector of
+         *               coefficients over the simplices of the appropriate
+         *               dimension. 
+         * @param dim Cycle dimension.
+         * @returns Boolean vector indicating whether each chain is a cycle. 
+         */
+        template <int p = 2>
+        Matrix<int, Dynamic, 1> areCycles(const Ref<const Matrix<Fp<p>, Dynamic, Dynamic> >& chains, 
+                                          const int dim)
+        {
+            // Check that the dimension of the input vectors is correct
+            if (dim < 0 || dim > this->dimension())
+                throw std::runtime_error("Invalid input dimension"); 
+            else if (chains.rows() != this->getNumSimplices(dim))
+                throw std::runtime_error(
+                    "Input vector does not represent chain of given dimension"
+                );
+
+            // Is the vector in the kernel of the boundary homomorphism? 
+            if (dim > 0)
+            {
+                Matrix<int, Dynamic, 1> are_cycles = Matrix<int, Dynamic, 1>::Zero(chains.cols()); 
+                Matrix<Fp<p>, Dynamic, Dynamic> del = this->getBoundaryHomomorphism<p>(dim);
+                for (int i = 0; i < chains.cols(); ++i) 
+                    are_cycles(i) = ((del * chains.col(i)).array() == 0).all(); 
+            } 
+            else    // If dim == 0, then all vectors are in the kernel 
+            {
+                return Matrix<int, Dynamic, 1>::Ones(chains.cols()); 
+            }
+        }
+
+        /**
          * Return true if the input chain is a boundary of the given dimension.
          *
          * @param chain Input chain, as a vector of coefficients over the 
@@ -1440,6 +1477,66 @@ class SimplicialComplex3D
         }
 
         /**
+         * Return a boolean vector that encodes, for each column in the given
+         * matrix, whether the corresponding chain of simplices is a boundary 
+         * of the given dimension. 
+         *
+         * @param chains Array of input chains, each as a vector of
+         *               coefficients over the simplices of the appropriate
+         *               dimension. 
+         * @param dim Boundary dimension (i.e., dimension of the boundary
+         *            homomorphism minus 1). 
+         * @returns True if the chain is a boundary, false otherwise.  
+         */
+        template <int p = 2>
+        bool areBoundaries(const Ref<const Matrix<Fp<p>, Dynamic, Dynamic> >& chains, 
+                           const int dim)
+        {
+            // Check that the dimension of the input vectors is correct
+            if (dim < 0 || dim > this->dimension())
+                throw std::runtime_error("Invalid input dimension"); 
+            else if (chains.rows() != this->getNumSimplices(dim))
+                throw std::runtime_error(
+                    "Input vector does not represent chain of given dimension"
+                );
+
+            // Is the vector in the image of the boundary homomorphism?
+            Matrix<int, Dynamic, 1> are_boundaries = Matrix<int, Dynamic, 1>::Ones(chains.cols()); 
+            if (dim < this->dimension())
+            {
+                // Get the row echelon form of [del | chains]
+                Matrix<Fp<p>, Dynamic, Dynamic> del = this->getBoundaryHomomorphism<p>(dim + 1); 
+                Matrix<Fp<p>, Dynamic, Dynamic> system(del.rows(), del.cols() + chains.cols()); 
+                system(Eigen::all, Eigen::seq(0, del.cols() - 1)) = del;
+                system(Eigen::all, Eigen::seq(del.cols(), del.cols() + chains.cols() - 1) = chains; 
+                system = ::rowEchelonForm<Fp<p> >(system);
+
+                // If there is an inconsistency in the row echelon form, this
+                // means that the chain is not in the column space of del and 
+                // is therefore not a boundary
+                for (int j = 0; j < chains.cols(); ++j)
+                {
+                    for (int i = 0; i < system.rows(); ++i)
+                    {
+                        if ((system.row(i).head(del.cols()).array() == 0).all() &&
+                            system(i, del.cols() + j) != 0)
+                        {
+                            are_boundaries(j) = 0;
+                            break; 
+                        }
+                    }
+                }
+            } 
+            else    // If dim is maximal, then only the zero vector is in the image
+            {
+                for (int i = 0; i < chains.cols(); ++i)
+                    are_boundaries(i) = (chains.col(i).array() == 0).all(); 
+            }
+
+            return are_boundaries; 
+        }
+
+        /**
          * Return true if the two cycles (1) are indeed cycles, and (2) are 
          * homologous. 
          *
@@ -1455,11 +1552,10 @@ class SimplicialComplex3D
                                  const Ref<const Matrix<Fp<p>, Dynamic, 1> >& chain2, 
                                  const int dim)
         {
-            return (
-                this->isCycle<p>(chain1, dim) &&
-                this->isCycle<p>(chain2, dim) &&
-                this->isBoundary<p>(chain1 - chain2, dim)
-            ); 
+            Matrix<Fp<p>, Dynamic, Dynamic> chains(chain1.size(), 2); 
+            chains.col(0) = chain1; 
+            chains.col(1) = chain2; 
+            return (this->areCycles<p>(chains, dim) && this->isBoundary<p>(chain1 - chain2, dim)); 
         }
 
         /**
