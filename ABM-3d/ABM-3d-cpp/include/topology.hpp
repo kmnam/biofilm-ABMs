@@ -1358,65 +1358,108 @@ class SimplicialComplex3D
         }
 
         /**
-         * Return true if the two cycles are (1) indeed cycles, meaning 
-         * they lie in the kernel of the appropriate boundary homomorphism,
-         * and (2) are homologous. 
+         * Return true if the input chain is a cycle of the given dimension. 
+         *
+         * @param chain Input chain, as a vector of coefficients over the 
+         *              simplices of the appropriate dimension. 
+         * @param dim Cycle dimension.
+         * @returns True if the chain is a cycle, false otherwise.  
          */
         template <int p = 2>
-        bool areHomologous(const Ref<const Matrix<Fp<p>, Dynamic, 1> >& v1, 
-                           const Ref<const Matrix<Fp<p>, Dynamic, 1> >& v2, 
-                           const int dim)
+        bool isCycle(const Ref<const Matrix<Fp<p>, Dynamic, 1> >& chain, 
+                     const int dim)
         {
-            // Check that the dimensions of the two vectors are correct 
+            // Check that the dimension of the input vector is correct
             if (dim < 0 || dim > this->dimension())
-                throw std::runtime_error(
-                    "Invalid input dimension for homology calculation"
-                ); 
-            else if (v1.size() != this->getNumSimplices(dim))
-                throw std::runtime_error(
-                    "Input vector does not represent chain of given dimension"
-                );
-            else if (v2.size() != this->getNumSimplices(dim))
+                throw std::runtime_error("Invalid input dimension"); 
+            else if (chain.size() != this->getNumSimplices(dim))
                 throw std::runtime_error(
                     "Input vector does not represent chain of given dimension"
                 );
 
-            // Are the two vectors in the kernel of the boundary homomorphism?
-            if (dim > 0)    // If dim == 0, then all vectors are in the kernel
+            // Is the vector in the kernel of the boundary homomorphism? 
+            if (dim > 0)
             {
-                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim); 
-                if (!((del2 * v1).array() == 0).all())
-                    return false; 
-                if (!((del2 * v2).array() == 0).all())
-                    return false;
+                Matrix<Fp<p>, Dynamic, Dynamic> del = this->getBoundaryHomomorphism<p>(dim); 
+                return ((del * chain).array() == 0).all(); 
             } 
-
-            // If so, are the two vectors homologous?
-            if (dim < this->dimension)    // If dim is maximal, then all cycles are homologous
+            else    // If dim == 0, then all vectors are in the kernel 
             {
-                Matrix<Fp<p>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<p>(dim + 1);
-                Matrix<Fp<p>, Dynamic, Dynamic> colspace = ::columnSpace<Fp<p> >(del1); 
-                Matrix<Fp<p>, Dynamic, Dynamic> system(colspace.rows(), colspace.cols() + 2); 
-                system(Eigen::all, Eigen::seq(0, colspace.cols() - 1)) = colspace; 
-                system.col(colspace.cols()) = -v2;
-                system.col(colspace.cols() + 1) = v1; 
+                return true; 
+            }
+        }
+
+        /**
+         * Return true if the input chain is a boundary of the given dimension.
+         *
+         * @param chain Input chain, as a vector of coefficients over the 
+         *              simplices of the appropriate dimension. 
+         * @param dim Boundary dimension (i.e., dimension of the boundary
+         *            homomorphism minus 1). 
+         * @returns True if the chain is a boundary, false otherwise.  
+         */
+        template <int p = 2>
+        bool isBoundary(const Ref<const Matrix<Fp<p>, Dynamic, 1> >& chain, 
+                        const int dim)
+        {
+            // Check that the dimension of the input vector is correct
+            if (dim < 0 || dim > this->dimension())
+                throw std::runtime_error("Invalid input dimension"); 
+            else if (chain.size() != this->getNumSimplices(dim))
+                throw std::runtime_error(
+                    "Input vector does not represent chain of given dimension"
+                );
+
+            // Is the vector in the image of the boundary homomorphism? 
+            if (dim < this->dimension())
+            {
+                // Get the row echelon form of [del | chain]
+                Matrix<Fp<p>, Dynamic, Dynamic> del = this->getBoundaryHomomorphism<p>(dim + 1); 
+                Matrix<Fp<p>, Dynamic, Dynamic> system(del.rows(), del.cols() + 1); 
+                system(Eigen::all, Eigen::seq(0, del.cols() - 1)) = del;
+                system.col(del.cols()) = chain; 
                 system = ::rowEchelonForm<Fp<p> >(system);
 
                 // If there is an inconsistency in the row echelon form, this
-                // means that v1 cannot be written as a linear combination of 
-                // the column space of \del and v2, which means that v1 and 
-                // v2 are non-homologous  
+                // means that the chain is not in the column space of del and 
+                // is therefore not a boundary  
                 for (int i = 0; i < system.rows(); ++i)
                 {
-                    if ((system.row(i).head(colspace.cols()).array() == 0).all() &&
-                        system(i, colspace.cols()) != 0)
+                    if ((system.row(i).head(del.cols()).array() == 0).all() &&
+                        system(i, del.cols()) != 0)
                     {
                         return false; 
                     }
-                } 
+                }
+                return true;  
+            } 
+            else    // If dim is maximal, then only the zero vector is in the image
+            {
+                return (chain.array() == 0).all(); 
             }
+        }
 
-            return true;  
+        /**
+         * Return true if the two cycles (1) are indeed cycles, and (2) are 
+         * homologous. 
+         *
+         * @param chain1 First input chain, as a vector of coefficients over
+         *               the simplices of the appropriate dimension. 
+         * @param chain2 Second input chain, as a vector of coefficients over
+         *               the simplices of the appropriate dimension.
+         * @param dim Cycle dimension. 
+         * @returns True if the two chains are homologous, false otherwise. 
+         */
+        template <int p = 2>
+        bool areHomologousCycles(const Ref<const Matrix<Fp<p>, Dynamic, 1> >& chain1, 
+                                 const Ref<const Matrix<Fp<p>, Dynamic, 1> >& chain2, 
+                                 const int dim)
+        {
+            return (
+                this->isCycle<p>(chain1, dim) &&
+                this->isCycle<p>(chain2, dim) &&
+                this->isBoundary<p>(chain1 - chain2, dim)
+            ); 
         }
 
         /**
@@ -1427,7 +1470,7 @@ class SimplicialComplex3D
          * @returns Collection of minimal cycles. 
          */
         template <int p = 2>
-        Matrix<double, Dynamic, Dynamic> getPrimeCharMinimalCycles(const int dim)
+        Matrix<double, Dynamic, Dynamic> minimizeCycles(const int dim)
         {
             if (dim < 0 || dim > this->dimension())
             {
