@@ -27,8 +27,6 @@
 #include <CGAL/Gmpz.h>
 #include <CGAL/QP_models.h>
 #include <CGAL/QP_functions.h>
-#include "distances.hpp"
-#include "mechanics.hpp"
 #include "fields.hpp"
 #include "graphs.hpp"
 #include "utils.hpp"
