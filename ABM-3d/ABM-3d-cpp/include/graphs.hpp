@@ -19,6 +19,7 @@
 #include <queue>
 #include <map>
 #include <unordered_map>
+#include <algorithm>
 #include <functional>
 #include <Eigen/Dense>
 #include <boost/graph/adjacency_list.hpp>
@@ -254,6 +255,43 @@ Array<int, Dynamic, 4> getTetrahedra(const Graph& graph)
 }
 
 /**
+ * Construct a dictionary that stores an index for each edge in the graph, 
+ * according to lexicographic order. 
+ *
+ * @param graph Input graph. 
+ */
+std::unordered_map<std::pair<int, int>, int,
+                   boost::hash<std::pair<int, int> > > getEdgeOrdering(Graph& graph)
+{
+    // Generate a lexicographically sorted vector of edges and a map of edge
+    // indices with respect to this ordering  
+    std::pair<boost::graph_traits<Graph>::edge_iterator, 
+              boost::graph_traits<Graph>::edge_iterator> it;
+    std::vector<std::pair<int, int> > edges; 
+    std::unordered_map<std::pair<int, int>, int,
+                       boost::hash<std::pair<int, int> > > edge_map; 
+    for (it = boost::edges(graph); it.first != it.second; ++it.first)
+    {
+        boost::graph_traits<Graph>::edge_descriptor edge = *(it.first);
+        int u = boost::source(edge, graph); 
+        int v = boost::target(edge, graph);
+        if (u < v)
+            edges.push_back(std::make_pair(u, v));
+        else 
+            edges.push_back(std::make_pair(v, u));  
+    }
+    std::sort(edges.begin(), edges.end());
+    int i = 0; 
+    for (auto&& edge : edges)
+    {
+        edge_map[edge] = i; 
+        i++; 
+    }
+
+    return edge_map;  
+}
+
+/**
  * Get the shortest path from vertex u to vertex v in the given graph.
  *
  * The i-th entry in the returned std::vector is the i-th vertex in the 
@@ -345,34 +383,11 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
 {
     // Get the minimum-weight path between each pair of vertices
     const int nv = boost::num_vertices(graph);
-    std::map<std::pair<int, int>, std::vector<int> > paths = ::getMinimumWeightPaths(graph); 
-
-    // Generate a lexicographically sorted vector of edges and a map of edge
-    // indices with respect to this ordering  
-    std::pair<boost::graph_traits<Graph>::edge_iterator, 
-              boost::graph_traits<Graph>::edge_iterator> it;
-    std::vector<std::pair<int, int> > edges; 
-    std::unordered_map<std::pair<int, int>, int,
-                       boost::hash<std::pair<int, int> > > edge_map; 
-    for (it = boost::edges(graph); it.first != it.second; ++it.first)
-    {
-        boost::graph_traits<Graph>::edge_descriptor edge = *(it.first);
-        int u = boost::source(edge, graph); 
-        int v = boost::target(edge, graph);
-        if (u < v)
-            edges.push_back(std::make_pair(u, v));
-        else 
-            edges.push_back(std::make_pair(v, u));  
-    }
-    std::sort(edges.begin(), edges.end());
-    int i = 0; 
-    for (auto&& edge : edges)
-    {
-        edge_map[edge] = i; 
-        i++; 
-    }    
+    auto paths = ::getMinimumWeightPaths(graph); 
 
     // For each vertex and edge in the graph ...
+    std::pair<boost::graph_traits<Graph>::edge_iterator, 
+              boost::graph_traits<Graph>::edge_iterator> it;
     std::vector<std::pair<std::vector<int>, int> > cycles;
     for (int i = 0; i < nv; ++i)
     {
@@ -452,6 +467,9 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
     // If there are no cycles in the collection, return an empty matrix 
     if (cycles.size() == 0)
         return Matrix<T, Dynamic, Dynamic>::Zero(ne, 0);
+
+    // Get a lexicographic ordering of the edges 
+    auto edge_map = ::getEdgeOrdering(graph); 
 
     // Add the first cycle to the basis 
     const int ne = boost::num_edges(graph);
