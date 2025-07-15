@@ -739,7 +739,7 @@ class SimplicialComplex3D
                 this->tree.template insert<4>(tetrahedra.row(i).transpose());
 
             // Populate the 1-skeleton (with uniform weights)
-            // TODO Clear graph  
+            boost::clear(this->one_skeleton); 
             for (int i = 0; i < points.rows(); ++i)
                 boost::add_vertex(this->one_skeleton); 
             for (int i = 0; i < edges.rows(); ++i)
