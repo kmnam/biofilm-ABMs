@@ -30,6 +30,7 @@
 #include "distances.hpp"
 #include "mechanics.hpp"
 #include "fields.hpp"
+#include "graphs.hpp"
 #include "utils.hpp"
 
 using namespace Eigen;
