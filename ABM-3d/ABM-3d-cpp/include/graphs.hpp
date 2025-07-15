@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/16/2025
+ *     7/15/2025
  */
 
 #ifndef UNDIRECTED_WEIGHTED_GRAPHS_HPP
@@ -24,21 +24,14 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/connected_components.hpp>
 #include <boost/container_hash/hash.hpp>
-#include <CGAL/Gmpz.h>
-#include <CGAL/QP_models.h>
-#include <CGAL/QP_functions.h>
 #include "distances.hpp"
 #include "mechanics.hpp"
-#include "fields.hpp"
 #include "utils.hpp"
 
 using namespace Eigen;
 
 typedef boost::property<boost::edge_weight_t, double> EdgeProperty; 
 typedef boost::adjacency_list<boost::hash_setS, boost::vecS, boost::undirectedS, boost::no_property, EdgeProperty> Graph;
-typedef CGAL::Gmpz ET; 
-typedef CGAL::Quadratic_program<int> Program;
-typedef CGAL::Quadratic_program_solution<ET> Solution; 
 
 /**
  * Define and return a graph in which each cell is a vertex, and two vertices
