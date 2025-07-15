@@ -303,6 +303,32 @@ std::vector<int> getMinimumWeightPath(const Graph& graph, const int u, const int
 }
 
 /**
+ * Get the shortest path for each pair of vertices in the given graph, which
+ * is assumed to be connected. 
+ *
+ * The paths are returned as a map that maps each pair of vertices to the
+ * corresponding path. 
+ *
+ * @param graph Input graph.
+ * @returns Minimum weight paths between each pair of vertices. 
+ */
+std::map<std::pair<int, int>, std::vector<int> > getMinimumWeightPaths(const Graph& graph)
+{
+    // Get the minimum-weight path between each pair of vertices
+    const int nv = boost::num_vertices(graph);
+    std::map<std::pair<int, int>, std::vector<int> > paths; 
+    for (int i = 0; i < nv; ++i)
+    {
+        for (int j = i + 1; j < nv; ++j)
+        {
+            paths[std::make_pair(i, j)] = getMinimumWeightPath(graph, i, j); 
+        }
+    }
+
+    return paths; 
+}
+
+/**
  * Get a minimum cycle basis for the given graph, which is assumed to be 
  * connected.
  *
@@ -319,14 +345,7 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
 {
     // Get the minimum-weight path between each pair of vertices
     const int nv = boost::num_vertices(graph);
-    std::map<std::pair<int, int>, std::vector<int> > paths; 
-    for (int i = 0; i < nv; ++i)
-    {
-        for (int j = i + 1; j < nv; ++j)
-        {
-            paths[std::make_pair(i, j)] = getMinimumWeightPath(graph, i, j); 
-        }
-    }
+    std::map<std::pair<int, int>, std::vector<int> > paths = ::getMinimumWeightPaths(graph); 
 
     // Generate a lexicographically sorted vector of edges and a map of edge
     // indices with respect to this ordering  
