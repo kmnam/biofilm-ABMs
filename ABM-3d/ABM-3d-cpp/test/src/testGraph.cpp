@@ -121,13 +121,57 @@ TEST_CASE("Tests for getMinimumWeightPath()", "[getMinimumWeightPath()]")
         REQUIRE(path[2] == 5);
         REQUIRE(path[3] == 6); 
     } 
-    REQUIRE(path[4] == 7); 
+    REQUIRE(path[4] == 7);
+
+    // Path from 1 to 0 
+    path = getMinimumWeightPath(graph, 1, 0); 
+    REQUIRE(path.size() == 2); 
+    REQUIRE(path[0] == 1); 
+    REQUIRE(path[1] == 0);  
 
     // Path from 1 to 2 
     path = getMinimumWeightPath(graph, 1, 2); 
     REQUIRE(path.size() == 2); 
     REQUIRE(path[0] == 1); 
+    REQUIRE(path[1] == 2);
+
+    // Path from 1 to 3 
+    path = getMinimumWeightPath(graph, 1, 3); 
+    REQUIRE(path.size() == 3); 
+    REQUIRE(path[0] == 1); 
     REQUIRE(path[1] == 2); 
+    REQUIRE(path[2] == 3);
+
+    // Path from 1 to 4
+    path = getMinimumWeightPath(graph, 1, 4); 
+    REQUIRE(path.size() == 3); 
+    REQUIRE(path[0] == 1);
+    REQUIRE((path[1] == 0 || path[1] == 5)); 
+    REQUIRE(path[2] == 4); 
+
+    // Path from 1 to 5
+    path = getMinimumWeightPath(graph, 1, 5); 
+    REQUIRE(path.size() == 2); 
+    REQUIRE(path[0] == 1); 
+    REQUIRE(path[1] == 5); 
+
+    // Path from 1 to 6 
+    path = getMinimumWeightPath(graph, 1, 6); 
+    REQUIRE(path.size() == 3); 
+    REQUIRE(path[0] == 1); 
+    REQUIRE((path[1] == 2 || path[1] == 5)); 
+    REQUIRE(path[2] == 6); 
+
+    // Path from 1 to 7 
+    path = getMinimumWeightPath(graph, 1, 7); 
+    REQUIRE(path.size() == 4); 
+    REQUIRE(path[0] == 1); 
+    REQUIRE((path[1] == 2 || path[1] == 5)); 
+    if (path[1] == 2)
+        REQUIRE((path[2] == 3 || path[2] == 6)); 
+    else 
+        REQUIRE(path[2] == 6); 
+    REQUIRE(path[3] == 7);  
 }
 
 TEST_CASE("Tests for getMinimumWeightPathTree()", "[getMinimumWeightPathTree()]")
