@@ -463,7 +463,8 @@ std::map<std::pair<int, int>, std::vector<int> > getPathsInMinimumWeightPathTree
                 path_uv.push_back(curr_vertex);
                 it++; 
                 curr_vertex = *it; 
-            } 
+            }
+            path_uv.push_back(v);  
 
             paths[std::make_pair(u, v)] = path_uv; 
         }
