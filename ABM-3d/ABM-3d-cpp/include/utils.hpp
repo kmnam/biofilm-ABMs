@@ -27,6 +27,9 @@
 #include <CGAL/Vector_3.h>
 #include <CGAL/Polyhedron_3.h>
 #include <CGAL/subdivision_method_3.h>
+#include <CGAL/Gmpz.h>
+#include <CGAL/QP_models.h>
+#include <CGAL/QP_functions.h>
 #include "indices.hpp"
 #include "distances.hpp"
 
@@ -50,6 +53,9 @@ typedef K::Point_3 Point_3;
 typedef K::Vector_3 Vector_3; 
 typedef CGAL::Polyhedron_3<K> Polyhedron_3;
 typedef Polyhedron_3::HalfedgeDS HalfedgeDS;
+typedef CGAL::Gmpz ET; 
+typedef CGAL::Quadratic_program<int> Program;
+typedef CGAL::Quadratic_program_solution<ET> Solution; 
 
 /**
  * Parse a JSON file specifying simulation parameters.
@@ -1457,8 +1463,6 @@ CGAL::Quadratic_program<int> defineL1LinearProgram(const int nvars_obj,
     // 
     // and uk, sk1, sk2 are all non-negative, but the input variables x, which
     // include the zk, may not be
-    const int m = nconstraints + 2 * nvars_obj;   // Number of constraints in standard form
-    const int n = nvars_total + 3 * nvars_obj;    // Number of variables in standard form 
     CGAL::Quadratic_program<int> lp(
         CGAL::EQUAL,    // Equality constraints
         false,          // No lower bounds by default 
