@@ -24,6 +24,7 @@
 #include <Eigen/Dense>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/connected_components.hpp>
+#include <boost/graph/dijkstra_shortest_paths.hpp>
 #include <boost/container_hash/hash.hpp>
 #include "distances.hpp"
 #include "mechanics.hpp"
@@ -261,7 +262,7 @@ Array<int, Dynamic, 4> getTetrahedra(const Graph& graph)
  * @param graph Input graph. 
  */
 std::unordered_map<std::pair<int, int>, int,
-                   boost::hash<std::pair<int, int> > > getEdgeOrdering(Graph& graph)
+                   boost::hash<std::pair<int, int> > > getEdgeOrdering(const Graph& graph)
 {
     // Generate a lexicographically sorted vector of edges and a map of edge
     // indices with respect to this ordering  
@@ -327,7 +328,7 @@ std::vector<int> getMinimumWeightPath(const Graph& graph, const int u, const int
 
     // Run Dijkstra's algorithm 
     boost::dijkstra_shortest_paths(
-        graph, u, boost::predecessor_map(pred_map), boost::distance_map(dist_map)
+        graph, u, boost::predecessor_map(pred_map).distance_map(dist_map)
     );
     std::vector<int> path; 
 
@@ -488,6 +489,7 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
 {
     // Get the minimum-weight-path tree rooted at vertex 0 
     const int nv = boost::num_vertices(graph);
+    const int ne = boost::num_edges(graph);
     auto result = ::getMinimumWeightPathTree(graph, 0);
     std::vector<std::vector<int> > tree_paths = result.first;
     Graph tree = result.second;  
@@ -535,7 +537,8 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
                 std::vector<int> cycle; 
                 Matrix<int, Dynamic, 1> encountered = Matrix<int, Dynamic, 1>::Zero(nv);
                 bool found_repeat_vertex = false;
-                for (const int& w : path1)                    // Path from i to u
+                // Traverse path from i to u 
+                for (const int& w : path1)
                 {
                     if (!encountered(w))
                     {
@@ -550,9 +553,11 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
                 }
                 if (found_repeat_vertex)
                     continue;
-                cycle.push_back(v);                           // Edge (u, v)
-                for (int j = 1; j < path2.size() - 1; ++j)    // Path from v to i (skipping v and i) 
+                cycle.push_back(v);    // Add edge (u, v)
+                // Traverse path from v to i (skipping v and i)
+                for (auto it = path2.begin() + 1; it != path2.end() - 1; ++it)
                 {
+                    int w = *it; 
                     if (!encountered(w))
                     {
                         encountered(w) = 1; 
@@ -575,7 +580,7 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
 
     // Order the cycles by length 
     std::sort(
-        cycles.begin(), cycles.end()
+        cycles.begin(), cycles.end(),
         [](const std::pair<std::vector<int>, int>& x, const std::pair<std::vector<int>, int>& y)
         {
             return x.second < y.second; 
@@ -590,20 +595,20 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
     auto edge_map = ::getEdgeOrdering(graph); 
 
     // Add the first cycle to the basis 
-    const int ne = boost::num_edges(graph);
     Matrix<T, Dynamic, Dynamic> basis(ne, 1); 
     basis.col(0) = Matrix<T, Dynamic, 1>::Zero(ne);
     int u, v;
-    std::pair<int, int> edge;  
-    for (int i = 0; i < cycles[0].size() - 1; ++i)
+    std::pair<int, int> edge;
+    std::vector<int> curr_cycle = cycles[0].first;  
+    for (auto it = curr_cycle.begin() + 1; it != curr_cycle.end(); ++it)
     {
-        u = cycles[0][i];
-        v = cycles[0][i + 1];
+        u = *std::prev(it); 
+        v = *it; 
         edge = (u < v ? std::make_pair(u, v) : std::make_pair(v, u)); 
         basis(edge_map[edge], 0) = 1; 
     }
-    u = cycles[0][cycles[0].size() - 1]; 
-    v = cycles[0][0]; 
+    u = curr_cycle[curr_cycle.size() - 1];
+    v = curr_cycle[0]; 
     edge = (u < v ? std::make_pair(u, v) : std::make_pair(v, u)); 
     basis(edge_map[edge], 0) = 1;
 
@@ -612,17 +617,17 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
     while (basis.cols() < ne - nv + 1)   // Expected number of cycles in the basis
     {
         // Get the vector corresponding to the cycle
-        std::vector<int> cycle = cycles[cycle_idx];  
+        curr_cycle = cycles[cycle_idx].first; 
         Matrix<T, Dynamic, 1> cycle_vec = Matrix<T, Dynamic, 1>::Zero(ne);
-        for (int i = 0; i < cycle.size() - 1; ++i)
+        for (auto it = curr_cycle.begin() + 1; it != curr_cycle.end(); ++it)
         {
-            u = cycle[i];
-            v = cycle[i + 1];
+            u = *std::prev(it); 
+            v = *it; 
             edge = (u < v ? std::make_pair(u, v) : std::make_pair(v, u)); 
             cycle_vec(edge_map[edge]) = 1; 
         }
-        u = cycle[cycle.size() - 1]; 
-        v = cycle[0]; 
+        u = curr_cycle[curr_cycle.size() - 1]; 
+        v = curr_cycle[0]; 
         edge = (u < v ? std::make_pair(u, v) : std::make_pair(v, u)); 
         cycle_vec(edge_map[edge]) = 1;
 
