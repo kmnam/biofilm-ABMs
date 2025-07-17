@@ -958,7 +958,7 @@ class SimplicialComplex3D
                     int idx = indices[subface]; 
 
                     // The corresponding entry in the matrix is (-1)^j
-                    del(idx, i) = Z2(j % 2 == 0);   // 1 == -1 in Z/2Z
+                    del(idx, i) = Z2(1);   // 1 == -1 in Z/2Z
                 }
             }
 
@@ -1103,7 +1103,7 @@ class SimplicialComplex3D
                 // Calculate the dimension of each homology group
                 for (int i = 0; i <= maxdim; ++i)
                 {
-                    Matrix<double, Dynamic, Dynamic> cycles = this->getRealHomology<double>(i); 
+                    Matrix<Rational, Dynamic, Dynamic> cycles = this->getRealHomology<Rational>(i); 
                     betti(i) = cycles.cols(); 
                 }
             }
