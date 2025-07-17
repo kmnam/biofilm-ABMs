@@ -86,17 +86,17 @@ class Z2
         // ---------------------------------------------------------- //
         bool operator==(const bool& x) const 
         {
-            return (this->value && x); 
+            return (this->value == x); 
         }
         
         bool operator==(const int& x) const 
         {
-            return (mod<int, p>(this->value - x) == 0); 
+            return (this->value == mod<int, 2>(x)); 
         }
 
         bool operator==(const Z2& x) const
         {
-            return (this->value && x.value); 
+            return (this->value == x.value); 
         }
 
         bool operator!=(const bool& x) const 
@@ -179,7 +179,7 @@ class Z2
 
         Z2& operator+=(const int& y)
         {
-            this->value = (this->value ^ mod<int>(y, 2)); 
+            this->value = (this->value ^ mod<int, 2>(y)); 
             return *this; 
         }
 
@@ -197,7 +197,7 @@ class Z2
 
         Z2& operator-=(const int& y)
         {
-            this->value = (this->value ^ mod<int>(y, 2)); 
+            this->value = (this->value ^ mod<int, 2>(y)); 
             return *this; 
         }
 
@@ -215,7 +215,7 @@ class Z2
 
         Z2& operator*=(const int& y)
         {
-            this->value = (this->value && mod<int>(y, 2)); 
+            this->value = (this->value && mod<int, 2>(y)); 
             return *this; 
         }
 
@@ -235,7 +235,7 @@ class Z2
         
         Z2& operator/=(const int& y)
         {
-            if (mod<int>(y, 2) == 0)
+            if (mod<int, 2>(y) == 0)
                 throw std::runtime_error("Cannot divide by zero");
             else
                 return *this;
@@ -351,7 +351,7 @@ Z2 operator/(const Z2& x, const bool& y)
 
 Z2 operator/(const Z2& x, const int& y)
 {
-    if (y == 0)
+    if (mod<int, 2>(y) == 0)
         throw std::runtime_error("Cannot divide by zero");
     else 
         return Z2(x);  
@@ -363,6 +363,31 @@ Z2 operator/(const Z2& x, const Z2& y)
         throw std::runtime_error("Cannot divide by zero");
     else 
         return Z2(x);  
+}
+
+bool operator==(const bool& x, const Z2& y)
+{
+    return (x == y.value); 
+}
+
+bool operator==(const int& x, const Z2& y)
+{
+    return (mod<int, 2>(x) == y.value); 
+}
+
+bool operator!=(const bool& x, const Z2& y)
+{
+    return (x != y.value); 
+}
+
+bool operator!=(const int& x, const Z2& y)
+{
+    return (mod<int, 2>(x) != y.value); 
+}
+
+bool operator^(const Z2& x, const Z2& y)
+{
+    return x.value ^ y.value; 
 }
 
 std::ostream& operator<<(std::ostream& out, const Z2& x)
@@ -953,9 +978,9 @@ struct NumTraits<Z2> : NumTraits<bool>
 
     enum
     {
-        IsComplex = 0; 
-        IsInteger = 1; 
-        IsSigned = 0;
+        IsComplex = 0, 
+        IsInteger = 1, 
+        IsSigned = 0,
         RequireInitialization = 1,
         ReadCost = 1,
         AddCost = 3,
