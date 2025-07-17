@@ -574,8 +574,8 @@ class SimplicialComplex3D
 
             // Define the triangles and tetrahedra from the 3- and 4-cliques 
             // in the graph (this gives the alpha-complex of the graph)
-            Array<int, Dynamic, 3> triangles = ::getTriangles<T>(graph); 
-            Array<int, Dynamic, 4> tetrahedra = ::getTetrahedra<T>(graph);
+            Array<int, Dynamic, 3> triangles = ::getTriangles(graph); 
+            Array<int, Dynamic, 4> tetrahedra = ::getTetrahedra(graph);
 
             // Add them to the simplex tree 
             for (int i = 0; i < triangles.rows(); ++i)
@@ -739,7 +739,7 @@ class SimplicialComplex3D
                 this->tree.template insert<4>(tetrahedra.row(i).transpose());
 
             // Populate the 1-skeleton (with uniform weights)
-            boost::clear(this->one_skeleton); 
+            this->one_skeleton.clear(); 
             for (int i = 0; i < points.rows(); ++i)
                 boost::add_vertex(this->one_skeleton); 
             for (int i = 0; i < edges.rows(); ++i)
@@ -846,8 +846,8 @@ class SimplicialComplex3D
          * @returns Boundary homomorphism from the group of (dim)-chains to 
          *          to the group of (dim - 1)-chains. 
          */
-        template <typename T>
-        Matrix<T, Dynamic, Dynamic> getRealBoundaryHomomorphism(const int dim) const 
+        template <typename U>
+        Matrix<U, Dynamic, Dynamic> getRealBoundaryHomomorphism(const int dim) const 
         {
             // If the dimension is zero or greater than the maximum dimension,
             // then raise an exception 
@@ -863,7 +863,7 @@ class SimplicialComplex3D
             const int n2 = faces2.size();  
 
             // Initialize the matrix with the appropriate dimensions
-            Matrix<T, Dynamic, Dynamic> del = Matrix<T, Dynamic, Dynamic>::Zero(n2, n1); 
+            Matrix<U, Dynamic, Dynamic> del = Matrix<U, Dynamic, Dynamic>::Zero(n2, n1); 
 
             // Store the indices of the output faces in the above ordering as 
             // a dictionary 
@@ -971,8 +971,8 @@ class SimplicialComplex3D
          * @param dim Input dimension.
          * @returns Combinatorial Laplacian matrix.  
          */
-        template <typename T>
-        Matrix<T, Dynamic, Dynamic> getCombinatorialLaplacian(const int dim) const 
+        template <typename U>
+        Matrix<U, Dynamic, Dynamic> getCombinatorialLaplacian(const int dim) const 
         {
             // Get the boundary homomorphisms 
             //
@@ -980,7 +980,7 @@ class SimplicialComplex3D
             //
             // Similarly, if dim == 0, then set del2 = 0
             const int maxdim = this->dimension();
-            Matrix<T, Dynamic, Dynamic> lap;  
+            Matrix<U, Dynamic, Dynamic> lap;  
             if (dim < 0 || dim > this->dimension())
             {
                 throw std::runtime_error(
@@ -990,22 +990,22 @@ class SimplicialComplex3D
             else if (dim == 0 && maxdim == 0)
             {
                 const int n = this->points.rows(); 
-                lap = Matrix<T, Dynamic, Dynamic>::Zero(n, n); 
+                lap = Matrix<U, Dynamic, Dynamic>::Zero(n, n); 
             }
             else if (dim == 0)        // maxdim != 0
             {
-                Matrix<T, Dynamic, Dynamic> del1 = this->getRealBoundaryHomomorphism<T>(1);
+                Matrix<U, Dynamic, Dynamic> del1 = this->getRealBoundaryHomomorphism<U>(1);
                 lap = del1 * del1.transpose(); 
             }
             else if (dim == maxdim)   // dim, maxdim != 0
             {
-                Matrix<T, Dynamic, Dynamic> del2 = this->getRealBoundaryHomomorphism<T>(dim);
+                Matrix<U, Dynamic, Dynamic> del2 = this->getRealBoundaryHomomorphism<U>(dim);
                 lap = del2.transpose() * del2; 
             }
             else     // Otherwise, get both boundary homomorphisms  
             { 
-                Matrix<T, Dynamic, Dynamic> del1 = this->getRealBoundaryHomomorphism<T>(dim + 1); 
-                Matrix<T, Dynamic, Dynamic> del2 = this->getRealBoundaryHomomorphism<T>(dim); 
+                Matrix<U, Dynamic, Dynamic> del1 = this->getRealBoundaryHomomorphism<U>(dim + 1); 
+                Matrix<U, Dynamic, Dynamic> del2 = this->getRealBoundaryHomomorphism<U>(dim); 
 
                 // Note that del1 has shape (n2, n1) and del2 has shape (n3, n2),
                 // where n1 = # (dim + 1)-simplices, n2 = # (dim)-simplices, 
@@ -1025,10 +1025,10 @@ class SimplicialComplex3D
          * @param dim Input dimension.
          * @returns Basis of cycles for the homology group. 
          */
-        template <typename T>
-        Matrix<T, Dynamic, Dynamic> getRealHomology(const int dim) const 
+        template <typename U>
+        Matrix<U, Dynamic, Dynamic> getRealHomology(const int dim) const 
         {
-            return ::kernel<T>(this->getCombinatorialLaplacian<T>(dim)); 
+            return ::kernel<U>(this->getCombinatorialLaplacian<U>(dim)); 
         }
 
         /**
@@ -1294,7 +1294,7 @@ class SimplicialComplex3D
                 Matrix<Z2, Dynamic, Dynamic> del = this->getZ2BoundaryHomomorphism(dim + 1); 
                 Matrix<Z2, Dynamic, Dynamic> system(del.rows(), del.cols() + chains.cols()); 
                 system(Eigen::all, Eigen::seq(0, del.cols() - 1)) = del;
-                system(Eigen::all, Eigen::seq(del.cols(), del.cols() + chains.cols() - 1) = chains; 
+                system(Eigen::all, Eigen::seq(del.cols(), del.cols() + chains.cols() - 1)) = chains; 
                 system = ::rowEchelonForm<Z2>(system);
 
                 // If there is an inconsistency in the row echelon form, this
