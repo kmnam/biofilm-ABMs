@@ -18,7 +18,46 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "../../include/graphs.hpp"
 
-using namespace Eigen; 
+using namespace Eigen;
+
+/**
+ * Return true if the two arrays are the same up to a permutation of the
+ * columns. 
+ */
+bool matchArraysUpToPermutedCols(const Ref<const Array<int, Dynamic, Dynamic> >& A,
+                                 const Ref<const Array<int, Dynamic, Dynamic> >& B)
+{
+    // Check that the arrays have the same shape 
+    if (A.rows() != B.rows() || A.cols() != B.cols())
+        return false; 
+
+    // Check that each column in A is present in B
+    Array<int, Dynamic, 1> found_cols = Array<int, Dynamic, 1>::Zero(B.cols()); 
+    for (int i = 0; i < A.cols(); ++i)
+    {
+        int found_col = -1; 
+        
+        // Run over all columns of B that have not already been accounted for
+        for (int j = 0; j < B.cols(); ++j)
+        {
+            if (!found_cols(j) && (A.col(i) == B.col(j)).all())
+            {
+                found_col = j; 
+                break;
+            }
+        }
+
+        // If the column in A does not exist in B (ignoring all columns of 
+        // B that have already contributed a column in A), return false 
+        if (found_col == -1)
+            return false;
+
+        // Keep track of the contributing column in B
+        found_cols(found_col) = 1;  
+    }
+
+    return true; 
+}
 
 /**
  * Generate a graph with three consecutive 4-cycles. 
@@ -38,140 +77,6 @@ Graph graph1()
     boost::add_edge(6, 7, EdgeProperty(1.0), graph);
 
     return graph;  
-}
-
-TEST_CASE("Tests for getMinimumWeightPath()", "[getMinimumWeightPath()]")
-{
-    Graph graph; 
-    std::vector<int> path; 
-
-    // ------------------------------------------------------------ // 
-    // Graph with three consecutive 4-cycles 
-    // ------------------------------------------------------------ //
-    graph = graph1();
-    REQUIRE(boost::num_vertices(graph) == 8); 
-    REQUIRE(boost::num_edges(graph) == 10); 
-
-    // Path from 0 to itself 
-    path = getMinimumWeightPath(graph, 0, 0); 
-    REQUIRE(path.size() == 1);
-    REQUIRE(path[0] == 0);
-
-    // Path from 0 to 1
-    path = getMinimumWeightPath(graph, 0, 1); 
-    REQUIRE(path.size() == 2);
-    REQUIRE(path[0] == 0); 
-    REQUIRE(path[1] == 1);
-
-    // Path from 0 to 2
-    path = getMinimumWeightPath(graph, 0, 2); 
-    REQUIRE(path.size() == 3); 
-    REQUIRE(path[0] == 0); 
-    REQUIRE(path[1] == 1); 
-    REQUIRE(path[2] == 2);
-
-    // Path from 0 to 3 
-    path = getMinimumWeightPath(graph, 0, 3); 
-    REQUIRE(path.size() == 4); 
-    REQUIRE(path[0] == 0); 
-    REQUIRE(path[1] == 1); 
-    REQUIRE(path[2] == 2); 
-    REQUIRE(path[3] == 3);
-
-    // Path from 0 to 4
-    path = getMinimumWeightPath(graph, 0, 4); 
-    REQUIRE(path.size() == 2); 
-    REQUIRE(path[0] == 0); 
-    REQUIRE(path[1] == 4);
-
-    // Path from 0 to 5: either 0, 1, 5 or 0, 4, 5
-    path = getMinimumWeightPath(graph, 0, 5); 
-    REQUIRE(path.size() == 3); 
-    REQUIRE(path[0] == 0); 
-    REQUIRE((path[1] == 1 || path[1] == 4));
-    REQUIRE(path[2] == 5);
-
-    // Path from 0 to 6: either 0, 1, 2, 6 or 0, 1, 5, 6 or 0, 4, 5, 6
-    path = getMinimumWeightPath(graph, 0, 6); 
-    REQUIRE(path.size() == 4);
-    REQUIRE(path[0] == 0); 
-    REQUIRE((path[1] == 1 || path[1] == 4)); 
-    if (path[1] == 1)
-        REQUIRE((path[2] == 2 || path[2] == 5));
-    else 
-        REQUIRE(path[2] == 5); 
-    REQUIRE(path[3] == 6);
-
-    // Path from 0 to 7: either 0, 1, 2, 3, 7 or 0, 1, 2, 6, 7 or 0, 1, 5, 6, 7
-    // or 0, 4, 5, 6, 7
-    path = getMinimumWeightPath(graph, 0, 7); 
-    REQUIRE(path.size() == 5);
-    REQUIRE(path[0] == 0); 
-    REQUIRE((path[1] == 1 || path[1] == 4)); 
-    if (path[1] == 1)
-    {
-        REQUIRE((path[2] == 2 || path[2] == 5));
-        if (path[2] == 2)
-            REQUIRE((path[3] == 3 || path[3] == 6));
-        else 
-            REQUIRE(path[3] == 6);  
-    }
-    else
-    { 
-        REQUIRE(path[2] == 5);
-        REQUIRE(path[3] == 6); 
-    } 
-    REQUIRE(path[4] == 7);
-
-    // Path from 1 to 0 
-    path = getMinimumWeightPath(graph, 1, 0); 
-    REQUIRE(path.size() == 2); 
-    REQUIRE(path[0] == 1); 
-    REQUIRE(path[1] == 0);  
-
-    // Path from 1 to 2 
-    path = getMinimumWeightPath(graph, 1, 2); 
-    REQUIRE(path.size() == 2); 
-    REQUIRE(path[0] == 1); 
-    REQUIRE(path[1] == 2);
-
-    // Path from 1 to 3 
-    path = getMinimumWeightPath(graph, 1, 3); 
-    REQUIRE(path.size() == 3); 
-    REQUIRE(path[0] == 1); 
-    REQUIRE(path[1] == 2); 
-    REQUIRE(path[2] == 3);
-
-    // Path from 1 to 4
-    path = getMinimumWeightPath(graph, 1, 4); 
-    REQUIRE(path.size() == 3); 
-    REQUIRE(path[0] == 1);
-    REQUIRE((path[1] == 0 || path[1] == 5)); 
-    REQUIRE(path[2] == 4); 
-
-    // Path from 1 to 5
-    path = getMinimumWeightPath(graph, 1, 5); 
-    REQUIRE(path.size() == 2); 
-    REQUIRE(path[0] == 1); 
-    REQUIRE(path[1] == 5); 
-
-    // Path from 1 to 6 
-    path = getMinimumWeightPath(graph, 1, 6); 
-    REQUIRE(path.size() == 3); 
-    REQUIRE(path[0] == 1); 
-    REQUIRE((path[1] == 2 || path[1] == 5)); 
-    REQUIRE(path[2] == 6); 
-
-    // Path from 1 to 7 
-    path = getMinimumWeightPath(graph, 1, 7); 
-    REQUIRE(path.size() == 4); 
-    REQUIRE(path[0] == 1); 
-    REQUIRE((path[1] == 2 || path[1] == 5)); 
-    if (path[1] == 2)
-        REQUIRE((path[2] == 3 || path[2] == 6)); 
-    else 
-        REQUIRE(path[2] == 6); 
-    REQUIRE(path[3] == 7);  
 }
 
 TEST_CASE("Tests for getMinimumWeightPathTree()", "[getMinimumWeightPathTree()]")
@@ -259,7 +164,7 @@ TEST_CASE("Tests for getMinimumWeightPathTree()", "[getMinimumWeightPathTree()]"
     REQUIRE((boost::edge(6, 7, tree).second ^ boost::edge(3, 7, tree).second));  
 }
 
-TEST_CASE("Tests for getPathsInMinimumWeightPathTree()", "[getPathsInMinimumWeightPathTree()]")
+TEST_CASE("Tests for getPathInMinimumWeightPathTree()", "[getPathInMinimumWeightPathTree()]")
 {
     Graph graph; 
 
@@ -270,37 +175,198 @@ TEST_CASE("Tests for getPathsInMinimumWeightPathTree()", "[getPathsInMinimumWeig
     auto result = getMinimumWeightPathTree(graph, 0);
     std::vector<std::vector<int> > tree_paths = result.first; 
     Graph tree = result.second;
-    std::map<std::pair<int, int>, std::vector<int> > all_paths
-        = getPathsInMinimumWeightPathTree(tree_paths, 0);
 
-    // Check that all pairs of vertices are represented
+    // Define the parent and depth of each vertex with respect to the root
     int nv = boost::num_vertices(graph);  
-    REQUIRE(all_paths.size() == nv * (nv - 1) / 2); 
-    for (int i = 0; i < nv; ++i)
+    std::vector<int> parents(nv), depths(nv);
+    parents[0] = -1;    // The root has no parent 
+    depths[0] = 0;      // The root has depth zero
+    for (auto& path : tree_paths) 
     {
-        for (int j = i + 1; j < nv; ++j)
+        int depth = 1; 
+        for (auto it = path.begin() + 1; it != path.end(); ++it)
         {
-            REQUIRE(all_paths.find(std::make_pair(i, j)) != all_paths.end()); 
+            auto prev = std::prev(it);
+            parents[*it] = *prev; 
+            depths[*it] = depth; 
+            depth++; 
         }
     }
 
-    // Check the path between all pairs of vertices
+    // Check the path between each pair of vertices 
     for (int i = 0; i < nv; ++i)
     {
         for (int j = i + 1; j < nv; ++j)
         {
-            std::pair<int, int> pair = std::make_pair(i, j);
-            std::vector<int> path = all_paths[pair]; 
+            std::vector<int> path = getPathInMinimumWeightPathTree(
+                tree_paths, parents, depths, i, j
+            ); 
             REQUIRE(path[0] == i); 
-            REQUIRE(path[path.size() - 1] == j);  
-            for (auto it = all_paths[pair].begin() + 1; it != all_paths[pair].end(); ++it)
+            REQUIRE(path[path.size() - 1] == j);
+
+            // Check that each edge in the path lies in the tree  
+            for (auto it = path.begin() + 1; it != path.end(); ++it)
             {
                 int u = *std::prev(it); 
                 int v = *it; 
                 REQUIRE(boost::edge(u, v, tree).second); 
             }
+
+            // Check that there are no repeated vertices along the path 
             REQUIRE(std::unordered_set<int>(path.begin(), path.end()).size() == path.size()); 
         }
     }
+}
+
+TEST_CASE("Tests for getMinimumWeightPaths()", "[getMinimumWeightPaths()]")
+{
+    Graph graph; 
+    std::vector<int> path; 
+
+    // ------------------------------------------------------------ // 
+    // Graph with three consecutive 4-cycles 
+    // ------------------------------------------------------------ //
+    graph = graph1();
+    REQUIRE(boost::num_vertices(graph) == 8); 
+    REQUIRE(boost::num_edges(graph) == 10);
+
+    // Get all minimum-weight paths
+    std::map<std::pair<int, int>, std::vector<int> > min_paths = getMinimumWeightPaths(graph);  
+
+    // Path from 0 to 1
+    path = min_paths[std::make_pair(0, 1)]; 
+    REQUIRE(path.size() == 2);
+    REQUIRE(path[0] == 0); 
+    REQUIRE(path[1] == 1);
+
+    // Path from 0 to 2
+    path = min_paths[std::make_pair(0, 2)];
+    REQUIRE(path.size() == 3); 
+    REQUIRE(path[0] == 0); 
+    REQUIRE(path[1] == 1); 
+    REQUIRE(path[2] == 2);
+
+    // Path from 0 to 3 
+    path = min_paths[std::make_pair(0, 3)];
+    REQUIRE(path.size() == 4); 
+    REQUIRE(path[0] == 0); 
+    REQUIRE(path[1] == 1); 
+    REQUIRE(path[2] == 2); 
+    REQUIRE(path[3] == 3);
+
+    // Path from 0 to 4
+    path = min_paths[std::make_pair(0, 4)];
+    REQUIRE(path.size() == 2); 
+    REQUIRE(path[0] == 0); 
+    REQUIRE(path[1] == 4);
+
+    // Path from 0 to 5: either 0, 1, 5 or 0, 4, 5
+    path = min_paths[std::make_pair(0, 5)]; 
+    REQUIRE(path.size() == 3); 
+    REQUIRE(path[0] == 0); 
+    REQUIRE((path[1] == 1 || path[1] == 4));
+    REQUIRE(path[2] == 5);
+
+    // Path from 0 to 6: either 0, 1, 2, 6 or 0, 1, 5, 6 or 0, 4, 5, 6
+    path = min_paths[std::make_pair(0, 6)];
+    REQUIRE(path.size() == 4);
+    REQUIRE(path[0] == 0); 
+    REQUIRE((path[1] == 1 || path[1] == 4)); 
+    if (path[1] == 1)
+        REQUIRE((path[2] == 2 || path[2] == 5));
+    else 
+        REQUIRE(path[2] == 5); 
+    REQUIRE(path[3] == 6);
+
+    // Path from 0 to 7: either 0, 1, 2, 3, 7 or 0, 1, 2, 6, 7 or 0, 1, 5, 6, 7
+    // or 0, 4, 5, 6, 7
+    path = min_paths[std::make_pair(0, 7)];
+    REQUIRE(path.size() == 5);
+    REQUIRE(path[0] == 0); 
+    REQUIRE((path[1] == 1 || path[1] == 4)); 
+    if (path[1] == 1)
+    {
+        REQUIRE((path[2] == 2 || path[2] == 5));
+        if (path[2] == 2)
+            REQUIRE((path[3] == 3 || path[3] == 6));
+        else 
+            REQUIRE(path[3] == 6);  
+    }
+    else
+    { 
+        REQUIRE(path[2] == 5);
+        REQUIRE(path[3] == 6); 
+    } 
+    REQUIRE(path[4] == 7);
+
+    // Path from 1 to 2 
+    path = min_paths[std::make_pair(1, 2)];
+    REQUIRE(path.size() == 2); 
+    REQUIRE(path[0] == 1); 
+    REQUIRE(path[1] == 2);
+
+    // Path from 1 to 3 
+    path = min_paths[std::make_pair(1, 3)];
+    REQUIRE(path.size() == 3); 
+    REQUIRE(path[0] == 1); 
+    REQUIRE(path[1] == 2); 
+    REQUIRE(path[2] == 3);
+
+    // Path from 1 to 4
+    path = min_paths[std::make_pair(1, 4)];
+    REQUIRE(path.size() == 3); 
+    REQUIRE(path[0] == 1);
+    REQUIRE((path[1] == 0 || path[1] == 5)); 
+    REQUIRE(path[2] == 4); 
+
+    // Path from 1 to 5
+    path = min_paths[std::make_pair(1, 5)];
+    REQUIRE(path.size() == 2); 
+    REQUIRE(path[0] == 1); 
+    REQUIRE(path[1] == 5); 
+
+    // Path from 1 to 6 
+    path = min_paths[std::make_pair(1, 6)];
+    REQUIRE(path.size() == 3); 
+    REQUIRE(path[0] == 1); 
+    REQUIRE((path[1] == 2 || path[1] == 5)); 
+    REQUIRE(path[2] == 6); 
+
+    // Path from 1 to 7 
+    path = min_paths[std::make_pair(1, 7)];
+    REQUIRE(path.size() == 4); 
+    REQUIRE(path[0] == 1); 
+    REQUIRE((path[1] == 2 || path[1] == 5)); 
+    if (path[1] == 2)
+        REQUIRE((path[2] == 3 || path[2] == 6)); 
+    else 
+        REQUIRE(path[2] == 6); 
+    REQUIRE(path[3] == 7);  
+}
+
+TEST_CASE("Tests for getMinimumCycleBasis()", "[getMinimumCycleBasis()]")
+{
+    Graph graph; 
+
+    // ------------------------------------------------------------ // 
+    // Graph with three consecutive 4-cycles 
+    // ------------------------------------------------------------ //
+    graph = graph1();
+    Matrix<int, Dynamic, Dynamic> basis = getMinimumCycleBasis<int>(graph);
+
+    // The edges are ordered lexicographically as: 
+    // (0,1), (0,4), (1,2), (1,5), (2,3), (2,6), (3,7), (4,5), (5,6), (6,7)
+    Matrix<int, Dynamic, Dynamic> cycles(boost::num_edges(graph), 3);
+    cycles << 1, 0, 0,
+              1, 0, 0,
+              0, 1, 0,
+              1, 1, 0,
+              0, 0, 1,
+              0, 1, 1,
+              0, 0, 1, 
+              1, 0, 0,
+              0, 1, 0,
+              0, 0, 1;
+    REQUIRE(matchArraysUpToPermutedCols(basis.array(), cycles.array())); 
 }
 
