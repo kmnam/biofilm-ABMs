@@ -14,6 +14,7 @@
 #include <iostream>
 #include <memory>
 #include <utility>
+#include <tuple>
 #include <vector>
 #include <stack>
 #include <queue>
@@ -1152,7 +1153,7 @@ class SimplicialComplex3D
          * @returns True if the chain is a cycle, false otherwise.  
          */
         bool isCycle(const Ref<const Matrix<Z2, Dynamic, 1> >& chain, 
-                     const int dim)
+                     const int dim) const
         {
             // Check that the dimension of the input vector is correct
             if (dim < 0 || dim > this->dimension())
@@ -1186,7 +1187,7 @@ class SimplicialComplex3D
          * @returns Boolean vector indicating whether each chain is a cycle. 
          */
         Matrix<int, Dynamic, 1> areCycles(const Ref<const Matrix<Z2, Dynamic, Dynamic> >& chains, 
-                                          const int dim)
+                                          const int dim) const
         {
             // Check that the dimension of the input vectors is correct
             if (dim < 0 || dim > this->dimension())
@@ -1224,7 +1225,7 @@ class SimplicialComplex3D
          * @returns True if the chain is a boundary, false otherwise.  
          */
         bool isBoundary(const Ref<const Matrix<Z2, Dynamic, 1> >& chain, 
-                        const int dim)
+                        const int dim) const
         {
             // Check that the dimension of the input vector is correct
             if (dim < 0 || dim > this->dimension())
@@ -1276,7 +1277,7 @@ class SimplicialComplex3D
          * @returns True if the chain is a boundary, false otherwise.  
          */
         Matrix<int, Dynamic, 1> areBoundaries(const Ref<const Matrix<Z2, Dynamic, Dynamic> >& chains, 
-                                              const int dim)
+                                              const int dim) const
         {
             // Check that the dimension of the input vectors is correct
             if (dim < 0 || dim > this->dimension())
@@ -1294,7 +1295,7 @@ class SimplicialComplex3D
                 Matrix<Z2, Dynamic, Dynamic> del = this->getZ2BoundaryHomomorphism(dim + 1); 
                 Matrix<Z2, Dynamic, Dynamic> system(del.rows(), del.cols() + chains.cols()); 
                 system(Eigen::all, Eigen::seq(0, del.cols() - 1)) = del;
-                system(Eigen::all, Eigen::seq(del.cols(), del.cols() + chains.cols() - 1)) = chains; 
+                system(Eigen::all, Eigen::lastN(chains.cols())) = chains; 
                 system = ::rowEchelonForm<Z2>(system);
 
                 // If there is an inconsistency in the row echelon form, this
@@ -1335,12 +1336,348 @@ class SimplicialComplex3D
          */
         bool areHomologousCycles(const Ref<const Matrix<Z2, Dynamic, 1> >& chain1, 
                                  const Ref<const Matrix<Z2, Dynamic, 1> >& chain2, 
-                                 const int dim)
+                                 const int dim) const
         {
             Matrix<Z2, Dynamic, Dynamic> chains(chain1.size(), 2); 
             chains.col(0) = chain1; 
             chains.col(1) = chain2; 
             return (this->areCycles(chains, dim) && this->isBoundary(chain1 - chain2, dim)); 
+        }
+
+        /**
+         * A helper function for `annotateEdges()` and `getMinimalFirstHomology()`
+         * that calculates the sentinel cycles associated with the minimum-
+         * weight-path tree rooted at the given vertex. 
+         *
+         * See Busaryev et al., SWAT LNCS (2010) and Dey et al., LNCS (2018) 
+         * for details.
+         *
+         * @param root Root vertex for the minimum-weight-path tree.
+         * @returns An array indicating the sentinel and non-sentinel edges 
+         *          in the 1-skeleton, as well as arrays of coefficient 
+         *          vectors for each sentinel cycle. 
+         */
+        std::pair<Matrix<int, Dynamic, 2>, Matrix<Z2, Dynamic, Dynamic> > getSentinelCycles(const int root = 0) const 
+        {
+            // Get a spanning tree of the 1-skeleton
+            auto result = ::getMinimumWeightPathTree(this->one_skeleton, root);
+            std::vector<std::vector<int> > tree_paths = result.first; 
+            Graph tree = result.second;
+
+            // Get an edge ordering map for the edges in the 1-skeleton 
+            std::unordered_map<std::pair<int, int>, int,
+                               boost::hash<std::pair<int, int> > > edge_map = getEdgeOrdering(this->one_skeleton); 
+
+            // Re-order the edges so that the non-tree edges come first
+            const int nv = this->points.rows(); 
+            const int ne = boost::num_edges(this->one_skeleton);
+            Matrix<int, Dynamic, 2> edges = this->getSimplices<1>();
+            Matrix<int, Dynamic, 2> edges_reordered(ne, 2);
+            int idx1 = 0;
+            int idx2 = ne - nv + 1;  
+            for (int i = 0; i < ne; ++i)
+            {
+                if (!boost::edge(edges(i, 0), edges(i, 1), tree).second)
+                {
+                    edges_reordered.row(idx1) = edges.row(i);
+                    idx1++; 
+                } 
+                else 
+                {
+                    edges_reordered.row(idx2) = edges.row(i); 
+                    idx2++;
+                }
+            }
+
+            // Define the parent and depth of each vertex with respect to
+            // the root in the tree 
+            std::vector<int> parents(nv), depths(nv);
+            parents[root] = -1;    // The root has no parent 
+            depths[root] = 0;      // The root has depth zero
+            for (auto& path : tree_paths) 
+            {
+                int depth = 1; 
+                for (auto it = path.begin() + 1; it != path.end(); ++it)
+                {
+                    auto prev = std::prev(it);
+                    parents[*it] = *prev; 
+                    depths[*it] = depth; 
+                    depth++; 
+                }
+            }
+
+            // For each non-tree edge (u, v), get the path from u to v in
+            // the tree and form the cycle formed by this path and (u, v)
+            Matrix<Z2, Dynamic, Dynamic> sentinel_cycles
+                = Matrix<Z2, Dynamic, Dynamic>::Zero(ne, ne - nv + 1); 
+            for (int i = 0; i < ne - nv + 1; ++i)
+            {
+                int u = edges_reordered(i, 0); 
+                int v = edges_reordered(i, 1); 
+
+                // Get the path from u to v in the tree 
+                std::vector<int> path_uv = getPathInMinimumWeightPathTree(
+                    tree_paths, parents, depths, u, v
+                );
+
+                // Which edges are in the path? (There must be at most 2 
+                // edges in the path, since (u, v) is not in the tree)
+                for (auto it = path_uv.begin() + 1; it != path_uv.end(); ++it)
+                {
+                    int j = *std::prev(it); 
+                    int k = *it;
+                    std::pair<int, int> pair = (j < k ? std::make_pair(j, k) : std::make_pair(k, j)); 
+                    int ei = edge_map[pair]; 
+                    sentinel_cycles(ei, i) = 1; 
+                }
+
+                // Finally account for the edge (u, v) in the cycle 
+                std::pair<int, int> pair = (u < v ? std::make_pair(u, v) : std::make_pair(v, u));
+                int ei = edge_map[pair];  
+                sentinel_cycles(ei, i) = 1;  
+            }
+
+            return std::make_pair(edges_reordered, sentinel_cycles); 
+        }
+
+        /**
+         * Annotate the edges in the simplicial complex, according to the 
+         * procedure outlined by Busaryev et al., SWAT LNCS (2010).
+         *
+         * @param root Root vertex for the minimum-weight-path tree. 
+         * @returns Combination of (1) an array indicating the sentinel and
+         *          non-sentinel edges, (2) the homology basis corresponding
+         *          to the sentinel cycles, and (3) the corresponding array of
+         *          edge annotations. 
+         */
+        std::tuple<Matrix<int, Dynamic, 2>,
+                   Matrix<Z2, Dynamic, Dynamic>,
+                   Matrix<Z2, Dynamic, Dynamic> > annotateEdges(const int root = 0) const
+        {
+            // Get the sentinel edges and cycles from the minimum-weight-path
+            // tree rooted at the given vertex 
+            auto result = this->getSentinelCycles(root); 
+            Matrix<int, Dynamic, 2> edges_reordered = result.first; 
+            Matrix<Z2, Dynamic, Dynamic> sentinel_cycles = result.second; 
+
+            // Get the earliest basis of [del2 | Z], where del2 is the 
+            // boundary homomorphism on 2-chains and Z is the set of 
+            // candidate cycles
+            Matrix<Z2, Dynamic, Dynamic> del2 = this->getZ2BoundaryHomomorphism(2);
+            const int nt = del2.cols(); 
+            Matrix<Z2, Dynamic, Dynamic> system(ne, nt + ne - nv + 1);
+            system(Eigen::all, Eigen::seq(0, nt - 1)) = del2; 
+            system(Eigen::all, Eigen::lastN(ne - nv + 1)) = sentinel_cycles;
+            Matrix<Z2, Dynamic, Dynamic> del2_colspace = ::columnSpace<Z2>(del2);  
+            Matrix<Z2, Dynamic, Dynamic> total_colspace = ::columnSpace<Z2>(system);
+            const int g = total_colspace.cols() - del2_colspace.cols();
+            
+            // Whichever columns in the column space basis for the total 
+            // system does not feature in the column space basis for del2
+            // form a homology cycle basis 
+            Matrix<Z2, Dynamic, Dynamic> h1_basis = total_colspace(Eigen::all, Eigen::lastN(g)); 
+
+            // Now compute the edge annotations by solving the linear system
+            // Zbar * X = Z, where Zbar is the matrix of column space basis
+            // vectors for [del2 | Z], and Z is the matrix of homology cycle
+            // basis vectors 
+            Matrix<Z2, Dynamic, Dynamic> coefs = ::solve<Z2>(total_colspace, sentinel_cycles);
+
+            // Pick out the last g rows of the solution matrix
+            coefs = coefs(Eigen::lastN(g), Eigen::all).eval(); 
+
+            // Add zero coefficients for the non-sentinel (tree) edges
+            coefs.conservativeResize(coefs.rows(), coefs.cols() + nv - 1);
+            coefs(Eigen::all, Eigen::lastN(nv - 1)) = Matrix<Z2, Dynamic, Dynamic>::Zero(g, nv - 1); 
+
+            return std::make_tuple(edges_reordered, h1_basis, coefs); 
+        }
+
+        /**
+         * Calculate a minimal homology basis for the first homology group 
+         * over Z/2Z coefficients, following the procedure outlined by 
+         * Dey et al. SCG (2010), LNCS (2018), and using the edge annotation 
+         * procedure due to Busaryev et al. SWAT LNCS (2010).
+         *
+         * The first part of this function is identical to annotateEdges(). 
+         *
+         * @param root Root vertex for the minimum-weight-path tree. 
+         * @returns Combination of (1) an array indicating the "sentinel" and
+         *          "non-sentinel" edges, (2) the homology basis corresponding
+         *          to the sentinel cycles, and (3) the corresponding array of
+         *          edge annotations. 
+         */
+        Matrix<Z2, Dynamic, Dynamic> getMinimalFirstHomology() const
+        {
+            // --------------------------------------------------------- //
+            //                  COMPUTE EDGE ANNOTATIONS                 //
+            // --------------------------------------------------------- //
+            // Get the sentinel edges and cycles from the minimum-weight-path
+            // tree rooted at the given vertex 
+            auto result = this->getSentinelCycles(0); 
+            Matrix<int, Dynamic, 2> edges_reordered = result.first; 
+            Matrix<Z2, Dynamic, Dynamic> sentinel_cycles = result.second; 
+
+            // Get the earliest basis of [del2 | Z], where del2 is the 
+            // boundary homomorphism on 2-chains and Z is the set of 
+            // candidate cycles
+            Matrix<Z2, Dynamic, Dynamic> del2 = this->getZ2BoundaryHomomorphism(2);
+            const int nt = del2.cols(); 
+            Matrix<Z2, Dynamic, Dynamic> system(ne, nt + ne - nv + 1);
+            system(Eigen::all, Eigen::seq(0, nt - 1)) = del2; 
+            system(Eigen::all, Eigen::lastN(ne - nv + 1)) = sentinel_cycles;
+            Matrix<Z2, Dynamic, Dynamic> del2_colspace = ::columnSpace<Z2>(del2);  
+            Matrix<Z2, Dynamic, Dynamic> total_colspace = ::columnSpace<Z2>(system);
+            const int g = total_colspace.cols() - del2_colspace.cols();
+            
+            // Whichever columns in the column space basis for the total 
+            // system does not feature in the column space basis for del2
+            // form a homology cycle basis 
+            Matrix<Z2, Dynamic, Dynamic> h1_basis = total_colspace(Eigen::all, Eigen::lastN(g)); 
+
+            // Now compute the edge annotations by solving the linear system
+            // Zbar * X = Z, where Zbar is the matrix of column space basis
+            // vectors for [del2 | Z], and Z is the matrix of homology cycle
+            // basis vectors 
+            Matrix<Z2, Dynamic, Dynamic> coefs = ::solve<Z2>(total_colspace, sentinel_cycles);
+
+            // Pick out the last g rows of the solution matrix
+            coefs = coefs(Eigen::lastN(g), Eigen::all).eval(); 
+
+            // Add zero coefficients for the non-sentinel (tree) edges
+            coefs.conservativeResize(coefs.rows(), coefs.cols() + nv - 1);
+            coefs(Eigen::all, Eigen::lastN(nv - 1)) = Matrix<Z2, Dynamic, Dynamic>::Zero(g, nv - 1); 
+
+            // --------------------------------------------------------- //
+            //              COMPUTE MINIMAL HOMOLOGY BASIS               //
+            // --------------------------------------------------------- //
+            // Generate sentinel cycles from the minimum-weight-path tree 
+            // rooted at each vertex (we already have the cycles for root = 0) 
+            Matrix<Z2, Dynamic, Dynamic> candidate_cycles = sentinel_cycles;
+            const int nv = this->points.rows();
+            const int ne = boost::num_edges(this->one_skeleton);  
+            for (int i = 1; i < nv; ++i)
+            {
+                sentinel_cycles = this->getSentinelCycles(i);
+
+                // Gather whichever sentinel cycles have not yet been
+                // encountered
+                for (int j = 0; j < sentinel_cycles.cols(); ++j)
+                {
+                    bool encountered = false;
+                    for (int k = 0; k < candidate_cycles.cols(); ++k)
+                    {
+                        if (((sentinel_cycles.col(j) - candidate_cycles.col(k)).array() == 0).all())
+                        {
+                            encountered = true; 
+                            break; 
+                        } 
+                    }
+                    if (!encountered)
+                    {
+                        candidate_cycles.conservativeResize(ne, candidate_cycles.cols() + 1); 
+                        candidate_cycles.col(candidate_cycles.cols() - 1) = sentinel_cycles.col(j); 
+                    }
+                }
+            }
+
+            // Calculate the annotation for each candidate cycle 
+            Matrix<Z2, Dynamic, Dynamic> annotations
+                = Matrix<Z2, Dynamic, Dynamic>::Zero(g, candidate_cycles.cols());
+            for (int j = 0; j < candidate_cycles.cols(); ++j)
+            {
+                // Sum the annotations over the edges in the candidate cycle
+                for (int i = 0; i < candidate_cycles.rows(); ++i)
+                {
+                    if (candidate_cycles(i, j))
+                    {
+                        annotations.col(j) += coefs.col(i); 
+                    }
+                } 
+            }
+
+            // Sort the candidate cycles by length 
+            std::vector<std::pair<int, int> > weights; 
+            for (int j = 0; j < candidate_cycles.cols(); ++j)
+            {
+                int weight = 0; 
+                for (int i = 0; i < candidate_cycles.rows(); ++i)
+                {
+                    if (candidate_cycles(i, j))
+                        weight++; 
+                }
+                weights.push_back(std::make_pair(j, weight)); 
+            } 
+            std::sort(
+                weights.begin(), weights.end(),
+                [](const std::pair<int, int>& x, const std::pair<int, int>& y)
+                {
+                    return x.second < y.second; 
+                }
+            );
+
+            // Now run through the candidate cycles ...
+            //
+            // Identify the first non-trivial candidate cycle (i.e., first 
+            // candidate cycle with nonzero annotation vector) 
+            Matrix<Z2, Dynamic, Dynamic> minimal_basis(ne, 0);
+            Matrix<Z2, Dynamic, Dynamic> minimal_annotations(g, 0);
+            auto it = weights.begin();  
+            int curr_idx = it->first;
+
+            // Run until we have gathered g cycles ... 
+            while (minimal_basis.cols() < g)
+            {
+                // If the next candidate cycle is trivial, skip it 
+                if ((annotations.col(curr_idx).array() == 0).all())
+                {
+                    it++;
+                    curr_idx = it->first;  
+                }
+                else     // Otherwise ... 
+                {
+                    // If we have not yet gathered any cycles, gather this one
+                    int ncurr = minimal_basis.cols();  
+                    if (ncurr == 0)
+                    {
+                        minimal_basis.conservativeResize(ne, 1); 
+                        minimal_basis.col(ncurr) = candidate_cycles.col(curr_idx); 
+                        minimal_annotations.conservativeResize(g, 1); 
+                        minimal_annotations.col(ncurr) = annotations.col(curr_idx); 
+                    }
+                    // Otherwise, check if the corresponding annotation vector
+                    // is independent of the others
+                    else 
+                    { 
+                        system.resize(g, ncurr + 1); 
+                        system(Eigen::all, Eigen::seqN(0, ncurr)) = minimal_annotations;
+                        system.col(ncurr) = annotations.col(curr_idx);
+                        system = ::rowEchelonForm<Z2>(system);
+                        bool found_inconsistency = false; 
+                        for (int i = 0; i < system.rows(); ++i)
+                        {
+                            if ((system.row(i).head(ncurr).array() == 0).all() && system(i, ncurr) != 0)
+                            {
+                                found_inconsistency = true;
+                                break; 
+                            }
+                        } 
+                        if (found_inconsistency)
+                        {
+                            minimal_basis.conservativeResize(ne, ncurr + 1); 
+                            minimal_basis.col(ncurr) = candidate_cycles.col(curr_idx); 
+                            minimal_annotations.conservativeResize(g, ncurr + 1); 
+                            minimal_annotations.col(ncurr) = annotations.col(curr_idx); 
+                        }
+                    }
+
+                    // Move onto the next candidate cycle in the ordering 
+                    it++; 
+                    curr_idx = it->first; 
+                }
+            }
+
+            return minimal_basis;  
         }
 
         /**
@@ -1351,7 +1688,7 @@ class SimplicialComplex3D
          * @param dim Input dimension. 
          * @returns Collection of minimal cycles. 
          */
-        Matrix<double, Dynamic, Dynamic> minimizeCycles(const int dim)
+        Matrix<double, Dynamic, Dynamic> minimizeCycles(const int dim) const
         {
             if (dim < 0 || dim > this->dimension())
             {
