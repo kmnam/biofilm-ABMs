@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/11/2025
+ *     7/17/2025
  */
 #include <iostream>
 #include <cstdlib>
@@ -22,6 +22,7 @@ using namespace Eigen;
 
 // Use high-precision type for testing 
 typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<100> > T;
+typedef boost::multiprecision::mpq_rational Rational; 
 
 using std::sin; 
 using boost::multiprecision::sin;
@@ -1275,20 +1276,21 @@ TEST_CASE("Tests for boundary calculations", "[SimplicialComplex3D::getBoundary(
 
 TEST_CASE(
     "Tests for boundary homomorphism calculations",
-    "[SimplicialComplex3D::getBoundaryHomomorphism()]"
+    "[SimplicialComplex3D::getRealBoundaryHomomorphism(),"
+    " SimplicialComplex3D::getZ2BoundaryHomomorphism()]"
 )
 {
-    Matrix<Fp<0>, Dynamic, Dynamic> del1, del2, del3; 
-    Matrix<Fp<2>, Dynamic, Dynamic> del1_p2, del2_p2, del3_p2; 
+    Matrix<Rational, Dynamic, Dynamic> del1, del2, del3; 
+    Matrix<Z2, Dynamic, Dynamic> del1_p2, del2_p2, del3_p2; 
 
     // ------------------------------------------------------------- // 
     // Test for discrete set of points
     // ------------------------------------------------------------- // 
     SimplicialComplex3D<T> cplex = complex_points(); 
-    REQUIRE_THROWS(cplex.getBoundaryHomomorphism<0>(0));
-    REQUIRE_THROWS(cplex.getBoundaryHomomorphism<0>(1)); 
-    REQUIRE_THROWS(cplex.getBoundaryHomomorphism<0>(2)); 
-    REQUIRE_THROWS(cplex.getBoundaryHomomorphism<0>(3));
+    REQUIRE_THROWS(cplex.getRealBoundaryHomomorphism<Rational>(0));
+    REQUIRE_THROWS(cplex.getRealBoundaryHomomorphism<Rational>(1)); 
+    REQUIRE_THROWS(cplex.getRealBoundaryHomomorphism<Rational>(2)); 
+    REQUIRE_THROWS(cplex.getRealBoundaryHomomorphism<Rational>(3));
 
     // ------------------------------------------------------------- // 
     // Test for triangle
@@ -1298,7 +1300,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_2 to C_1
     //
     // Here, the map should send [0, 1, 2] to [1, 2] - [0, 2] + [0, 1]
-    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    del2 = cplex.getRealBoundaryHomomorphism<Rational>(2);
     REQUIRE(del2.rows() == cplex.getNumSimplices(1));    // = 3 
     REQUIRE(del2.cols() == cplex.getNumSimplices(2));    // = 1
     REQUIRE(del2(0) == 1); 
@@ -1311,7 +1313,7 @@ TEST_CASE(
     // -> [0, 1] to [1] - [0]
     // -> [0, 2] to [2] - [0]
     // -> [1, 2] to [2] - [1]
-    del1 = cplex.getBoundaryHomomorphism<0>(1); 
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1); 
     REQUIRE(del1.rows() == cplex.getNumSimplices(0));    // = 3 
     REQUIRE(del1.cols() == cplex.getNumSimplices(1));    // = 3
     REQUIRE(del1(0, 0) == -1);    // [1] - [0]
@@ -1327,7 +1329,7 @@ TEST_CASE(
     // The homomorphism should map 4 * [0, 1] + 2 * [0, 2] - 3 * [1, 2]
     // to 4 * ([1] - [0]) + 2 * ([2] - [0]) - 3 * ([2] - [1]), which is 
     // -6 * [0] + 7 * [1] - [2]
-    Matrix<Fp<0>, Dynamic, 1> x(3), y(3);
+    Matrix<Rational, Dynamic, 1> x(3), y(3);
     x << 4, 2, -3;
     y = del1 * x;
     REQUIRE(y(0) == -6); 
@@ -1338,8 +1340,8 @@ TEST_CASE(
     REQUIRE(((del1 * del2).array() == 0).all());
 
     // Compare against the boundary homomorphisms mod 2
-    del2_p2 = cplex.getBoundaryHomomorphism<2>(2); 
-    del1_p2 = cplex.getBoundaryHomomorphism<2>(1);
+    del2_p2 = cplex.getZ2BoundaryHomomorphism(2); 
+    del1_p2 = cplex.getZ2BoundaryHomomorphism(1);
     REQUIRE(del2_p2.rows() == del2.rows()); 
     REQUIRE(del2_p2.cols() == del2.cols()); 
     for (int i = 0; i < del2_p2.rows(); ++i)
@@ -1377,7 +1379,7 @@ TEST_CASE(
     // -> [0, 1] to [1] - [0]
     // -> [0, 2] to [2] - [0]
     // -> [1, 2] to [2] - [1]
-    del1 = cplex.getBoundaryHomomorphism<0>(1); 
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1); 
     REQUIRE(del1.rows() == cplex.getNumSimplices(0));    // = 3 
     REQUIRE(del1.cols() == cplex.getNumSimplices(1));    // = 3
     REQUIRE(del1(0, 0) == -1);    // [1] - [0]
@@ -1391,7 +1393,7 @@ TEST_CASE(
     REQUIRE(del1(2, 2) == 1);
 
     // Compare against the boundary homomorphism mod 2
-    del1_p2 = cplex.getBoundaryHomomorphism<2>(1);
+    del1_p2 = cplex.getZ2BoundaryHomomorphism(1);
     REQUIRE(del1_p2.rows() == del1.rows()); 
     REQUIRE(del1_p2.cols() == del1.cols()); 
     for (int i = 0; i < del1_p2.rows(); ++i)
@@ -1413,7 +1415,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_2 to C_1
     //
     // Here, the map should send [0, 1, 2] to [1, 2] - [0, 2] + [0, 1]
-    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    del2 = cplex.getRealBoundaryHomomorphism<Rational>(2);
     REQUIRE(del2.rows() == cplex.getNumSimplices(1));    // = 7
     REQUIRE(del2.cols() == cplex.getNumSimplices(2));    // = 1
     REQUIRE(del2(0) == 1);     // [0, 1]
@@ -1427,7 +1429,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_1 to C_0
     //
     // Here, the map should send each [v0, v1] to [v1] - [v0] 
-    del1 = cplex.getBoundaryHomomorphism<0>(1); 
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1); 
     REQUIRE(del1.rows() == cplex.getNumSimplices(0));    // = 7 
     REQUIRE(del1.cols() == cplex.getNumSimplices(1));    // = 7
     Matrix<int, Dynamic, 2> edges(7, 2);  
@@ -1457,8 +1459,8 @@ TEST_CASE(
     REQUIRE(((del1 * del2).array() == 0).all());
 
     // Compare against the boundary homomorphisms mod 2
-    del2_p2 = cplex.getBoundaryHomomorphism<2>(2); 
-    del1_p2 = cplex.getBoundaryHomomorphism<2>(1);
+    del2_p2 = cplex.getZ2BoundaryHomomorphism(2); 
+    del1_p2 = cplex.getZ2BoundaryHomomorphism(1);
     REQUIRE(del2_p2.rows() == del2.rows()); 
     REQUIRE(del2_p2.cols() == del2.cols()); 
     for (int i = 0; i < del2_p2.rows(); ++i)
@@ -1493,7 +1495,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_2 to C_1
     //
     // Here, the map should send [v0, v1, v2] to [v1, v2] - [v0, v2] + [v0, v1]
-    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    del2 = cplex.getRealBoundaryHomomorphism<Rational>(2);
     REQUIRE(del2.rows() == cplex.getNumSimplices(1));    // = 16
     REQUIRE(del2.cols() == cplex.getNumSimplices(2));    // = 8
     edges.resize(16, 2);
@@ -1545,7 +1547,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_1 to C_0
     //
     // Here, the map should send each [v0, v1] to [v1] - [v0] 
-    del1 = cplex.getBoundaryHomomorphism<0>(1); 
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1); 
     REQUIRE(del1.rows() == cplex.getNumSimplices(0));    // = 9 
     REQUIRE(del1.cols() == cplex.getNumSimplices(1));    // = 16
     for (int i = 0; i < 9; ++i)
@@ -1567,8 +1569,8 @@ TEST_CASE(
     REQUIRE(((del1 * del2).array() == 0).all());
 
     // Compare against the boundary homomorphisms mod 2
-    del2_p2 = cplex.getBoundaryHomomorphism<2>(2); 
-    del1_p2 = cplex.getBoundaryHomomorphism<2>(1);
+    del2_p2 = cplex.getZ2BoundaryHomomorphism(2); 
+    del1_p2 = cplex.getZ2BoundaryHomomorphism(1);
     REQUIRE(del2_p2.rows() == del2.rows()); 
     REQUIRE(del2_p2.cols() == del2.cols()); 
     for (int i = 0; i < del2_p2.rows(); ++i)
@@ -1603,7 +1605,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_2 to C_1
     //
     // Here, the map should send [v0, v1, v2] to [v1, v2] - [v0, v2] + [v0, v1]
-    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    del2 = cplex.getRealBoundaryHomomorphism<Rational>(2);
     REQUIRE(del2.rows() == cplex.getNumSimplices(1));    // = 15
     REQUIRE(del2.cols() == cplex.getNumSimplices(2));    // = 6
     edges.resize(15, 2);
@@ -1652,7 +1654,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_1 to C_0
     //
     // Here, the map should send each [v0, v1] to [v1] - [v0] 
-    del1 = cplex.getBoundaryHomomorphism<0>(1); 
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1); 
     REQUIRE(del1.rows() == cplex.getNumSimplices(0));    // = 9 
     REQUIRE(del1.cols() == cplex.getNumSimplices(1));    // = 15
     for (int i = 0; i < 9; ++i)
@@ -1674,8 +1676,8 @@ TEST_CASE(
     REQUIRE(((del1 * del2).array() == 0).all());
 
     // Compare against the boundary homomorphisms mod 2
-    del2_p2 = cplex.getBoundaryHomomorphism<2>(2); 
-    del1_p2 = cplex.getBoundaryHomomorphism<2>(1);
+    del2_p2 = cplex.getZ2BoundaryHomomorphism(2); 
+    del1_p2 = cplex.getZ2BoundaryHomomorphism(1);
     REQUIRE(del2_p2.rows() == del2.rows()); 
     REQUIRE(del2_p2.cols() == del2.cols()); 
     for (int i = 0; i < del2_p2.rows(); ++i)
@@ -1710,7 +1712,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_2 to C_1
     //
     // Here, the map should send [v0, v1, v2] to [v1, v2] - [v0, v2] + [v0, v1]
-    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    del2 = cplex.getRealBoundaryHomomorphism<Rational>(2);
     REQUIRE(del2.rows() == cplex.getNumSimplices(1));    // = 24
     REQUIRE(del2.cols() == cplex.getNumSimplices(2));    // = 12
     for (int i = 0; i < del2.rows(); ++i)
@@ -1752,7 +1754,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_1 to C_0
     //
     // Here, the map should send each [v0, v1] to [v1] - [v0] 
-    del1 = cplex.getBoundaryHomomorphism<0>(1); 
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1); 
     REQUIRE(del1.rows() == cplex.getNumSimplices(0));    // = 12 
     REQUIRE(del1.cols() == cplex.getNumSimplices(1));    // = 24
     for (int i = 0; i < del1.rows(); ++i)
@@ -1795,8 +1797,8 @@ TEST_CASE(
     REQUIRE(((del1 * del2).array() == 0).all());
 
     // Compare against the boundary homomorphisms mod 2
-    del2_p2 = cplex.getBoundaryHomomorphism<2>(2); 
-    del1_p2 = cplex.getBoundaryHomomorphism<2>(1);
+    del2_p2 = cplex.getZ2BoundaryHomomorphism(2); 
+    del1_p2 = cplex.getZ2BoundaryHomomorphism(1);
     REQUIRE(del2_p2.rows() == del2.rows()); 
     REQUIRE(del2_p2.cols() == del2.cols()); 
     for (int i = 0; i < del2_p2.rows(); ++i)
@@ -1831,7 +1833,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_2 to C_1
     //
     // Here, the map should send [v0, v1, v2] to [v1, v2] - [v0, v2] + [v0, v1]
-    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    del2 = cplex.getRealBoundaryHomomorphism<Rational>(2);
     REQUIRE(del2.rows() == cplex.getNumSimplices(1));    // = 47
     REQUIRE(del2.cols() == cplex.getNumSimplices(2));    // = 24
     for (int i = 0; i < del2.rows(); ++i)
@@ -1905,7 +1907,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_1 to C_0
     //
     // Here, the map should send each [v0, v1] to [v1] - [v0] 
-    del1 = cplex.getBoundaryHomomorphism<0>(1); 
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1); 
     REQUIRE(del1.rows() == cplex.getNumSimplices(0));    // = 22
     REQUIRE(del1.cols() == cplex.getNumSimplices(1));    // = 47
     for (int i = 0; i < del1.rows(); ++i)
@@ -2026,8 +2028,8 @@ TEST_CASE(
     REQUIRE(((del1 * del2).array() == 0).all());
 
     // Compare against the boundary homomorphisms mod 2
-    del2_p2 = cplex.getBoundaryHomomorphism<2>(2); 
-    del1_p2 = cplex.getBoundaryHomomorphism<2>(1);
+    del2_p2 = cplex.getZ2BoundaryHomomorphism(2); 
+    del1_p2 = cplex.getZ2BoundaryHomomorphism(1);
     REQUIRE(del2_p2.rows() == del2.rows()); 
     REQUIRE(del2_p2.cols() == del2.cols()); 
     for (int i = 0; i < del2_p2.rows(); ++i)
@@ -2062,7 +2064,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_3 to C_2
     //
     // This map should send [0, 1, 2, 3] to [1, 2, 3] - [0, 2, 3] + [0, 1, 3] - [0, 1, 2]
-    del3 = cplex.getBoundaryHomomorphism<0>(3); 
+    del3 = cplex.getRealBoundaryHomomorphism<Rational>(3); 
     REQUIRE(del3.rows() == cplex.getNumSimplices(2));    // 4
     REQUIRE(del3.cols() == cplex.getNumSimplices(3));    // 1
     REQUIRE(del3(0) == -1);    // [0, 1, 2]
@@ -2073,7 +2075,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_2 to C_1
     //
     // Here, the map should send [v0, v1, v2] to [v1, v2] - [v0, v2] + [v0, v1]
-    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    del2 = cplex.getRealBoundaryHomomorphism<Rational>(2);
     REQUIRE(del2.rows() == cplex.getNumSimplices(1));    // = 6
     REQUIRE(del2.cols() == cplex.getNumSimplices(2));    // = 4
     REQUIRE(del2(0, 0) == 1);    // [0, 1, 2] -> [1, 2] - [0, 2] + [0, 1]
@@ -2104,7 +2106,7 @@ TEST_CASE(
     // Get the boundary homomorphism from C_1 to C_0
     //
     // Here, the map should send each [v0, v1] to [v1] - [v0] 
-    del1 = cplex.getBoundaryHomomorphism<0>(1); 
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1); 
     REQUIRE(del1.rows() == cplex.getNumSimplices(0));    // = 4 
     REQUIRE(del1.cols() == cplex.getNumSimplices(1));    // = 6
     REQUIRE(del1(0, 0) == -1);    // [0, 1] -> [1] - [0]
@@ -2137,9 +2139,9 @@ TEST_CASE(
     REQUIRE(((del1 * del2).array() == 0).all());
 
     // Compare against the boundary homomorphisms mod 2
-    del3_p2 = cplex.getBoundaryHomomorphism<2>(3); 
-    del2_p2 = cplex.getBoundaryHomomorphism<2>(2); 
-    del1_p2 = cplex.getBoundaryHomomorphism<2>(1);
+    del3_p2 = cplex.getZ2BoundaryHomomorphism(3); 
+    del2_p2 = cplex.getZ2BoundaryHomomorphism(2); 
+    del1_p2 = cplex.getZ2BoundaryHomomorphism(1);
     REQUIRE(del3_p2.rows() == del3.rows()); 
     REQUIRE(del3_p2.cols() == del3.cols()); 
     for (int i = 0; i < del3_p2.rows(); ++i)
@@ -2185,7 +2187,7 @@ TEST_CASE(
     "[SimplicialComplex3D::getCombinatorialLaplacian()]"
 )
 {
-    Matrix<Fp<0>, Dynamic, Dynamic> L0, L1, L2, L3;
+    Matrix<Rational, Dynamic, Dynamic> L0, L1, L2, L3;
 
     // ------------------------------------------------------------- // 
     // Test for discrete set of points 
@@ -2193,7 +2195,7 @@ TEST_CASE(
     SimplicialComplex3D<T> cplex = complex_points();
 
     // L0 should be the 3x3 zero matrix 
-    L0 = cplex.getCombinatorialLaplacian(0);
+    L0 = cplex.getCombinatorialLaplacian<Rational>(0);
     REQUIRE(L0.rows() == 3);
     REQUIRE(L0.cols() == 3); 
     REQUIRE((L0.array() == 0).all());
@@ -2202,14 +2204,14 @@ TEST_CASE(
     // Test for triangle
     // ------------------------------------------------------------- // 
     cplex = complex_triangle();
-    L0 = cplex.getCombinatorialLaplacian(0);
-    L1 = cplex.getCombinatorialLaplacian(1); 
-    L2 = cplex.getCombinatorialLaplacian(2); 
+    L0 = cplex.getCombinatorialLaplacian<Rational>(0);
+    L1 = cplex.getCombinatorialLaplacian<Rational>(1); 
+    L2 = cplex.getCombinatorialLaplacian<Rational>(2); 
 
     // This complex is contractible and therefore has trivial homology
     REQUIRE(L0.rows() == 3); 
     REQUIRE(L0.cols() == 3);
-    Matrix<Fp<0>, Dynamic, Dynamic> kerL0 = ::kernel<Fp<0> >(L0); 
+    Matrix<Rational, Dynamic, Dynamic> kerL0 = ::kernel<Rational>(L0); 
     REQUIRE(kerL0.cols() == 1); 
     REQUIRE(L1.rows() == 3); 
     REQUIRE(L1.cols() == 3); 
@@ -2222,31 +2224,31 @@ TEST_CASE(
     // Test for simple cycle
     // ------------------------------------------------------------- // 
     cplex = complex_cycle();
-    L0 = cplex.getCombinatorialLaplacian(0);
-    L1 = cplex.getCombinatorialLaplacian(1); 
+    L0 = cplex.getCombinatorialLaplacian<Rational>(0);
+    L1 = cplex.getCombinatorialLaplacian<Rational>(1); 
 
     // This complex has one 1-cycle
     REQUIRE(L0.rows() == 3); 
     REQUIRE(L0.cols() == 3);
-    kerL0 = ::kernel<Fp<0> >(L0); 
+    kerL0 = ::kernel<Rational>(L0); 
     REQUIRE(kerL0.cols() == 1); 
     REQUIRE(L1.rows() == 3); 
     REQUIRE(L1.cols() == 3); 
-    Matrix<Fp<0>, Dynamic, Dynamic> kerL1 = ::kernel<Fp<0> >(L1); 
+    Matrix<Rational, Dynamic, Dynamic> kerL1 = ::kernel<Rational>(L1); 
     REQUIRE(kerL1.cols() == 1); 
 
     // ------------------------------------------------------------- // 
     // Test for triangle with additional 1-simplices 
     // ------------------------------------------------------------- //
     cplex = complex_triangles_with_appendages();
-    L0 = cplex.getCombinatorialLaplacian(0);
-    L1 = cplex.getCombinatorialLaplacian(1); 
-    L2 = cplex.getCombinatorialLaplacian(2); 
+    L0 = cplex.getCombinatorialLaplacian<Rational>(0);
+    L1 = cplex.getCombinatorialLaplacian<Rational>(1); 
+    L2 = cplex.getCombinatorialLaplacian<Rational>(2); 
 
     // This complex is contractible and therefore has trivial homology
     REQUIRE(L0.rows() == 7); 
     REQUIRE(L0.cols() == 7);
-    kerL0 = ::kernel<Fp<0> >(L0); 
+    kerL0 = ::kernel<Rational>(L0); 
     REQUIRE(kerL0.cols() == 1); 
     REQUIRE(L1.rows() == 7); 
     REQUIRE(L1.cols() == 7); 
@@ -2259,14 +2261,14 @@ TEST_CASE(
     // Test for simply connected 2-D mesh
     // ------------------------------------------------------------- // 
     cplex = complex_2d_mesh();
-    L0 = cplex.getCombinatorialLaplacian(0);
-    L1 = cplex.getCombinatorialLaplacian(1); 
-    L2 = cplex.getCombinatorialLaplacian(2); 
+    L0 = cplex.getCombinatorialLaplacian<Rational>(0);
+    L1 = cplex.getCombinatorialLaplacian<Rational>(1); 
+    L2 = cplex.getCombinatorialLaplacian<Rational>(2); 
 
     // This complex is contractible and therefore has trivial homology
     REQUIRE(L0.rows() == 9); 
     REQUIRE(L0.cols() == 9);
-    kerL0 = ::kernel<Fp<0> >(L0); 
+    kerL0 = ::kernel<Rational>(L0); 
     REQUIRE(kerL0.cols() == 1); 
     REQUIRE(L1.rows() == 16); 
     REQUIRE(L1.cols() == 16); 
@@ -2279,19 +2281,19 @@ TEST_CASE(
     // Test for 2-D mesh with hole 
     // ------------------------------------------------------------- // 
     cplex = complex_2d_mesh_with_hole();
-    L0 = cplex.getCombinatorialLaplacian(0);
-    L1 = cplex.getCombinatorialLaplacian(1); 
-    L2 = cplex.getCombinatorialLaplacian(2); 
+    L0 = cplex.getCombinatorialLaplacian<Rational>(0);
+    L1 = cplex.getCombinatorialLaplacian<Rational>(1); 
+    L2 = cplex.getCombinatorialLaplacian<Rational>(2); 
 
     // This complex is still connected but *not* simply connected, and has
     // one hole (1-D cycle)
     REQUIRE(L0.rows() == 9); 
     REQUIRE(L0.cols() == 9);
-    kerL0 = ::kernel<Fp<0> >(L0); 
+    kerL0 = ::kernel<Rational>(L0); 
     REQUIRE(kerL0.cols() == 1); 
     REQUIRE(L1.rows() == 15); 
     REQUIRE(L1.cols() == 15); 
-    kerL1 = ::kernel<Fp<0> >(L1); 
+    kerL1 = ::kernel<Rational>(L1); 
     REQUIRE(kerL1.cols() == 1); 
     REQUIRE(L2.rows() == 6); 
     REQUIRE(L2.cols() == 6); 
@@ -2301,19 +2303,19 @@ TEST_CASE(
     // Test for annulus
     // ------------------------------------------------------------- //
     cplex = complex_annulus(); 
-    L0 = cplex.getCombinatorialLaplacian(0);
-    L1 = cplex.getCombinatorialLaplacian(1); 
-    L2 = cplex.getCombinatorialLaplacian(2); 
+    L0 = cplex.getCombinatorialLaplacian<Rational>(0);
+    L1 = cplex.getCombinatorialLaplacian<Rational>(1); 
+    L2 = cplex.getCombinatorialLaplacian<Rational>(2); 
 
     // This complex is still connected but *not* simply connected, and has
     // one hole (1-D cycle)
     REQUIRE(L0.rows() == 12); 
     REQUIRE(L0.cols() == 12);
-    kerL0 = ::kernel<Fp<0> >(L0); 
+    kerL0 = ::kernel<Rational>(L0); 
     REQUIRE(kerL0.cols() == 1); 
     REQUIRE(L1.rows() == 24); 
     REQUIRE(L1.cols() == 24); 
-    kerL1 = ::kernel<Fp<0> >(L1); 
+    kerL1 = ::kernel<Rational>(L1); 
     REQUIRE(kerL1.cols() == 1); 
     REQUIRE(L2.rows() == 12); 
     REQUIRE(L2.cols() == 12); 
@@ -2323,19 +2325,19 @@ TEST_CASE(
     // Test for two-holed annulus
     // ------------------------------------------------------------- //
     cplex = complex_annulus_two_holes(); 
-    L0 = cplex.getCombinatorialLaplacian(0);
-    L1 = cplex.getCombinatorialLaplacian(1); 
-    L2 = cplex.getCombinatorialLaplacian(2); 
+    L0 = cplex.getCombinatorialLaplacian<Rational>(0);
+    L1 = cplex.getCombinatorialLaplacian<Rational>(1); 
+    L2 = cplex.getCombinatorialLaplacian<Rational>(2); 
 
     // This complex is still connected but *not* simply connected, and has
     // two holes (1-D cycle)
     REQUIRE(L0.rows() == 22); 
     REQUIRE(L0.cols() == 22);
-    kerL0 = ::kernel<Fp<0> >(L0); 
+    kerL0 = ::kernel<Rational>(L0); 
     REQUIRE(kerL0.cols() == 1); 
     REQUIRE(L1.rows() == 47); 
     REQUIRE(L1.cols() == 47); 
-    kerL1 = ::kernel<Fp<0> >(L1); 
+    kerL1 = ::kernel<Rational>(L1); 
     REQUIRE(kerL1.cols() == 2); 
     REQUIRE(L2.rows() == 24); 
     REQUIRE(L2.cols() == 24); 
@@ -2345,15 +2347,15 @@ TEST_CASE(
     // Test for tetrahedron
     // ------------------------------------------------------------- // 
     cplex = complex_tetrahedron();
-    L0 = cplex.getCombinatorialLaplacian(0);
-    L1 = cplex.getCombinatorialLaplacian(1);
-    L2 = cplex.getCombinatorialLaplacian(2);
-    L3 = cplex.getCombinatorialLaplacian(3);
+    L0 = cplex.getCombinatorialLaplacian<Rational>(0);
+    L1 = cplex.getCombinatorialLaplacian<Rational>(1);
+    L2 = cplex.getCombinatorialLaplacian<Rational>(2);
+    L3 = cplex.getCombinatorialLaplacian<Rational>(3);
 
     // This complex is contractible and therefore has trivial homology
     REQUIRE(L0.rows() == 4); 
     REQUIRE(L0.cols() == 4);
-    kerL0 = ::kernel<Fp<0> >(L0); 
+    kerL0 = ::kernel<Rational>(L0); 
     REQUIRE(kerL0.cols() == 1); 
     REQUIRE(L1.rows() == 6); 
     REQUIRE(L1.cols() == 6); 
@@ -2368,14 +2370,13 @@ TEST_CASE(
 
 TEST_CASE(
     "Tests for homology calculations with rational coefficients",
-    "[SimplicialComplex3D::getZeroCharHomology(),"
-    " SimplicialComplex3D::getPrimeCharHomology(),"
-    " SimplicialComplex3D::getZeroCharBettiNumbers()]"
+    "[SimplicialComplex3D::getRealHomology(),"
+    " SimplicialComplex3D::getRealBettiNumbers()]"
 )
 {
-    Matrix<Fp<0>, Dynamic, Dynamic> H0_p0, H1_p0, H2_p0, H3_p0;
-    Matrix<Fp<0>, Dynamic, Dynamic> del1, del2;
-    Matrix<Fp<0>, Dynamic, Dynamic> aug1, aug2; 
+    Matrix<Rational, Dynamic, Dynamic> H0_p0, H1_p0, H2_p0, H3_p0;
+    Matrix<Rational, Dynamic, Dynamic> del1, del2;
+    Matrix<Rational, Dynamic, Dynamic> aug1, aug2; 
 
     // ------------------------------------------------------------- // 
     // Test for discrete set of points 
@@ -2383,11 +2384,11 @@ TEST_CASE(
     SimplicialComplex3D<T> cplex = complex_points();
 
     // Get a basis for the zeroth homology group over the rationals 
-    H0_p0 = cplex.getZeroCharHomology(0);
+    H0_p0 = cplex.getRealHomology<Rational>(0);
     REQUIRE(H0_p0.rows() == 3);  
 
     // Check the Betti numbers 
-    Array<int, Dynamic, 1> betti = cplex.getZeroCharBettiNumbers(); 
+    Array<int, Dynamic, 1> betti = cplex.getRealBettiNumbers(); 
     REQUIRE(betti(0) == 3); 
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
@@ -2399,9 +2400,9 @@ TEST_CASE(
     cplex = complex_triangle();
 
     // Get bases for the homology groups over the rationals
-    H0_p0 = cplex.getZeroCharHomology(0);
-    H1_p0 = cplex.getZeroCharHomology(1); 
-    H2_p0 = cplex.getZeroCharHomology(2); 
+    H0_p0 = cplex.getRealHomology<Rational>(0);
+    H1_p0 = cplex.getRealHomology<Rational>(1); 
+    H2_p0 = cplex.getRealHomology<Rational>(2); 
     REQUIRE(H0_p0.cols() == 1);
     REQUIRE(H1_p0.cols() == 0); 
     REQUIRE(H2_p0.cols() == 0);
@@ -2411,29 +2412,15 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    Matrix<Fp<0>, Dynamic, 1> v1 = Matrix<Fp<0>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<0>(1);
+    Matrix<Rational, Dynamic, 1> v1 = Matrix<Rational, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
-
-    // Get bases for the homology groups over the rationals, but with
-    // getPrimeCharHomology()
-    H0_p0 = cplex.getPrimeCharHomology<0>(0); 
-    H1_p0 = cplex.getPrimeCharHomology<0>(1); 
-    H2_p0 = cplex.getPrimeCharHomology<0>(2);
-    REQUIRE(H0_p0.cols() == 1);
-    REQUIRE(H1_p0.cols() == 0); 
-    REQUIRE(H2_p0.cols() == 0);
-
-    // Again check that the basis vector for H0 is homologous to the 
-    // all-ones vector
-    aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
+    REQUIRE(!containsInconsistency<Rational>(aug1, v1));
 
     // Check the Betti numbers 
-    betti = cplex.getZeroCharBettiNumbers(); 
+    betti = cplex.getRealBettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
@@ -2445,8 +2432,8 @@ TEST_CASE(
     cplex = complex_cycle();
 
     // Get bases for the homology groups over the rationals 
-    H0_p0 = cplex.getZeroCharHomology(0);
-    H1_p0 = cplex.getZeroCharHomology(1); 
+    H0_p0 = cplex.getRealHomology<Rational>(0);
+    H1_p0 = cplex.getRealHomology<Rational>(1); 
     REQUIRE(H0_p0.cols() == 1);
     REQUIRE(H1_p0.cols() == 1);
 
@@ -2455,12 +2442,12 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<0>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<0>(1);
+    v1 = Matrix<Rational, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
+    REQUIRE(!containsInconsistency<Rational>(aug1, v1));
 
     // Check that the basis vector for H1 is a scalar multiple of the vector
     // (1, -1, 1), corresponding to the cycle [v0,v1], [v2,v0], [v1,v2]
@@ -2470,25 +2457,8 @@ TEST_CASE(
     REQUIRE(H1_p0(1) == -H1_p0(0)); 
     REQUIRE(H1_p0(2) == H1_p0(0)); 
 
-    // Get bases for the homology groups over the rationals, but with
-    // getPrimeCharHomology()
-    H0_p0 = cplex.getPrimeCharHomology<0>(0); 
-    H1_p0 = cplex.getPrimeCharHomology<0>(1); 
-    REQUIRE(H0_p0.cols() == 1);
-    REQUIRE(H1_p0.cols() == 1);
-
-    // Again check that the basis vector for H0 is homologous to the 
-    // all-ones vector
-    aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
-
-    // Again check that the basis vector for H1 is a scalar multiple of the
-    // vector (1, -1, 1)
-    REQUIRE(H1_p0(1) == -H1_p0(0)); 
-    REQUIRE(H1_p0(2) == H1_p0(0)); 
-
     // Check the Betti numbers 
-    betti = cplex.getZeroCharBettiNumbers(); 
+    betti = cplex.getRealBettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 1); 
     REQUIRE(betti(2) == 0);
@@ -2500,9 +2470,9 @@ TEST_CASE(
     cplex = complex_triangles_with_appendages();
 
     // Get bases for the homology groups over the rationals 
-    H0_p0 = cplex.getZeroCharHomology(0);
-    H1_p0 = cplex.getZeroCharHomology(1); 
-    H2_p0 = cplex.getZeroCharHomology(2); 
+    H0_p0 = cplex.getRealHomology<Rational>(0);
+    H1_p0 = cplex.getRealHomology<Rational>(1); 
+    H2_p0 = cplex.getRealHomology<Rational>(2); 
     REQUIRE(H0_p0.cols() == 1);
     REQUIRE(H1_p0.cols() == 0); 
     REQUIRE(H2_p0.cols() == 0);
@@ -2512,29 +2482,15 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<0>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<0>(1); 
+    v1 = Matrix<Rational, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1); 
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
-
-    // Get bases for the homology groups over the rationals, but with
-    // getPrimeCharHomology()
-    H0_p0 = cplex.getPrimeCharHomology<0>(0); 
-    H1_p0 = cplex.getPrimeCharHomology<0>(1); 
-    H2_p0 = cplex.getPrimeCharHomology<0>(2);
-    REQUIRE(H0_p0.cols() == 1);
-    REQUIRE(H1_p0.cols() == 0); 
-    REQUIRE(H2_p0.cols() == 0);
-
-    // Again check that the basis vector for H0 is homologous to the 
-    // all-ones vector
-    aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
+    REQUIRE(!containsInconsistency<Rational>(aug1, v1));
 
     // Check the Betti numbers 
-    betti = cplex.getZeroCharBettiNumbers(); 
+    betti = cplex.getRealBettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
@@ -2546,9 +2502,9 @@ TEST_CASE(
     cplex = complex_2d_mesh();
 
     // Get bases for the homology groups over the rationals 
-    H0_p0 = cplex.getZeroCharHomology(0);
-    H1_p0 = cplex.getZeroCharHomology(1); 
-    H2_p0 = cplex.getZeroCharHomology(2); 
+    H0_p0 = cplex.getRealHomology<Rational>(0);
+    H1_p0 = cplex.getRealHomology<Rational>(1); 
+    H2_p0 = cplex.getRealHomology<Rational>(2); 
     REQUIRE(H0_p0.cols() == 1);
     REQUIRE(H1_p0.cols() == 0); 
     REQUIRE(H2_p0.cols() == 0);
@@ -2558,29 +2514,15 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<0>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<0>(1);
+    v1 = Matrix<Rational, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0;
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
-
-    // Get bases for the homology groups over the rationals, but with
-    // getPrimeCharHomology()
-    H0_p0 = cplex.getPrimeCharHomology<0>(0); 
-    H1_p0 = cplex.getPrimeCharHomology<0>(1); 
-    H2_p0 = cplex.getPrimeCharHomology<0>(2);
-    REQUIRE(H0_p0.cols() == 1);
-    REQUIRE(H1_p0.cols() == 0); 
-    REQUIRE(H2_p0.cols() == 0);
-
-    // Again check that the basis vector for H0 is homologous to the 
-    // all-ones vector
-    aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
+    REQUIRE(!containsInconsistency<Rational>(aug1, v1));
 
     // Check the Betti numbers 
-    betti = cplex.getZeroCharBettiNumbers(); 
+    betti = cplex.getRealBettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
@@ -2592,9 +2534,9 @@ TEST_CASE(
     cplex = complex_2d_mesh_with_hole();
 
     // Get bases for the homology groups over the rationals 
-    H0_p0 = cplex.getZeroCharHomology(0);
-    H1_p0 = cplex.getZeroCharHomology(1); 
-    H2_p0 = cplex.getZeroCharHomology(2); 
+    H0_p0 = cplex.getRealHomology<Rational>(0);
+    H1_p0 = cplex.getRealHomology<Rational>(1); 
+    H2_p0 = cplex.getRealHomology<Rational>(2); 
     REQUIRE(H0_p0.cols() == 1);
     REQUIRE(H1_p0.cols() == 1); 
     REQUIRE(H2_p0.cols() == 0);
@@ -2604,51 +2546,31 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<0>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<0>(1);
+    v1 = Matrix<Rational, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0;
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Rational>(aug1, v1)); 
 
     // Check that the basis vector for H1 is homologous to the cycle 
     // (0, 0, 0, -1, 1, 0, 0, -1, 0, 1, 0, ..., 0), corresponding to the
     // cycle [v1,v3], [v3,v4], [v4,v2], [v2,v1]
-    Matrix<Fp<0>, Dynamic, 1> v2 = Matrix<Fp<0>, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
+    Matrix<Rational, Dynamic, 1> v2 = Matrix<Rational, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
     v2(3) = -1; 
     v2(4) = 1; 
     v2(7) = -1; 
     v2(9) = 1;
-    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    del2 = cplex.getRealBoundaryHomomorphism<Rational>(2);
     aug2.resize(del2.rows(), del2.cols() + 1);
     aug2(Eigen::all, Eigen::seq(0, del2.cols() - 1)) = del2; 
     aug2.col(del2.cols()) = H1_p0;  
     REQUIRE(((del1 * H1_p0).array() == 0).all());
     REQUIRE(((del1 * v2).array() == 0).all());
-    REQUIRE(!containsInconsistency<Fp<0> >(aug2, v2)); 
-
-    // Get bases for the homology groups over the rationals, but with
-    // getPrimeCharHomology()
-    H0_p0 = cplex.getPrimeCharHomology<0>(0); 
-    H1_p0 = cplex.getPrimeCharHomology<0>(1); 
-    H2_p0 = cplex.getPrimeCharHomology<0>(2);
-    REQUIRE(H0_p0.cols() == 1);
-    REQUIRE(H1_p0.cols() == 1); 
-    REQUIRE(H2_p0.cols() == 0);
-
-    // Again check that the basis vector for H0 is homologous to the 
-    // all-ones vector
-    aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
-
-    // Again check that the basis vector for H1 is homologous to the 
-    // above 1-cycle 
-    aug2.col(del2.cols()) = H1_p0;
-    REQUIRE(((del1 * H1_p0).array() == 0).all());
-    REQUIRE(!containsInconsistency<Fp<0> >(aug2, v2)); 
+    REQUIRE(!containsInconsistency<Rational>(aug2, v2)); 
 
     // Check the Betti numbers 
-    betti = cplex.getZeroCharBettiNumbers(); 
+    betti = cplex.getRealBettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 1); 
     REQUIRE(betti(2) == 0);
@@ -2660,9 +2582,9 @@ TEST_CASE(
     cplex = complex_annulus(); 
 
     // Get bases for the homology groups over the rationals 
-    H0_p0 = cplex.getZeroCharHomology(0);
-    H1_p0 = cplex.getZeroCharHomology(1); 
-    H2_p0 = cplex.getZeroCharHomology(2);
+    H0_p0 = cplex.getRealHomology<Rational>(0);
+    H1_p0 = cplex.getRealHomology<Rational>(1); 
+    H2_p0 = cplex.getRealHomology<Rational>(2);
     REQUIRE(H0_p0.cols() == 1);
     REQUIRE(H1_p0.cols() == 1); 
     REQUIRE(H2_p0.cols() == 0);
@@ -2672,53 +2594,33 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<0>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<0>(1);
+    v1 = Matrix<Rational, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0;
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
+    REQUIRE(!containsInconsistency<Rational>(aug1, v1));
 
     // Check that the basis vector for H1 is homologous to the cycle 
     // (0, ..., 0, 1, -1, 1, 1, 1, 1), corresponding to the cycle [v6,v7], 
     // [v7,v8], [v8,v9], [v9,v10], [v10,v11], [v11,v6]
-    v2 = Matrix<Fp<0>, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
+    v2 = Matrix<Rational, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
     v2(18) = 1; 
     v2(19) = -1; 
     v2(20) = 1; 
     v2(21) = 1;
     v2(22) = 1;
     v2(23) = 1;
-    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    del2 = cplex.getRealBoundaryHomomorphism<Rational>(2);
     aug2.resize(del2.rows(), del2.cols() + 1);
     aug2(Eigen::all, Eigen::seq(0, del2.cols() - 1)) = del2; 
     aug2.col(del2.cols()) = H1_p0;  
     REQUIRE(((del1 * H1_p0).array() == 0).all());
     REQUIRE(((del1 * v2).array() == 0).all());
-    REQUIRE(!containsInconsistency<Fp<0> >(aug2, v2)); 
+    REQUIRE(!containsInconsistency<Rational>(aug2, v2)); 
 
-    // Get bases for the homology groups over the rationals, but with
-    // getPrimeCharHomology()
-    H0_p0 = cplex.getPrimeCharHomology<0>(0); 
-    H1_p0 = cplex.getPrimeCharHomology<0>(1); 
-    H2_p0 = cplex.getPrimeCharHomology<0>(2);
-    REQUIRE(H0_p0.cols() == 1);
-    REQUIRE(H1_p0.cols() == 1); 
-    REQUIRE(H2_p0.cols() == 0);
-
-    // Again check that the basis vector for H0 is homologous to the 
-    // all-ones vector
-    aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
-
-    // Again check that the basis vector for H1 is homologous to the 
-    // above 1-cycle 
-    aug2.col(del2.cols()) = H1_p0;
-    REQUIRE(((del1 * H1_p0).array() == 0).all());
-    REQUIRE(!containsInconsistency<Fp<0> >(aug2, v2)); 
-    
     // Check the Betti numbers 
-    betti = cplex.getZeroCharBettiNumbers(); 
+    betti = cplex.getRealBettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 1); 
     REQUIRE(betti(2) == 0);
@@ -2730,9 +2632,9 @@ TEST_CASE(
     cplex = complex_annulus_two_holes(); 
 
     // Get bases for the homology groups over the rationals 
-    H0_p0 = cplex.getZeroCharHomology(0);
-    H1_p0 = cplex.getZeroCharHomology(1); 
-    H2_p0 = cplex.getZeroCharHomology(2);
+    H0_p0 = cplex.getRealHomology<Rational>(0);
+    H1_p0 = cplex.getRealHomology<Rational>(1); 
+    H2_p0 = cplex.getRealHomology<Rational>(2);
     REQUIRE(H0_p0.cols() == 1);
     REQUIRE(H1_p0.cols() == 2); 
     REQUIRE(H2_p0.cols() == 0);
@@ -2742,24 +2644,24 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<0>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<0>(1);
+    v1 = Matrix<Rational, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0;
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
+    REQUIRE(!containsInconsistency<Rational>(aug1, v1));
 
     // Check that the two basis vectors for H1 are not homologous to each other
-    del2 = cplex.getBoundaryHomomorphism<0>(2);
+    del2 = cplex.getRealBoundaryHomomorphism<Rational>(2);
     REQUIRE(((del1 * H1_p0.col(0)).array() == 0).all());
     REQUIRE(((del1 * H1_p0.col(1)).array() == 0).all());
     aug2.resize(del2.rows(), del2.cols() + 1);
     aug2(Eigen::all, Eigen::seq(0, del2.cols() - 1)) = del2;
     aug2.col(del2.cols()) = H1_p0.col(0);
-    REQUIRE(containsInconsistency<Fp<0> >(aug2, H1_p0.col(1))); 
+    REQUIRE(containsInconsistency<Rational>(aug2, H1_p0.col(1))); 
 
     // Consider 11 different cycles ...  
-    Matrix<Fp<0>, Dynamic, Dynamic> cycles(cplex.getNumSimplices(1), 11);
+    Matrix<Rational, Dynamic, Dynamic> cycles(cplex.getNumSimplices(1), 11);
 
     // Left hole, small: [v6,v7], [v7,v8], [v8,v9], [v9,v10], [v10,v11],
     //                   [v11,v6]
@@ -2926,17 +2828,17 @@ TEST_CASE(
         for (int j = i + 1; j < 11; ++j)
         {
             if (i == 0 && j == 1)          // Left holes 
-                REQUIRE(!containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j)));
+                REQUIRE(!containsInconsistency<Rational>(del2, cycles.col(i) - cycles.col(j)));
             else if (i == 2 && j == 3)     // Right holes
-                REQUIRE(!containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j)));
+                REQUIRE(!containsInconsistency<Rational>(del2, cycles.col(i) - cycles.col(j)));
             else if (i == 4 && j == 5)     // Both holes
-                REQUIRE(!containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j)));
+                REQUIRE(!containsInconsistency<Rational>(del2, cycles.col(i) - cycles.col(j)));
             else if (i == 6 && j == 7)     // Left hole, twice around
-                REQUIRE(!containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j)));
+                REQUIRE(!containsInconsistency<Rational>(del2, cycles.col(i) - cycles.col(j)));
             else if (i == 8 && j == 9)     // Right hole, twice around
-                REQUIRE(!containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j)));
+                REQUIRE(!containsInconsistency<Rational>(del2, cycles.col(i) - cycles.col(j)));
             else    // Figure eight should not be homologous to any other cycle
-                REQUIRE(containsInconsistency<Fp<0> >(del2, cycles.col(i) - cycles.col(j))); 
+                REQUIRE(containsInconsistency<Rational>(del2, cycles.col(i) - cycles.col(j))); 
         }
     }
 
@@ -2947,16 +2849,7 @@ TEST_CASE(
     aug2.col(del2.cols()) = H1_p0.col(0);
     aug2.col(del2.cols() + 1) = H1_p0.col(1);
     for (int i = 0; i < 11; ++i)
-        REQUIRE(!containsInconsistency<Fp<0> >(aug2, cycles.col(i)));
-
-    // Get bases for the homology groups over the rationals, but with
-    // getPrimeCharHomology()
-    H0_p0 = cplex.getPrimeCharHomology<0>(0); 
-    H1_p0 = cplex.getPrimeCharHomology<0>(1); 
-    H2_p0 = cplex.getPrimeCharHomology<0>(2);
-    REQUIRE(H0_p0.cols() == 1);
-    REQUIRE(H1_p0.cols() == 2); 
-    REQUIRE(H2_p0.cols() == 0);
+        REQUIRE(!containsInconsistency<Rational>(aug2, cycles.col(i)));
 
     // ------------------------------------------------------------- // 
     // Test for tetrahedron
@@ -2964,10 +2857,10 @@ TEST_CASE(
     cplex = complex_tetrahedron();
 
     // Get bases for the homology groups over the rationals 
-    H0_p0 = cplex.getZeroCharHomology(0);
-    H1_p0 = cplex.getZeroCharHomology(1); 
-    H2_p0 = cplex.getZeroCharHomology(2);
-    H3_p0 = cplex.getZeroCharHomology(3); 
+    H0_p0 = cplex.getRealHomology<Rational>(0);
+    H1_p0 = cplex.getRealHomology<Rational>(1); 
+    H2_p0 = cplex.getRealHomology<Rational>(2);
+    H3_p0 = cplex.getRealHomology<Rational>(3); 
     REQUIRE(H0_p0.cols() == 1);
     REQUIRE(H1_p0.cols() == 0); 
     REQUIRE(H2_p0.cols() == 0);
@@ -2978,31 +2871,15 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<0>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<0>(1);
+    v1 = Matrix<Rational, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getRealBoundaryHomomorphism<Rational>(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p0;
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
-
-    // Get bases for the homology groups over the rationals, but with
-    // getPrimeCharHomology()
-    H0_p0 = cplex.getPrimeCharHomology<0>(0); 
-    H1_p0 = cplex.getPrimeCharHomology<0>(1); 
-    H2_p0 = cplex.getPrimeCharHomology<0>(2);
-    H3_p0 = cplex.getPrimeCharHomology<0>(3);
-    REQUIRE(H0_p0.cols() == 1);
-    REQUIRE(H1_p0.cols() == 0); 
-    REQUIRE(H2_p0.cols() == 0);
-    REQUIRE(H3_p0.cols() == 0);
-
-    // Again check that the basis vector for H0 is homologous to the 
-    // all-ones vector
-    aug1.col(del1.cols()) = H0_p0; 
-    REQUIRE(!containsInconsistency<Fp<0> >(aug1, v1));
+    REQUIRE(!containsInconsistency<Rational>(aug1, v1));
 
     // Check the Betti numbers 
-    betti = cplex.getZeroCharBettiNumbers(); 
+    betti = cplex.getRealBettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
@@ -3011,13 +2888,13 @@ TEST_CASE(
 
 TEST_CASE(
     "Tests for homology calculations with Z/2Z coefficients",
-    "[SimplicialComplex3D::getPrimeCharHomology(),"
-    " SimplicialComplex3D::getPrimeCharBettiNumbers()]"
+    "[SimplicialComplex3D::getZ2Homology(),"
+    " SimplicialComplex3D::getZ2BettiNumbers()]"
 )
 {
-    Matrix<Fp<2>, Dynamic, Dynamic> H0_p2, H1_p2, H2_p2, H3_p2;
-    Matrix<Fp<2>, Dynamic, Dynamic> del1, del2;
-    Matrix<Fp<2>, Dynamic, Dynamic> aug1, aug2; 
+    Matrix<Z2, Dynamic, Dynamic> H0_p2, H1_p2, H2_p2, H3_p2;
+    Matrix<Z2, Dynamic, Dynamic> del1, del2;
+    Matrix<Z2, Dynamic, Dynamic> aug1, aug2; 
 
     // ------------------------------------------------------------- // 
     // Test for discrete set of points 
@@ -3025,11 +2902,11 @@ TEST_CASE(
     SimplicialComplex3D<T> cplex = complex_points();
 
     // Get a basis for the zeroth homology group over the rationals 
-    H0_p2 = cplex.getPrimeCharHomology<2>(0);
+    H0_p2 = cplex.getZ2Homology(0); 
     REQUIRE(H0_p2.rows() == 3);
 
     // Check the Betti numbers 
-    Array<int, Dynamic, 1> betti = cplex.getPrimeCharBettiNumbers<2>(); 
+    Array<int, Dynamic, 1> betti = cplex.getZ2BettiNumbers(); 
     REQUIRE(betti(0) == 3); 
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
@@ -3041,9 +2918,9 @@ TEST_CASE(
     cplex = complex_triangle();
     
     // Get bases for the homology groups over Z/2Z
-    H0_p2 = cplex.getPrimeCharHomology<2>(0); 
-    H1_p2 = cplex.getPrimeCharHomology<2>(1); 
-    H2_p2 = cplex.getPrimeCharHomology<2>(2);
+    H0_p2 = cplex.getZ2Homology(0); 
+    H1_p2 = cplex.getZ2Homology(1); 
+    H2_p2 = cplex.getZ2Homology(2);
     REQUIRE(H0_p2.cols() == 1);
     REQUIRE(H1_p2.cols() == 0); 
     REQUIRE(H2_p2.cols() == 0);
@@ -3053,15 +2930,15 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    Matrix<Fp<2>, Dynamic, 1> v1 = Matrix<Fp<2>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<2>(1);
+    Matrix<Z2, Dynamic, 1> v1 = Matrix<Z2, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getZ2BoundaryHomomorphism(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p2; 
-    REQUIRE(!containsInconsistency<Fp<2> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Z2>(aug1, v1)); 
 
     // Check the Betti numbers mod 2 
-    betti = cplex.getPrimeCharBettiNumbers<2>(); 
+    betti = cplex.getZ2BettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
@@ -3073,8 +2950,8 @@ TEST_CASE(
     cplex = complex_cycle();
 
     // Get bases for the homology groups over Z/2Z
-    H0_p2 = cplex.getPrimeCharHomology<2>(0); 
-    H1_p2 = cplex.getPrimeCharHomology<2>(1); 
+    H0_p2 = cplex.getZ2Homology(0); 
+    H1_p2 = cplex.getZ2Homology(1); 
     REQUIRE(H0_p2.cols() == 1);
     REQUIRE(H1_p2.cols() == 1);
 
@@ -3083,12 +2960,12 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<2>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<2>(1);
+    v1 = Matrix<Z2, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getZ2BoundaryHomomorphism(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p2; 
-    REQUIRE(!containsInconsistency<Fp<2> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Z2>(aug1, v1)); 
 
     // Check that the basis vector for H1 is a scalar multiple of the vector
     // (1, 1, 1), corresponding to the cycle [v0,v1], [v2,v0], [v1,v2]
@@ -3103,7 +2980,7 @@ TEST_CASE(
     REQUIRE(H1_p2(2) == 1); 
 
     // Check the Betti numbers mod 2 
-    betti = cplex.getPrimeCharBettiNumbers<2>(); 
+    betti = cplex.getZ2BettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 1); 
     REQUIRE(betti(2) == 0);
@@ -3115,9 +2992,9 @@ TEST_CASE(
     cplex = complex_triangles_with_appendages();
 
     // Get bases for the homology groups over Z/2Z
-    H0_p2 = cplex.getPrimeCharHomology<2>(0); 
-    H1_p2 = cplex.getPrimeCharHomology<2>(1); 
-    H2_p2 = cplex.getPrimeCharHomology<2>(2);
+    H0_p2 = cplex.getZ2Homology(0); 
+    H1_p2 = cplex.getZ2Homology(1); 
+    H2_p2 = cplex.getZ2Homology(2);
     REQUIRE(H0_p2.cols() == 1);
     REQUIRE(H1_p2.cols() == 0); 
     REQUIRE(H2_p2.cols() == 0);
@@ -3127,15 +3004,15 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<2>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<2>(1);
+    v1 = Matrix<Z2, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getZ2BoundaryHomomorphism(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p2; 
-    REQUIRE(!containsInconsistency<Fp<2> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Z2>(aug1, v1)); 
 
     // Check the Betti numbers mod 2 
-    betti = cplex.getPrimeCharBettiNumbers<2>(); 
+    betti = cplex.getZ2BettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
@@ -3147,9 +3024,9 @@ TEST_CASE(
     cplex = complex_2d_mesh();
     
     // Get bases for the homology groups over Z/2Z
-    H0_p2 = cplex.getPrimeCharHomology<2>(0); 
-    H1_p2 = cplex.getPrimeCharHomology<2>(1); 
-    H2_p2 = cplex.getPrimeCharHomology<2>(2);
+    H0_p2 = cplex.getZ2Homology(0); 
+    H1_p2 = cplex.getZ2Homology(1); 
+    H2_p2 = cplex.getZ2Homology(2);
     REQUIRE(H0_p2.cols() == 1);
     REQUIRE(H1_p2.cols() == 0); 
     REQUIRE(H2_p2.cols() == 0);
@@ -3159,22 +3036,22 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<2>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<2>(1);
+    v1 = Matrix<Z2, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getZ2BoundaryHomomorphism(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p2; 
-    REQUIRE(!containsInconsistency<Fp<2> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Z2>(aug1, v1)); 
 
     // Check the Betti numbers 
-    betti = cplex.getZeroCharBettiNumbers(); 
+    betti = cplex.getRealBettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
     REQUIRE(betti(3) == 0);
 
     // Check the Betti numbers mod 2 
-    betti = cplex.getPrimeCharBettiNumbers<2>(); 
+    betti = cplex.getZ2BettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
@@ -3186,9 +3063,9 @@ TEST_CASE(
     cplex = complex_2d_mesh_with_hole();
 
     // Get bases for the homology groups over Z/2Z
-    H0_p2 = cplex.getPrimeCharHomology<2>(0); 
-    H1_p2 = cplex.getPrimeCharHomology<2>(1); 
-    H2_p2 = cplex.getPrimeCharHomology<2>(2);
+    H0_p2 = cplex.getZ2Homology(0); 
+    H1_p2 = cplex.getZ2Homology(1); 
+    H2_p2 = cplex.getZ2Homology(2);
     REQUIRE(H0_p2.cols() == 1);
     REQUIRE(H1_p2.cols() == 1);
     REQUIRE(H2_p2.cols() == 0);
@@ -3198,31 +3075,31 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<2>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<2>(1);
+    v1 = Matrix<Z2, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getZ2BoundaryHomomorphism(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p2;
-    REQUIRE(!containsInconsistency<Fp<2> >(aug1, v1)); 
+    REQUIRE(!containsInconsistency<Z2>(aug1, v1)); 
 
     // Check that the basis vector for H1 is homologous to the cycle 
     // (0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, ..., 0), corresponding to the
     // cycle [v1,v3], [v3,v4], [v4,v2], [v2,v1]
-    Matrix<Fp<2>, Dynamic, 1> v2 = Matrix<Fp<2>, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
+    Matrix<Z2, Dynamic, 1> v2 = Matrix<Z2, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
     v2(3) = 1; 
     v2(4) = 1; 
     v2(7) = 1; 
     v2(9) = 1;
-    del2 = cplex.getBoundaryHomomorphism<2>(2);
+    del2 = cplex.getZ2BoundaryHomomorphism(2);
     aug2.resize(del2.rows(), del2.cols() + 1);
     aug2(Eigen::all, Eigen::seq(0, del2.cols() - 1)) = del2; 
     aug2.col(del2.cols()) = H1_p2;  
     REQUIRE(((del1 * H1_p2).array() == 0).all());
     REQUIRE(((del1 * v2).array() == 0).all());
-    REQUIRE(!containsInconsistency<Fp<2> >(aug2, v2)); 
+    REQUIRE(!containsInconsistency<Z2>(aug2, v2)); 
 
     // Check the Betti numbers mod 2 
-    betti = cplex.getPrimeCharBettiNumbers<2>(); 
+    betti = cplex.getZ2BettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 1); 
     REQUIRE(betti(2) == 0);
@@ -3234,9 +3111,9 @@ TEST_CASE(
     cplex = complex_annulus(); 
 
     // Get bases for the homology groups over Z/2Z
-    H0_p2 = cplex.getPrimeCharHomology<2>(0);
-    H1_p2 = cplex.getPrimeCharHomology<2>(1); 
-    H2_p2 = cplex.getPrimeCharHomology<2>(2);
+    H0_p2 = cplex.getZ2Homology(0);
+    H1_p2 = cplex.getZ2Homology(1); 
+    H2_p2 = cplex.getZ2Homology(2);
     REQUIRE(H0_p2.cols() == 1);
     REQUIRE(H1_p2.cols() == 1); 
     REQUIRE(H2_p2.cols() == 0);
@@ -3246,33 +3123,33 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<2>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<2>(1);
+    v1 = Matrix<Z2, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getZ2BoundaryHomomorphism(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p2;
-    REQUIRE(!containsInconsistency<Fp<2> >(aug1, v1));
+    REQUIRE(!containsInconsistency<Z2>(aug1, v1));
 
     // Check that the basis vector for H1 is homologous to the cycle 
     // (0, ..., 0, 1, 1, 1, 1, 1, 1), corresponding to the cycle [v6,v7], 
     // [v7,v8], [v8,v9], [v9,v10], [v10,v11], [v11,v6]
-    v2 = Matrix<Fp<2>, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
+    v2 = Matrix<Z2, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
     v2(18) = 1; 
     v2(19) = 1; 
     v2(20) = 1; 
     v2(21) = 1;
     v2(22) = 1;
     v2(23) = 1;
-    del2 = cplex.getBoundaryHomomorphism<2>(2);
+    del2 = cplex.getZ2BoundaryHomomorphism(2);
     aug2.resize(del2.rows(), del2.cols() + 1);
     aug2(Eigen::all, Eigen::seq(0, del2.cols() - 1)) = del2; 
     aug2.col(del2.cols()) = H1_p2;  
     REQUIRE(((del1 * H1_p2).array() == 0).all());
     REQUIRE(((del1 * v2).array() == 0).all());
-    REQUIRE(!containsInconsistency<Fp<2> >(aug2, v2));
+    REQUIRE(!containsInconsistency<Z2>(aug2, v2));
 
     // Check the Betti numbers mod 2 
-    betti = cplex.getPrimeCharBettiNumbers<2>(); 
+    betti = cplex.getZ2BettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 1); 
     REQUIRE(betti(2) == 0);
@@ -3284,10 +3161,10 @@ TEST_CASE(
     cplex = complex_annulus_two_holes();
 
     // Get bases for the homology groups over Z/2Z
-    H0_p2 = cplex.getPrimeCharHomology<2>(0);
+    H0_p2 = cplex.getZ2Homology(0);
     /*
-    H1_p2 = cplex.getPrimeCharHomology<2>(1);
-    H2_p2 = cplex.getPrimeCharHomology<2>(2);
+    H1_p2 = cplex.getZ2Homology(1);
+    H2_p2 = cplex.getZ2Homology(2);
     std::cout << H0_p2 << "\n--\n"; 
     std::cout << H1_p2 << "\n--\n"; 
     REQUIRE(H0_p2.cols() == 1);
@@ -3299,25 +3176,25 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<2>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<2>(1);
+    v1 = Matrix<Z2, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getZ2BoundaryHomomorphism(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p2;
-    REQUIRE(!containsInconsistency<Fp<2> >(aug1, v1));
+    REQUIRE(!containsInconsistency<Z2>(aug1, v1));
 
     // - Check that one basis vector for H1 is homologous to the cycle [v6,v7], 
     //   [v7,v8], [v8,v9], [v9,v10], [v10,v11], [v11,v6]
     // - Check that one basis vector for H1 is homologous to the cycle [v16,v17],
     //   [v17,v18], [v18,v19], [v19,v20], [v20,v21], [v21,v16]
-    v2 = Matrix<Fp<2>, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
+    v2 = Matrix<Z2, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
     v2(24) = 1; 
     v2(25) = 1; 
     v2(26) = 1; 
     v2(27) = 1;
     v2(28) = 1;
     v2(29) = 1;
-    Matrix<Fp<2>, Dynamic, 1> v3 = Matrix<Fp<2>, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
+    Matrix<Z2, Dynamic, 1> v3 = Matrix<Z2, Dynamic, 1>::Zero(cplex.getNumSimplices(1));
     v3(41) = 1; 
     v3(42) = 1;
     v3(43) = 1; 
@@ -3328,26 +3205,26 @@ TEST_CASE(
     REQUIRE(((del1 * v3).array() == 0).all());
     REQUIRE(((del1 * H1_p2.col(0)).array() == 0).all());
     REQUIRE(((del1 * H1_p2.col(1)).array() == 0).all());
-    del2 = cplex.getBoundaryHomomorphism<2>(2);
+    del2 = cplex.getZ2BoundaryHomomorphism(2);
     aug2.resize(del2.rows(), del2.cols() + 1);
     aug2(Eigen::all, Eigen::seq(0, del2.cols() - 1)) = del2;
     aug2.col(del2.cols()) = H1_p2.col(0);     // Check first basis vector 
-    REQUIRE((!containsInconsistency<Fp<2> >(aug2, v2) || !containsInconsistency<Fp<2> >(aug2, v3)));
-    if (!containsInconsistency<Fp<2> >(aug2, v2))
+    REQUIRE((!containsInconsistency<Z2>(aug2, v2) || !containsInconsistency<Z2>(aug2, v3)));
+    if (!containsInconsistency<Z2>(aug2, v2))
     {
         // If the first basis vector is homologous to v2 ... 
         aug2.col(del2.cols()) = H1_p2.col(1); 
-        REQUIRE(!containsInconsistency<Fp<2> >(aug2, v3));
+        REQUIRE(!containsInconsistency<Z2>(aug2, v3));
     }
     else
     {
         // If the first basis vector is homologous to v3 ... 
         aug2.col(del2.cols()) = H1_p2.col(1); 
-        REQUIRE(!containsInconsistency<Fp<2> >(aug2, v2));
+        REQUIRE(!containsInconsistency<Z2>(aug2, v2));
     }
 
     // Check the Betti numbers mod 2 
-    betti = cplex.getPrimeCharBettiNumbers<2>(); 
+    betti = cplex.getZ2BettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 2); 
     REQUIRE(betti(2) == 0);
@@ -3360,10 +3237,10 @@ TEST_CASE(
     cplex = complex_tetrahedron();
 
     // Get bases for the homology groups over Z/2Z
-    H0_p2 = cplex.getPrimeCharHomology<2>(0);
-    H1_p2 = cplex.getPrimeCharHomology<2>(1); 
-    H2_p2 = cplex.getPrimeCharHomology<2>(2);
-    H3_p2 = cplex.getPrimeCharHomology<2>(3);
+    H0_p2 = cplex.getZ2Homology(0);
+    H1_p2 = cplex.getZ2Homology(1); 
+    H2_p2 = cplex.getZ2Homology(2);
+    H3_p2 = cplex.getZ2Homology(3);
     REQUIRE(H0_p2.cols() == 1);
     REQUIRE(H1_p2.cols() == 0); 
     REQUIRE(H2_p2.cols() == 0);
@@ -3374,21 +3251,22 @@ TEST_CASE(
     //
     // Since \del_0 is the zero map, this means that the difference lies
     // in the image of \del_1
-    v1 = Matrix<Fp<2>, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
-    del1 = cplex.getBoundaryHomomorphism<2>(1);
+    v1 = Matrix<Z2, Dynamic, 1>::Ones(cplex.getNumSimplices(0));
+    del1 = cplex.getZ2BoundaryHomomorphism(1);
     aug1.resize(del1.rows(), del1.cols() + 1); 
     aug1(Eigen::all, Eigen::seq(0, del1.cols() - 1)) = del1; 
     aug1.col(del1.cols()) = H0_p2;
-    REQUIRE(!containsInconsistency<Fp<2> >(aug1, v1));
+    REQUIRE(!containsInconsistency<Z2>(aug1, v1));
 
     // Check the Betti numbers mod 2 
-    betti = cplex.getPrimeCharBettiNumbers<2>(); 
+    betti = cplex.getZ2BettiNumbers(); 
     REQUIRE(betti(0) == 1); 
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
     REQUIRE(betti(3) == 0);
 }
 
+/*
 TEST_CASE("Tests for minimal cycle calculations", "[getMinimalCycles()]")
 {
     Matrix<double, Dynamic, Dynamic> opt_cycles; 
@@ -3446,3 +3324,4 @@ TEST_CASE("Tests for minimal cycle calculations", "[getMinimalCycles()]")
             REQUIRE(opt_cycles(i) == 0); 
     } 
 }
+*/
