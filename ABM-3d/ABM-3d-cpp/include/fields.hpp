@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/30/2025
+ *     7/17/2025
  */
 #ifndef FIELDS_OF_ARBITRARY_CHARACTERISTIC_HPP
 #define FIELDS_OF_ARBITRARY_CHARACTERISTIC_HPP
@@ -26,6 +26,345 @@ template <typename T, int p>
 int mod(const T x)
 {
     return (x < 0 ? static_cast<int>(-x) % p : static_cast<int>(x) % p);
+}
+
+/**
+ * A lightweight implementation of the Z/2Z field. 
+ */
+class Z2
+{
+    public:
+        bool value; 
+
+        Z2()
+        {
+            this->value = 0; 
+        }
+
+        Z2(const bool x)
+        {
+            this->value = x; 
+        }
+
+        Z2(const int x)
+        {
+            this->value = mod<int, 2>(x); 
+        }
+
+        Z2(const Z2& x)
+        {
+            this->value = x.value; 
+        }
+
+        ~Z2()
+        {
+        }
+
+        // ---------------------------------------------------------- //
+        //                    ASSIGNMENT OPERATORS                    //
+        // ---------------------------------------------------------- //
+        Z2& operator=(const bool& x)
+        {
+            this->value = x;
+            return *this;  
+        }
+
+        Z2& operator=(const int& x)
+        {
+            this->value = mod<int, 2>(x); 
+            return *this;  
+        }
+        
+        Z2& operator=(const Z2& x)
+        {
+            this->value = x.value;
+            return *this;  
+        }
+
+        // ---------------------------------------------------------- //
+        //              EQUALITY AND INEQUALITY OPERATORS             //
+        // ---------------------------------------------------------- //
+        bool operator==(const bool& x) const 
+        {
+            return (this->value && x); 
+        }
+        
+        bool operator==(const int& x) const 
+        {
+            return (mod<int, p>(this->value - x) == 0); 
+        }
+
+        bool operator==(const Z2& x) const
+        {
+            return (this->value && x.value); 
+        }
+
+        bool operator!=(const bool& x) const 
+        {
+            return !(*this == x); 
+        }
+
+        bool operator!=(const int& x) const 
+        {
+            return !(*this == x); 
+        }
+
+        bool operator!=(const Z2& x) const 
+        {
+            return !(*this == x); 
+        }
+
+        // ---------------------------------------------------------- //
+        //                 GREATER-THAN AND LESS-THAN                 // 
+        // ---------------------------------------------------------- //
+        bool operator>(const Z2& x) const 
+        {
+            return this->value > x.value; 
+        }
+
+        bool operator>=(const Z2& x) const 
+        {
+            return this->value >= x.value; 
+        }
+
+        bool operator<(const Z2& x) const 
+        {
+            return this->value < x.value; 
+        }
+
+        bool operator<=(const Z2& x) const 
+        {
+            return this->value <= x.value; 
+        } 
+
+        // ---------------------------------------------------------- //
+        //                  INCREMENT AND DECREMENT                   //
+        // ---------------------------------------------------------- //
+        Z2& operator++()
+        {
+            this->value = (!this->value ? 1 : 0);
+            return *this; 
+        }
+        
+        Z2& operator--()
+        {
+            this->value = (!this->value ? 1 : 0);
+            return *this;  
+        }
+
+        // ---------------------------------------------------------- //
+        //                           NEGATION                         //
+        // ---------------------------------------------------------- //
+        Z2 operator-() const 
+        {
+            return Z2(this->value); 
+        }
+
+        // ---------------------------------------------------------- //
+        //                    ARITHMETIC OPERATORS                    //
+        // ---------------------------------------------------------- //
+        Z2& operator+=(const bool& y)
+        {
+            this->value = (this->value ^ y);
+            return *this;  
+        }
+
+        Z2& operator+=(const int& y)
+        {
+            this->value = (this->value ^ mod<int>(y, 2)); 
+            return *this; 
+        }
+
+        Z2& operator+=(const Z2& y)
+        {
+            this->value = (this->value ^ y.value); 
+            return *this;  
+        }
+        
+        Z2& operator-=(const bool& y)
+        {
+            this->value = (this->value ^ y);
+            return *this;  
+        }
+
+        Z2& operator-=(const int& y)
+        {
+            this->value = (this->value ^ mod<int>(y, 2)); 
+            return *this; 
+        }
+
+        Z2& operator-=(const Z2& y)
+        {
+            this->value = (this->value ^ y.value); 
+            return *this;  
+        }
+
+        Z2& operator*=(const bool& y)
+        {
+            this->value = (this->value && y); 
+            return *this; 
+        }
+
+        Z2& operator*=(const int& y)
+        {
+            this->value = (this->value && mod<int>(y, 2)); 
+            return *this; 
+        }
+
+        Z2& operator*=(const Z2& y)
+        {
+            this->value = (this->value && y.value); 
+            return *this; 
+        }
+
+        Z2& operator/=(const bool& y)
+        {
+            if (!y)
+                throw std::runtime_error("Cannot divide by zero");
+            else
+                return *this;
+        } 
+        
+        Z2& operator/=(const int& y)
+        {
+            if (mod<int>(y, 2) == 0)
+                throw std::runtime_error("Cannot divide by zero");
+            else
+                return *this;
+        } 
+
+        Z2& operator/=(const Z2& y)
+        {
+            if (!y.value)
+                throw std::runtime_error("Cannot divide by zero");
+            else
+                return *this;
+        } 
+}; 
+
+Z2 operator+(const Z2& x, const bool& y)
+{
+    return Z2(x.value ^ y); 
+}
+
+Z2 operator+(const Z2& x, const int& y)
+{
+    return Z2(x.value ^ mod<int, 2>(y)); 
+}
+
+Z2 operator+(const bool& x, const Z2& y)
+{
+    return y + x; 
+}
+
+Z2 operator+(const int& x, const Z2& y)
+{
+    return y + x; 
+}
+
+Z2 operator+(const Z2& x, const Z2& y)
+{
+    return Z2(x.value ^ y.value); 
+}
+
+Z2 operator-(const Z2& x, const bool& y)
+{
+    return x + y; 
+}
+
+Z2 operator-(const Z2& x, const int& y)
+{
+    return x + y; 
+}
+
+Z2 operator-(const bool& x, const Z2& y)
+{
+    return x + y; 
+}
+
+Z2 operator-(const int& x, const Z2& y)
+{
+    return x + y; 
+}
+
+Z2 operator-(const Z2& x, const Z2& y)
+{
+    return x + y; 
+}
+
+Z2 operator*(const Z2& x, const bool& y)
+{
+    return Z2(x.value && y); 
+}
+
+Z2 operator*(const Z2& x, const int& y)
+{
+    return Z2(x.value && mod<int, 2>(y)); 
+}
+
+Z2 operator*(const bool& x, const Z2& y)
+{
+    return y * x; 
+}
+
+Z2 operator*(const int& x, const Z2& y)
+{
+    return y * x; 
+}
+
+Z2 operator*(const Z2& x, const Z2& y)
+{
+    return Z2(x.value && y.value); 
+}
+
+Z2 operator/(const bool& x, const Z2& y)
+{
+    if (!y.value)
+        throw std::runtime_error("Cannot divide by zero");
+    else 
+        return Z2(x); 
+}
+
+Z2 operator/(const int& x, const Z2& y)
+{
+    if (!y.value)
+        throw std::runtime_error("Cannot divide by zero");
+    else 
+        return Z2(x); 
+}
+
+Z2 operator/(const Z2& x, const bool& y)
+{
+    if (!y)
+        throw std::runtime_error("Cannot divide by zero");
+    else 
+        return Z2(x);  
+}
+
+Z2 operator/(const Z2& x, const int& y)
+{
+    if (y == 0)
+        throw std::runtime_error("Cannot divide by zero");
+    else 
+        return Z2(x);  
+}
+
+Z2 operator/(const Z2& x, const Z2& y)
+{
+    if (!y.value)
+        throw std::runtime_error("Cannot divide by zero");
+    else 
+        return Z2(x);  
+}
+
+std::ostream& operator<<(std::ostream& out, const Z2& x)
+{
+    return out << x.value; 
+}
+
+Z2 abs(const Z2& x)
+{
+    return Z2(x); 
 }
 
 /**
@@ -596,6 +935,25 @@ Fp<p> abs(const Fp<p>& x)
 }
 
 namespace Eigen {
+
+template <>
+struct NumTraits<Z2> : NumTraits<bool>
+{
+    typedef Z2 Real;
+    typedef Z2 NonInteger; 
+    typedef Z2 Nested; 
+
+    enum
+    {
+        IsComplex = 0; 
+        IsInteger = 1; 
+        IsSigned = 0;
+        RequireInitialization = 1,
+        ReadCost = 1,
+        AddCost = 3,
+        MulCost = 3
+    }; 
+}; 
 
 template <>
 struct NumTraits<Fp<0> > : NumTraits<Rational>
