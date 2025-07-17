@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/15/2025
+ *     7/17/2025
  */
 
 #ifndef UNDIRECTED_WEIGHTED_GRAPHS_HPP
@@ -293,22 +293,20 @@ std::unordered_map<std::pair<int, int>, int,
 }
 
 /**
- * Get the shortest path from vertex u to vertex v in the given graph.
+ * Get the shortest-path tree of the given graph, which is assumed to be 
+ * connected, using Dijkstra's algorithm.
  *
  * The i-th entry in the returned std::vector is the i-th vertex in the 
  * path (including u as the 0-th entry and v as the last). 
  *
  * @param graph Input graph.
- * @param u First vertex. 
- * @param v Second vertex.  
- * @returns Minimum weight path from u to v. 
+ * @param source Source vertex. 
+ * @returns Minimum weight paths from the source vertex to every other 
+ *          vertex, alongside the tree itself as a separate graph.  
  */
-std::vector<int> getMinimumWeightPath(const Graph& graph, const int u, const int v)
+std::pair<std::vector<std::vector<int> >, Graph> getMinimumWeightPathTree(const Graph& graph,
+                                                                          const int source = 0)
 {
-    // Return the trivial path if u == v
-    if (u == v)
-        return {u}; 
-
     const int nv = boost::num_vertices(graph);
 
     // Define a map of vertices to their indices 
@@ -328,47 +326,27 @@ std::vector<int> getMinimumWeightPath(const Graph& graph, const int u, const int
 
     // Run Dijkstra's algorithm 
     boost::dijkstra_shortest_paths(
-        graph, u, boost::predecessor_map(pred_map).distance_map(dist_map)
+        graph, source, boost::predecessor_map(pred_map).distance_map(dist_map)
     );
-    std::vector<int> path; 
 
-    // If there is no path from source to target, then return
-    if (dist[v] == std::numeric_limits<double>::infinity())
-        return path; 
-
-    // Otherwise, traverse the path from target to source 
-    for (int i = v; i != u; i = pred[i])
-        path.push_back(i);
-    path.push_back(u);
-    std::reverse(path.begin(), path.end()); 
-
-    return path;  
-}
-
-/**
- * Get the shortest-path tree of the given graph, which is assumed to be 
- * connected.
- *
- * This is done by computing the shortest path from a fixed source vertex 
- * to every other vertex in the graph. 
- *
- * @param graph Input graph.
- * @returns Minimum weight paths from the source vertex to every other 
- *          vertex, alongside the tree itself as a separate graph.  
- */
-std::pair<std::vector<std::vector<int> >, Graph> getMinimumWeightPathTree(const Graph& graph,
-                                                                          const int source = 0)
-{
-    // Get the minimum-weight path from the source vertex to every other
-    // vertex
-    const int nv = boost::num_vertices(graph);
+    // For each vertex ...
     Graph tree(nv); 
     std::vector<std::vector<int> > paths; 
     for (int i = 0; i < nv; ++i)
     {
-        std::vector<int> path = getMinimumWeightPath(graph, source, i);
+        std::vector<int> path; 
+
+        // If there is no path from source to target, then store an empty path
+        if (dist[i] == std::numeric_limits<double>::infinity())
+            paths.push_back(path); 
+
+        // Otherwise, traverse the path from target to source 
+        for (int j = i; j != source; j = pred[j])
+            path.push_back(j);
+        path.push_back(source);
+        std::reverse(path.begin(), path.end());
         paths.push_back(path);
-        
+
         // Add each edge in the path to the tree 
         for (auto it = path.begin() + 1; it != path.end(); ++it)
         {
@@ -377,100 +355,135 @@ std::pair<std::vector<std::vector<int> >, Graph> getMinimumWeightPathTree(const 
             if (!boost::edge(u, v, tree).second)
                 boost::add_edge(u, v, EdgeProperty(1.0), tree);  
         } 
-    }
-    
-    return std::make_pair(paths, tree); 
+    } 
+
+    return std::make_pair(paths, tree);  
 }
 
 /**
- * Define a map of all paths between all pairs of vertices in the given
- * shortest-path tree.
  *
- * The input tree is specified as a set of paths from the root, as in the
- * output from `getMinimumWeightPathTree()`.
+ */
+std::vector<int> getPathInMinimumWeightPathTree(const std::vector<std::vector<int> >& tree_paths,
+                                                const std::vector<int>& parents, 
+                                                const std::vector<int>& depths, 
+                                                const int u, const int v)
+{
+    // Get the path to v from the root of the tree 
+    std::vector<int> path_v = tree_paths[v]; 
+
+    // Find the lowest common ancestor of u and v
+    //
+    // In whichever path is longer, travel up the path until the 
+    // depths are the same
+    int curr_u = u; 
+    int curr_v = v; 
+    while (depths[curr_u] > depths[curr_v])
+        curr_u = parents[curr_u]; 
+    while (depths[curr_v] > depths[curr_u])
+        curr_v = parents[curr_v];
+
+    // Then climb up the two paths until we reach a common ancestor
+    while (curr_u != curr_v)
+    {
+        curr_u = parents[curr_u]; 
+        curr_v = parents[curr_v]; 
+    }
+
+    // Climb up the path from u to the lowest common ancestor
+    std::vector<int> path_uv; 
+    int curr_vertex = u; 
+    while (curr_vertex != curr_u)
+    {
+        path_uv.push_back(curr_vertex); 
+        curr_vertex = parents[curr_vertex]; 
+    }
+
+    // Then climb back down the path from the lowest common ancestor
+    // to v
+    auto it = std::find(path_v.begin(), path_v.end(), curr_vertex); 
+    while (curr_vertex != v)
+    {
+        path_uv.push_back(curr_vertex);
+        it++; 
+        curr_vertex = *it; 
+    }
+    path_uv.push_back(v); 
+
+    return path_uv;  
+}
+
+/**
+ * Define a map of all shortest paths between all pairs of vertices in
+ * the given graph. 
  *
- * The output is a map that sends each pair of vertices, (u, v), to the 
- * unique path from u to v in the tree.  
+ * The output is a map that sends each pair of vertices, (u, v), to a 
+ * shortest path from u to v in the graph. 
  *
- * @param tree Input shortest-path tree.
+ * @param graph Input graph. 
  * @returns Minimum weight paths from the source vertex to every other 
  *          vertex. 
  */
-std::map<std::pair<int, int>, std::vector<int> > getPathsInMinimumWeightPathTree(const std::vector<std::vector<int> >& tree_paths,
-                                                                                 const int root)
+std::map<std::pair<int, int>, std::vector<int> > getMinimumWeightPaths(const Graph& graph)
 {
-    const int nv = tree_paths.size(); 
+    const int nv = boost::num_vertices(graph); 
 
-    // Define the parent and depth of each vertex with respect to the root 
-    std::vector<int> parents(nv), depths(nv);
-    parents[root] = -1;    // The root has no parent 
-    depths[root] = 0;      // The root has depth zero
-    for (auto& path : tree_paths)
-    {
-        int depth = 1; 
-        for (auto it = path.begin() + 1; it != path.end(); ++it)
+    // Get the minimum-weight-path tree rooted at each vertex 
+    std::vector<std::vector<std::vector<int> > > tree_paths; 
+    std::vector<std::vector<int> > parents; 
+    std::vector<std::vector<int> > depths; 
+    for (int i = 0; i < nv; ++i)
+    { 
+        auto result = getMinimumWeightPathTree(graph, i);
+        std::vector<std::vector<int> > tree_paths_i = result.first; 
+
+        // Define the parent and depth of each vertex with respect to the root 
+        std::vector<int> parents_i(nv), depths_i(nv);
+        parents_i[i] = -1;    // The root has no parent 
+        depths_i[i] = 0;      // The root has depth zero
+        for (auto& path : tree_paths_i) 
         {
-            auto prev = std::prev(it);
-            parents[*it] = *prev; 
-            depths[*it] = depth; 
-            depth++; 
+            int depth = 1; 
+            for (auto it = path.begin() + 1; it != path.end(); ++it)
+            {
+                auto prev = std::prev(it);
+                parents_i[*it] = *prev; 
+                depths_i[*it] = depth; 
+                depth++; 
+            }
         }
+        tree_paths.push_back(tree_paths_i);
+        parents.push_back(parents_i); 
+        depths.push_back(depths_i);  
     }
 
     // For each pair of vertices ...
-    std::map<std::pair<int, int>, std::vector<int> > paths;  
+    std::map<std::pair<int, int>, std::vector<int> > min_paths;  
     for (int u = 0; u < nv; ++u)
     {
-        // Get the path to u from the root and its length 
-        std::vector<int> path_u = tree_paths[u]; 
         for (int v = u + 1; v < nv; ++v)
         {
-            // Get the path to v from the root and its length 
-            std::vector<int> path_v = tree_paths[v]; 
-
-            // Find the lowest common ancestor of u and v
-            //
-            // In whichever path is longer, travel up the path until the 
-            // depths are the same
-            int curr_u = u; 
-            int curr_v = v; 
-            while (depths[curr_u] > depths[curr_v])
-                curr_u = parents[curr_u]; 
-            while (depths[curr_v] > depths[curr_u])
-                curr_v = parents[curr_v];
-
-            // Then climb up the two paths until we reach a common ancestor
-            while (curr_u != curr_v)
+            // Get the path from u to v in each minimum-weight-path tree
+            int min_length = std::numeric_limits<int>::max(); 
+            std::vector<int> min_path;  
+            for (int w = 0; w < nv; ++w)
             {
-                curr_u = parents[curr_u]; 
-                curr_v = parents[curr_v]; 
-            }
+                std::vector<int> path = getPathInMinimumWeightPathTree(
+                    tree_paths[w], parents[w], depths[w], u, v
+                );
 
-            // Climb up the path from u to the lowest common ancestor
-            std::vector<int> path_uv; 
-            int curr_vertex = u; 
-            while (curr_vertex != curr_u)
-            {
-                path_uv.push_back(curr_vertex); 
-                curr_vertex = parents[curr_vertex]; 
+                // Is this path shorter than the current choice of shortest
+                // path? 
+                if (path.size() < min_length)
+                {
+                    min_length = path.size(); 
+                    min_path = path; 
+                }
             }
-
-            // Then climb back down the path from the lowest common ancestor
-            // to v
-            auto it = std::find(path_v.begin(), path_v.end(), curr_vertex); 
-            while (curr_vertex != v)
-            {
-                path_uv.push_back(curr_vertex);
-                it++; 
-                curr_vertex = *it; 
-            }
-            path_uv.push_back(v);  
-
-            paths[std::make_pair(u, v)] = path_uv; 
+            min_paths[std::make_pair(u, v)] = min_path; 
         }
     }
 
-    return paths; 
+    return min_paths; 
 }
 
 /**
@@ -488,19 +501,10 @@ std::map<std::pair<int, int>, std::vector<int> > getPathsInMinimumWeightPathTree
 template <typename T>
 Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
 {
-    // Get the minimum-weight-path tree rooted at vertex 0 
+    // Get the minimum-weight paths between all pairs of vertices 
     const int nv = boost::num_vertices(graph);
     const int ne = boost::num_edges(graph);
-    auto result = ::getMinimumWeightPathTree(graph, 0);
-    std::vector<std::vector<int> > tree_paths = result.first;
-    Graph tree = result.second;  
-
-    // The tree contains a unique path between each pair of vertices
-    //
-    // Extract each such path, and store in a map that sends each pair of 
-    // vertices (u, v) to the path from u to v 
-    std::map<std::pair<int, int>, std::vector<int> > all_paths
-        = ::getPathsInMinimumWeightPathTree(tree_paths, 0);
+    std::map<std::pair<int, int>, std::vector<int> > min_paths = getMinimumWeightPaths(graph); 
 
     // For each vertex and edge in the graph ...
     std::pair<boost::graph_traits<Graph>::edge_iterator, 
@@ -514,21 +518,52 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
             int u = boost::source(edge, graph); 
             int v = boost::target(edge, graph);
 
-            // Check that (u, v) is not an edge in the tree 
-            if (!boost::edge(u, v, tree).second)
-            {
-                // Get the paths from i to u and from i to v 
-                std::pair<int, int> pair1 = (i < u ? std::make_pair(i, u) : std::make_pair(u, i)); 
-                std::pair<int, int> pair2 = (i < v ? std::make_pair(i, v) : std::make_pair(v, i));
-                std::vector<int> path1 = all_paths[pair1]; 
-                std::vector<int> path2 = all_paths[pair2]; 
+            // Get the paths from i to u and from i to v 
+            std::pair<int, int> pair1 = (i < u ? std::make_pair(i, u) : std::make_pair(u, i)); 
+            std::pair<int, int> pair2 = (i < v ? std::make_pair(i, v) : std::make_pair(v, i));
+            std::vector<int> path1, path2;
+            if (pair1.first < pair1.second)
+                path1 = min_paths[pair1]; 
+            else    // pair1.first == pair1.second 
+                path1.push_back(pair1.first);  
+            if (pair2.first < pair2.second)
+                path2 = min_paths[pair2]; 
+            else    // pair2.first == pair2.second 
+                path2.push_back(pair2.first);  
 
+            // Check that (u, v) is not an edge in either path
+            bool found_edge = false; 
+            for (auto it = path1.begin() + 1; it != path1.end(); ++it)
+            {
+                int j = *std::prev(it); 
+                int k = *it; 
+                if ((j == u && k == v) || (j == v && k == u))
+                {
+                    found_edge = true;
+                    break;
+                } 
+            }
+            if (!found_edge)
+            {
+                for (auto it = path2.begin() + 1; it != path2.end(); ++it)
+                {
+                    int j = *std::prev(it); 
+                    int k = *it; 
+                    if ((j == u && k == v) || (j == v && k == u))
+                    {
+                        found_edge = true;
+                        break;
+                    } 
+                }
+            } 
+            if (!found_edge)    // If it is not edge in either path ... 
+            {
                 // Re-order the paths to ensure that they flow from i to u and 
                 // from v to i
                 if (pair1.first == u)
                     std::reverse(path1.begin(), path1.end()); 
                 if (pair2.first == i)
-                    std::reverse(path1.begin(), path1.end());  
+                    std::reverse(path2.begin(), path2.end()); 
 
                 // Create the cycle formed by the path from i to u, the edge
                 // (u, v), and the path from v to i 
@@ -538,9 +573,11 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
                 std::vector<int> cycle; 
                 Matrix<int, Dynamic, 1> encountered = Matrix<int, Dynamic, 1>::Zero(nv);
                 bool found_repeat_vertex = false;
+                
                 // Traverse path from i to u 
-                for (const int& w : path1)
+                for (auto it = path1.begin(); it != path1.end(); ++it)
                 {
+                    int w = *it; 
                     if (!encountered(w))
                     {
                         encountered(w) = 1; 
@@ -554,26 +591,50 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
                 }
                 if (found_repeat_vertex)
                     continue;
-                cycle.push_back(v);    // Add edge (u, v)
-                // Traverse path from v to i (skipping v and i)
-                for (auto it = path2.begin() + 1; it != path2.end() - 1; ++it)
-                {
-                    int w = *it; 
-                    if (!encountered(w))
-                    {
-                        encountered(w) = 1; 
-                        cycle.push_back(w); 
-                    }
-                    else    // w has been encountered already (this could happen)
-                    {
-                        found_repeat_vertex = true; 
-                        break; 
-                    }
-                }
-                if (found_repeat_vertex)
-                    continue;
 
-                // Now add the cycle to the collection 
+                // Add edge (u, v)
+                if (!encountered(v) || v == i) 
+                {
+                    encountered(v) = 1; 
+                    cycle.push_back(v);
+                }
+                else    // v has been encountered already and v != i 
+                {
+                    continue; 
+                }
+
+                // Traverse path from v to i
+                if (path2.size() == 1)        // (u, v = i) was the last edge 
+                {
+                    cycle.pop_back();         // Remove the last vertex (v = i) 
+                }
+                else if (path2.size() == 2)   // (v, i) is the last edge 
+                {
+                    // Do nothing 
+                } 
+                else    // path2.size() > 2 
+                {
+                    for (auto it = path2.begin() + 1; it != path2.end(); ++it)
+                    {
+                        int w = *it; 
+                        if (!encountered(w) || w == i)
+                        {
+                            encountered(w) = 1; 
+                            cycle.push_back(w); 
+                        }
+                        else    // w has been encountered already and w != i (this could happen)
+                        {
+                            found_repeat_vertex = true; 
+                            break; 
+                        }
+                    }
+                    if (found_repeat_vertex)
+                        continue;
+                    cycle.pop_back();   // Remove the last vertex (v = i) 
+                }  
+
+                // Now add the cycle to the collection after removing the 
+                // repeated vertex
                 cycles.push_back(std::make_pair(cycle, cycle.size()));
             }
         }
@@ -593,7 +654,7 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
         return Matrix<T, Dynamic, Dynamic>::Zero(ne, 0);
 
     // Get a lexicographic ordering of the edges 
-    auto edge_map = ::getEdgeOrdering(graph); 
+    auto edge_map = ::getEdgeOrdering(graph);
 
     // Add the first cycle to the basis 
     Matrix<T, Dynamic, Dynamic> basis(ne, 1); 
