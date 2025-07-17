@@ -109,6 +109,149 @@ Matrix<Rational, Dynamic, Dynamic> sampleByRank(const int nrows, const int ncols
     return A * B; 
 }
 
+TEST_CASE("Tests for Z2 class", "[Z2]")
+{
+    Z2 z(0);
+    Z2 x(1);
+    REQUIRE(!z);
+    REQUIRE(x); 
+    REQUIRE(z == false); 
+    REQUIRE(x == true);  
+    REQUIRE(z == 0);
+    REQUIRE(x == 1);
+    REQUIRE(!(z && z)); 
+    REQUIRE(!(z || z)); 
+    REQUIRE(!(z ^ z)); 
+    REQUIRE(!(z && x)); 
+    REQUIRE((z || x)); 
+    REQUIRE((z ^ x));
+    REQUIRE((x && x)); 
+    REQUIRE((x || x));
+    REQUIRE(!(x ^ x));  
+
+    // Test all binary arithmetic functions
+    REQUIRE(z + z == 0); 
+    REQUIRE(z - z == 0); 
+    REQUIRE(z * z == 0); 
+    REQUIRE_THROWS(z / z);  
+    REQUIRE(x + z == 1);
+    REQUIRE(x - z == 1);
+    REQUIRE(x * z == 0); 
+    REQUIRE_THROWS(x / z); 
+    REQUIRE(z + x == 1); 
+    REQUIRE(z - x == 1); 
+    REQUIRE(z * x == 0); 
+    REQUIRE(z / x == 0);
+    REQUIRE(x + x == 2); 
+    REQUIRE(x - x == 0);
+    REQUIRE(x * x == 1); 
+    REQUIRE(x / x == 1);
+
+    // Test all binary arithmetic with integers
+    REQUIRE(1 + z == 1);     // Addition
+    REQUIRE(z + 1 == 1); 
+    REQUIRE(2 + z == 0); 
+    REQUIRE(z + 2 == 0);
+    REQUIRE(3 + z == 1); 
+    REQUIRE(z + 3 == 1); 
+    REQUIRE(4 + z == 0); 
+    REQUIRE(z + 4 == 0); 
+    REQUIRE(5 + z == 1); 
+    REQUIRE(z + 5 == 1); 
+    REQUIRE(1 + x == 0); 
+    REQUIRE(x + 1 == 0); 
+    REQUIRE(2 + x == 1); 
+    REQUIRE(x + 2 == 1);
+    REQUIRE(3 + x == 0); 
+    REQUIRE(x + 3 == 0); 
+    REQUIRE(4 + x == 1); 
+    REQUIRE(x + 4 == 1); 
+    REQUIRE(5 + x == 0); 
+    REQUIRE(x + 5 == 0);
+    REQUIRE(1 - z == 1);     // Subtraction
+    REQUIRE(z - 1 == 1); 
+    REQUIRE(2 - z == 0); 
+    REQUIRE(z - 2 == 0);
+    REQUIRE(3 - z == 1); 
+    REQUIRE(z - 3 == 1); 
+    REQUIRE(4 - z == 0); 
+    REQUIRE(z - 4 == 0); 
+    REQUIRE(5 - z == 1); 
+    REQUIRE(z - 5 == 1); 
+    REQUIRE(1 - x == 0); 
+    REQUIRE(x - 1 == 0); 
+    REQUIRE(2 - x == 1); 
+    REQUIRE(x - 2 == 1);
+    REQUIRE(3 - x == 0); 
+    REQUIRE(x - 3 == 0); 
+    REQUIRE(4 - x == 1); 
+    REQUIRE(x - 4 == 1); 
+    REQUIRE(5 - x == 0); 
+    REQUIRE(x - 5 == 0);
+    REQUIRE(1 * z == 0);     // Multiplication 
+    REQUIRE(z * 1 == 0); 
+    REQUIRE(2 * z == 0); 
+    REQUIRE(z * 2 == 0);
+    REQUIRE(3 * z == 0); 
+    REQUIRE(z * 3 == 0); 
+    REQUIRE(4 * z == 0); 
+    REQUIRE(z * 4 == 0); 
+    REQUIRE(5 * z == 0); 
+    REQUIRE(z * 5 == 0); 
+    REQUIRE(1 * x == 1); 
+    REQUIRE(x * 1 == 1); 
+    REQUIRE(2 * x == 0); 
+    REQUIRE(x * 2 == 0);
+    REQUIRE(3 * x == 1); 
+    REQUIRE(x * 3 == 1); 
+    REQUIRE(4 * x == 0); 
+    REQUIRE(x * 4 == 0); 
+    REQUIRE(5 * x == 1); 
+    REQUIRE(x * 5 == 1);
+    REQUIRE_THROWS(1 / z);   // Division 
+    REQUIRE(z / 1 == 0); 
+    REQUIRE_THROWS(2 / z); 
+    REQUIRE_THROWS(z / 2); 
+    REQUIRE_THROWS(3 / z); 
+    REQUIRE(z / 3 == 0); 
+    REQUIRE_THROWS(4 / z); 
+    REQUIRE_THROWS(z / 4); 
+    REQUIRE_THROWS(5 / z); 
+    REQUIRE(z / 5 == 0); 
+    REQUIRE(1 / x == 1); 
+    REQUIRE(x / 1 == 1); 
+    REQUIRE(2 / x == 0); 
+    REQUIRE_THROWS(x / 2);
+    REQUIRE(3 / x == 1); 
+    REQUIRE(x / 3 == 1); 
+    REQUIRE(4 / x == 0); 
+    REQUIRE_THROWS(x / 4);
+    REQUIRE(5 / x == 1); 
+    REQUIRE(x / 5 == 1);
+
+    // Test modular equivalence
+    REQUIRE(z != 1);  
+    REQUIRE(z == 2); 
+    REQUIRE(z != 3); 
+    REQUIRE(z == 4); 
+    REQUIRE(z != 5);
+    REQUIRE(z != -1); 
+    REQUIRE(z == -2);
+    REQUIRE(z != -3);  
+    REQUIRE(z == -4); 
+    REQUIRE(z != -5);
+    REQUIRE(x != 0); 
+    REQUIRE(x != 2); 
+    REQUIRE(x == 3);
+    REQUIRE(x != 4); 
+    REQUIRE(x == 5);
+    REQUIRE(x == -1);
+    REQUIRE(x != -2); 
+    REQUIRE(x == -3);
+    REQUIRE(x != -4); 
+    REQUIRE(x == -5);
+}
+
 TEST_CASE("Tests for Fp class with p == 2", "[Fp]")
 {
     Fp<2> z(0);
