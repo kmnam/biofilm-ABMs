@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/15/2025
+ *     7/17/2025
  */
 
 #ifndef SIMPLICIAL_COMPLEXES_3D_HPP
@@ -747,16 +747,26 @@ class SimplicialComplex3D
         }
 
         /**
-         * Return the shortest path from vertex u to vertex v in the
-         * simplicial complex. 
+         * Return the shortest-path tree rooted at the given vertex of the
+         * 1-skeleton. 
          *
-         * @param u First vertex. 
-         * @param v Second vertex. 
-         * @returns Shortest path from u to v in the simplicial complex. 
+         * @param root Choice of root vertex. 
+         * @returns Shortest-path tree rooted at the given vertex. 
          */
-        std::vector<int> getMinimumWeightPath(const int u, const int v) const
+        std::pair<std::vector<std::vector<int> >, Graph> getMinimumWeightPathTree(const int root = 0) const 
         {
-            return ::getMinimumWeightPath(this->one_skeleton, u, v); 
+            return ::getMinimumWeightPathTree(this->one_skeleton, root); 
+        }
+
+        /**
+         * Return the shortest path between each pair of vertices in the
+         * 1-skeleton.
+         *
+         * @returns Map of shortest paths in the simplicial complex. 
+         */
+        std::map<std::pair<int, int>, std::vector<int> > getMinimumWeightPaths() const 
+        {
+            return ::getMinimumWeightPaths(this->one_skeleton); 
         }
 
         /**
@@ -836,8 +846,8 @@ class SimplicialComplex3D
          * @returns Boundary homomorphism from the group of (dim)-chains to 
          *          to the group of (dim - 1)-chains. 
          */
-        template <int p = 0>
-        Matrix<Fp<p>, Dynamic, Dynamic> getBoundaryHomomorphism(const int dim) const 
+        template <typename T>
+        Matrix<T, Dynamic, Dynamic> getRealBoundaryHomomorphism(const int dim) const 
         {
             // If the dimension is zero or greater than the maximum dimension,
             // then raise an exception 
@@ -853,7 +863,7 @@ class SimplicialComplex3D
             const int n2 = faces2.size();  
 
             // Initialize the matrix with the appropriate dimensions
-            Matrix<Fp<p>, Dynamic, Dynamic> del = Matrix<Fp<p>, Dynamic, Dynamic>::Zero(n2, n1); 
+            Matrix<T, Dynamic, Dynamic> del = Matrix<T, Dynamic, Dynamic>::Zero(n2, n1); 
 
             // Store the indices of the output faces in the above ordering as 
             // a dictionary 
@@ -883,7 +893,72 @@ class SimplicialComplex3D
                     int idx = indices[subface]; 
 
                     // The corresponding entry in the matrix is (-1)^j
-                    del(idx, i) = Fp<p>(j % 2 == 0 ? 1 : -1);   
+                    del(idx, i) = (j % 2 == 0 ? 1 : -1);   
+                }
+            }
+
+            return del;
+        }
+
+        /**
+         * Return the given boundary homomorphism, which (following Munkres,
+         * Elements of Algebraic Topology) calculates the boundaries of
+         * simplices of the given dimension as a linear combination of
+         * simplices of the given dimension minus one.
+         *
+         * This boundary homomorphism is computed over Z/2Z coefficients. 
+         *
+         * @param dim Input dimension.
+         * @returns Boundary homomorphism from the group of (dim)-chains to 
+         *          to the group of (dim - 1)-chains. 
+         */
+        Matrix<Z2, Dynamic, Dynamic> getZ2BoundaryHomomorphism(const int dim) const 
+        {
+            // If the dimension is zero or greater than the maximum dimension,
+            // then raise an exception 
+            if (dim == 0 || dim > this->dimension())
+                throw std::runtime_error(
+                    "Invalid input dimension for boundary homomorphism"
+                );
+
+            // Get a sorted list of the simplices with the appropriate dimensions
+            std::vector<std::vector<int> > faces1 = this->tree.getSubstrings(true, dim + 1);
+            std::vector<std::vector<int> > faces2 = this->tree.getSubstrings(true, dim);
+            const int n1 = faces1.size(); 
+            const int n2 = faces2.size();  
+
+            // Initialize the matrix with the appropriate dimensions
+            Matrix<Z2, Dynamic, Dynamic> del = Matrix<Z2, Dynamic, Dynamic>::Zero(n2, n1); 
+
+            // Store the indices of the output faces in the above ordering as 
+            // a dictionary 
+            std::unordered_map<std::vector<int>, int, boost::hash<std::vector<int> > > indices; 
+            for (int i = 0; i < n2; ++i)
+                indices[faces2[i]] = i;  
+
+            // For each face in the domain ...
+            for (int i = 0; i < n1; ++i)
+            {
+                std::vector<int> face = faces1[i]; 
+
+                // Get all codimension-one subfaces
+                //
+                // Each face in the domain consists of dim + 1 points, so 
+                // each subface arises from excluding each point 
+                for (int j = 0; j < dim + 1; ++j)
+                {
+                    std::vector<int> subface; 
+                    for (int k = 0; k < dim + 1; ++k)
+                    {
+                        if (j != k)
+                            subface.push_back(face[k]); 
+                    }
+
+                    // Get the index of the subface in the ordering 
+                    int idx = indices[subface]; 
+
+                    // The corresponding entry in the matrix is (-1)^j
+                    del(idx, i) = Z2(j % 2 == 0);   // 1 == -1 in Z/2Z
                 }
             }
 
@@ -891,15 +966,13 @@ class SimplicialComplex3D
         } 
 
         /**
-         * Returns the combinatorial Laplacian.
-         *
-         * This function assumes that the underlying field is the rationals
-         * (characteristic zero). 
+         * Returns the combinatorial Laplacian over the real/rational numbers.
          *
          * @param dim Input dimension.
          * @returns Combinatorial Laplacian matrix.  
          */
-        Matrix<Fp<0>, Dynamic, Dynamic> getCombinatorialLaplacian(const int dim) const 
+        template <typename T>
+        Matrix<T, Dynamic, Dynamic> getCombinatorialLaplacian(const int dim) const 
         {
             // Get the boundary homomorphisms 
             //
@@ -907,7 +980,7 @@ class SimplicialComplex3D
             //
             // Similarly, if dim == 0, then set del2 = 0
             const int maxdim = this->dimension();
-            Matrix<Fp<0>, Dynamic, Dynamic> lap;  
+            Matrix<T, Dynamic, Dynamic> lap;  
             if (dim < 0 || dim > this->dimension())
             {
                 throw std::runtime_error(
@@ -917,22 +990,22 @@ class SimplicialComplex3D
             else if (dim == 0 && maxdim == 0)
             {
                 const int n = this->points.rows(); 
-                return Matrix<Fp<0>, Dynamic, Dynamic>::Zero(n, n); 
+                lap = Matrix<T, Dynamic, Dynamic>::Zero(n, n); 
             }
             else if (dim == 0)        // maxdim != 0
             {
-                Matrix<Fp<0>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<0>(1);
+                Matrix<T, Dynamic, Dynamic> del1 = this->getRealBoundaryHomomorphism<T>(1);
                 lap = del1 * del1.transpose(); 
             }
             else if (dim == maxdim)   // dim, maxdim != 0
             {
-                Matrix<Fp<0>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<0>(dim);
+                Matrix<T, Dynamic, Dynamic> del2 = this->getRealBoundaryHomomorphism<T>(dim);
                 lap = del2.transpose() * del2; 
             }
             else     // Otherwise, get both boundary homomorphisms  
             { 
-                Matrix<Fp<0>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<0>(dim + 1); 
-                Matrix<Fp<0>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<0>(dim); 
+                Matrix<T, Dynamic, Dynamic> del1 = this->getRealBoundaryHomomorphism<T>(dim + 1); 
+                Matrix<T, Dynamic, Dynamic> del2 = this->getRealBoundaryHomomorphism<T>(dim); 
 
                 // Note that del1 has shape (n2, n1) and del2 has shape (n3, n2),
                 // where n1 = # (dim + 1)-simplices, n2 = # (dim)-simplices, 
@@ -946,39 +1019,35 @@ class SimplicialComplex3D
         }
 
         /**
-         * Get a basis of cycles for the homology group over rational
+         * Get a basis of cycles for the homology group over real/rational
          * coefficients of the given dimension. 
          *
          * @param dim Input dimension.
          * @returns Basis of cycles for the homology group. 
          */
-        Matrix<Fp<0>, Dynamic, Dynamic> getZeroCharHomology(const int dim) const 
+        template <typename T>
+        Matrix<T, Dynamic, Dynamic> getRealHomology(const int dim) const 
         {
-            return ::kernel<Fp<0> >(this->getCombinatorialLaplacian(dim)); 
+            return ::kernel<T>(this->getCombinatorialLaplacian<T>(dim)); 
         }
 
         /**
-         * Get a basis of cycles for the homology group over a field of 
-         * characteristic p > 0 of the given dimension.
-         *
-         * This function should also work with p == 0, but is less 
-         * efficient that computing the kernel of the combinatorial
-         * Laplacian. 
+         * Get a basis of cycles for the homology group over Z/2Z coefficients
+         * of the given dimension.
          *
          * @param dim Input dimension.
          * @returns Basis of cycles for the homology group. 
          */
-        template <int p = 2>
-        Matrix<Fp<p>, Dynamic, Dynamic> getPrimeCharHomology(const int dim) const 
+        Matrix<Z2, Dynamic, Dynamic> getZ2Homology(const int dim) const 
         {
-            Matrix<Fp<p>, Dynamic, Dynamic> cycles;
+            Matrix<Z2, Dynamic, Dynamic> cycles;
             if (dim > 0 && dim < this->dimension())
             {
                 // Get the boundary homomorphisms and the corresponding
                 // quotient space basis 
-                Matrix<Fp<p>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<p>(dim + 1);
-                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim);
-                cycles = ::quotientSpace<Fp<p> >(del2, del1); 
+                Matrix<Z2, Dynamic, Dynamic> del1 = this->getZ2BoundaryHomomorphism(dim + 1);
+                Matrix<Z2, Dynamic, Dynamic> del2 = this->getZ2BoundaryHomomorphism(dim);
+                cycles = ::quotientSpace<Z2>(del2, del1); 
             }
             else if (dim == 0)
             {
@@ -990,34 +1059,34 @@ class SimplicialComplex3D
                     // In this case, the image of the 1st boundary homomorphism
                     // is zero, so the quotient is all of F^d
                     int n = this->points.rows(); 
-                    cycles = Matrix<Fp<p>, Dynamic, Dynamic>::Identity(n, n); 
+                    cycles = Matrix<Z2, Dynamic, Dynamic>::Identity(n, n); 
                 }
                 else 
                 {
                     // In this case, the image of the 1st boundary homomorphism 
                     // may be nontrivial, and the quotient is F^d modulo the image
-                    Matrix<Fp<p>, Dynamic, Dynamic> del1 = this->getBoundaryHomomorphism<p>(dim + 1);
-                    cycles = ::quotientSpace<Fp<p> >(del1);
+                    Matrix<Z2, Dynamic, Dynamic> del1 = this->getZ2BoundaryHomomorphism(dim + 1);
+                    cycles = ::quotientSpace<Z2>(del1);
                 } 
             }
             else    // dim != 0 and dim == this->dimension() 
             {
                 // In this case, the image of the (dim + 1)-th boundary 
                 // homomorphism is zero
-                Matrix<Fp<p>, Dynamic, Dynamic> del2 = this->getBoundaryHomomorphism<p>(dim);
-                cycles = ::kernel<Fp<p> >(del2);
+                Matrix<Z2, Dynamic, Dynamic> del2 = this->getZ2BoundaryHomomorphism(dim);
+                cycles = ::kernel<Z2>(del2);
             }
 
             return cycles; 
         }
 
         /**
-         * Get the vector of Betti numbers over rational coefficients for
-         * the simplicial complex. 
+         * Get the vector of Betti numbers over real/rational coefficients
+         * for the simplicial complex. 
          *
          * @returns Betti numbers of the simplicial complex. 
          */
-        Array<int, Dynamic, 1> getZeroCharBettiNumbers() const 
+        Array<int, Dynamic, 1> getRealBettiNumbers() const 
         {
             Array<int, Dynamic, 1> betti = Array<int, Dynamic, 1>::Zero(4);
             const int maxdim = this->dimension(); 
@@ -1027,7 +1096,6 @@ class SimplicialComplex3D
             if (maxdim == 0)
             {
                 betti(0) = this->points.rows(); 
-                return betti; 
             }
             // If not, then compute each combinatorial Laplacian 
             else 
@@ -1035,21 +1103,21 @@ class SimplicialComplex3D
                 // Calculate the dimension of each homology group
                 for (int i = 0; i <= maxdim; ++i)
                 {
-                    Matrix<Fp<0>, Dynamic, Dynamic> cycles = this->getZeroCharHomology(i); 
+                    Matrix<double, Dynamic, Dynamic> cycles = this->getRealHomology<double>(i); 
                     betti(i) = cycles.cols(); 
                 }
-                return betti; 
             }
+            
+            return betti; 
         }
 
         /**
-         * Get the vector of Betti numbers over a field of characteristic 
-         * p > 0 for the simplicial complex. 
+         * Get the vector of Betti numbers over Z/2Z coefficients for the 
+         * simplicial complex. 
          *
          * @returns Betti numbers of the simplicial complex. 
          */
-        template <int p = 2>
-        Array<int, Dynamic, 1> getPrimeCharBettiNumbers() const 
+        Array<int, Dynamic, 1> getZ2BettiNumbers() const 
         {
             Array<int, Dynamic, 1> betti = Array<int, Dynamic, 1>::Zero(4);
             const int maxdim = this->dimension(); 
@@ -1059,7 +1127,6 @@ class SimplicialComplex3D
             if (maxdim == 0)
             {
                 betti(0) = this->points.rows(); 
-                return betti; 
             }
             // If not, then compute each combinatorial Laplacian 
             else 
@@ -1067,23 +1134,24 @@ class SimplicialComplex3D
                 // Calculate the dimension of each homology group
                 for (int i = 0; i <= maxdim; ++i)
                 {
-                    Matrix<Fp<p>, Dynamic, Dynamic> cycles = this->getPrimeCharHomology<p>(i); 
+                    Matrix<Z2, Dynamic, Dynamic> cycles = this->getZ2Homology(i); 
                     betti(i) = cycles.cols(); 
                 }
-                return betti; 
             }
+
+            return betti; 
         }
 
         /**
-         * Return true if the input chain is a cycle of the given dimension. 
+         * Return true if the input chain is a cycle of the given dimension
+         * over Z/2Z coefficients.
          *
          * @param chain Input chain, as a vector of coefficients over the 
          *              simplices of the appropriate dimension. 
          * @param dim Cycle dimension.
          * @returns True if the chain is a cycle, false otherwise.  
          */
-        template <int p = 2>
-        bool isCycle(const Ref<const Matrix<Fp<p>, Dynamic, 1> >& chain, 
+        bool isCycle(const Ref<const Matrix<Z2, Dynamic, 1> >& chain, 
                      const int dim)
         {
             // Check that the dimension of the input vector is correct
@@ -1097,7 +1165,7 @@ class SimplicialComplex3D
             // Is the vector in the kernel of the boundary homomorphism? 
             if (dim > 0)
             {
-                Matrix<Fp<p>, Dynamic, Dynamic> del = this->getBoundaryHomomorphism<p>(dim); 
+                Matrix<Z2, Dynamic, Dynamic> del = this->getZ2BoundaryHomomorphism(dim); 
                 return ((del * chain).array() == 0).all(); 
             } 
             else    // If dim == 0, then all vectors are in the kernel 
@@ -1109,7 +1177,7 @@ class SimplicialComplex3D
         /**
          * Return a boolean vector that encodes, for each column in the given
          * matrix, whether the corresponding chain of simplices is a cycle 
-         * of the given dimension. 
+         * of the given dimension over Z/2Z coefficients. 
          *
          * @param chains Array of input chains, each as a vector of
          *               coefficients over the simplices of the appropriate
@@ -1117,8 +1185,7 @@ class SimplicialComplex3D
          * @param dim Cycle dimension.
          * @returns Boolean vector indicating whether each chain is a cycle. 
          */
-        template <int p = 2>
-        Matrix<int, Dynamic, 1> areCycles(const Ref<const Matrix<Fp<p>, Dynamic, Dynamic> >& chains, 
+        Matrix<int, Dynamic, 1> areCycles(const Ref<const Matrix<Z2, Dynamic, Dynamic> >& chains, 
                                           const int dim)
         {
             // Check that the dimension of the input vectors is correct
@@ -1129,22 +1196,26 @@ class SimplicialComplex3D
                     "Input vector does not represent chain of given dimension"
                 );
 
-            // Is the vector in the kernel of the boundary homomorphism? 
+            // Is the vector in the kernel of the boundary homomorphism?
+            Matrix<int, Dynamic, 1> are_cycles;  
             if (dim > 0)
             {
-                Matrix<int, Dynamic, 1> are_cycles = Matrix<int, Dynamic, 1>::Zero(chains.cols()); 
-                Matrix<Fp<p>, Dynamic, Dynamic> del = this->getBoundaryHomomorphism<p>(dim);
+                are_cycles = Matrix<int, Dynamic, 1>::Zero(chains.cols()); 
+                Matrix<Z2, Dynamic, Dynamic> del = this->getZ2BoundaryHomomorphism(dim);
                 for (int i = 0; i < chains.cols(); ++i) 
                     are_cycles(i) = ((del * chains.col(i)).array() == 0).all(); 
             } 
             else    // If dim == 0, then all vectors are in the kernel 
             {
-                return Matrix<int, Dynamic, 1>::Ones(chains.cols()); 
+                are_cycles = Matrix<int, Dynamic, 1>::Ones(chains.cols()); 
             }
+
+            return are_cycles; 
         }
 
         /**
-         * Return true if the input chain is a boundary of the given dimension.
+         * Return true if the input chain is a boundary of the given dimension
+         * over Z/2Z coefficients.
          *
          * @param chain Input chain, as a vector of coefficients over the 
          *              simplices of the appropriate dimension. 
@@ -1152,8 +1223,7 @@ class SimplicialComplex3D
          *            homomorphism minus 1). 
          * @returns True if the chain is a boundary, false otherwise.  
          */
-        template <int p = 2>
-        bool isBoundary(const Ref<const Matrix<Fp<p>, Dynamic, 1> >& chain, 
+        bool isBoundary(const Ref<const Matrix<Z2, Dynamic, 1> >& chain, 
                         const int dim)
         {
             // Check that the dimension of the input vector is correct
@@ -1168,11 +1238,11 @@ class SimplicialComplex3D
             if (dim < this->dimension())
             {
                 // Get the row echelon form of [del | chain]
-                Matrix<Fp<p>, Dynamic, Dynamic> del = this->getBoundaryHomomorphism<p>(dim + 1); 
-                Matrix<Fp<p>, Dynamic, Dynamic> system(del.rows(), del.cols() + 1); 
+                Matrix<Z2, Dynamic, Dynamic> del = this->getZ2BoundaryHomomorphism(dim + 1); 
+                Matrix<Z2, Dynamic, Dynamic> system(del.rows(), del.cols() + 1); 
                 system(Eigen::all, Eigen::seq(0, del.cols() - 1)) = del;
                 system.col(del.cols()) = chain; 
-                system = ::rowEchelonForm<Fp<p> >(system);
+                system = ::rowEchelonForm<Z2>(system);
 
                 // If there is an inconsistency in the row echelon form, this
                 // means that the chain is not in the column space of del and 
@@ -1196,7 +1266,7 @@ class SimplicialComplex3D
         /**
          * Return a boolean vector that encodes, for each column in the given
          * matrix, whether the corresponding chain of simplices is a boundary 
-         * of the given dimension. 
+         * of the given dimension over Z/2Z coefficients. 
          *
          * @param chains Array of input chains, each as a vector of
          *               coefficients over the simplices of the appropriate
@@ -1205,8 +1275,7 @@ class SimplicialComplex3D
          *            homomorphism minus 1). 
          * @returns True if the chain is a boundary, false otherwise.  
          */
-        template <int p = 2>
-        Matrix<int, Dynamic, 1> areBoundaries(const Ref<const Matrix<Fp<p>, Dynamic, Dynamic> >& chains, 
+        Matrix<int, Dynamic, 1> areBoundaries(const Ref<const Matrix<Z2, Dynamic, Dynamic> >& chains, 
                                               const int dim)
         {
             // Check that the dimension of the input vectors is correct
@@ -1222,11 +1291,11 @@ class SimplicialComplex3D
             if (dim < this->dimension())
             {
                 // Get the row echelon form of [del | chains]
-                Matrix<Fp<p>, Dynamic, Dynamic> del = this->getBoundaryHomomorphism<p>(dim + 1); 
-                Matrix<Fp<p>, Dynamic, Dynamic> system(del.rows(), del.cols() + chains.cols()); 
+                Matrix<Z2, Dynamic, Dynamic> del = this->getZ2BoundaryHomomorphism(dim + 1); 
+                Matrix<Z2, Dynamic, Dynamic> system(del.rows(), del.cols() + chains.cols()); 
                 system(Eigen::all, Eigen::seq(0, del.cols() - 1)) = del;
                 system(Eigen::all, Eigen::seq(del.cols(), del.cols() + chains.cols() - 1) = chains; 
-                system = ::rowEchelonForm<Fp<p> >(system);
+                system = ::rowEchelonForm<Z2>(system);
 
                 // If there is an inconsistency in the row echelon form, this
                 // means that the chain is not in the column space of del and 
@@ -1255,7 +1324,7 @@ class SimplicialComplex3D
 
         /**
          * Return true if the two cycles (1) are indeed cycles, and (2) are 
-         * homologous. 
+         * homologous, over Z/2Z coefficients.  
          *
          * @param chain1 First input chain, as a vector of coefficients over
          *               the simplices of the appropriate dimension. 
@@ -1264,15 +1333,14 @@ class SimplicialComplex3D
          * @param dim Cycle dimension. 
          * @returns True if the two chains are homologous, false otherwise. 
          */
-        template <int p = 2>
-        bool areHomologousCycles(const Ref<const Matrix<Fp<p>, Dynamic, 1> >& chain1, 
-                                 const Ref<const Matrix<Fp<p>, Dynamic, 1> >& chain2, 
+        bool areHomologousCycles(const Ref<const Matrix<Z2, Dynamic, 1> >& chain1, 
+                                 const Ref<const Matrix<Z2, Dynamic, 1> >& chain2, 
                                  const int dim)
         {
-            Matrix<Fp<p>, Dynamic, Dynamic> chains(chain1.size(), 2); 
+            Matrix<Z2, Dynamic, Dynamic> chains(chain1.size(), 2); 
             chains.col(0) = chain1; 
             chains.col(1) = chain2; 
-            return (this->areCycles<p>(chains, dim) && this->isBoundary<p>(chain1 - chain2, dim)); 
+            return (this->areCycles(chains, dim) && this->isBoundary(chain1 - chain2, dim)); 
         }
 
         /**
@@ -1283,7 +1351,6 @@ class SimplicialComplex3D
          * @param dim Input dimension. 
          * @returns Collection of minimal cycles. 
          */
-        template <int p = 2>
         Matrix<double, Dynamic, Dynamic> minimizeCycles(const int dim)
         {
             if (dim < 0 || dim > this->dimension())
@@ -1292,7 +1359,7 @@ class SimplicialComplex3D
                     "Invalid input dimension for minimal cycle calculation"
                 ); 
             }
-            Matrix<Fp<p>, Dynamic, Dynamic> cycles = this->getPrimeCharHomology<p>(dim);
+            Matrix<Z2, Dynamic, Dynamic> cycles = this->getZ2Homology(dim);
             Matrix<double, Dynamic, Dynamic> opt_cycles(cycles.rows(), cycles.cols()); 
 
             // If the input dimension is maximal, then optimization is not 
@@ -1311,7 +1378,7 @@ class SimplicialComplex3D
             else 
             {
                 // Get the boundary homomorphism from the (dim + 1)-th chain group
-                Matrix<Fp<p>, Dynamic, Dynamic> del = this->getBoundaryHomomorphism<p>(dim + 1);
+                Matrix<Z2, Dynamic, Dynamic> del = this->getZ2BoundaryHomomorphism(dim + 1);
                 const int n1 = del.cols();    // Number of (dim + 1)-simplices
                 const int n2 = del.rows();    // Number of (dim)-simplices
 
@@ -1324,7 +1391,7 @@ class SimplicialComplex3D
                 {
                     // We must minimize the 1-norm of z = z1 + \del w, where 
                     // z1 is the basic cycle and w is any (dim + 1)-chain
-                    Matrix<Fp<p>, Dynamic, 1> cycle = cycles.col(j); 
+                    Matrix<Z2, Dynamic, 1> cycle = cycles.col(j); 
 
                     // Define the linear program in standard format, and 
                     // solve for the minimal cycle
