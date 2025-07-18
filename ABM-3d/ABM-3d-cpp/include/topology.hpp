@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/17/2025
+ *     7/18/2025
  */
 
 #ifndef SIMPLICIAL_COMPLEXES_3D_HPP
@@ -1514,6 +1514,11 @@ class SimplicialComplex3D
          */
         Matrix<Z2, Dynamic, Dynamic> getMinimalFirstHomology() const
         {
+            // If the dimension of the complex is 1, then simply return the 
+            // minimal cycle basis for the 1-skeleton 
+            if (this->dimension() == 1)
+                return getMinimumCycleBasis<Z2>(this->one_skeleton); 
+
             // ---------------------------------------------------------- //
             //                  COMPUTE EDGE ANNOTATIONS                  //
             // ---------------------------------------------------------- //
@@ -1705,14 +1710,19 @@ class SimplicialComplex3D
         }
 
         /**
-         * Calculate a basis of homology classes for the given dimension and 
-         * minimize each homology class representative according to its 1-norm
-         * using linear programming. 
+         * Given a collection of cycles representing different homology 
+         * classes for the given dimension, minimize each cycle according to
+         * its 1-norm using linear programming, following the approach of 
+         * Obayashi, SIAM J Appl Algebra Geometry (2018).
          *
+         * It is assumed that the input cycles are indeed cycles.  
+         *
+         * @param cycles Input collection of cycles. 
          * @param dim Input dimension. 
          * @returns Collection of minimal cycles. 
          */
-        Matrix<double, Dynamic, Dynamic> minimizeCycles(const int dim) const
+        Matrix<double, Dynamic, Dynamic> minimizeCycles(const Ref<const Matrix<Z2, Dynamic, Dynamic> >& cycles, 
+                                                        const int dim) const
         {
             if (dim < 0 || dim > this->dimension())
             {
@@ -1720,7 +1730,13 @@ class SimplicialComplex3D
                     "Invalid input dimension for minimal cycle calculation"
                 ); 
             }
-            Matrix<Z2, Dynamic, Dynamic> cycles = this->getZ2Homology(dim);
+            const int n2 = this->getNumSimplices(dim); 
+            if (n2 != cycles.rows())
+            {
+                throw std::runtime_error(
+                    "Input cycle coefficients do not match input dimension" 
+                ); 
+            }
             Matrix<double, Dynamic, Dynamic> opt_cycles(cycles.rows(), cycles.cols()); 
 
             // If the input dimension is maximal, then optimization is not 
@@ -1741,13 +1757,9 @@ class SimplicialComplex3D
                 // Get the boundary homomorphism from the (dim + 1)-th chain group
                 Matrix<Z2, Dynamic, Dynamic> del = this->getZ2BoundaryHomomorphism(dim + 1);
                 const int n1 = del.cols();    // Number of (dim + 1)-simplices
-                const int n2 = del.rows();    // Number of (dim)-simplices
-
-                // For each cycle, solve the corresponding linear programming
-                // problem 
-                //
-                // We follow the approach of Obayashi, SIAM J Appl Algebra
-                // Geometry (2018) (see Eqn. 9)
+           
+                // For each cycle, define and solve the corresponding linear
+                // programming problem 
                 for (int j = 0; j < cycles.cols(); ++j)
                 {
                     // We must minimize the 1-norm of z = z1 + \del w, where 
