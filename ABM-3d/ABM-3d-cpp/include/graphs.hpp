@@ -511,8 +511,7 @@ std::map<std::pair<int, int>, std::vector<int> > getMinimumWeightPaths(const Gra
 }
 
 /**
- * Get a minimum cycle basis for the given graph, which is assumed to be 
- * connected.
+ * Get a minimum cycle basis for the given graph.
  *
  * Each cycle is returned as a vector of vertex indices, with edges between
  * consecutive vertices (and the edge from the last vertex to the first).
