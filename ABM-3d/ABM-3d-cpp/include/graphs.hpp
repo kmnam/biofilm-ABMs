@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/17/2025
+ *     7/18/2025
  */
 
 #ifndef UNDIRECTED_WEIGHTED_GRAPHS_HPP
@@ -293,19 +293,22 @@ std::unordered_map<std::pair<int, int>, int,
 }
 
 /**
- * Get the shortest-path tree of the given graph, which is assumed to be 
- * connected, using Dijkstra's algorithm.
+ * Get the shortest-path tree of the given graph, using Dijkstra's algorithm.
+ *
+ * The tree is in fact a forest, in which all vertices that are not connected
+ * to the root are isolated, and the connected component containing the root 
+ * is a tree. 
  *
  * The i-th entry in the returned std::vector is the i-th vertex in the 
  * path (including u as the 0-th entry and v as the last). 
  *
  * @param graph Input graph.
- * @param source Source vertex. 
+ * @param root Root vertex. 
  * @returns Minimum weight paths from the source vertex to every other 
  *          vertex, alongside the tree itself as a separate graph.  
  */
 std::pair<std::vector<std::vector<int> >, Graph> getMinimumWeightPathTree(const Graph& graph,
-                                                                          const int source = 0)
+                                                                          const int root = 0)
 {
     const int nv = boost::num_vertices(graph);
 
@@ -315,7 +318,7 @@ std::pair<std::vector<std::vector<int> >, Graph> getMinimumWeightPathTree(const 
     // Define a vector of predecessor vertices 
     std::vector<boost::graph_traits<Graph>::vertex_descriptor> pred(nv);
 
-    // Define distances to the source vertex 
+    // Define distances to the root
     std::vector<double> dist; 
     for (int i = 0; i < nv; ++i)
         dist.push_back(std::numeric_limits<double>::infinity());
@@ -326,7 +329,7 @@ std::pair<std::vector<std::vector<int> >, Graph> getMinimumWeightPathTree(const 
 
     // Run Dijkstra's algorithm 
     boost::dijkstra_shortest_paths(
-        graph, source, boost::predecessor_map(pred_map).distance_map(dist_map)
+        graph, root, boost::predecessor_map(pred_map).distance_map(dist_map)
     );
 
     // For each vertex ...
@@ -336,14 +339,14 @@ std::pair<std::vector<std::vector<int> >, Graph> getMinimumWeightPathTree(const 
     {
         std::vector<int> path; 
 
-        // If there is no path from source to target, then store an empty path
+        // If there is no path from root to the vertex, then store an empty path
         if (dist[i] == std::numeric_limits<double>::infinity())
             paths.push_back(path); 
 
-        // Otherwise, traverse the path from target to source 
-        for (int j = i; j != source; j = pred[j])
+        // Otherwise, traverse the path from the vertex to the root 
+        for (int j = i; j != root; j = pred[j])
             path.push_back(j);
-        path.push_back(source);
+        path.push_back(root); 
         std::reverse(path.begin(), path.end());
         paths.push_back(path);
 
@@ -361,20 +364,38 @@ std::pair<std::vector<std::vector<int> >, Graph> getMinimumWeightPathTree(const 
 }
 
 /**
+ * A helper function that computes the unique path from u to v in the given
+ * Dijkstra shortest-path tree, which is defined in terms of the paths in
+ * the tree (`tree_paths`), the predecessor map (`parents`), and a map 
+ * indicating the depth of each vertex with respect to the root (`depths`).
  *
+ * @param tree_paths Vector of paths from the root to each vertex in the
+ *                   Dijkstra shortest-path tree. If a vertex is disconnected
+ *                   from the root, the path is empty.  
+ * @param parents Vector indicating the predecessor of each vertex along the
+ *                path from the root. 
+ * @param depths Vector indicating the depth of each vertex with respect to 
+ *               the root. 
+ * @param u First vertex. 
+ * @param v Second vertex. 
+ * @returns Unique path from u to v in the tree. 
  */
 std::vector<int> getPathInMinimumWeightPathTree(const std::vector<std::vector<int> >& tree_paths,
                                                 const std::vector<int>& parents, 
                                                 const std::vector<int>& depths, 
                                                 const int u, const int v)
 {
-    // Get the path to v from the root of the tree 
-    std::vector<int> path_v = tree_paths[v]; 
+    // Return an empty path if either u or v is disconnected from the root 
+    std::vector<int> path_u = tree_paths[u];
+    std::vector<int> path_v = tree_paths[v];
+    std::vector<int> path_uv; 
+    if (path_u.size() == 0 || path_v.size() == 0)
+        return path_uv;
 
     // Find the lowest common ancestor of u and v
     //
-    // In whichever path is longer, travel up the path until the 
-    // depths are the same
+    // In whichever path is longer, travel up the path until the depths are
+    // the same  
     int curr_u = u; 
     int curr_v = v; 
     while (depths[curr_u] > depths[curr_v])
@@ -390,7 +411,6 @@ std::vector<int> getPathInMinimumWeightPathTree(const std::vector<std::vector<in
     }
 
     // Climb up the path from u to the lowest common ancestor
-    std::vector<int> path_uv; 
     int curr_vertex = u; 
     while (curr_vertex != curr_u)
     {
@@ -398,8 +418,7 @@ std::vector<int> getPathInMinimumWeightPathTree(const std::vector<std::vector<in
         curr_vertex = parents[curr_vertex]; 
     }
 
-    // Then climb back down the path from the lowest common ancestor
-    // to v
+    // Then climb back down the path from the lowest common ancestor to v
     auto it = std::find(path_v.begin(), path_v.end(), curr_vertex); 
     while (curr_vertex != v)
     {
