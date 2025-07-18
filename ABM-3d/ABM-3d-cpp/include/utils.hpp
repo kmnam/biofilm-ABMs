@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/10/2025
+ *     7/18/2025
  */
 
 #ifndef BIOFILM_UTILS_3D_HPP
@@ -1265,10 +1265,10 @@ Matrix<T, Dynamic, Dynamic> solve(const Ref<const Matrix<T, Dynamic, Dynamic> >&
     const int nvecs = B.cols(); 
     Matrix<T, Dynamic, Dynamic> system(nrows, ncols + nvecs);
     system(Eigen::all, Eigen::seq(0, ncols - 1)) = A;
-    system(Eigen::all, Eigen::seq(ncols, ncols + nvecs - 1)) = B;  
+    system(Eigen::all, Eigen::lastN(nvecs)) = B; 
     Matrix<T, Dynamic, Dynamic> reduced = rowEchelonForm<T>(system);
     Matrix<T, Dynamic, Dynamic> A_reduced = reduced(Eigen::all, Eigen::seq(0, ncols - 1)); 
-    Matrix<T, Dynamic, Dynamic> B_reduced = reduced(Eigen::all, Eigen::seq(ncols, ncols + nvecs - 1)); 
+    Matrix<T, Dynamic, Dynamic> B_reduced = reduced(Eigen::all, Eigen::lastN(nvecs)); 
 
     // Now that the matrix is in row-reduced form, find the pivots ...
     Matrix<int, Dynamic, 1> pivots = getPivots<T>(A_reduced); 
@@ -1337,8 +1337,7 @@ Matrix<T, Dynamic, Dynamic> complement(const Ref<const Matrix<T, Dynamic, Dynami
     // Construct linear system, one for each standard basis vector
     Matrix<T, Dynamic, Dynamic> system(dim, nvecs + dim); 
     system(Eigen::all, Eigen::seq(0, nvecs - 1)) = basis; 
-    system(Eigen::all, Eigen::seq(nvecs, nvecs + dim - 1))
-        = Matrix<T, Dynamic, Dynamic>::Identity(dim, dim); 
+    system(Eigen::all, Eigen::lastN(dim)) = Matrix<T, Dynamic, Dynamic>::Identity(dim, dim); 
 
     // Get row echelon form 
     Matrix<T, Dynamic, Dynamic> system_reduced = rowEchelonForm<T>(system);
@@ -1380,17 +1379,22 @@ Matrix<T, Dynamic, Dynamic> quotientSpace(const Ref<const Matrix<T, Dynamic, Dyn
     // Form the augmented matrix 
     Matrix<T, Dynamic, Dynamic> system(kerA.rows(), kerA.cols() + imB.cols());
     system(Eigen::all, Eigen::seq(0, imB.cols() - 1)) = imB; 
-    system(Eigen::all, Eigen::seq(imB.cols(), imB.cols() + kerA.cols() - 1)) = kerA;
+    system(Eigen::all, Eigen::lastN(kerA.cols())) = kerA;
 
     // Get the row echelon form and pivot columns  
-    system = ::rowEchelonForm<T>(system);
-    Matrix<int, Dynamic, 1> pivots = ::getPivotCols<T>(system);
+    Matrix<T, Dynamic, Dynamic> system_reduced = ::rowEchelonForm<T>(system);
+    Matrix<int, Dynamic, 1> pivots = ::getPivotCols<T>(system_reduced);
 
     // Return the vectors that do not correspond to the pivot columns
-    int n_quotient_basis = (pivots.tail(kerA.cols()).array() != -1).sum(); 
+    int n_quotient_basis = 0;
+    for (int i = imB.cols(); i < imB.cols() + kerA.cols(); ++i)
+    {
+        if (pivots(i) != -1)
+            n_quotient_basis++; 
+    }
     Matrix<T, Dynamic, Dynamic> quotient_basis(kerA.rows(), n_quotient_basis);
     int j = 0;  
-    for (int i = imB.cols(); i < pivots.size(); ++i)
+    for (int i = imB.cols(); i < imB.cols() + kerA.cols(); ++i)
     {
         if (pivots(i) != -1)
         {
