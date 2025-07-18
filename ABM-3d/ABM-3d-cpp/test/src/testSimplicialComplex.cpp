@@ -119,7 +119,7 @@ SimplicialComplex3D<T> complex_cycle()
  */
 SimplicialComplex3D<T> complex_triangles_with_appendages()
 {
-    Array<T, Dynamic, 3> points(7, 7); 
+    Array<T, Dynamic, 3> points(7, 3); 
     Array<int, Dynamic, 2> edges(7, 2); 
     Array<int, Dynamic, 3> triangles(1, 3); 
     Array<int, Dynamic, 4> tetrahedra(0, 4); 
@@ -139,6 +139,33 @@ SimplicialComplex3D<T> complex_triangles_with_appendages()
              5, 6;
     triangles << 0, 1, 2;
     return SimplicialComplex3D<T>(points, edges, triangles, tetrahedra); 
+}
+
+/**
+ * Generate the example 2-D complex from Busaryev et al. 2010. 
+ */
+SimplicialComplex3D<T> complex_busaryev_example()
+{
+    Array<T, Dynamic, 3> points(5, 3); 
+    Array<int, Dynamic, 2> edges(8, 2); 
+    Array<int, Dynamic, 3> triangles(2, 3); 
+    Array<int, Dynamic, 4> tetrahedra(0, 4); 
+    points << 0, 0, 0,
+              1, 1, 0,
+              2, 0, 0,
+              0, 2, 0,
+              2, 2, 0;
+    edges << 0, 1,
+             0, 2,
+             0, 3,
+             1, 2,
+             1, 3,
+             1, 4,
+             2, 4,
+             3, 4;
+    triangles << 0, 1, 2,
+                 1, 3, 4;
+    return SimplicialComplex3D<T>(points, edges, triangles, tetrahedra);  
 }
 
 /**
@@ -3264,6 +3291,96 @@ TEST_CASE(
     REQUIRE(betti(1) == 0); 
     REQUIRE(betti(2) == 0);
     REQUIRE(betti(3) == 0);
+}
+
+TEST_CASE("Tests for edge annotation", "[annotateEdges()]")
+{
+    SimplicialComplex3D<T> cplex = complex_busaryev_example(); 
+    auto result = cplex.annotateEdges(0);
+    Matrix<int, Dynamic, 2> edges_reordered = std::get<0>(result);
+    Matrix<Z2, Dynamic, Dynamic> h1_basis = std::get<1>(result); 
+    Matrix<Z2, Dynamic, Dynamic> coefs = std::get<2>(result); 
+
+    // To check the annotations, we need the spanning tree rooted at 0
+    auto result2 = cplex.getMinimumWeightPathTree(0);
+    std::vector<std::vector<int> > tree_paths = result2.first;
+    Graph tree = result2.second; 
+
+    // Check that the sentinel edges are not in the tree 
+    int nv = cplex.getNumSimplices(0); 
+    int ne = cplex.getNumSimplices(1);
+    int nt = boost::num_edges(tree); 
+    REQUIRE(nt == nv - 1);
+    for (int i = 0; i < ne - nv + 1; ++i)
+        REQUIRE(!boost::edge(edges_reordered(i, 0), edges_reordered(i, 1), tree).second);
+    for (int i = ne - nv + 1; i < ne; ++i)
+        REQUIRE(boost::edge(edges_reordered(i, 0), edges_reordered(i, 1), tree).second);
+
+    // Check that the provided basis is indeed a homology basis
+    REQUIRE(h1_basis.cols() == 2);
+    Matrix<Z2, Dynamic, Dynamic> del1 = cplex.getZ2BoundaryHomomorphism(1);  
+    REQUIRE(((del1 * h1_basis.col(0)).array() == 0).all());
+    REQUIRE(((del1 * h1_basis.col(1)).array() == 0).all()); 
+
+    // Check that each cycle in the provided basis is a sentinel cycle
+    Matrix<int, Dynamic, 2> edges = cplex.getSimplices<1>();  
+    for (int i = 0; i < h1_basis.cols(); ++i)
+    {
+        // Get the edges in each cycle representative 
+        std::vector<int> edges_in_cycle; 
+        for (int j = 0; j < h1_basis.rows(); ++j)
+        {
+            if (h1_basis(j, i))
+                edges_in_cycle.push_back(j); 
+        }
+
+        // Each cycles should consist of exactly one sentinal edge
+        int n_sentinel_edges = 0; 
+        for (const int j : edges_in_cycle)
+        {
+            int u = edges(j, 0); 
+            int v = edges(j, 1); 
+            if (!boost::edge(u, v, tree).second)
+                n_sentinel_edges++; 
+        }
+        REQUIRE(n_sentinel_edges == 1); 
+    }
+}
+
+TEST_CASE("Tests for minimal homology basis calculation", "[getMinimalFirstHomology()]")
+{
+    Matrix<Z2, Dynamic, Dynamic> min_basis;
+    Matrix<Z2, Dynamic, 1> cycle1, cycle2; 
+
+    // ------------------------------------------------------------- // 
+    // Test for annulus
+    // ------------------------------------------------------------- //
+    SimplicialComplex3D<T> cplex = complex_annulus(); 
+    min_basis = cplex.getMinimalFirstHomology();
+    REQUIRE(min_basis.cols() == 1);
+    cycle1.resize(24);
+    cycle1 << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1;
+    REQUIRE(cplex.areHomologousCycles(min_basis.col(0), cycle1, 1)); 
+
+    // ------------------------------------------------------------- // 
+    // Test for Busaryev et al.'s example 
+    // ------------------------------------------------------------- // 
+    cplex = complex_busaryev_example(); 
+    min_basis = cplex.getMinimalFirstHomology();
+    REQUIRE(min_basis.cols() == 2);
+    REQUIRE(!cplex.areHomologousCycles(min_basis.col(0), min_basis.col(1), 1)); 
+    cycle1.resize(8); 
+    cycle2.resize(8); 
+    cycle1 << 1, 0, 1, 0, 1, 0, 0, 0; 
+    cycle2 << 0, 0, 0, 1, 0, 1, 1, 0;
+    REQUIRE((
+        cplex.areHomologousCycles(min_basis.col(0), cycle1, 1) ||
+        cplex.areHomologousCycles(min_basis.col(0), cycle2, 1)
+    )); 
+    if (cplex.areHomologousCycles(min_basis.col(0), cycle1, 1))
+        REQUIRE(cplex.areHomologousCycles(min_basis.col(1), cycle2, 1));
+    else
+        REQUIRE(cplex.areHomologousCycles(min_basis.col(1), cycle1, 1));
 }
 
 /*
