@@ -1240,9 +1240,9 @@ class SimplicialComplex3D
             {
                 // Get the row echelon form of [del | chain]
                 Matrix<Z2, Dynamic, Dynamic> del = this->getZ2BoundaryHomomorphism(dim + 1); 
-                Matrix<Z2, Dynamic, Dynamic> system(del.rows(), del.cols() + 1); 
+                Matrix<Z2, Dynamic, Dynamic> system(del.rows(), del.cols() + 1);
                 system(Eigen::all, Eigen::seq(0, del.cols() - 1)) = del;
-                system.col(del.cols()) = chain; 
+                system.col(del.cols()) = chain;
                 system = ::rowEchelonForm<Z2>(system);
 
                 // If there is an inconsistency in the row echelon form, this
@@ -1340,8 +1340,10 @@ class SimplicialComplex3D
         {
             Matrix<Z2, Dynamic, Dynamic> chains(chain1.size(), 2); 
             chains.col(0) = chain1; 
-            chains.col(1) = chain2; 
-            return (this->areCycles(chains, dim) && this->isBoundary(chain1 - chain2, dim)); 
+            chains.col(1) = chain2;
+            bool are_cycles = (this->areCycles(chains, dim).array() == 1).all();
+            bool diff_is_boundary = this->isBoundary(chain1 - chain2, dim);
+            return (are_cycles && diff_is_boundary); 
         }
 
         /**
@@ -1464,6 +1466,8 @@ class SimplicialComplex3D
             // boundary homomorphism on 2-chains and Z is the set of 
             // candidate cycles
             Matrix<Z2, Dynamic, Dynamic> del2 = this->getZ2BoundaryHomomorphism(2);
+            const int nv = this->points.rows(); 
+            const int ne = del2.rows(); 
             const int nt = del2.cols(); 
             Matrix<Z2, Dynamic, Dynamic> system(ne, nt + ne - nv + 1);
             system(Eigen::all, Eigen::seq(0, nt - 1)) = del2; 
@@ -1522,6 +1526,8 @@ class SimplicialComplex3D
             // boundary homomorphism on 2-chains and Z is the set of 
             // candidate cycles
             Matrix<Z2, Dynamic, Dynamic> del2 = this->getZ2BoundaryHomomorphism(2);
+            const int nv = this->points.rows(); 
+            const int ne = del2.rows(); 
             const int nt = del2.cols(); 
             Matrix<Z2, Dynamic, Dynamic> system(ne, nt + ne - nv + 1);
             system(Eigen::all, Eigen::seq(0, nt - 1)) = del2; 
@@ -1554,11 +1560,9 @@ class SimplicialComplex3D
             // Generate sentinel cycles from the minimum-weight-path tree 
             // rooted at each vertex (we already have the cycles for root = 0) 
             Matrix<Z2, Dynamic, Dynamic> candidate_cycles = sentinel_cycles;
-            const int nv = this->points.rows();
-            const int ne = boost::num_edges(this->one_skeleton);  
             for (int i = 1; i < nv; ++i)
             {
-                sentinel_cycles = this->getSentinelCycles(i);
+                sentinel_cycles = this->getSentinelCycles(i).second;
 
                 // Gather whichever sentinel cycles have not yet been
                 // encountered
