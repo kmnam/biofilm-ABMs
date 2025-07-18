@@ -1513,9 +1513,9 @@ class SimplicialComplex3D
          */
         Matrix<Z2, Dynamic, Dynamic> getMinimalFirstHomology() const
         {
-            // --------------------------------------------------------- //
-            //                  COMPUTE EDGE ANNOTATIONS                 //
-            // --------------------------------------------------------- //
+            // ---------------------------------------------------------- //
+            //                  COMPUTE EDGE ANNOTATIONS                  //
+            // ---------------------------------------------------------- //
             // Get the sentinel edges and cycles from the minimum-weight-path
             // tree rooted at the given vertex 
             auto result = this->getSentinelCycles(0); 
@@ -1554,9 +1554,9 @@ class SimplicialComplex3D
             coefs.conservativeResize(coefs.rows(), coefs.cols() + nv - 1);
             coefs(Eigen::all, Eigen::lastN(nv - 1)) = Matrix<Z2, Dynamic, Dynamic>::Zero(g, nv - 1); 
 
-            // --------------------------------------------------------- //
-            //              COMPUTE MINIMAL HOMOLOGY BASIS               //
-            // --------------------------------------------------------- //
+            // ---------------------------------------------------------- //
+            //               COMPUTE MINIMAL HOMOLOGY BASIS               //
+            // ---------------------------------------------------------- //
             // Generate sentinel cycles from the minimum-weight-path tree 
             // rooted at each vertex (we already have the cycles for root = 0) 
             Matrix<Z2, Dynamic, Dynamic> candidate_cycles = sentinel_cycles;
