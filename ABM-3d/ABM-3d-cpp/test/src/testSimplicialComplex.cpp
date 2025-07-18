@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/17/2025
+ *     7/18/2025
  */
 #include <iostream>
 #include <cstdlib>
@@ -3609,16 +3609,17 @@ TEST_CASE("Tests for minimal homology basis calculation", "[getMinimalFirstHomol
         REQUIRE(cplex.areHomologousCycles(min_basis.col(1), cycles.col(0), 1));
 }
 
-/*
 TEST_CASE("Tests for minimal cycle calculations", "[getMinimalCycles()]")
 {
+    Matrix<Z2, Dynamic, Dynamic> min_basis; 
     Matrix<double, Dynamic, Dynamic> opt_cycles; 
 
     // ------------------------------------------------------------- // 
     // Test for simple cycle
     // ------------------------------------------------------------- // 
     SimplicialComplex3D<T> cplex = complex_cycle();
-    opt_cycles = cplex.getPrimeCharMinimalCycles<2>(1);
+    min_basis = cplex.getMinimalFirstHomology();
+    opt_cycles = cplex.minimizeCycles(min_basis, 1);
 
     // Check that the nonzero entries correspond to the minimal cycle, 
     // which contain all the edges
@@ -3632,7 +3633,8 @@ TEST_CASE("Tests for minimal cycle calculations", "[getMinimalCycles()]")
     // Test for 2-D mesh with hole 
     // ------------------------------------------------------------- // 
     cplex = complex_2d_mesh_with_hole();
-    opt_cycles = cplex.getPrimeCharMinimalCycles<2>(1);
+    min_basis = cplex.getMinimalFirstHomology();
+    opt_cycles = cplex.minimizeCycles(min_basis, 1);
 
     // Check that the nonzero entries correspond to the minimal cycle, 
     // which contain edges 3, 4, 7, 9, corresponding to the cycle 
@@ -3651,7 +3653,8 @@ TEST_CASE("Tests for minimal cycle calculations", "[getMinimalCycles()]")
     // Test for annulus 
     // ------------------------------------------------------------- //
     cplex = complex_annulus(); 
-    opt_cycles = cplex.getPrimeCharMinimalCycles<2>(1);
+    min_basis = cplex.getMinimalFirstHomology();
+    opt_cycles = cplex.minimizeCycles(min_basis, 1);
     
     // Check that the nonzero entries correspond to the minimal cycle, 
     // which contain the last six edges (18, 19, 20, 21, 22, 23),
@@ -3667,4 +3670,3 @@ TEST_CASE("Tests for minimal cycle calculations", "[getMinimalCycles()]")
             REQUIRE(opt_cycles(i) == 0); 
     } 
 }
-*/
