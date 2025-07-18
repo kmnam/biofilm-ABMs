@@ -2928,7 +2928,7 @@ TEST_CASE(
     // ------------------------------------------------------------- // 
     SimplicialComplex3D<T> cplex = complex_points();
 
-    // Get a basis for the zeroth homology group over the rationals 
+    // Get a basis for the zeroth homology group over the rationals
     H0_p2 = cplex.getZ2Homology(0); 
     REQUIRE(H0_p2.rows() == 3);
 
@@ -2941,7 +2941,7 @@ TEST_CASE(
 
     // ------------------------------------------------------------- // 
     // Test for triangle
-    // ------------------------------------------------------------- // 
+    // ------------------------------------------------------------- //
     cplex = complex_triangle();
     
     // Get bases for the homology groups over Z/2Z
@@ -3189,11 +3189,8 @@ TEST_CASE(
 
     // Get bases for the homology groups over Z/2Z
     H0_p2 = cplex.getZ2Homology(0);
-    /*
     H1_p2 = cplex.getZ2Homology(1);
     H2_p2 = cplex.getZ2Homology(2);
-    std::cout << H0_p2 << "\n--\n"; 
-    std::cout << H1_p2 << "\n--\n"; 
     REQUIRE(H0_p2.cols() == 1);
     REQUIRE(H1_p2.cols() == 2); 
     REQUIRE(H2_p2.cols() == 0);
@@ -3236,7 +3233,7 @@ TEST_CASE(
     aug2.resize(del2.rows(), del2.cols() + 1);
     aug2(Eigen::all, Eigen::seq(0, del2.cols() - 1)) = del2;
     aug2.col(del2.cols()) = H1_p2.col(0);     // Check first basis vector 
-    REQUIRE((!containsInconsistency<Z2>(aug2, v2) || !containsInconsistency<Z2>(aug2, v3)));
+    REQUIRE((!containsInconsistency<Z2>(aug2, v2) ^ !containsInconsistency<Z2>(aug2, v3)));
     if (!containsInconsistency<Z2>(aug2, v2))
     {
         // If the first basis vector is homologous to v2 ... 
@@ -3256,11 +3253,10 @@ TEST_CASE(
     REQUIRE(betti(1) == 2); 
     REQUIRE(betti(2) == 0);
     REQUIRE(betti(3) == 0);
-    */
     
     // ------------------------------------------------------------- // 
     // Test for tetrahedron
-    // ------------------------------------------------------------- // 
+    // ------------------------------------------------------------- //
     cplex = complex_tetrahedron();
 
     // Get bases for the homology groups over Z/2Z
@@ -3670,3 +3666,4 @@ TEST_CASE("Tests for minimal cycle calculations", "[getMinimalCycles()]")
             REQUIRE(opt_cycles(i) == 0); 
     } 
 }
+
