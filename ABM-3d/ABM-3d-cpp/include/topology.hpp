@@ -1359,16 +1359,14 @@ class SimplicialComplex3D
          *          in the 1-skeleton, as well as arrays of coefficient 
          *          vectors for each sentinel cycle. 
          */
-        std::pair<Matrix<int, Dynamic, 2>, Matrix<Z2, Dynamic, Dynamic> > getSentinelCycles(const int root = 0) const 
+        std::pair<Matrix<int, Dynamic, 2>, Matrix<Z2, Dynamic, Dynamic> >
+            getSentinelCycles(const int root,
+                              std::unordered_map<std::pair<int, int>, int, boost::hash<std::pair<int, int> > >& edge_map) const
         {
             // Get a spanning tree of the 1-skeleton
             auto result = ::getMinimumWeightPathTree(this->one_skeleton, root);
             std::vector<std::vector<int> > tree_paths = result.first; 
             Graph tree = result.second;
-
-            // Get an edge ordering map for the edges in the 1-skeleton 
-            std::unordered_map<std::pair<int, int>, int,
-                               boost::hash<std::pair<int, int> > > edge_map = getEdgeOrdering(this->one_skeleton); 
 
             // Re-order the edges so that the non-tree edges come first
             const int nv = this->points.rows(); 
@@ -1456,9 +1454,12 @@ class SimplicialComplex3D
                    Matrix<Z2, Dynamic, Dynamic>,
                    Matrix<Z2, Dynamic, Dynamic> > annotateEdges(const int root = 0) const
         {
+            // Get a map for the edges in the 1-skeleton 
+            auto edge_map = getEdgeOrdering(this->one_skeleton); 
+
             // Get the sentinel edges and cycles from the minimum-weight-path
             // tree rooted at the given vertex 
-            auto result = this->getSentinelCycles(root); 
+            auto result = this->getSentinelCycles(root, edge_map); 
             Matrix<int, Dynamic, 2> edges_reordered = result.first; 
             Matrix<Z2, Dynamic, Dynamic> sentinel_cycles = result.second; 
 
@@ -1516,11 +1517,14 @@ class SimplicialComplex3D
             // ---------------------------------------------------------- //
             //                  COMPUTE EDGE ANNOTATIONS                  //
             // ---------------------------------------------------------- //
+            // Get a map for the edges in the 1-skeleton 
+            auto edge_map = getEdgeOrdering(this->one_skeleton); 
+
             // Get the sentinel edges and cycles from the minimum-weight-path
             // tree rooted at the given vertex 
-            auto result = this->getSentinelCycles(0); 
+            auto result = this->getSentinelCycles(0, edge_map); 
             Matrix<int, Dynamic, 2> edges_reordered = result.first; 
-            Matrix<Z2, Dynamic, Dynamic> sentinel_cycles = result.second; 
+            Matrix<Z2, Dynamic, Dynamic> sentinel_cycles = result.second;
 
             // Get the earliest basis of [del2 | Z], where del2 is the 
             // boundary homomorphism on 2-chains and Z is the set of 
@@ -1539,7 +1543,7 @@ class SimplicialComplex3D
             // Whichever columns in the column space basis for the total 
             // system does not feature in the column space basis for del2
             // form a homology cycle basis 
-            Matrix<Z2, Dynamic, Dynamic> h1_basis = total_colspace(Eigen::all, Eigen::lastN(g)); 
+            Matrix<Z2, Dynamic, Dynamic> h1_basis = total_colspace(Eigen::all, Eigen::lastN(g));
 
             // Now compute the edge annotations by solving the linear system
             // Zbar * X = Z, where Zbar is the matrix of column space basis
@@ -1552,7 +1556,22 @@ class SimplicialComplex3D
 
             // Add zero coefficients for the non-sentinel (tree) edges
             coefs.conservativeResize(coefs.rows(), coefs.cols() + nv - 1);
-            coefs(Eigen::all, Eigen::lastN(nv - 1)) = Matrix<Z2, Dynamic, Dynamic>::Zero(g, nv - 1); 
+            coefs(Eigen::all, Eigen::lastN(nv - 1)) = Matrix<Z2, Dynamic, Dynamic>::Zero(g, nv - 1);
+
+            // Reorder the annotations according to the lexicographic 
+            // ordering
+            Matrix<Z2, Dynamic, Dynamic> coefs_lex(g, ne); 
+            for (int i = 0; i < ne; ++i)
+            {
+                // Get the i-th edge in the sentinel/non-sentinel ordering
+                std::pair<int, int> pair = std::make_pair(edges_reordered(i, 0), edges_reordered(i, 1));
+
+                // Get the index of the edge in the lexicographical ordering 
+                int ei = edge_map[pair]; 
+
+                // Reorder the annotations accordingly 
+                coefs_lex.col(ei) = coefs.col(i); 
+            } 
 
             // ---------------------------------------------------------- //
             //               COMPUTE MINIMAL HOMOLOGY BASIS               //
@@ -1562,7 +1581,8 @@ class SimplicialComplex3D
             Matrix<Z2, Dynamic, Dynamic> candidate_cycles = sentinel_cycles;
             for (int i = 1; i < nv; ++i)
             {
-                sentinel_cycles = this->getSentinelCycles(i).second;
+                result = this->getSentinelCycles(i, edge_map);
+                sentinel_cycles = result.second;
 
                 // Gather whichever sentinel cycles have not yet been
                 // encountered
@@ -1580,7 +1600,7 @@ class SimplicialComplex3D
                     if (!encountered)
                     {
                         candidate_cycles.conservativeResize(ne, candidate_cycles.cols() + 1); 
-                        candidate_cycles.col(candidate_cycles.cols() - 1) = sentinel_cycles.col(j); 
+                        candidate_cycles.col(candidate_cycles.cols() - 1) = sentinel_cycles.col(j);
                     }
                 }
             }
@@ -1595,7 +1615,7 @@ class SimplicialComplex3D
                 {
                     if (candidate_cycles(i, j))
                     {
-                        annotations.col(j) += coefs.col(i); 
+                        annotations.col(j) += coefs_lex.col(i); 
                     }
                 } 
             }
