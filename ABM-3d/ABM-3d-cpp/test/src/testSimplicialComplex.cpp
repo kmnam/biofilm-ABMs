@@ -3350,7 +3350,7 @@ TEST_CASE("Tests for edge annotation", "[annotateEdges()]")
 TEST_CASE("Tests for minimal homology basis calculation", "[getMinimalFirstHomology()]")
 {
     Matrix<Z2, Dynamic, Dynamic> min_basis;
-    Matrix<Z2, Dynamic, 1> cycle1, cycle2; 
+    Matrix<Z2, Dynamic, Dynamic> cycles; 
 
     // ------------------------------------------------------------- // 
     // Test for annulus
@@ -3358,29 +3358,255 @@ TEST_CASE("Tests for minimal homology basis calculation", "[getMinimalFirstHomol
     SimplicialComplex3D<T> cplex = complex_annulus(); 
     min_basis = cplex.getMinimalFirstHomology();
     REQUIRE(min_basis.cols() == 1);
-    cycle1.resize(24);
-    cycle1 << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1;
-    REQUIRE(cplex.areHomologousCycles(min_basis.col(0), cycle1, 1)); 
+
+    // Define 3 cycles: 1) a tight cycle around the hole, 2) a loose cycle
+    // around the hole (around the circumference of the annulus), and 3) a
+    // null-homologous cycle
+    cycles = Matrix<Z2, Dynamic, Dynamic>::Zero(24, 3);
+    cycles(18, 0) = 1; 
+    cycles(19, 0) = 1; 
+    cycles(20, 0) = 1; 
+    cycles(21, 0) = 1; 
+    cycles(22, 0) = 1; 
+    cycles(23, 0) = 1;
+    cycles(0, 1) = 1; 
+    cycles(1, 1) = 1; 
+    cycles(4, 1) = 1; 
+    cycles(7, 1) = 1; 
+    cycles(10, 1) = 1; 
+    cycles(13, 1) = 1; 
+    cycles(0, 2) = 1; 
+    cycles(2, 2) = 1; 
+    cycles(4, 2) = 1; 
+    cycles(9, 2) = 1; 
+    cycles(18, 2) = 1; 
+    cycles(20, 2) = 1; 
+    REQUIRE(cplex.areHomologousCycles(cycles.col(0), cycles.col(1), 1)); 
+    REQUIRE(cplex.areHomologousCycles(min_basis.col(0), cycles.col(0), 1));
+    REQUIRE(cplex.areHomologousCycles(min_basis.col(0), cycles.col(1), 1)); 
+    REQUIRE(!cplex.areHomologousCycles(cycles.col(0), cycles.col(2), 1));
+    REQUIRE(!cplex.areHomologousCycles(cycles.col(1), cycles.col(2), 1)); 
+    REQUIRE(!cplex.areHomologousCycles(min_basis.col(0), cycles.col(2), 1)); 
+
+    // ------------------------------------------------------------- // 
+    // Test for two-holed annulus
+    // ------------------------------------------------------------- //
+    cplex = complex_annulus_two_holes();
+    min_basis = cplex.getMinimalFirstHomology();
+    REQUIRE(min_basis.cols() == 2);
+    REQUIRE(!cplex.areHomologousCycles(min_basis.col(0), min_basis.col(1), 1));
+
+    // Consider 11 different cycles ... 
+    //
+    // Left hole, small: [v6,v7], [v7,v8], [v8,v9], [v9,v10], [v10,v11],
+    //                   [v11,v6]
+    cycles = Matrix<Z2, Dynamic, Dynamic>::Zero(47, 11);
+    cycles(24, 0) = 1;
+    cycles(25, 0) = 1; 
+    cycles(26, 0) = 1; 
+    cycles(27, 0) = 1;
+    cycles(28, 0) = 1;
+    cycles(29, 0) = 1;
+    // Left hole, large: [v0,v1], [v1,v2], [v2,v3], [v3,v4], [v4,v5], [v5,v0]
+    cycles(0, 1) = 1; 
+    cycles(1, 1) = 1; 
+    cycles(4, 1) = 1; 
+    cycles(10, 1) = 1; 
+    cycles(16, 1) = 1; 
+    cycles(19, 1) = 1;
+    // Right hole, small: [v16,v17], [v17,v18], [v18,v19], [v19,v20], [v20,v21],
+    //                    [v21,v16]
+    cycles(41, 2) = 1;
+    cycles(42, 2) = -1;
+    cycles(43, 2) = 1; 
+    cycles(44, 2) = 1; 
+    cycles(45, 2) = 1; 
+    cycles(46, 2) = 1;
+    // Right hole, large: [v12,v13], [v13,v14], [v14,v15], [v15,v2], [v2,v1],
+    //                    [v1,v12]
+    cycles(30, 3) = 1;
+    cycles(33, 3) = 1; 
+    cycles(36, 3) = 1; 
+    cycles(13, 3) = -1; 
+    cycles(4, 3) = -1; 
+    cycles(7, 3) = 1; 
+    // Both holes, small: [v6,v7], [v7,v1], [v1,v21], [v21,v16], [v16,v17],
+    //                    [v17,v18], [v18,v19], [v19,v20], [v20,v2], [v2,v8],
+    //                    [v8,v9], [v9,v10], [v10,v11], [v11,v6]
+    cycles(24, 4) = 1; 
+    cycles(6, 4) = -1; 
+    cycles(9, 4) = 1; 
+    cycles(42, 4) = -1;
+    cycles(41, 4) = 1;
+    cycles(43, 4) = 1;
+    cycles(44, 4) = 1;
+    cycles(45, 4) = 1;
+    cycles(15, 4) = -1; 
+    cycles(12, 4) = 1;
+    cycles(27, 4) = 1;
+    cycles(28, 4) = 1;
+    cycles(29, 4) = 1;
+    cycles(25, 4) = -1;
+    // Both holes, large: [v0,v1], [v1,v12], [v12,v13], [v13,v14], [v14,v15],
+    //                    [v15,v2], [v2,v3], [v3,v4], [v4,v5], [v5,v0]
+    cycles(0, 5) = 1; 
+    cycles(7, 5) = 1; 
+    cycles(30, 5) = 1; 
+    cycles(33, 5) = 1;
+    cycles(36, 5) = 1;
+    cycles(13, 5) = -1;
+    cycles(10, 5) = 1;
+    cycles(16, 5) = 1;
+    cycles(19, 5) = 1;
+    cycles(1, 5) = -1;
+    // Left hole, twice 1: [v0,v1], [v1,v2], [v2,v3], [v3,v4], [v4,v5],
+    //                     [v5,v11], [v11,v0], [v0,v6], [v6,v1], [v1,v7],
+    //                     [v7,v2], [v2,v8], [v8,v3], [v3,v9], [v9,v4],
+    //                     [v4,v10], [v10,v5], [v5,v0]
+    cycles(0, 6) = 1; 
+    cycles(4, 6) = 1; 
+    cycles(10, 6) = 1; 
+    cycles(16, 6) = 1; 
+    cycles(19, 6) = 1;
+    cycles(23, 6) = 1; 
+    cycles(3, 6) = -1; 
+    cycles(2, 6) = 1;
+    cycles(5, 6) = -1;
+    cycles(6, 6) = 1;
+    cycles(11, 6) = -1;
+    cycles(12, 6) = 1; 
+    cycles(17, 6) = -1;
+    cycles(18, 6) = 1;
+    cycles(20, 6) = -1;
+    cycles(21, 6) = 1;
+    cycles(22, 6) = -1; 
+    cycles(1, 6) = -1;
+    // Left hole, twice 2: [v0,v1], [v1,v2], [v2,v3], [v3,v4], [v4,v5],
+    //                     [v5,v11], [v11,v6], [v6,v7], [v7,v8], [v8,v9],
+    //                     [v9,v10], [v10,v11], [v11,v0]
+    cycles(0, 7) = 1; 
+    cycles(4, 7) = 1; 
+    cycles(10, 7) = 1; 
+    cycles(16, 7) = 1; 
+    cycles(19, 7) = 1;
+    cycles(23, 7) = 1;
+    cycles(25, 7) = -1;
+    cycles(24, 7) = 1;
+    cycles(26, 7) = 1;
+    cycles(27, 7) = 1;
+    cycles(28, 7) = 1;
+    cycles(29, 7) = 1;
+    cycles(3, 7) = -1;
+    // Right hole, twice 1: [v12,v13], [v13,v14], [v14,v15], [v15,v2],
+    //                      [v2,v1], [v1,v21], [v21,v12], [v12,v16],
+    //                      [v16,v13], [v13,v17], [v17,v14], [v14,v18],
+    //                      [v18,v15], [v15,v19], [v19,v2], [v2,v20],
+    //                      [v20,v1], [v1,v12]
+    cycles(30, 8) = 1;
+    cycles(33, 8) = 1; 
+    cycles(36, 8) = 1;
+    cycles(13, 8) = -1; 
+    cycles(4, 8) = -1;
+    cycles(9, 8) = 1;
+    cycles(32, 8) = -1;
+    cycles(31, 8) = 1;
+    cycles(34, 8) = -1; 
+    cycles(35, 8) = 1;
+    cycles(37, 8) = -1;
+    cycles(38, 8) = 1;
+    cycles(39, 8) = -1;
+    cycles(40, 8) = 1;
+    cycles(14, 8) = -1;
+    cycles(15, 8) = 1;
+    cycles(8, 8) = -1; 
+    cycles(7, 8) = 1;
+    // Right hole, twice 2: [v12,v13], [v13,v14], [v14,v15], [v15,v2],
+    //                      [v2,v1], [v1,v21], [v21,v16], [v16,v17],
+    //                      [v17,v18], [v18,v19], [v19,v20], [v20,v21],
+    //                      [v21,v12]
+    cycles(30, 9) = 1;
+    cycles(33, 9) = 1; 
+    cycles(36, 9) = 1;
+    cycles(13, 9) = -1; 
+    cycles(4, 9) = -1;
+    cycles(9, 9) = 1;
+    cycles(42, 9) = -1;
+    cycles(41, 9) = 1;
+    cycles(43, 9) = 1; 
+    cycles(44, 9) = 1;
+    cycles(45, 9) = 1;
+    cycles(46, 9) = 1;
+    cycles(32, 9) = -1;
+    // Figure eight: [v0,v1], [v1,v20], [v20,v19], [v19,v18], [v18,v17],
+    //               [v17,v16], [v16,v21], [v21,v20], [v20,v2], [v2,v3],
+    //               [v3,v4], [v4,v5], [v5,v0]
+    cycles(0, 10) = 1;
+    cycles(8, 10) = 1;
+    cycles(45, 10) = -1;
+    cycles(44, 10) = -1;
+    cycles(43, 10) = -1; 
+    cycles(41, 10) = -1;
+    cycles(42, 10) = 1;
+    cycles(46, 10) = -1;
+    cycles(15, 10) = -1;
+    cycles(10, 10) = 1;
+    cycles(16, 10) = 1;
+    cycles(19, 10) = 1;
+    cycles(1, 10) = -1;
+
+    // Check that the two basis cycles are homologous to only the cycles 
+    // that wrap around the left or right holes once 
+    REQUIRE((
+        cplex.areHomologousCycles(min_basis.col(0), cycles.col(0), 1) ^ 
+        cplex.areHomologousCycles(min_basis.col(1), cycles.col(0), 1)
+    ));
+
+    // In the first case, basis cycle 0 is homologous to cycles around the
+    // left hole
+    int left, right;  
+    if (cplex.areHomologousCycles(min_basis.col(0), cycles.col(0), 1))
+    {
+        left = 0; 
+        right = 1;
+    }
+    else 
+    {
+        left = 1; 
+        right = 0;
+    }
+    REQUIRE(cplex.areHomologousCycles(min_basis.col(left), cycles.col(1), 1));
+    for (int i = 2; i < 11; ++i)
+        REQUIRE(!cplex.areHomologousCycles(min_basis.col(left), cycles.col(i), 1));
+    REQUIRE(!cplex.areHomologousCycles(min_basis.col(right), cycles.col(1), 1));  
+    REQUIRE(cplex.areHomologousCycles(min_basis.col(right), cycles.col(2), 1)); 
+    REQUIRE(cplex.areHomologousCycles(min_basis.col(right), cycles.col(3), 1)); 
+    for (int i = 4; i < 11; ++i)
+        REQUIRE(!cplex.areHomologousCycles(min_basis.col(right), cycles.col(i), 1));
 
     // ------------------------------------------------------------- // 
     // Test for Busaryev et al.'s example 
-    // ------------------------------------------------------------- // 
+    // ------------------------------------------------------------- //
     cplex = complex_busaryev_example(); 
     min_basis = cplex.getMinimalFirstHomology();
     REQUIRE(min_basis.cols() == 2);
-    REQUIRE(!cplex.areHomologousCycles(min_basis.col(0), min_basis.col(1), 1)); 
-    cycle1.resize(8); 
-    cycle2.resize(8); 
-    cycle1 << 1, 0, 1, 0, 1, 0, 0, 0; 
-    cycle2 << 0, 0, 0, 1, 0, 1, 1, 0;
+    REQUIRE(!cplex.areHomologousCycles(min_basis.col(0), min_basis.col(1), 1));
+
+    // Define the two cycles 
+    cycles = Matrix<Z2, Dynamic, Dynamic>::Zero(8, 2);
+    cycles(0, 0) = 1; 
+    cycles(2, 0) = 1; 
+    cycles(4, 0) = 1; 
+    cycles(3, 1) = 1; 
+    cycles(5, 1) = 1; 
+    cycles(6, 1) = 1; 
     REQUIRE((
-        cplex.areHomologousCycles(min_basis.col(0), cycle1, 1) ||
-        cplex.areHomologousCycles(min_basis.col(0), cycle2, 1)
+        cplex.areHomologousCycles(min_basis.col(0), cycles.col(0), 1) ^
+        cplex.areHomologousCycles(min_basis.col(0), cycles.col(1), 1)
     )); 
-    if (cplex.areHomologousCycles(min_basis.col(0), cycle1, 1))
-        REQUIRE(cplex.areHomologousCycles(min_basis.col(1), cycle2, 1));
+    if (cplex.areHomologousCycles(min_basis.col(0), cycles.col(0), 1))
+        REQUIRE(cplex.areHomologousCycles(min_basis.col(1), cycles.col(1), 1));
     else
-        REQUIRE(cplex.areHomologousCycles(min_basis.col(1), cycle1, 1));
+        REQUIRE(cplex.areHomologousCycles(min_basis.col(1), cycles.col(0), 1));
 }
 
 /*
