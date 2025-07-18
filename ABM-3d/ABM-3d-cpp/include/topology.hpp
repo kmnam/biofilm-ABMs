@@ -1045,7 +1045,7 @@ class SimplicialComplex3D
             if (dim > 0 && dim < this->dimension())
             {
                 // Get the boundary homomorphisms and the corresponding
-                // quotient space basis 
+                // quotient space basis
                 Matrix<Z2, Dynamic, Dynamic> del1 = this->getZ2BoundaryHomomorphism(dim + 1);
                 Matrix<Z2, Dynamic, Dynamic> del2 = this->getZ2BoundaryHomomorphism(dim);
                 cycles = ::quotientSpace<Z2>(del2, del1); 
