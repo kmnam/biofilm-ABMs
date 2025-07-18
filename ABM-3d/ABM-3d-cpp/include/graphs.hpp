@@ -553,23 +553,20 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
             if (pair2.first < pair2.second)
                 path2 = min_paths[pair2]; 
             else    // pair2.first == pair2.second 
-                path2.push_back(pair2.first);  
+                path2.push_back(pair2.first);
 
-            // Check that (u, v) is not an edge in either path
-            bool found_edge = false; 
-            for (auto it = path1.begin() + 1; it != path1.end(); ++it)
-            {
-                int j = *std::prev(it); 
-                int k = *it; 
-                if ((j == u && k == v) || (j == v && k == u))
-                {
-                    found_edge = true;
-                    break;
-                } 
-            }
-            if (!found_edge)
-            {
-                for (auto it = path2.begin() + 1; it != path2.end(); ++it)
+            // Check that these paths are nonempty, so that i, u, and v are 
+            // mutually connected 
+            //
+            // It suffices to check only the path from i to u, because if 
+            // this path is nonempty, so must the path from i to v
+            if (path1.size() > 0)
+            { 
+                // Check that (u, v) is not an edge in either path
+                //
+                // First check the path from i to u ... 
+                bool found_edge = false; 
+                for (auto it = path1.begin() + 1; it != path1.end(); ++it)
                 {
                     int j = *std::prev(it); 
                     int k = *it; 
@@ -579,74 +576,48 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
                         break;
                     } 
                 }
-            } 
-            if (!found_edge)    // If it is not edge in either path ... 
-            {
-                // Re-order the paths to ensure that they flow from i to u and 
-                // from v to i
-                if (pair1.first == u)
-                    std::reverse(path1.begin(), path1.end()); 
-                if (pair2.first == i)
-                    std::reverse(path2.begin(), path2.end()); 
-
-                // Create the cycle formed by the path from i to u, the edge
-                // (u, v), and the path from v to i 
-                //
-                // Keep track of each vertex that is encountered along the path, 
-                // and ensure that none are encountered more than once 
-                std::vector<int> cycle; 
-                Matrix<int, Dynamic, 1> encountered = Matrix<int, Dynamic, 1>::Zero(nv);
-                bool found_repeat_vertex = false;
-                
-                // Traverse path from i to u 
-                for (auto it = path1.begin(); it != path1.end(); ++it)
+                if (!found_edge)
                 {
-                    int w = *it; 
-                    if (!encountered(w))
-                    {
-                        encountered(w) = 1; 
-                        cycle.push_back(w); 
-                    }
-                    else    // w has been encountered already (this should not happen)
-                    {
-                        found_repeat_vertex = true; 
-                        break; 
-                    }
-                }
-                if (found_repeat_vertex)
-                    continue;
-
-                // Add edge (u, v)
-                if (!encountered(v) || v == i) 
-                {
-                    encountered(v) = 1; 
-                    cycle.push_back(v);
-                }
-                else    // v has been encountered already and v != i 
-                {
-                    continue; 
-                }
-
-                // Traverse path from v to i
-                if (path2.size() == 1)        // (u, v = i) was the last edge 
-                {
-                    cycle.pop_back();         // Remove the last vertex (v = i) 
-                }
-                else if (path2.size() == 2)   // (v, i) is the last edge 
-                {
-                    // Do nothing 
-                } 
-                else    // path2.size() > 2 
-                {
+                    // ... then check the path from i to v 
                     for (auto it = path2.begin() + 1; it != path2.end(); ++it)
                     {
+                        int j = *std::prev(it); 
+                        int k = *it; 
+                        if ((j == u && k == v) || (j == v && k == u))
+                        {
+                            found_edge = true;
+                            break;
+                        } 
+                    }
+                } 
+                if (!found_edge)    // If (u, v) is not in either path ... 
+                {
+                    // Re-order the paths to ensure that they flow from i to u and 
+                    // from v to i
+                    if (pair1.first == u)
+                        std::reverse(path1.begin(), path1.end()); 
+                    if (pair2.first == i)
+                        std::reverse(path2.begin(), path2.end()); 
+
+                    // Create the cycle formed by the path from i to u, the edge
+                    // (u, v), and the path from v to i 
+                    //
+                    // Keep track of each vertex that is encountered along the path, 
+                    // and ensure that none are encountered more than once 
+                    std::vector<int> cycle; 
+                    Matrix<int, Dynamic, 1> encountered = Matrix<int, Dynamic, 1>::Zero(nv);
+                    bool found_repeat_vertex = false;
+                    
+                    // Traverse path from i to u 
+                    for (auto it = path1.begin(); it != path1.end(); ++it)
+                    {
                         int w = *it; 
-                        if (!encountered(w) || w == i)
+                        if (!encountered(w))
                         {
                             encountered(w) = 1; 
                             cycle.push_back(w); 
                         }
-                        else    // w has been encountered already and w != i (this could happen)
+                        else    // w has been encountered already (this should not happen)
                         {
                             found_repeat_vertex = true; 
                             break; 
@@ -654,12 +625,52 @@ Matrix<T, Dynamic, Dynamic> getMinimumCycleBasis(const Graph& graph)
                     }
                     if (found_repeat_vertex)
                         continue;
-                    cycle.pop_back();   // Remove the last vertex (v = i) 
-                }  
 
-                // Now add the cycle to the collection after removing the 
-                // repeated vertex
-                cycles.push_back(std::make_pair(cycle, cycle.size()));
+                    // Add edge (u, v)
+                    if (!encountered(v) || v == i) 
+                    {
+                        encountered(v) = 1; 
+                        cycle.push_back(v);
+                    }
+                    else    // v has been encountered already and v != i 
+                    {
+                        continue; 
+                    }
+
+                    // Traverse path from v to i
+                    if (path2.size() == 1)        // (u, v = i) was the last edge 
+                    {
+                        cycle.pop_back();         // Remove the last vertex (v = i) 
+                    }
+                    else if (path2.size() == 2)   // (v, i) is the last edge 
+                    {
+                        // Do nothing 
+                    } 
+                    else    // path2.size() > 2 
+                    {
+                        for (auto it = path2.begin() + 1; it != path2.end(); ++it)
+                        {
+                            int w = *it; 
+                            if (!encountered(w) || w == i)
+                            {
+                                encountered(w) = 1; 
+                                cycle.push_back(w); 
+                            }
+                            else    // w has been encountered already and w != i (this could happen)
+                            {
+                                found_repeat_vertex = true; 
+                                break; 
+                            }
+                        }
+                        if (found_repeat_vertex)
+                            continue;
+                        cycle.pop_back();   // Remove the last vertex (v = i) 
+                    }  
+
+                    // Now add the cycle to the collection after removing the 
+                    // repeated vertex
+                    cycles.push_back(std::make_pair(cycle, cycle.size()));
+                }
             }
         }
     }
