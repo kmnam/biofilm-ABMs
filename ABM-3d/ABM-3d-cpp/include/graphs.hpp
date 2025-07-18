@@ -432,10 +432,10 @@ std::vector<int> getPathInMinimumWeightPathTree(const std::vector<std::vector<in
 }
 
 /**
- * Define a map of all shortest paths between all pairs of vertices in
- * the given graph. 
+ * Define a map of all shortest paths between all pairs of vertices in the
+ * given graph. 
  *
- * The output is a map that sends each pair of vertices, (u, v), to a 
+ * The output is a map that sends each pair of vertices, (u, v), to a
  * shortest path from u to v in the graph. 
  *
  * @param graph Input graph. 
@@ -490,12 +490,17 @@ std::map<std::pair<int, int>, std::vector<int> > getMinimumWeightPaths(const Gra
                     tree_paths[w], parents[w], depths[w], u, v
                 );
 
-                // Is this path shorter than the current choice of shortest
-                // path? 
-                if (path.size() < min_length)
+                // If the path is empty, then there is no path from u to 
+                // v in the tree (which is actually a forest)
+                if (path.size() > 0)
                 {
-                    min_length = path.size(); 
-                    min_path = path; 
+                    // Is this path shorter than the current choice of
+                    // shortest path? 
+                    if (path.size() < min_length)
+                    {
+                        min_length = path.size(); 
+                        min_path = path; 
+                    }
                 }
             }
             min_paths[std::make_pair(u, v)] = min_path; 
