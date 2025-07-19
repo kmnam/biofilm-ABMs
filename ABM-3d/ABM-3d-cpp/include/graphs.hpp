@@ -325,7 +325,7 @@ std::pair<std::vector<std::vector<int> >, Graph> getMinimumWeightPathTree(const 
 
     // Make corresponding Boost property maps
     auto pred_map = boost::make_iterator_property_map(pred.begin(), idx_map); 
-    auto dist_map = boost::make_iterator_property_map(dist.begin(), idx_map); 
+    auto dist_map = boost::make_iterator_property_map(dist.begin(), idx_map);
 
     // Run Dijkstra's algorithm 
     boost::dijkstra_shortest_paths(
@@ -339,26 +339,34 @@ std::pair<std::vector<std::vector<int> >, Graph> getMinimumWeightPathTree(const 
     {
         std::vector<int> path; 
 
-        // If there is no path from root to the vertex, then store an empty path
+        // If there is no path from root to the vertex, then store an empty
+        // path
         if (dist[i] == std::numeric_limits<double>::infinity())
-            paths.push_back(path); 
-
-        // Otherwise, traverse the path from the vertex to the root 
-        for (int j = i; j != root; j = pred[j])
-            path.push_back(j);
-        path.push_back(root); 
-        std::reverse(path.begin(), path.end());
-        paths.push_back(path);
-
-        // Add each edge in the path to the tree 
-        for (auto it = path.begin() + 1; it != path.end(); ++it)
         {
-            int u = *std::prev(it); 
-            int v = *it;
-            if (!boost::edge(u, v, tree).second)
-                boost::add_edge(u, v, EdgeProperty(1.0), tree);  
-        } 
-    } 
+            paths.push_back(path);
+        }
+        // Otherwise, traverse the path from the vertex to the root
+        else 
+        { 
+            for (int j = i; j != root; j = pred[j])
+                path.push_back(j);
+            path.push_back(root); 
+            std::reverse(path.begin(), path.end());
+            paths.push_back(path);
+
+            // Add each edge in the path to the tree
+            if (path.size() > 1)
+            {
+                for (auto it = path.begin() + 1; it != path.end(); ++it)
+                {
+                    int u = *std::prev(it); 
+                    int v = *it;
+                    if (!boost::edge(u, v, tree).second)
+                        boost::add_edge(u, v, EdgeProperty(1.0), tree); 
+                }
+            }
+        }
+    }
 
     return std::make_pair(paths, tree);  
 }
@@ -385,12 +393,10 @@ std::vector<int> getPathInMinimumWeightPathTree(const std::vector<std::vector<in
                                                 const std::vector<int>& depths, 
                                                 const int u, const int v)
 {
-    // Return an empty path if either u or v is disconnected from the root 
-    std::vector<int> path_u = tree_paths[u];
-    std::vector<int> path_v = tree_paths[v];
+    // Return an empty path if either u or v is disconnected from the root
     std::vector<int> path_uv; 
-    if (path_u.size() == 0 || path_v.size() == 0)
-        return path_uv;
+    if (depths[u] == -2 || depths[v] == -2)
+        return path_uv;  
 
     // Find the lowest common ancestor of u and v
     //
@@ -419,6 +425,7 @@ std::vector<int> getPathInMinimumWeightPathTree(const std::vector<std::vector<in
     }
 
     // Then climb back down the path from the lowest common ancestor to v
+    std::vector<int> path_v = tree_paths[v];
     auto it = std::find(path_v.begin(), path_v.end(), curr_vertex); 
     while (curr_vertex != v)
     {
