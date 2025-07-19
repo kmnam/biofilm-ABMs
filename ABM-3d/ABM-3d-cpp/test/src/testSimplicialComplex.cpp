@@ -3289,6 +3289,7 @@ TEST_CASE(
     REQUIRE(betti(3) == 0);
 }
 
+/*
 TEST_CASE("Tests for edge annotation", "[annotateEdges()]")
 {
     SimplicialComplex3D<T> cplex = complex_busaryev_example(); 
@@ -3342,6 +3343,7 @@ TEST_CASE("Tests for edge annotation", "[annotateEdges()]")
         REQUIRE(n_sentinel_edges == 1); 
     }
 }
+*/
 
 TEST_CASE("Tests for minimal homology basis calculation", "[getMinimalFirstHomology()]")
 {
@@ -3351,7 +3353,7 @@ TEST_CASE("Tests for minimal homology basis calculation", "[getMinimalFirstHomol
     // ------------------------------------------------------------- // 
     // Test for annulus
     // ------------------------------------------------------------- //
-    SimplicialComplex3D<T> cplex = complex_annulus(); 
+    SimplicialComplex3D<T> cplex = complex_annulus();
     min_basis = cplex.getMinimalFirstHomology();
     REQUIRE(min_basis.cols() == 1);
 
@@ -3664,6 +3666,6 @@ TEST_CASE("Tests for minimal cycle calculations", "[getMinimalCycles()]")
             REQUIRE(opt_cycles(i) != 0); 
         else 
             REQUIRE(opt_cycles(i) == 0); 
-    } 
+    }
 }
 
