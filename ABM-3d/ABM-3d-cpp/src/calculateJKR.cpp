@@ -245,6 +245,92 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E, const T deq_target,
 }
 
 /**
+ * Tabulate the principal radii of curvature at given collection of contact
+ * points on a cell. 
+ *
+ * Each contact point is parametrized by:
+ *
+ * (1) the angle between the overlap vector and the cell's orientation vector,
+ * (2) the cell's half-length, and 
+ * (3) the centerline coordinate at which the overlap vector is positioned.
+ *
+ * @param half_l Mesh of cell half-lengths. 
+ * @param r2 Lattice of cell 2 centers. 
+ * @param n2 Mesh of cell 2 orientations. 
+ * @param R Cell radius (including the EPS). 
+ * @param E0 Elastic modulus.
+ * @param gamma Surface energy density.
+ * @param dmin Minimum cell-cell distance at which to calculate JKR forces. 
+ *             If the cell-cell distance is less than this value, this function
+ *             returns nan's (encoded as a large float) for the forces. 
+ * @param JKRMode JKR force mode (either isotropic or anisotropic). 
+ * @param n_ellip_table Number of values to calculate for the elliptic integral
+ *                      function used to calculate contact areas.
+ * @param project_tol Tolerance for the ellipsoid projection method. 
+ * @param project_max_iter Maximum number of iterations for the ellipsoid
+ *                         projection method. 
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method.
+ * @returns Table of calculated JKR forces. 
+ */
+template <typename T>
+using CurvatureRadiiTable = std::unordered_map<std::tuple<int, int, int>,
+                                               std::pair<T, T>,
+                                               boost::hash<std::tuple<int, int, int> > >;
+template <typename T>
+CurvatureRadiiTable<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& theta,
+                                              const Ref<const Matrix<T, Dynamic, 1> >& half_l,
+                                              const Ref<const Matrix<T, Dynamic, 1> >& coords,
+                                              const T R, 
+                                              const bool calibrate_endpoint_radii = true, 
+                                              const T project_tol = 1e-6,
+                                              const int project_max_iter = 100)
+{
+    CurvatureRadiiTable<T> radii;
+
+    // For each cell half-length ... 
+    for (int j = 0; j < half_l.size(); ++j)
+    {
+        T factor = 1.0; 
+        if (calibrate_endpoint_radii)
+        {
+            // Get the principal radii of curvature at the endpoint of the 
+            // inscribed ellipsoid
+            std::pair<T, T> radii_endpoint = projectAndGetPrincipalRadiiOfCurvature<T>(
+                half_l(j), R, 0.0, half_l(j), project_tol, project_max_iter
+            );
+
+            // Calculate a calibration factor for the minor radius 
+            factor = R / radii_endpoint.second;  
+        }
+
+        // For each overlap-orientation angle ... 
+        for (int i = 0; i < theta.size(); ++i)
+        {
+            // For each centerline coordinate ... 
+            for (int k = 0; k < coords.size(); ++k)
+            {
+                // Calculate the principal radii of curvature 
+                std::pair<T, T> radii_ = projectAndGetPrincipalRadiiOfCurvature<T>(
+                    half_l(j), R, theta(i), coords(k), project_tol,
+                    project_max_iter
+                );
+                T rmax = radii_.first; 
+                T rmin = radii_.second; 
+
+                // Calibrate if desired 
+                radii[std::make_tuple(i, j, k)] = std::make_pair(
+                    factor * rmax, factor * rmin
+                ); 
+            }
+        }
+    }
+
+    return radii; 
+} 
+
+/**
  * Calculate JKR forces for a given collection of cell-cell configurations.
  *
  * Each cell-cell configuration involves one cell at the origin, parallel to
