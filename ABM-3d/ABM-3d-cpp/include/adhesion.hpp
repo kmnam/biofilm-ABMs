@@ -223,8 +223,8 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
  * Note that this function technically calculates the *negatives* of the
  * generalized forces.
  *
- * This function takes in a pre-computed table of values for the overlap vs.
- * JKR contact radius function. 
+ * This function takes in a pre-computed table of values for the JKR contact
+ * radius as a function of the overlap distance. 
  *
  * @param n1 Orientation of cell 1.
  * @param n2 Orientation of cell 2. 
@@ -236,15 +236,11 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
  *          achieved. 
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
  *          achieved.
- * @param delta_vs_jkr_radius Array of pre-computed values for the overlap vs. 
- *                            JKR contact radius function. The rows are
- *                            assumed to be given in order of increasing
- *                            overlap.  
+ * @param jkr_radius_table Pre-computed table of values for the overlap vs. 
+ *                         JKR contact radius function. The rows are assumed
+ *                         to be given in order of increasing overlap.  
  * @param include_constraint If true, enforce the orientation vector norm 
  *                           constraint on the generalized torques.
- * @param imag_tol Tolerance for determining whether a root for the the JKR
- *                 contact radius polynomial is real.
- * @param aberth_tol Tolerance for the Aberth-Ehrlich method.
  * @returns Matrix of generalized forces arising from the simplified JKR
  *          contact potential.
  */
@@ -254,10 +250,8 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
                                                 const Ref<const Matrix<T, Dim, 1> >& d12,
                                                 const T R, const T E0, const T gamma,
                                                 const T s, const T t,
-                                                const Ref<const Matrix<T, Dynamic, 2> >& delta_vs_jkr_radius,
-                                                const bool include_constraint = true,
-                                                const T imag_tol = 1e-20, 
-                                                const T aberth_tol = 1e-20)
+                                                const Ref<const Matrix<T, Dynamic, 2> >& jkr_radius_table,
+                                                const bool include_constraint = true)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
     const T dist = d12.norm(); 
@@ -271,8 +265,8 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
 
         // Find the tabulated overlap value closest to delta, and the 
         // corresponding JKR contact radius 
-        int idx = nearestValue<T>(delta_vs_jkr_radius.col(0), delta);
-        T radius = delta_vs_jkr_radius(idx, 1);  
+        int idx = nearestValue<T>(jkr_radius_table.col(0), delta); 
+        T radius = jkr_radius_table(idx, 1); 
 
         // Calculate the generalized forces
         T a3 = radius * radius * radius;  
@@ -389,6 +383,148 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
 
         // Calculate the generalized forces
         T term = 4 * sqrt(area * radius * gamma * E0);
+        Matrix<T, Dim, 1> v = term * d12n;  
+        
+        // Partial derivatives w.r.t cell 1 center 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
+
+        // Partial derivatives w.r.t cell 2 center 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = v;
+
+        // Partial derivatives w.r.t cell orientations 
+        if (!include_constraint)
+        {
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -s * v; 
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * v;
+        }
+        else    // Correct torques to account for orientation norm constraint 
+        {
+            T w1 = n1.dot(-v);
+            T w2 = n2.dot(-v);  
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = s * (-w1 * n1 - v);
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * (w2 * n2 + v);  
+        }
+    }
+    
+    return dEdq.array(); 
+}
+
+/**
+ * Compute the Lagrangian generalized forces between two neighboring cells
+ * that arise from the anisotropic JKR force in arbitrary dimensions (2 or 3).
+ *
+ * Note that this function technically calculates the *negatives* of the
+ * generalized forces.
+ *
+ * This function takes in three pre-computed tables of values for:
+ * - the principal radii of curvature at the contact point, as a function of 
+ *   (1) the angle between the overlap vector and the orientation vector, 
+ *   (2) the cell half-length, and
+ *   (3) the centerline coordinate at which the overlap vector is positioned; 
+ * - the JKR contact radius as a function of overlap distance, and 
+ * - the elliptic integral function. 
+ *
+ * @param n1 Orientation of cell 1.
+ * @param half_l1 Half-length of cell 1.
+ * @param n2 Orientation of cell 2.
+ * @param half_l2 Half-length of cell 2. 
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param R Cell radius, including the EPS.
+ * @param E0 Elastic modulus of EPS. 
+ * @param gamma Surface energy density. 
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved.
+ * @param radii_table_theta Array of input values for the angle between the 
+ *                          overlap vector and the orientation vector, at 
+ *                          which the principal radii of curvature were pre-
+ *                          computed (see below). 
+ * @param radii_table_half_l Array of input values for the cell half-lengths
+ *                           at which the principal radii of curvature were
+ *                           pre-computed (see below). 
+ * @param radii_table_coords Array of input values for the centerline 
+ *                           coordinates at which the principal radii of 
+ *                           curvature were pre-computed (see below). 
+ * @param radii_table Pre-computed table of values for the principal radii 
+ *                    of curvature as a function of the contact point.
+ * @param jkr_radius_table Pre-computed table of values for the overlap vs. 
+ *                         JKR contact radius function. The rows are assumed
+ *                         to be given in order of increasing overlap.  
+ * @param ellip_table Pre-computed table containing values for the elliptic
+ *                    integral function for various eccentricities between 0
+ *                    and 1. 
+ * @param include_constraint If true, enforce the orientation vector norm 
+ *                           constraint on the generalized torques.
+ * @returns Matrix of generalized forces arising from the simplified JKR
+ *          contact potential.
+ */
+template <typename T, int Dim, int N = 100>
+Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
+                                                  const T half_l1,
+                                                  const Ref<const Matrix<T, Dim, 1> >& n2,
+                                                  const T half_l2,
+                                                  const Ref<const Matrix<T, Dim, 1> >& d12,
+                                                  const T R, const T E0, const T gamma,
+                                                  const T s, const T t,
+                                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_theta, 
+                                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_half_l,
+                                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_coords,
+                                                  const std::unordered_map<
+                                                      std::tuple<int, int, int>,
+                                                      std::pair<T, T>,
+                                                      boost::hash<std::tuple<int, int, int> > >& radii_table,
+                                                  const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
+                                                  const bool include_constraint = true)
+{
+    Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
+    const T dist = d12.norm(); 
+
+    // If the distance is less than 2 * R ... 
+    if (dist <= 2 * R)
+    {
+        // Normalize the distance vector and get the overlap distance 
+        Matrix<T, Dim, 1> d12n = d12 / dist;
+        T delta = 2 * R - dist; 
+
+        // Get the angles between the overlap vector and the two orientation
+        // vectors
+        T theta1 = acosSafe<T>(d12n, n1); 
+        T theta2 = acosSafe<T>(-d12n, n2);
+
+        // Look up the corresponding principal radii of curvature at the 
+        // two contact points  
+        int theta1_nearest = nearestValue<T>(radii_table_theta, theta1); 
+        int theta2_nearest = nearestValue<T>(radii_table_theta, theta2); 
+        int half_l1_nearest = nearestValue<T>(radii_table_half_l, half_l1); 
+        int half_l2_nearest = nearestValue<T>(radii_table_half_l, half_l2); 
+        int s_nearest = nearestValue<T>(radii_table_coords, s); 
+        int t_nearest = nearestValue<T>(radii_table_coords, t); 
+        std::tuple<int, int, int> tuple1 = std::make_tuple(
+            theta1_nearest, half_l1_nearest, s_nearest
+        ); 
+        std::tuple<int, int, int> tuple2 = std::make_tuple(
+            theta2_nearest, half_l2_nearest, t_nearest
+        );  
+        std::pair<T, T> radii1 = radii_table[tuple1]; 
+        std::pair<T, T> radii2 = radii_table[tuple2];
+        T Rx1 = radii1.first; 
+        T Ry1 = radii1.second; 
+        T Rx2 = radii2.first; 
+        T Ry2 = radii2.second;
+
+        // Calculate the expected contact area for a Hertzian contact 
+        T area = hertzContactArea<T>(delta, Rx1, Ry1, Rx2, Ry2, n1, n2, ellip_table);
+        T radius = sqrt(area / boost::math::constants::pi<T>());
+
+        // Compute the correction factor to account for JKR-based adhesion
+        int radius_nearest = nearestValue<T>(jkr_radius_table.col(0), delta); 
+        T jkr_radius = jkr_radius_table(radius_nearest, 1); 
+        T jkr_radius_factor = jkr_radius / sqrt(R * delta);
+        T jkr_area = area * jkr_radius_factor * jkr_radius_factor; 
+
+        // Calculate the generalized forces
+        T term = 4 * sqrt(jkr_area * jkr_radius * gamma * E0);
         Matrix<T, Dim, 1> v = term * d12n;  
         
         // Partial derivatives w.r.t cell 1 center 
