@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     4/23/2025
+ *     7/25/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -25,6 +25,8 @@
 #include <boost/random.hpp>
 #include <boost/multiprecision/mpfr.hpp>
 #include "indices.hpp"
+#include "ellipsoid.hpp"
+#include "jkr.hpp"
 #include "growth.hpp"
 #include "mechanics.hpp"
 #include "utils.hpp"
@@ -55,6 +57,124 @@ std::string floatToString(T x, const int precision = 10)
     ss << std::setprecision(precision);
     ss << x;
     return ss.str();
+}
+
+/**
+ * Tabulate the JKR contact radius at a given collection of overlap distances.
+ *
+ * @param delta Input mesh of overlap distances. 
+ * @param R Cell radius (including the EPS). 
+ * @param E0 Elastic modulus. 
+ * @param gamma Surface energy density.
+ * @param calibrate_endpoint_radii If true, calibrate the principal radii of 
+ *                                 curvature so that the minimum radius is R
+ *                                 and the maximum radius is always greater 
+ *                                 than R.
+ * @param project_tol Tolerance for the ellipsoid projection method. 
+ * @param project_max_iter Maximum number of iterations for the ellipsoid
+ *                         projection method. 
+ * @returns Table of calculated principal radii of curvature. 
+ */
+template <typename T>
+Matrix<T, Dynamic, 2> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >& delta,
+                                               const T R, const T E0, const T gamma,
+                                               const T imag_tol = 1e-20, 
+                                               const T aberth_tol = 1e-20)
+{
+    Matrix<T, Dynamic, 2> radii;
+    radii.col(0) = delta; 
+
+    // For each overlap distance ... 
+    for (int i = 0; i < delta; ++i)
+    {
+        // Calculate the JKR contact radius 
+        radii(i, 1) = jkrContactRadius<T>(
+            delta(i), R, E0, gamma, imag_tol, aberth_tol
+        ).second;
+    }
+
+    return radii;  
+} 
+
+/**
+ * Tabulate the principal radii of curvature at a given collection of contact
+ * points on a cell. 
+ *
+ * Each contact point is parametrized by:
+ *
+ * (1) the angle between the overlap vector and the cell's orientation vector,
+ * (2) the cell's half-length, and 
+ * (3) the centerline coordinate at which the overlap vector is positioned.
+ *
+ * @param theta Input mesh of overlap-orientation angles. 
+ * @param half_l Input mesh of cell half-lengths. 
+ * @param coords Input mesh of cell centerline coordinates.
+ * @param R Cell radius (including the EPS).  
+ * @param calibrate_endpoint_radii If true, calibrate the principal radii of 
+ *                                 curvature so that the minimum radius is R
+ *                                 and the maximum radius is always greater 
+ *                                 than R.
+ * @param project_tol Tolerance for the ellipsoid projection method. 
+ * @param project_max_iter Maximum number of iterations for the ellipsoid
+ *                         projection method. 
+ * @returns Table of calculated principal radii of curvature. 
+ */
+template <typename T>
+using CurvatureRadiiTable = std::unordered_map<std::tuple<int, int, int>,
+                                               std::pair<T, T>,
+                                               boost::hash<std::tuple<int, int, int> > >;
+template <typename T>
+CurvatureRadiiTable<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1> >& theta,
+                                                    const Ref<const Matrix<T, Dynamic, 1> >& half_l,
+                                                    const Ref<const Matrix<T, Dynamic, 1> >& coords,
+                                                    const T R, 
+                                                    const bool calibrate_endpoint_radii = true, 
+                                                    const T project_tol = 1e-6,
+                                                    const int project_max_iter = 100)
+{
+    CurvatureRadiiTable<T> radii;
+
+    // For each cell half-length ... 
+    for (int j = 0; j < half_l.size(); ++j)
+    {
+        T rmax_factor = 1.0; 
+        if (calibrate_endpoint_radii)
+        {
+            // Get the principal radii of curvature at the endpoint of the 
+            // inscribed ellipsoid
+            std::pair<T, T> radii_endpoint = projectAndGetPrincipalRadiiOfCurvature<T>(
+                half_l(j), R, 0.0, half_l(j), project_tol, project_max_iter
+            );
+
+            // Calculate a calibration factor for the minor radius 
+            rmax_factor = R / radii_endpoint.second;  
+        }
+
+        // For each overlap-orientation angle ... 
+        for (int i = 0; i < theta.size(); ++i)
+        {
+            // For each centerline coordinate ... 
+            for (int k = 0; k < coords.size(); ++k)
+            {
+                // Calculate the principal radii of curvature 
+                std::pair<T, T> radii_ = projectAndGetPrincipalRadiiOfCurvature<T>(
+                    half_l(j), R, theta(i), coords(k) * half_l(j), project_tol,
+                    project_max_iter
+                );
+                T rmax = radii_.first; 
+                T rmin = radii_.second; 
+
+                // Calibrate if desired
+                std::tuple<int, int, int> tuple = std::make_tuple(i, j, k); 
+                if (!calibrate_endpoint_radii) 
+                    radii[tuple] = std::make_pair(rmax, rmin);
+                else
+                    radii[tuple] = std::make_pair(factor * rmax, R); 
+            }
+        }
+    }
+
+    return radii; 
 } 
 
 /**

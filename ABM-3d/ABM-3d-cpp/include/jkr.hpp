@@ -287,4 +287,199 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
     return area * jkr_radius_factor * jkr_radius_factor;  
 }
 
+/**
+ * Calculate the equilibrium cell-cell distance for the given JKR surface 
+ * energy density. 
+ *
+ * @param R Cell radius (including the EPS). 
+ * @param E0 Elastic modulus.
+ * @param gamma Surface energy density.
+ * @param dinit Initial overlap distance.  
+ * @param increment_overlap Increment for finite differences approximation.
+ * @param tol Tolerance for Newton's method.  
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method.
+ * @returns Equilibrium cell-cell distance.  
+ */
+template <typename T>
+T jkrEquilibriumDistance(const T R, const T E0, const T gamma, const T dinit, 
+                         const T increment_overlap = 1e-8, const T tol = 1e-8, 
+                         const T imag_tol = 1e-8, const T aberth_tol = 1e-20)
+{
+    T overlap = 2 * R - dinit;  
+    T update = std::numeric_limits<T>::infinity();
+
+    // While the update between consecutive overlaps is larger than the 
+    // given tolerance ... 
+    while (abs(update) > tol)
+    {
+        // Compute the contact radius for the current overlap distance
+        T radius = jkrContactRadius<T>(overlap, R, E0, gamma, imag_tol, aberth_tol).second;
+
+        // Compute the corresponding force
+        T prefactor1 = static_cast<T>(4) / static_cast<T>(3) * E0 / R;
+        T prefactor2 = 4 * sqrt(boost::math::constants::pi<T>() * gamma * E0); 
+        T f_hertz = prefactor1 * radius * radius * radius; 
+        T f_jkr = prefactor2 * pow(radius, 1.5); 
+        T force = f_hertz - f_jkr;
+
+        // Estimate the derivative of this force w.r.t the overlap
+        T radius_plus = jkrContactRadius<T>(
+            overlap + increment_overlap, R, E0, gamma, imag_tol, aberth_tol
+        ).second;
+        T radius_minus = jkrContactRadius<T>(
+            overlap - increment_overlap, R, E0, gamma, imag_tol, aberth_tol
+        ).second;
+        T f_hertz_plus = prefactor1 * radius_plus * radius_plus * radius_plus; 
+        T f_jkr_plus = prefactor2 * pow(radius_plus, 1.5); 
+        T force_plus = f_hertz_plus - f_jkr_plus; 
+        T f_hertz_minus = prefactor1 * radius_minus * radius_minus * radius_minus; 
+        T f_jkr_minus = prefactor2 * pow(radius_minus, 1.5); 
+        T force_minus = f_hertz_minus - f_jkr_minus;
+        T deriv = (force_plus - force_minus) / (2 * increment_overlap);
+
+        // Update the overlap according to Newton's method 
+        update = -force / deriv;
+        overlap += update;
+    }
+
+    return 2 * R - overlap; 
+}
+
+/**
+ * Calculate the surface energy density for which the desired Hertz-JKR 
+ * equilibrium cell-cell distance is achieved.
+ *
+ * @param R Cell radius (including the EPS). 
+ * @param E0 Elastic modulus.
+ * @param deq_target Target equilibrium cell-cell distance. 
+ * @param min_gamma Minimum surface energy density.
+ * @param max_gamma Maximum surface energy density.  
+ * @param dinit Initial overlap distance.  
+ * @param tol Tolerance for (steepest) gradient descent.
+ * @param log_increment_gamma Increment for finite differences approximation 
+ *                            w.r.t log10(gamma) during gradient descent. 
+ * @param max_learn_rate Maximum learning rate.
+ * @param increment_overlap Increment for finite differences approximation
+ *                          w.r.t overlap in jkrEquilibriumDistance().
+ * @param newton_tol Tolerance for Newton's method in jkrEquilibriumDistance().  
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method.
+ * @param verbose If true, print iteration details to stdout.
+ * @returns Optimal surface energy density for the desired equilibrium 
+ *          cell-cell distance.  
+ */
+template <typename T>
+T jkrOptimalSurfaceEnergyDensity(const T R, const T E0, const T deq_target, 
+                                 const T min_gamma, const T max_gamma, 
+                                 const T dinit, const T tol = 1e-8,
+                                 const T log_increment_gamma = 1e-6,
+                                 const T max_learn_rate = 1.0,  
+                                 const T increment_overlap = 1e-8,
+                                 const T newton_tol = 1e-8,
+                                 const T imag_tol = 1e-8,
+                                 const T aberth_tol = 1e-20,
+                                 const bool verbose = false)
+{
+    // Get an initial value for gamma
+    T log_gamma = (log10(min_gamma) + log10(max_gamma)) / 2.0; 
+    T gamma = pow(10.0, log_gamma); 
+    T update = std::numeric_limits<T>::infinity();
+    int iter = 0; 
+    if (verbose)
+        std::cout << std::setprecision(10);
+
+    // Calculate the deviation of the current equilibrium distance from
+    // the target equilibrium distance 
+    T deq = jkrEquilibriumDistance<T>(
+        R, E0, gamma, dinit, increment_overlap, newton_tol, imag_tol, aberth_tol
+    );
+    T error = abs(deq - deq_target);
+
+    // While the update between consecutive values of gamma is larger than
+    // the given tolerance ... 
+    while (abs(update) > tol)
+    {
+        // Estimate the derivative of this deviation w.r.t. gamma
+        T gamma_plus = pow(10.0, log_gamma + log_increment_gamma); 
+        T gamma_minus = pow(10.0, log_gamma - log_increment_gamma); 
+        T deq_plus = jkrEquilibriumDistance<T>(
+            R, E0, gamma_plus, dinit, increment_overlap, newton_tol, imag_tol,
+            aberth_tol
+        );
+        T error_plus = abs(deq_plus - deq_target);  
+        T deq_minus = jkrEquilibriumDistance<T>(
+            R, E0, gamma_minus, dinit, increment_overlap, newton_tol, imag_tol,
+            aberth_tol
+        );
+        T error_minus = abs(deq_minus - deq_target);  
+        T deriv = (error_plus - error_minus) / (2 * log_increment_gamma);
+
+        // Determine a learning rate that satisfies the Armijo condition
+        // via backtracking line search (Nocedal and Wright, Algorithm 3.1)
+        //
+        // Start with the maximum learning rate 
+        T learn_rate = max_learn_rate;
+        update = -learn_rate * deriv;
+        T gamma_new = pow(10.0, log_gamma + update); 
+
+        // Check if the proposed update exceeds the given bounds  
+        if (gamma_new < min_gamma)
+            update = log10(min_gamma) - log_gamma;
+        }
+        else if (gamma_new > max_gamma)
+            update = log10(max_gamma) - log_gamma;
+        learn_rate = -update / deriv;
+        gamma_new = pow(10.0, log_gamma + update);  
+
+        // Compute the new cell-cell equilibrium distance 
+        T deq_new = jkrEquilibriumDistance<T>(
+            R, E0, gamma_new, dinit, increment_overlap, newton_tol, imag_tol,
+            aberth_tol
+        );
+        T error_new = abs(deq_new - deq_target);
+
+        // If the Armijo condition is not satisfied (set c = 0.1) ...  
+        while (error_new > error - 0.1 * learn_rate * deriv * deriv)
+        {
+            // Lower the learning rate and try again (set contraction factor
+            // \rho = 0.5) 
+            learn_rate *= 0.5;
+            update = -learn_rate * deriv;
+            gamma_new = pow(10.0, log_gamma + update); 
+
+            // Check if the proposed update exceeds the given bounds  
+            if (gamma_new < min_gamma)
+                update = log10(min_gamma) - log_gamma;
+            else if (gamma_new > max_gamma)
+                update = log10(max_gamma) - log_gamma;
+            learn_rate = -update / deriv;
+            gamma_new = pow(10.0, log_gamma + update); 
+            
+            // Compute the new cell-cell equilibrium distance 
+            deq_new = jkrEquilibriumDistance<T>(
+                R, E0, gamma_new, dinit, increment_overlap, newton_tol,
+                imag_tol, aberth_tol
+            );
+            error_new = abs(deq_new - deq_target); 
+        }
+        
+        // Print iteration details if desired 
+        if (verbose)
+            std::cout << "Iteration " << iter << ": gamma = " << gamma << ", "
+                      << "deq = " << deq << ", log update = " << update << std::endl; 
+
+        // Update gamma according to the given learning rate 
+        log_gamma += update;
+        gamma = gamma_new; 
+        deq = deq_new; 
+        error = error_new; 
+        iter++; 
+    } 
+
+    return gamma; 
+}
+
 #endif
