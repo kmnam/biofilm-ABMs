@@ -830,7 +830,9 @@ TEST_CASE(
     const T project_tol = 1e-20; 
     const int max_iter = 1000;  
 
-    // Case 1: Ellipsoid with long axis parallel to the x-axis 
+    // -------------------------------------------------------------- //
+    // Case 1: Ellipsoid with long axis parallel to the x-axis
+    // -------------------------------------------------------------- //
     Matrix<T, 3, 1> r, n, dnorm, x, y, z;
     std::pair<T, T> radii, radii_true; 
     T s;  
@@ -843,6 +845,8 @@ TEST_CASE(
     const T half_l = 0.5;
 
     // Case 1a: Query point lies along x-axis
+    //
+    // In this case, the nearest point should be (R + half_l, 0, 0) 
     dnorm = x; 
     s = half_l;   
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
@@ -856,7 +860,26 @@ TEST_CASE(
     REQUIRE_THAT(
         static_cast<double>(radii.second),
         Catch::Matchers::WithinAbs(static_cast<double>(radii_true.second), tol)
+    );
+
+    // Perform same calculation with simpler call signature
+    //
+    // The angle between the x-axis and the normalized overlap vector is zero
+    radii = projectAndGetPrincipalRadiiOfCurvature<T>(
+        half_l, R, 0.0, half_l, project_tol, max_iter
     ); 
+    REQUIRE_THAT(
+        static_cast<double>(radii.first),
+        Catch::Matchers::WithinAbs(static_cast<double>(radii_true.first), tol)
+    ); 
+    REQUIRE_THAT(
+        static_cast<double>(radii.second),
+        Catch::Matchers::WithinAbs(static_cast<double>(radii_true.second), tol)
+    );
+
+    // Case 1b: Query point lies along x-axis, but on other side 
+    //
+    // In this case, the nearest point should be (-R + half_l, 0, 0) 
     dnorm = -x; 
     s = -half_l; 
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
@@ -870,8 +893,13 @@ TEST_CASE(
         static_cast<double>(radii.second),
         Catch::Matchers::WithinAbs(static_cast<double>(radii_true.second), tol)
     );
+
+    // Perform same calculation with simpler call signature
+    //
+    // The angle between the x-axis and the normalized overlap vector is 180
+    // degrees
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        half_l, R, 0.0, half_l, project_tol, max_iter
+        half_l, R, boost::math::constants::pi<T>(), half_l, project_tol, max_iter
     ); 
     REQUIRE_THAT(
         static_cast<double>(radii.first),
@@ -882,7 +910,9 @@ TEST_CASE(
         Catch::Matchers::WithinAbs(static_cast<double>(radii_true.second), tol)
     );
 
-    // Case 1b: Query point lies along y-axis 
+    // Case 1c: Query point lies along y-axis
+    //
+    // In this case, the nearest point should be (0, R, 0) 
     dnorm = y;
     s = 0;  
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
@@ -896,20 +926,9 @@ TEST_CASE(
     REQUIRE_THAT(
         static_cast<double>(radii.second),
         Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
-    ); 
-    dnorm = -y; 
-    s = 0;  
-    radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r, n, half_l, R, dnorm, s, project_tol, max_iter
     );
-    REQUIRE_THAT(
-        static_cast<double>(radii.first),
-        Catch::Matchers::WithinAbs(static_cast<double>(radii_true.first), tol)
-    );  
-    REQUIRE_THAT(
-        static_cast<double>(radii.second),
-        Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
-    ); 
+
+    // Perform same calculation with simpler call signature
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
         half_l, R, acosSafe<T>(n.dot(dnorm)), s, project_tol, max_iter
     );
@@ -922,7 +941,39 @@ TEST_CASE(
         Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
     ); 
 
-    // Case 1c: Query point lies along z-axis 
+    // Case 1d: Query point lies along y-axis, but on other side
+    //
+    // In this case, the nearest point should be (0, -R, 0) 
+    dnorm = -y; 
+    s = 0;  
+    radii = projectAndGetPrincipalRadiiOfCurvature<T>(
+        r, n, half_l, R, dnorm, s, project_tol, max_iter
+    );
+    REQUIRE_THAT(
+        static_cast<double>(radii.first),
+        Catch::Matchers::WithinAbs(static_cast<double>(radii_true.first), tol)
+    );  
+    REQUIRE_THAT(
+        static_cast<double>(radii.second),
+        Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
+    );
+
+    // Perform same calculation with simpler call signature
+    radii = projectAndGetPrincipalRadiiOfCurvature<T>(
+        half_l, R, acosSafe<T>(n.dot(dnorm)), s, project_tol, max_iter
+    );
+    REQUIRE_THAT(
+        static_cast<double>(radii.first),
+        Catch::Matchers::WithinAbs(static_cast<double>(radii_true.first), tol)
+    );  
+    REQUIRE_THAT(
+        static_cast<double>(radii.second),
+        Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
+    ); 
+
+    // Case 1e: Query point lies along z-axis
+    //
+    // In this case, the nearest point should be (0, 0, R) 
     dnorm = z;
     s = 0;  
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
@@ -935,7 +986,24 @@ TEST_CASE(
     REQUIRE_THAT(
         static_cast<double>(radii.second),
         Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
+    );
+
+    // Perform same calculation with simpler call signature
+    radii = projectAndGetPrincipalRadiiOfCurvature<T>(
+        half_l, R, acosSafe<T>(n.dot(dnorm)), s, project_tol, max_iter
+    );
+    REQUIRE_THAT(
+        static_cast<double>(radii.first),
+        Catch::Matchers::WithinAbs(static_cast<double>(radii_true.first), tol)
+    );  
+    REQUIRE_THAT(
+        static_cast<double>(radii.second),
+        Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
     ); 
+
+    // Case 1f: Query point lies along z-axis, but on other side
+    //
+    // In this case, the nearest point should be (0, 0, -R) 
     dnorm = -z; 
     s = 0;  
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
@@ -949,25 +1017,19 @@ TEST_CASE(
         static_cast<double>(radii.second),
         Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
     );
-    radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        half_l, R, acosSafe<T>(n.dot(dnorm)), s, project_tol, max_iter
-    );
-    REQUIRE_THAT(
-        static_cast<double>(radii.first),
-        Catch::Matchers::WithinAbs(static_cast<double>(radii_true.first), tol)
-    );  
-    REQUIRE_THAT(
-        static_cast<double>(radii.second),
-        Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
-    );
 
-    // Case 2: Ellipsoid with long axis parallel to the vector (cos(30), sin(30), 0)
+    // -------------------------------------------------------------- //
+    // Case 2: Ellipsoid with orientation vector parallel to (cos(30), sin(30), 0)
+    // -------------------------------------------------------------- //
     r << 0, 0, 0; 
     n << cos(boost::math::constants::sixth_pi<T>()),
          sin(boost::math::constants::sixth_pi<T>()),
          0;
 
-    // Case 2a: Query point lies parallel to the orientation vector 
+    // Case 2a: Query point lies along orientation vector 
+    //
+    // In this case, the nearest point should be (b * cos(30), b * sin(30), 0)
+    // with b = R + half_l
     dnorm = n; 
     s = half_l;   
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
@@ -982,6 +1044,26 @@ TEST_CASE(
         static_cast<double>(radii.second),
         Catch::Matchers::WithinAbs(static_cast<double>(radii_true.second), tol)
     );
+
+    // Perform same calculation with simpler call signature
+    //
+    // The angle between the x-axis and the normalized overlap vector is zero
+    radii = projectAndGetPrincipalRadiiOfCurvature<T>(
+        half_l, R, 0.0, half_l, project_tol, max_iter
+    ); 
+    REQUIRE_THAT(
+        static_cast<double>(radii.first),
+        Catch::Matchers::WithinAbs(static_cast<double>(radii_true.first), tol)
+    ); 
+    REQUIRE_THAT(
+        static_cast<double>(radii.second),
+        Catch::Matchers::WithinAbs(static_cast<double>(radii_true.second), tol)
+    );
+
+    // Case 2b: Query point lies along orientation vector, but on other side 
+    //
+    // In this case, the nearest point should be (-b * cos(30), -b * sin(30), 0)
+    // with b = R + half_l
     dnorm = -n; 
     s = -half_l;
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
@@ -995,8 +1077,13 @@ TEST_CASE(
         static_cast<double>(radii.second),
         Catch::Matchers::WithinAbs(static_cast<double>(radii_true.second), tol)
     );
+
+    // Perform same calculation with simpler call signature
+    //
+    // The angle between the x-axis and the normalized overlap vector is 180
+    // degrees
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        half_l, R, 0.0, half_l, project_tol, max_iter
+        half_l, R, boost::math::constants::pi<T>(), half_l, project_tol, max_iter
     ); 
     REQUIRE_THAT(
         static_cast<double>(radii.first),
@@ -1007,7 +1094,9 @@ TEST_CASE(
         Catch::Matchers::WithinAbs(static_cast<double>(radii_true.second), tol)
     );
 
-    // Case 2b: Query point lies perpendicular to the orientation vector 
+    // Case 2c: Query point lies perpendicular to orientation vector 
+    //
+    // In this case, the nearest point should be (-R * sin(30), R * cos(30), 0)
     dnorm << -sin(boost::math::constants::sixth_pi<T>()), 
               cos(boost::math::constants::sixth_pi<T>()),
               0;
@@ -1024,6 +1113,24 @@ TEST_CASE(
         static_cast<double>(radii.second),
         Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
     );
+
+    // Perform same calculation with simpler call signature
+    radii = projectAndGetPrincipalRadiiOfCurvature<T>(
+        half_l, R, acosSafe<T>(n.dot(dnorm)), s, project_tol, max_iter
+    );
+    REQUIRE_THAT(
+        static_cast<double>(radii.first),
+        Catch::Matchers::WithinAbs(static_cast<double>(radii_true.first), tol)
+    );  
+    REQUIRE_THAT(
+        static_cast<double>(radii.second),
+        Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
+    ); 
+
+    // Case 2d: Query point lies perpendicular to orientation vector, but 
+    // on other side  
+    //
+    // In this case, the nearest point should be (R * sin(30), -R * cos(30), 0)
     dnorm *= -1; 
     s = 0;
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
@@ -1037,6 +1144,8 @@ TEST_CASE(
         static_cast<double>(radii.second),
         Catch::Matchers::WithinAbs(static_cast<double>(R), tol)
     );
+
+    // Perform same calculation with simpler call signature
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
         half_l, R, acosSafe<T>(n.dot(dnorm)), s, project_tol, max_iter
     );
