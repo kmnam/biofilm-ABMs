@@ -20,6 +20,7 @@
 #include <stack>
 #include <regex>
 #include <algorithm>
+#include <filesystem>
 #include <boost/json/src.hpp>
 #include <boost/math/constants/constants.hpp>
 #include <boost/multiprecision/mpfr.hpp>
@@ -949,7 +950,7 @@ int nearestValue(const Ref<const Matrix<T, Dynamic, 1> >& values, const T x)
     int low = 0; 
     int high = values.size() - 1;
     T nearest = std::numeric_limits<T>::infinity();
-    int nearest_idx;  
+    int nearest_idx = 0;  
     while (low <= high)
     {
         int mid = (low + high) / 2;
