@@ -197,11 +197,6 @@ std::pair<T, T> getPrincipalRadiiOfCurvature(const Ref<const Matrix<T, 3, 1> >& 
     T cos2v = cosv * cosv; 
     T sin2v = 1 - cos2v;
     T v = acosSafe<T>(cosv);
-    T sinv = sin(v); 
-    T cosu = y(2) / (a * sinv);
-    T cos2u = cosu * cosu; 
-    T sin2u = 1 - cos2u;
-    T u = acosSafe<T>(cosu);
     
     // Then calculate the Gaussian curvature ...
     T gauss_term1 = a * a * a * a * c * c; 
