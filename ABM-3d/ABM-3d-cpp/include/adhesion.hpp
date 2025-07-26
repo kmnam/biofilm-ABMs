@@ -436,6 +436,9 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
  *          achieved. 
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
  *          achieved.
+ * @param jkr_radius_table Pre-computed table of values for the overlap vs. 
+ *                         JKR contact radius function. The rows are assumed
+ *                         to be given in order of increasing overlap.  
  * @param radii_table_theta Array of input values for the angle between the 
  *                          overlap vector and the orientation vector, at 
  *                          which the principal radii of curvature were pre-
@@ -446,11 +449,9 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
  * @param radii_table_coords Array of input values for the centerline 
  *                           coordinates at which the principal radii of 
  *                           curvature were pre-computed (see below). 
- * @param radii_table Pre-computed table of values for the principal radii 
- *                    of curvature as a function of the contact point.
- * @param jkr_radius_table Pre-computed table of values for the overlap vs. 
- *                         JKR contact radius function. The rows are assumed
- *                         to be given in order of increasing overlap.  
+ * @param curvature_radii_table Pre-computed table of values for the principal
+ *                              radii of curvature as a function of the contact
+ *                              point.
  * @param ellip_table Pre-computed table containing values for the elliptic
  *                    integral function for various eccentricities between 0
  *                    and 1. 
@@ -459,7 +460,7 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
  * @returns Matrix of generalized forces arising from the simplified JKR
  *          contact potential.
  */
-template <typename T, int Dim, int N = 100>
+template <typename T, int Dim>
 Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
                                                   const T half_l1,
                                                   const Ref<const Matrix<T, Dim, 1> >& n2,
@@ -467,13 +468,14 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
                                                   const Ref<const Matrix<T, Dim, 1> >& d12,
                                                   const T R, const T E0, const T gamma,
                                                   const T s, const T t,
+                                                  const Ref<const Matrix<T, Dynamic, 2> >& jkr_radius_table,
                                                   const Ref<const Matrix<T, Dynamic, 1> >& radii_table_theta, 
                                                   const Ref<const Matrix<T, Dynamic, 1> >& radii_table_half_l,
                                                   const Ref<const Matrix<T, Dynamic, 1> >& radii_table_coords,
-                                                  const std::unordered_map<
+                                                  std::unordered_map<
                                                       std::tuple<int, int, int>,
                                                       std::pair<T, T>,
-                                                      boost::hash<std::tuple<int, int, int> > >& radii_table,
+                                                      boost::hash<std::tuple<int, int, int> > >& curvature_radii_table,
                                                   const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
                                                   const bool include_constraint = true)
 {
@@ -489,8 +491,8 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
 
         // Get the angles between the overlap vector and the two orientation
         // vectors
-        T theta1 = acosSafe<T>(d12n, n1); 
-        T theta2 = acosSafe<T>(-d12n, n2);
+        T theta1 = acosSafe<T>(d12n.dot(n1)); 
+        T theta2 = acosSafe<T>((-d12n).dot(n2));
 
         // Look up the corresponding principal radii of curvature at the 
         // two contact points  
@@ -506,8 +508,8 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
         std::tuple<int, int, int> tuple2 = std::make_tuple(
             theta2_nearest, half_l2_nearest, t_nearest
         );  
-        std::pair<T, T> radii1 = radii_table[tuple1]; 
-        std::pair<T, T> radii2 = radii_table[tuple2];
+        std::pair<T, T> radii1 = curvature_radii_table[tuple1]; 
+        std::pair<T, T> radii2 = curvature_radii_table[tuple2];
         T Rx1 = radii1.first; 
         T Ry1 = radii1.second; 
         T Rx2 = radii2.first; 
@@ -515,7 +517,6 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
 
         // Calculate the expected contact area for a Hertzian contact 
         T area = hertzContactArea<T>(delta, Rx1, Ry1, Rx2, Ry2, n1, n2, ellip_table);
-        T radius = sqrt(area / boost::math::constants::pi<T>());
 
         // Compute the correction factor to account for JKR-based adhesion
         int radius_nearest = nearestValue<T>(jkr_radius_table.col(0), delta); 
