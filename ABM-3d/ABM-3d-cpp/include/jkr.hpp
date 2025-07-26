@@ -302,7 +302,7 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
  * @param aberth_tol Tolerance for Aberth-Ehrlich method.
  * @returns Equilibrium cell-cell distance.  
  */
-template <typename T>
+template <typename T, int N = 100>
 T jkrEquilibriumDistance(const T R, const T E0, const T gamma, const T dinit, 
                          const T increment_overlap = 1e-8, const T tol = 1e-8, 
                          const T imag_tol = 1e-8, const T aberth_tol = 1e-20)
@@ -315,7 +315,10 @@ T jkrEquilibriumDistance(const T R, const T E0, const T gamma, const T dinit,
     while (abs(update) > tol)
     {
         // Compute the contact radius for the current overlap distance
-        T radius = jkrContactRadius<T>(overlap, R, E0, gamma, imag_tol, aberth_tol).second;
+        auto result = jkrContactRadius<T, N>(
+            overlap, R, E0, gamma, imag_tol, aberth_tol
+        );
+        T radius = result.second;
 
         // Compute the corresponding force
         T prefactor1 = static_cast<T>(4) / static_cast<T>(3) * E0 / R;
@@ -325,12 +328,14 @@ T jkrEquilibriumDistance(const T R, const T E0, const T gamma, const T dinit,
         T force = f_hertz - f_jkr;
 
         // Estimate the derivative of this force w.r.t the overlap
-        T radius_plus = jkrContactRadius<T>(
+        result = jkrContactRadius<T, N>(
             overlap + increment_overlap, R, E0, gamma, imag_tol, aberth_tol
-        ).second;
-        T radius_minus = jkrContactRadius<T>(
+        );
+        T radius_plus = result.second;
+        result = jkrContactRadius<T, N>(
             overlap - increment_overlap, R, E0, gamma, imag_tol, aberth_tol
-        ).second;
+        );
+        T radius_minus = result.second;
         T f_hertz_plus = prefactor1 * radius_plus * radius_plus * radius_plus; 
         T f_jkr_plus = prefactor2 * pow(radius_plus, 1.5); 
         T force_plus = f_hertz_plus - f_jkr_plus; 
@@ -371,7 +376,7 @@ T jkrEquilibriumDistance(const T R, const T E0, const T gamma, const T dinit,
  * @returns Optimal surface energy density for the desired equilibrium 
  *          cell-cell distance.  
  */
-template <typename T>
+template <typename T, int N = 100>
 T jkrOptimalSurfaceEnergyDensity(const T R, const T E0, const T deq_target, 
                                  const T min_gamma, const T max_gamma, 
                                  const T dinit, const T tol = 1e-8,
@@ -393,7 +398,7 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E0, const T deq_target,
 
     // Calculate the deviation of the current equilibrium distance from
     // the target equilibrium distance 
-    T deq = jkrEquilibriumDistance<T>(
+    T deq = jkrEquilibriumDistance<T, N>(
         R, E0, gamma, dinit, increment_overlap, newton_tol, imag_tol, aberth_tol
     );
     T error = abs(deq - deq_target);
@@ -405,12 +410,12 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E0, const T deq_target,
         // Estimate the derivative of this deviation w.r.t. gamma
         T gamma_plus = pow(10.0, log_gamma + log_increment_gamma); 
         T gamma_minus = pow(10.0, log_gamma - log_increment_gamma); 
-        T deq_plus = jkrEquilibriumDistance<T>(
+        T deq_plus = jkrEquilibriumDistance<T, N>(
             R, E0, gamma_plus, dinit, increment_overlap, newton_tol, imag_tol,
             aberth_tol
         );
         T error_plus = abs(deq_plus - deq_target);  
-        T deq_minus = jkrEquilibriumDistance<T>(
+        T deq_minus = jkrEquilibriumDistance<T, N>(
             R, E0, gamma_minus, dinit, increment_overlap, newton_tol, imag_tol,
             aberth_tol
         );
@@ -435,7 +440,7 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E0, const T deq_target,
         gamma_new = pow(10.0, log_gamma + update);  
 
         // Compute the new cell-cell equilibrium distance 
-        T deq_new = jkrEquilibriumDistance<T>(
+        T deq_new = jkrEquilibriumDistance<T, N>(
             R, E0, gamma_new, dinit, increment_overlap, newton_tol, imag_tol,
             aberth_tol
         );
@@ -459,7 +464,7 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E0, const T deq_target,
             gamma_new = pow(10.0, log_gamma + update); 
             
             // Compute the new cell-cell equilibrium distance 
-            deq_new = jkrEquilibriumDistance<T>(
+            deq_new = jkrEquilibriumDistance<T, N>(
                 R, E0, gamma_new, dinit, increment_overlap, newton_tol,
                 imag_tol, aberth_tol
             );
