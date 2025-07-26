@@ -85,7 +85,7 @@ Matrix<T, Dynamic, 2> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic
     radii.col(0) = delta; 
 
     // For each overlap distance ... 
-    for (int i = 0; i < delta; ++i)
+    for (int i = 0; i < delta.size(); ++i)
     {
         // Calculate the JKR contact radius 
         radii(i, 1) = jkrContactRadius<T, N>(
@@ -169,7 +169,7 @@ CurvatureRadiiTable<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dy
                 if (!calibrate_endpoint_radii) 
                     radii[tuple] = std::make_pair(rmax, rmin);
                 else
-                    radii[tuple] = std::make_pair(factor * rmax, R); 
+                    radii[tuple] = std::make_pair(rmax_factor * rmax, R); 
             }
         }
     }
@@ -450,13 +450,19 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         T imag_tol = 1e-8; 
         T aberth_tol = 1e-20; 
         int n_ellip = 100;
+        int n_overlap = 100; 
         if (adhesion_params.find("jkr_imag_tol") != adhesion_params.end())
             imag_tol = adhesion_params["jkr_imag_tol"]; 
         if (adhesion_params.find("jkr_aberth_tol") != adhesion_params.end())
             aberth_tol = adhesion_params["jkr_aberth_tol"];
         if (adhesion_params.find("n_ellip") != adhesion_params.end())
-            n_ellip = adhesion_params["n_ellip"];  
-        jkr_data.contact_radii = calculateJKRContactRadii<T, N>(
+            n_ellip = adhesion_params["n_ellip"];
+        if (adhesion_params.find("n_mesh_overlap") != adhesion_params.end())
+            n_overlap = adhesion_params["n_mesh_overlap"];
+        Matrix<T, Dynamic, 1> delta = Matrix<T, Dynamic, 1>::LinSpaced(
+            n_overlap, 0, 1.2 * Rcell
+        );  
+        jkr_data.contact_radii = calculateJKRContactRadii<T, 100>(
             delta, R, E0, gamma, imag_tol, aberth_tol
         );
         jkr_data.ellip_table = getEllipticIntegralTable<T>(n_ellip); 
@@ -575,7 +581,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_xy_bound"] = floatToString<T>(daughter_angle_xy_bound, precision);
-    params["daughter_angle_z_bound"] = floatToString<T>(daughter_anglez_bound, precision);
+    params["daughter_angle_z_bound"] = floatToString<T>(daughter_angle_z_bound, precision);
     params["truncate_surface_friction"] = (truncate_surface_friction ? "1" : "0"); 
     params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_rxy_noise"] = floatToString<T>(max_rxy_noise, precision);
