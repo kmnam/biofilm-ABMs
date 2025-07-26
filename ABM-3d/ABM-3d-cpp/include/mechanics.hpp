@@ -1014,7 +1014,7 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
     if (adhesion_mode != AdhesionMode::NONE)
     {
         dEdq_adhesion = cellCellAdhesiveForces<T>(
-            cells, neighbors, to_adhere, dt, iter, R, Rcell, adhesion_mode,
+            cells, neighbors, to_adhere, dt, iter, R, Rcell, E0, adhesion_mode,
             adhesion_params, jkr_data
         ); 
     }
