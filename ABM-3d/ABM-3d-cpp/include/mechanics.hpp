@@ -62,7 +62,7 @@ enum class AdhesionMode
  * JKR forces.  
  */
 template <typename T>
-struct JKRData<T>
+struct JKRData
 {
     Matrix<T, Dynamic, 4> ellip_table;
     Matrix<T, Dynamic, 2> contact_radii;
