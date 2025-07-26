@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/21/2025
+ *     7/25/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -53,9 +53,25 @@ typedef K::Segment_3 Segment_3;
 enum class AdhesionMode
 {
     NONE = 0,
-    JKR = 1,
-    KIHARA = 2,
-    GBK = 3
+    JKR_ISOTROPIC = 1,
+    JKR_ANISOTROPIC = 2
+};
+
+/**
+ * A struct that contains all necessary pre-computed values for calculating
+ * JKR forces.  
+ */
+template <typename T>
+struct JKRData<T>
+{
+    Matrix<T, Dynamic, 4> ellip_table;
+    Matrix<T, Dynamic, 2> contact_radii;
+    Matrix<T, Dynamic, 1> theta; 
+    Matrix<T, Dynamic, 1> half_l; 
+    Matrix<T, Dynamic, 1> centerline_coords; 
+    std::unordered_map<std::tuple<int, int, int>,
+                       std::pair<T, T>,
+                       boost::hash<std::tuple<int, int, int> > > curvature_radii;  
 };
 
 /**
@@ -829,9 +845,12 @@ Array<T, Dynamic, 6> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
- * @param mode Choice of potential used to model cell-cell adhesion. Can be
- *             NONE (0), JKR (1), KIHARA (2), or GBK (3).
- * @param params Parameters required to compute cell-cell adhesion forces. 
+ * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
+ *                      Can be NONE (0), JKR_ISOTROPIC (1), or JKR_ANISOTROPIC
+ *                      (2). 
+ * @param adhesion_params Parameters required to compute cell-cell adhesion
+ *                        forces.
+ * @param jkr_data 
  * @returns Derivatives of the cell-cell adhesion energies with respect to  
  *          cell positions and orientations.   
  */
@@ -841,8 +860,9 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                                             const Ref<const Array<int, Dynamic, 1> >& to_adhere,
                                             const T dt, const int iter,
                                             const T R, const T Rcell, 
-                                            const T E0, const AdhesionMode mode, 
-                                            std::unordered_map<std::string, T>& params)
+                                            const T E0, const AdhesionMode adhesion_mode, 
+                                            std::unordered_map<std::string, T>& adhesion_params,
+                                            JKRData<T>& jkr_data)
 {
     int n = cells.rows();   // Number of cells
 
@@ -882,35 +902,25 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
 
             // Get the corresponding forces
             Array<T, 2, 6> forces;
-            if (mode == AdhesionMode::JKR)
+            if (adhesion_mode == AdhesionMode::JKR_ISOTROPIC)
             {
-                const T gamma = params["gamma"]; 
+                const T gamma = adhesion_params["surface_energy_density"]; 
                 // Enforce orientation vector norm constraint
                 forces = forcesIsotropicJKRLagrange<T, 3>(
-                    ni, nj, dij, R, E0, gamma, si, sj, true
+                    ni, nj, dij, R, E0, gamma, si, sj, jkr_data.contact_radii,
+                    true
                 ); 
             }
-            else if (mode == AdhesionMode::KIHARA) 
+            else if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
             {
-                const T strength = params["strength"];
-                const T expd = params["distance_exp"]; 
-                const T dmin = params["mindist"];
+                const T gamma = adhesion_params["surface_energy_density"]; 
                 // Enforce orientation vector norm constraint 
-                forces = strength * forcesKiharaLagrange<T, 3>(
-                    ni, nj, dij, R, si, sj, expd, dmin, true
+                forces = forcesAnisotropicJKRLagrange<T, 3>(
+                    ni, half_li, nj, half_lj, dij, R, E0, gamma, si, sj, 
+                    jkr_data.contact_radii, jkr_data.theta, jkr_data.half_l,
+                    jkr_data.centerline_coords, jkr_data.curvature_radii,
+                    jkr_data.ellip_table, true
                 );
-            }
-            else if (mode == AdhesionMode::GBK)
-            {
-                const T strength = params["strength"];
-                const T exp1 = params["anisotropy_exp1"];
-                const T expd = params["distance_exp"]; 
-                const T dmin = params["mindist"];
-                // Enforce orientation vector norm constraint 
-                forces = strength * forcesGBKLagrange<T, 3>(
-                    ri, ni, half_li, rj, nj, half_lj, R, Rcell, dij, si, sj,
-                    expd, exp1, dmin, true
-                ); 
             }
             #ifdef DEBUG_CHECK_CELL_CELL_ADHESIVE_FORCES_NAN
                 if (forces.isNaN().any() || forces.isInf().any())
@@ -957,9 +967,11 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  * @param assume_2d If the i-th entry is true, assume that the i-th cell's
  *                  z-orientation is zero. 
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
- *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
+ *                      Can be NONE (0), JKR_ISOTROPIC (1), or JKR_ANISOTROPIC
+ *                      (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
+ * @param jkr_data 
  * @param no_surface If true, omit the surface from the simulation. 
  * @param multithread If true, use multithreading. 
  * @returns Array of translational and orientational velocities.   
@@ -975,6 +987,7 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
                                            const Ref<const Array<int, Dynamic, 1> >& assume_2d,
                                            const AdhesionMode adhesion_mode,
                                            std::unordered_map<std::string, T>& adhesion_params,
+                                           JKRData<T>& jkr_data, 
                                            const bool no_surface,
                                            const bool multithread)
 {
@@ -1002,7 +1015,7 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
     {
         dEdq_adhesion = cellCellAdhesiveForces<T>(
             cells, neighbors, to_adhere, dt, iter, R, Rcell, adhesion_mode,
-            adhesion_params
+            adhesion_params, jkr_data
         ); 
     }
 
@@ -1143,9 +1156,11 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  * @param noise Noise to be added to each generalized force used to compute
  *              the velocities.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
- *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
+ *                      Can be NONE (0), JKR_ISOTROPIC (1), or JKR_ANISOTROPIC
+ *                      (2).
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
+ * @param jkr_data 
  * @param no_surface If true, omit the surface from the simulation. 
  * @param multithread If true, use multithreading. 
  * @returns Array of translational and orientational velocities.   
@@ -1161,7 +1176,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const Ref<const Array<T, Dynamic, 6> >& noise,
                                    const AdhesionMode adhesion_mode,
                                    std::unordered_map<std::string, T>& adhesion_params,
-                                   const bool no_surface,
+                                   JKRData<T>& jkr_data, const bool no_surface,
                                    const bool multithread)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
@@ -1196,7 +1211,8 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     // Compute all conservative forces and add noise 
     Array<T, Dynamic, 6> forces = getConservativeForces<T>(
         cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors, 
-        E0, assume_2d, adhesion_mode, adhesion_params, no_surface, multithread
+        E0, assume_2d, adhesion_mode, adhesion_params, jkr_data, no_surface,
+        multithread
     );
     forces += noise; 
     
@@ -1484,9 +1500,11 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param rng Random number generator.
  * @param uniform_dist Pre-defined instance of standard uniform distribution.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
- *                      Can be NONE (0), JKR (1), KIHARA (2), or GBK (3).
+ *                      Can be NONE (0), JKR_ISOTROPIC (1), or JKR_ANISOTROPIC
+ *                      (2). 
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
+ * @param jkr_data 
  * @param no_surface If true, omit the surface from the simulation. 
  * @param n_start_multithread Minimum number of cells at which to start using
  *                            multithreading. 
@@ -1509,7 +1527,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode,
                            std::unordered_map<std::string, T>& adhesion_params,
-                           const bool no_surface,
+                           JKRData<T>& jkr_data, const bool no_surface,
                            const int n_start_multithread = 50)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
@@ -1594,8 +1612,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
     std::vector<Array<T, Dynamic, 6> > velocities;
     Array<T, Dynamic, 6> v0 = getVelocities<T>(
         cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
-        E0, assume_2d, noise, adhesion_mode, adhesion_params, no_surface,
-        multithread
+        E0, assume_2d, noise, adhesion_mode, adhesion_params, jkr_data, 
+        no_surface, multithread
     );
     velocities.push_back(v0);
     for (int i = 1; i < s; ++i)
@@ -1608,8 +1626,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
         normalizeOrientations<T>(cells_i, dt, iter);    
         Array<T, Dynamic, 6> vi = getVelocities<T>(
             cells_i, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
-            E0, assume_2d, noise, adhesion_mode, adhesion_params, no_surface,
-            multithread
+            E0, assume_2d, noise, adhesion_mode, adhesion_params, jkr_data,
+            no_surface, multithread
         );
         velocities.push_back(vi);
     }
