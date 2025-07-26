@@ -443,20 +443,24 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     JKRData<T> jkr_data;
     if (adhesion_mode != AdhesionMode::NONE)
     {
-        const bool compute_curvature_radii = static_cast<bool>(
-            adhesion_params["compute_curvature_radii"]
-        );  
-        const T gamma = adhesion_params["surface_energy_density"];  
+        // First parse polynomial-solving parameters, if given 
         T imag_tol = 1e-8; 
-        T aberth_tol = 1e-20; 
-        int n_ellip = 100;
-        int n_overlap = 100; 
+        T aberth_tol = 1e-20;
         if (adhesion_params.find("jkr_imag_tol") != adhesion_params.end())
             imag_tol = adhesion_params["jkr_imag_tol"]; 
         if (adhesion_params.find("jkr_aberth_tol") != adhesion_params.end())
             aberth_tol = adhesion_params["jkr_aberth_tol"];
-        if (adhesion_params.find("n_ellip") != adhesion_params.end())
-            n_ellip = adhesion_params["n_ellip"];
+
+        // Parse the desired equilibrium cell-cell distance and solve for 
+        // the corresponding surface energy density  
+        const T eqdist = adhesion_params["eqdist"];
+        const T gamma = jkrOptimalSurfaceEnergyDensity<T, 100>(
+            R, E0, eqdist, 100.0, 10000.0, 2 * R, 1e-8, 1e-6, 1.0, 1e-8, 
+            1e-8, imag_tol, aberth_tol
+        );
+
+        // Calculate JKR contact radii for a range of overlap distances
+        int n_overlap = 100; 
         if (adhesion_params.find("n_mesh_overlap") != adhesion_params.end())
             n_overlap = adhesion_params["n_mesh_overlap"];
         Matrix<T, Dynamic, 1> delta = Matrix<T, Dynamic, 1>::LinSpaced(
@@ -465,49 +469,66 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         jkr_data.contact_radii = calculateJKRContactRadii<T, 100>(
             delta, R, E0, gamma, imag_tol, aberth_tol
         );
-        jkr_data.ellip_table = getEllipticIntegralTable<T>(n_ellip); 
-        if (compute_curvature_radii)
+
+        // If anisotropic JKR adhesion is desired ... 
+        if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
         {
-            bool calibrate_endpoint_radii = true;
-            int n_theta = 100; 
-            int n_half_l = 100; 
-            int n_coords = 100; 
-            T project_tol = 1e-6; 
-            int project_max_iter = 100;  
-            if (adhesion_params.find("calibrate_endpoint_radii") != adhesion_params.end()) 
-                calibrate_endpoint_radii = static_cast<bool>(
-                    adhesion_params["calibrate_endpoint_radii"]
-                );
-            if (adhesion_params.find("n_mesh_theta") != adhesion_params.end())
-                n_theta = static_cast<int>(adhesion_params["n_mesh_theta"]); 
-            if (adhesion_params.find("n_mesh_half_l") != adhesion_params.end())
-                n_half_l = static_cast<int>(adhesion_params["n_mesh_half_l"]); 
-            if (adhesion_params.find("n_mesh_centerline_coords") != adhesion_params.end())
-                n_coords = static_cast<int>(adhesion_params["n_centerline_coords"]);
-            if (adhesion_params.find("ellipsoid_project_tol") != adhesion_params.end())
-                project_tol = adhesion_params["ellipsoid_project_tol"];  
-            if (adhesion_params.find("ellipsoid_project_max_iter") != adhesion_params.end())
-                project_max_iter = static_cast<int>(
-                    adhesion_params["ellipsoid_project_max_iter"]
+            // Determine whether the principal radii of curvature should be
+            // computed 
+            const bool compute_curvature_radii = static_cast<bool>(
+                adhesion_params["compute_curvature_radii"]
+            );
+
+            // Calculate the elliptic integral function 
+            int n_ellip = 100;
+            if (adhesion_params.find("n_ellip") != adhesion_params.end())
+                n_ellip = adhesion_params["n_ellip"];
+            jkr_data.ellip_table = getEllipticIntegralTable<T>(n_ellip); 
+
+            // Calculate the principal radii of curvature, if desired 
+            if (compute_curvature_radii)
+            {
+                bool calibrate_endpoint_radii = true;
+                int n_theta = 100; 
+                int n_half_l = 100; 
+                int n_coords = 100; 
+                T project_tol = 1e-6; 
+                int project_max_iter = 100;  
+                if (adhesion_params.find("calibrate_endpoint_radii") != adhesion_params.end()) 
+                    calibrate_endpoint_radii = static_cast<bool>(
+                        adhesion_params["calibrate_endpoint_radii"]
+                    );
+                if (adhesion_params.find("n_mesh_theta") != adhesion_params.end())
+                    n_theta = static_cast<int>(adhesion_params["n_mesh_theta"]); 
+                if (adhesion_params.find("n_mesh_half_l") != adhesion_params.end())
+                    n_half_l = static_cast<int>(adhesion_params["n_mesh_half_l"]); 
+                if (adhesion_params.find("n_mesh_centerline_coords") != adhesion_params.end())
+                    n_coords = static_cast<int>(adhesion_params["n_centerline_coords"]);
+                if (adhesion_params.find("ellipsoid_project_tol") != adhesion_params.end())
+                    project_tol = adhesion_params["ellipsoid_project_tol"];  
+                if (adhesion_params.find("ellipsoid_project_max_iter") != adhesion_params.end())
+                    project_max_iter = static_cast<int>(
+                        adhesion_params["ellipsoid_project_max_iter"]
+                    );  
+                jkr_data.theta = Matrix<T, Dynamic, 1>::LinSpaced(
+                    n_theta, 0.0, boost::math::constants::half_pi<T>()
+                ); 
+                jkr_data.half_l = Matrix<T, Dynamic, 1>::LinSpaced(
+                    n_half_l, 0.5 * L0, 0.5 * Ldiv
                 );  
-            jkr_data.theta = Matrix<T, Dynamic, 1>::LinSpaced(
-                n_theta, 0.0, boost::math::constants::half_pi<T>()
-            ); 
-            jkr_data.half_l = Matrix<T, Dynamic, 1>::LinSpaced(
-                n_half_l, 0.5 * L0, 0.5 * Ldiv
-            );  
-            jkr_data.centerline_coords = Matrix<T, Dynamic, 1>::LinSpaced(
-                n_coords, 0.0, 1.0
-            ); 
-            jkr_data.curvature_radii = calculateCurvatureRadiiTable<T>(
-                jkr_data.theta, jkr_data.half_l, jkr_data.centerline_coords, 
-                R, calibrate_endpoint_radii, project_tol, project_max_iter
-            );  
-        }
-        else 
-        {
-            // TODO Implement this 
-            throw std::runtime_error("Not yet implemented"); 
+                jkr_data.centerline_coords = Matrix<T, Dynamic, 1>::LinSpaced(
+                    n_coords, 0.0, 1.0
+                ); 
+                jkr_data.curvature_radii = calculateCurvatureRadiiTable<T>(
+                    jkr_data.theta, jkr_data.half_l, jkr_data.centerline_coords, 
+                    R, calibrate_endpoint_radii, project_tol, project_max_iter
+                );  
+            }
+            else 
+            {
+                // TODO Implement this 
+                throw std::runtime_error("Not yet implemented"); 
+            }
         } 
     } 
 
