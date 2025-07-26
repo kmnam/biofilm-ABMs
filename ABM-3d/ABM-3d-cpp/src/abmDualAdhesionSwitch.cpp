@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/15/2025
+ *     7/25/2025
  */
 
 #include <Eigen/Dense>
@@ -81,25 +81,104 @@ int main(int argc, char** argv)
     if (token == 0)
         adhesion_mode = AdhesionMode::NONE;
     else if (token == 1)
-        adhesion_mode = AdhesionMode::JKR; 
+        adhesion_mode = AdhesionMode::JKR_ISOTROPIC; 
     else if (token == 2)
-        adhesion_mode = AdhesionMode::KIHARA; 
-    else if (token == 3)
-        adhesion_mode = AdhesionMode::GBK;
+        adhesion_mode = AdhesionMode::JKR_ANISOTROPIC; 
     else 
         throw std::runtime_error("Invalid cell-cell adhesion mode specified"); 
     std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map;
     adhesion_map.insert(std::make_pair(1, 1)); 
     std::unordered_map<std::string, T> adhesion_params;
-    adhesion_params["strength"] = static_cast<T>(json_data["adhesion_strength"].as_double());
-    adhesion_params["mindist"] = static_cast<T>(json_data["adhesion_mindist"].as_double());
-    if (adhesion_mode == AdhesionMode::KIHARA || adhesion_mode == AdhesionMode::GBK)
+    if (adhesion_mode != AdhesionMode::NONE)
     {
-        adhesion_params["distance_exp"] = static_cast<T>(json_data["adhesion_distance_exp"].as_double()); 
-    }
-    if (adhesion_mode == AdhesionMode::GBK) 
-    {
-        adhesion_params["anisotropy_exp1"] = static_cast<T>(json_data["adhesion_anisotropy_exp1"].as_double());
+        // Parse essential input parameters
+        adhesion_params["compute_curvature_radii"] = static_cast<T>(
+            json_data["adhesion_compute_curvature_radii"].as_int64()
+        ); 
+        adhesion_params["surface_energy_density"] = static_cast<T>(
+            json_data["adhesion_surface_energy_density"].as_double()
+        );
+
+        // Parse optional input parameters
+        T imag_tol = 1e-8; 
+        T aberth_tol = 1e-8; 
+        T n_ellip = 100; 
+        T n_mesh_overlap = 100; 
+        T n_mesh_theta = 100; 
+        T n_mesh_half_l = 100; 
+        T n_mesh_centerline_coords = 100;
+        T calibrate_endpoint_radii = 1;
+        T project_tol = 1e-8; 
+        T project_max_iter = 100;  
+        try
+        {
+            imag_tol = static_cast<T>(json_data["adhesion_jkr_imag_tol"].as_double()); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { }
+        try
+        {
+            aberth_tol = static_cast<T>(json_data["adhesion_jkr_aberth_tol"].as_double()); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { }
+        try
+        {
+            n_ellip = static_cast<T>(json_data["adhesion_n_ellip"].as_int64()); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { }
+        try
+        {
+            n_mesh_overlap = static_cast<T>(json_data["adhesion_n_mesh_overlap"].as_int64()); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { }
+        try
+        {
+            n_mesh_theta = static_cast<T>(json_data["adhesion_n_mesh_theta"].as_int64()); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { }
+        try
+        {
+            n_mesh_half_l = static_cast<T>(json_data["adhesion_n_mesh_half_l"].as_int64()); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { }
+        try
+        {
+            n_mesh_centerline_coords = static_cast<T>(
+                json_data["adhesion_n_mesh_centerline_coords"].as_int64()
+            ); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { }
+        try
+        {
+            calibrate_endpoint_radii = static_cast<T>(
+                json_data["adhesion_calibrate_endpoint_radii"].as_int64()
+            ); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { }
+        try
+        {
+            project_tol = static_cast<T>(
+                json_data["adhesion_ellipsoid_project_tol"].as_double()
+            ); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { }
+        try
+        {
+            project_max_iter = static_cast<T>(
+                json_data["adhesion_ellipsoid_project_max_iter"].as_int64()
+            ); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { }
+
+        adhesion_params["jkr_imag_tol"] = imag_tol; 
+        adhesion_params["jkr_aberth_tol"] = aberth_tol; 
+        adhesion_params["n_ellip"] = n_ellip; 
+        adhesion_params["n_mesh_overlap"] = n_mesh_overlap; 
+        adhesion_params["n_mesh_theta"] = n_mesh_theta; 
+        adhesion_params["n_mesh_half_l"] = n_mesh_half_l; 
+        adhesion_params["n_mesh_centerline_coords"] = n_mesh_centerline_coords; 
+        adhesion_params["calibrate_endpoint_radii"] = calibrate_endpoint_radii; 
+        adhesion_params["ellipsoid_project_tol"] = project_tol; 
+        adhesion_params["ellipsoid_project_max_iter"] = project_max_iter;  
     }
 
     // Omit the surface, if desired 
