@@ -75,7 +75,7 @@ std::string floatToString(T x, const int precision = 10)
  *                         projection method. 
  * @returns Table of calculated principal radii of curvature. 
  */
-template <typename T>
+template <typename T, int N = 100>
 Matrix<T, Dynamic, 2> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >& delta,
                                                const T R, const T E0, const T gamma,
                                                const T imag_tol = 1e-20, 
@@ -88,7 +88,7 @@ Matrix<T, Dynamic, 2> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic
     for (int i = 0; i < delta; ++i)
     {
         // Calculate the JKR contact radius 
-        radii(i, 1) = jkrContactRadius<T>(
+        radii(i, 1) = jkrContactRadius<T, N>(
             delta(i), R, E0, gamma, imag_tol, aberth_tol
         ).second;
     }
@@ -440,6 +440,71 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             return -daughter_angle_z_bound + 2 * daughter_angle_z_bound * r;
         };
 
+    JKRData<T> jkr_data;
+    if (adhesion_mode != AdhesionMode::NONE)
+    {
+        const bool compute_curvature_radii = static_cast<bool>(
+            adhesion_params["compute_curvature_radii"]
+        );  
+        const T gamma = adhesion_params["surface_energy_density"];  
+        T imag_tol = 1e-8; 
+        T aberth_tol = 1e-20; 
+        int n_ellip = 100;
+        if (adhesion_params.find("jkr_imag_tol") != adhesion_params.end())
+            imag_tol = adhesion_params["jkr_imag_tol"]; 
+        if (adhesion_params.find("jkr_aberth_tol") != adhesion_params.end())
+            aberth_tol = adhesion_params["jkr_aberth_tol"];
+        if (adhesion_params.find("n_ellip") != adhesion_params.end())
+            n_ellip = adhesion_params["n_ellip"];  
+        jkr_data.contact_radii = calculateJKRContactRadii<T, N>(
+            delta, R, E0, gamma, imag_tol, aberth_tol
+        );
+        jkr_data.ellip_table = getEllipticIntegralTable<T>(n_ellip); 
+        if (compute_curvature_radii)
+        {
+            bool calibrate_endpoint_radii = true;
+            int n_theta = 100; 
+            int n_half_l = 100; 
+            int n_coords = 100; 
+            T project_tol = 1e-6; 
+            int project_max_iter = 100;  
+            if (adhesion_params.find("calibrate_endpoint_radii") != adhesion_params.end()) 
+                calibrate_endpoint_radii = static_cast<bool>(
+                    adhesion_params["calibrate_endpoint_radii"]
+                );
+            if (adhesion_params.find("n_mesh_theta") != adhesion_params.end())
+                n_theta = static_cast<int>(adhesion_params["n_mesh_theta"]); 
+            if (adhesion_params.find("n_mesh_half_l") != adhesion_params.end())
+                n_half_l = static_cast<int>(adhesion_params["n_mesh_half_l"]); 
+            if (adhesion_params.find("n_mesh_centerline_coords") != adhesion_params.end())
+                n_coords = static_cast<int>(adhesion_params["n_centerline_coords"]);
+            if (adhesion_params.find("ellipsoid_project_tol") != adhesion_params.end())
+                project_tol = adhesion_params["ellipsoid_project_tol"];  
+            if (adhesion_params.find("ellipsoid_project_max_iter") != adhesion_params.end())
+                project_max_iter = static_cast<int>(
+                    adhesion_params["ellipsoid_project_max_iter"]
+                );  
+            jkr_data.theta = Matrix<T, Dynamic, 1>::LinSpaced(
+                n_theta, 0.0, boost::math::constants::half_pi<T>()
+            ); 
+            jkr_data.half_l = Matrix<T, Dynamic, 1>::LinSpaced(
+                n_half_l, 0.5 * L0, 0.5 * Ldiv
+            );  
+            jkr_data.centerline_coords = Matrix<T, Dynamic, 1>::LinSpaced(
+                n_coords, 0.0, 1.0
+            ); 
+            jkr_data.curvature_radii = calculateCurvatureRadiiTable<T>(
+                jkr_data.theta, jkr_data.half_l, jkr_data.centerline_coords, 
+                R, calibrate_endpoint_radii, project_tol, project_max_iter
+            );  
+        }
+        else 
+        {
+            // TODO Implement this 
+            throw std::runtime_error("Not yet implemented"); 
+        } 
+    } 
+
     // Check that the cell data array has the correct size if pole ages are 
     // to be tracked 
     if (track_poles && cells.cols() < __ncols_required + 2)
@@ -510,7 +575,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     }
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_xy_bound"] = floatToString<T>(daughter_angle_xy_bound, precision);
-    params["daughter_angle_z_bound"] = floatToString<T>(daughter_angle_z_bound, precision);
+    params["daughter_angle_z_bound"] = floatToString<T>(daughter_anglez_bound, precision);
     params["truncate_surface_friction"] = (truncate_surface_friction ? "1" : "0"); 
     params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_rxy_noise"] = floatToString<T>(max_rxy_noise, precision);
@@ -641,7 +706,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
             cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
             max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-            adhesion_mode, adhesion_params, no_surface, n_start_multithread
+            adhesion_mode, adhesion_params, jkr_data, no_surface,
+            n_start_multithread
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 6> errors = result.second;
@@ -679,7 +745,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
                     max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-                    adhesion_mode, adhesion_params, no_surface
+                    adhesion_mode, adhesion_params, jkr_data, no_surface,
+                    n_start_multithread
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -718,7 +785,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
                 cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
                 max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-                adhesion_mode, adhesion_params, no_surface
+                adhesion_mode, adhesion_params, jkr_data, no_surface,
+                n_start_multithread
             ); 
             cells_new = result.first;
             errors = result.second;
