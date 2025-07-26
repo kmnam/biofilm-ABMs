@@ -93,7 +93,7 @@ T hertzContactArea(const T delta, const T Rx1, const T Ry1, const T Rx2,
     // Column 1: value of K(e), complete elliptic integral of first kind 
     // Column 2: value of E(e), complete elliptic integral of second kind
     // Column 3: value of LHS of Eqn. 3.29 in Barber, which is equal to B / A
-    int nearest_idx; 
+    int nearest_idx = 0; 
     if (ratio < ellip_table(0, 3))
     {
         nearest_idx = 0; 
@@ -188,8 +188,12 @@ std::pair<T, T> jkrContactRadius(const T delta, const T R, const T E,
     else if (roots_real.size() == 2)
     {
         // Sort the real roots in ascending order 
-        std::sort(roots_real.begin(), roots_real.end()); 
-        return std::make_pair(roots_real[0], roots_real[1]);
+        std::sort(roots_real.begin(), roots_real.end());
+
+        // Return as type T 
+        return std::make_pair(
+            static_cast<T>(roots_real[0]), static_cast<T>(roots_real[1])
+        );
     } 
     else   // Otherwise, find the 2 real roots with the smallest imaginary parts
     {
@@ -211,8 +215,12 @@ std::pair<T, T> jkrContactRadius(const T delta, const T R, const T E,
         roots_real.clear();
         roots_real.push_back(real(roots(roots_imag[0].second)));
         roots_real.push_back(real(roots(roots_imag[1].second))); 
-        std::sort(roots_real.begin(), roots_real.end());   
-        return std::make_pair(roots_real[0], roots_real[1]);
+        std::sort(roots_real.begin(), roots_real.end()); 
+
+        // Return as type T 
+        return std::make_pair(
+            static_cast<T>(roots_real[0]), static_cast<T>(roots_real[1])
+        );
     } 
 }
 
@@ -265,7 +273,7 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
         r1, n1, half_l1, R, d12n, s, project_tol, project_max_iter
     ); 
     std::pair<T, T> radii2 = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r2, n2, half_l2, R, -d12n, t, project_totl, project_max_iter
+        r2, n2, half_l2, R, -d12n, t, project_tol, project_max_iter
     );
     T Rx1 = radii1.first; 
     T Ry1 = radii1.second; 
@@ -433,7 +441,6 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T E0, const T deq_target,
         // Check if the proposed update exceeds the given bounds  
         if (gamma_new < min_gamma)
             update = log10(min_gamma) - log_gamma;
-        }
         else if (gamma_new > max_gamma)
             update = log10(max_gamma) - log_gamma;
         learn_rate = -update / deriv;
