@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/25/2025
+ *     7/28/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -76,21 +76,24 @@ std::string floatToString(T x, const int precision = 10)
  * @returns Table of calculated principal radii of curvature. 
  */
 template <typename T, int N = 100>
-Matrix<T, Dynamic, 2> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >& delta,
-                                               const T R, const T E0, const T gamma,
-                                               const T imag_tol = 1e-20, 
-                                               const T aberth_tol = 1e-20)
+ContactRadiiTable<T> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >& delta,
+                                              const Ref<const Matrix<T, Dynamic, 1> >& gamma, 
+                                              const T R, const T E0,
+                                              const T imag_tol = 1e-20, 
+                                              const T aberth_tol = 1e-20)
 {
-    Matrix<T, Dynamic, 2> radii;
-    radii.col(0) = delta; 
+    ContactRadiiTable<T> radii; 
 
     // For each overlap distance ... 
     for (int i = 0; i < delta.size(); ++i)
     {
-        // Calculate the JKR contact radius 
-        radii(i, 1) = jkrContactRadius<T, N>(
-            delta(i), R, E0, gamma, imag_tol, aberth_tol
-        ).second;
+        for (int j = 0; j < gamma.size(); ++j)
+        {
+            // Calculate the JKR contact radius 
+            radii[std::make_pair(i, j)] = jkrContactRadius<T, N>(
+                delta(i), R, E0, gamma(j), imag_tol, aberth_tol
+            ).second;
+        }
     }
 
     return radii;  
@@ -119,10 +122,6 @@ Matrix<T, Dynamic, 2> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic
  *                         projection method. 
  * @returns Table of calculated principal radii of curvature. 
  */
-template <typename T>
-using CurvatureRadiiTable = std::unordered_map<std::tuple<int, int, int>,
-                                               std::pair<T, T>,
-                                               boost::hash<std::tuple<int, int, int> > >;
 template <typename T>
 CurvatureRadiiTable<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1> >& theta,
                                                     const Ref<const Matrix<T, Dynamic, 1> >& half_l,
@@ -329,6 +328,25 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     bool started_multithread = false;  
     boost::random::mt19937 rng(rng_seed);
 
+    // Define additional column indices, if desired
+    int __colidx_gamma = -1; 
+    int __colidx_negpole_t0 = -1; 
+    int __colidx_pospole_t0 = -1;
+    if (adhesion_mode != AdhesionMode::NONE)
+    {
+        __colidx_gamma = 22;
+        if (track_poles)
+        {
+            __colidx_negpole_t0 = 23; 
+            __colidx_pospole_t0 = 24;
+        }
+    }
+    else if (track_poles)
+    {
+        __colidx_negpole_t0 = 22; 
+        __colidx_pospole_t0 = 23;
+    }
+
     // Define Butcher tableau for order 3(2) Runge-Kutta method by Bogacki
     // and Shampine 
     Array<T, Dynamic, Dynamic> A(4, 4); 
@@ -343,6 +361,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     T error_order = 2; 
 
     // Prefactors for cell-cell interaction forces
+    //
+    // TODO Change to balance with new JKR forces 
     Array<T, 3, 1> cell_cell_prefactors; 
     cell_cell_prefactors << 2.5 * E0 * sqrt(R),
                             2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 2.5),
@@ -352,7 +372,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     Array<T, Dynamic, 7> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
 
     // Allow adhesion between all pairs of neighboring cells according to the
-    // given adhesion map 
+    // given adhesion map
+    /* 
     Array<int, Dynamic, 1> to_adhere = Array<int, Dynamic, 1>::Zero(neighbors.rows());
     for (int k = 0; k < neighbors.rows(); ++k)
     {
@@ -371,8 +392,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             dist > R + Rcell && dist < 2 * R
         ); 
     }
+    */
 
-    // Initialize parent IDs (TODO check that they have been correctly specified)
+    // Initialize parent IDs
     std::vector<int> parents(parents_init); 
 
     // Growth rate distribution functions: normal distributions with given means
@@ -441,10 +463,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         };
 
     JKRData<T> jkr_data;
+    jkr_data.max_gamma = 0; 
     if (adhesion_mode != AdhesionMode::NONE)
     {
         // First parse polynomial-solving parameters, if given 
-        T imag_tol = 1e-8; 
+        T imag_tol = 1e-20; 
         T aberth_tol = 1e-20;
         if (adhesion_params.find("jkr_imag_tol") != adhesion_params.end())
             imag_tol = adhesion_params["jkr_imag_tol"]; 
@@ -454,21 +477,44 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Parse the desired equilibrium cell-cell distance and solve for 
         // the corresponding surface energy density  
         const T eqdist = adhesion_params["eqdist"];
-        const T gamma = jkrOptimalSurfaceEnergyDensity<T, 100>(
-            R, E0, eqdist, 100.0, 10000.0, 2 * R, 1e-8, 1e-6, 1.0, 1e-8, 
-            1e-8, imag_tol, aberth_tol
+        jkr_data.max_gamma = jkrOptimalSurfaceEnergyDensity<T, 100>(
+            R, E0, eqdist, 1.0, 1000.0, 2 * R, 1e-8, 1e-6, 1.0, 1e-8, 
+            1e-8, imag_tol, aberth_tol, true
         );
+        if (adhesion_params["jkr_energy_density_switch_time"] == 0)
+            jkr_data.gamma_switch_rate = std::numeric_limits<T>::infinity(); 
+        else
+            jkr_data.gamma_switch_rate = ( 
+                jkr_data.max_gamma / adhesion_params["jkr_energy_density_switch_time"]
+            );  
 
-        // Calculate JKR contact radii for a range of overlap distances
-        int n_overlap = 100; 
+        // Initialize the surface energy density for each cell to be 
+        // the maximum value for group 1 cells and zero for group 2 cells
+        for (int i = 0; i < n; ++i)
+        {
+            if (cells(i, __colidx_group) == 1)
+                cells(i, __colidx_gamma) = jkr_data.max_gamma; 
+            else 
+                cells(i, __colidx_gamma) = 0.0; 
+        }
+
+        // Calculate JKR contact radii for a range of overlap distances and 
+        // surface energy densities 
+        int n_overlap = 100;
+        int n_gamma = 100; 
         if (adhesion_params.find("n_mesh_overlap") != adhesion_params.end())
             n_overlap = adhesion_params["n_mesh_overlap"];
-        Matrix<T, Dynamic, 1> delta = Matrix<T, Dynamic, 1>::LinSpaced(
+        if (adhesion_params.find("n_mesh_gamma") != adhesion_params.end())
+            n_gamma = adhesion_params["n_mesh_gamma"]; 
+        jkr_data.overlaps = Matrix<T, Dynamic, 1>::LinSpaced(
             n_overlap, 0, 1.2 * Rcell
-        );  
-        jkr_data.contact_radii = calculateJKRContactRadii<T, 100>(
-            delta, R, E0, gamma, imag_tol, aberth_tol
         );
+        jkr_data.gamma = Matrix<T, Dynamic, 1>::LinSpaced(
+            n_gamma, 0, jkr_data.max_gamma
+        );
+        jkr_data.contact_radii = calculateJKRContactRadii<T, 100>(
+            jkr_data.overlaps, jkr_data.gamma, R, E0, imag_tol, aberth_tol
+        ); 
 
         // If anisotropic JKR adhesion is desired ... 
         if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
@@ -530,6 +576,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 throw std::runtime_error("Not yet implemented"); 
             }
         } 
+    }
+    // If there is no cell-cell adhesion, fix the surface energy density of 
+    // all cells to zero
+    else 
+    {
+        cells.col(__colidx_gamma) = Array<T, Dynamic, 1>::Zero(n); 
     } 
 
     // Check that the cell data array has the correct size if pole ages are 
@@ -625,10 +677,14 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     }
     params["track_poles"] = (track_poles ? "1" : "0");
     params["no_surface"] = (no_surface ? "1" : "0");
-    params["n_cells_start_switch"] = std::to_string(n_cells_start_switch);  
+    params["n_cells_start_switch"] = std::to_string(n_cells_start_switch);
 
     // Write the initial population to file
     std::unordered_map<int, int> write_other_cols;
+    if (adhesion_mode != AdhesionMode::NONE)
+    {
+        write_other_cols[__colidx_gamma] = 1;    // Write adhesion energy densities as floats
+    }
     if (track_poles)
     {
         write_other_cols[__colidx_negpole_t0] = 1;    // Write pole ages as floats
@@ -670,7 +726,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         {
             auto div_result = divideCellsWithPoles<T>(
                 cells, parents, t, R, Rcell, to_divide, growth_dists, rng,
-                daughter_length_dist, daughter_angle_xy_dist, daughter_angle_z_dist
+                daughter_length_dist, daughter_angle_xy_dist, daughter_angle_z_dist,
+                __colidx_negpole_t0, __colidx_pospole_t0
             );
             cells = div_result.first;
             daughter_pairs = div_result.second;
@@ -696,9 +753,43 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     cells, daughter_pairs, group_attributes, n_groups,
                     switch_rates, growth_dists, attribute_dists, rng, uniform_dist
                 );
+
+                // Update cell surface adhesion energy densities 
+                for (int i = 0; i < n; ++i)
+                {
+                    if (cells(i, __colidx_group) == 1)
+                    {
+                        if (jkr_data.gamma_switch_rate == std::numeric_limits<T>::infinity())
+                        {
+                            cells(i, __colidx_gamma) = jkr_data.max_gamma; 
+                        }
+                        else if (cells(i, __colidx_gamma) < jkr_data.max_gamma)
+                        {
+                            cells(i, __colidx_gamma) += jkr_data.gamma_switch_rate * dt;
+                            if (cells(i, __colidx_gamma) > jkr_data.max_gamma)
+                                cells(i, __colidx_gamma) = jkr_data.max_gamma; 
+                        }
+                    }
+                    else    // cells(i, __colidx_group == 2)
+                    {
+                        if (jkr_data.gamma_switch_rate == std::numeric_limits<T>::infinity())
+                        {
+                            cells(i, __colidx_gamma) = 0; 
+                        }
+                        else if (cells(i, __colidx_gamma) > 0)
+                        {
+                            cells(i, __colidx_gamma) -= jkr_data.gamma_switch_rate * dt; 
+                            if (cells(i, __colidx_gamma) < 0)
+                                cells(i, __colidx_gamma) = 0; 
+                        }
+                    } 
+                }
             }
+            
             // Update neighboring cells 
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+
+            /*
             // Update pairs of adhering cells 
             to_adhere.resize(neighbors.rows());
             for (int k = 0; k < neighbors.rows(); ++k)
@@ -718,6 +809,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     dist > R + Rcell && dist < 2 * R
                 ); 
             }
+            */
         }
 
         // Update cell positions and orientations
@@ -730,11 +822,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         #endif
         auto result = stepRungeKuttaAdaptive<T>(
-            A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-            cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
-            max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-            adhesion_mode, adhesion_params, jkr_data, no_surface,
-            n_start_multithread
+            A, b, bs, cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors,
+            E0, nz_threshold, max_rxy_noise, max_rz_noise, max_nxy_noise,
+            max_nz_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+            jkr_data, __colidx_gamma, no_surface, n_start_multithread
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 6> errors = result.second;
@@ -769,11 +860,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 // the integration 
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
-                    A, b, bs, cells, neighbors, to_adhere, dt_new, iter, R, Rcell,
+                    A, b, bs, cells, neighbors, dt_new, iter, R, Rcell,
                     cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
                     max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-                    adhesion_mode, adhesion_params, jkr_data, no_surface,
-                    n_start_multithread
+                    adhesion_mode, adhesion_params, jkr_data, __colidx_gamma,
+                    no_surface, n_start_multithread
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -809,11 +900,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             // Re-do the integration with the new stepsize
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
-                A, b, bs, cells, neighbors, to_adhere, dt, iter, R, Rcell,
-                cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
-                max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-                adhesion_mode, adhesion_params, jkr_data, no_surface,
-                n_start_multithread
+                A, b, bs, cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors,
+                E0, nz_threshold, max_rxy_noise, max_rz_noise, max_nxy_noise,
+                max_nz_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+                jkr_data, __colidx_gamma, no_surface, n_start_multithread
             ); 
             cells_new = result.first;
             errors = result.second;
@@ -882,6 +972,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 if (max_overlaps(j) > basal_min_overlap)
                     overlap_idx.push_back(j);
             }
+            
             // If there are cells that do not touch the surface, then throw
             // them out 
             if (overlap_idx.size() < cells.rows())
@@ -899,7 +990,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (iter % iter_update_neighbors == 0)
         {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+            
             // Update pairs of adhering cells 
+            /*
             to_adhere.resize(neighbors.rows());
             for (int k = 0; k < neighbors.rows(); ++k)
             {
@@ -918,6 +1011,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     dist > R + Rcell && dist < 2 * R
                 ); 
             }
+            */
         }
 
         // Switch cells between groups if desired 
@@ -928,6 +1022,31 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 cells, group_attributes, n_groups, dt, switch_rates, growth_dists,
                 attribute_dists, rng, uniform_dist
             );
+            
+            // Update cell surface adhesion energy densities 
+            for (int i = 0; i < n; ++i)
+            {
+                if (cells(i, __colidx_group) == 1)
+                {
+                    if (cells(i, __colidx_gamma) < jkr_data.max_gamma)
+                    {
+                        cells(i, __colidx_gamma) += jkr_data.gamma_switch_rate * dt; 
+                        if (cells(i, __colidx_gamma) > jkr_data.max_gamma)
+                            cells(i, __colidx_gamma) = jkr_data.max_gamma;
+                    } 
+                }
+                else    // cells(i, __colidx_group == 2)
+                {
+                    if (cells(i, __colidx_gamma) > 0)
+                    {
+                        cells(i, __colidx_gamma) -= jkr_data.gamma_switch_rate * dt; 
+                        if (cells(i, __colidx_gamma) < 0)
+                            cells(i, __colidx_gamma) = 0; 
+                    }                     
+                } 
+            }
+            
+            /*
             // Update pairs of adhering cells 
             for (int k = 0; k < neighbors.rows(); ++k)
             {
@@ -946,6 +1065,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     dist > R + Rcell && dist < 2 * R
                 ); 
             }
+            */
             // Truncate cell-surface friction coefficients according to Coulomb's law
             if (truncate_surface_friction)
             {
