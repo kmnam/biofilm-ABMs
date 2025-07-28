@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/24/2025
+ *     7/28/2025
  */
 
 #ifndef ADHESION_POTENTIAL_FORCES_HPP
@@ -244,13 +244,18 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
  * @returns Matrix of generalized forces arising from the simplified JKR
  *          contact potential.
  */
+template <typename T>
+using ContactRadiiTable = std::unordered_map<std::pair<int, int>, T,
+                                             boost::hash<std::pair<int, int> > >;
 template <typename T, int Dim>
 Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
                                                 const Ref<const Matrix<T, Dim, 1> >& n2,
                                                 const Ref<const Matrix<T, Dim, 1> >& d12,
                                                 const T R, const T E0, const T gamma,
                                                 const T s, const T t,
-                                                const Ref<const Matrix<T, Dynamic, 2> >& jkr_radius_table,
+                                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_delta, 
+                                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_gamma,
+                                                ContactRadiiTable<T>& jkr_radius_table, 
                                                 const bool include_constraint = true)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
@@ -265,8 +270,9 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
 
         // Find the tabulated overlap value closest to delta, and the 
         // corresponding JKR contact radius 
-        int idx = nearestValue<T>(jkr_radius_table.col(0), delta); 
-        T radius = jkr_radius_table(idx, 1); 
+        int idx_delta = nearestValue<T>(jkr_table_delta, delta);
+        int idx_gamma = nearestValue<T>(jkr_table_gamma, gamma);  
+        T radius = jkr_radius_table[std::make_pair(idx_delta, idx_gamma)];
 
         // Calculate the generalized forces
         T a3 = radius * radius * radius;  
@@ -460,22 +466,25 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
  * @returns Matrix of generalized forces arising from the simplified JKR
  *          contact potential.
  */
+template <typename T>
+using CurvatureRadiiTable = std::unordered_map<std::tuple<int, int, int>,
+                                               std::pair<T, T>,
+                                               boost::hash<std::tuple<int, int, int> > >;
 template <typename T, int Dim>
 Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
                                                   const T half_l1,
                                                   const Ref<const Matrix<T, Dim, 1> >& n2,
                                                   const T half_l2,
                                                   const Ref<const Matrix<T, Dim, 1> >& d12,
-                                                  const T R, const T E0, const T gamma,
+                                                  const T R, const T E0, const T gamma, 
                                                   const T s, const T t,
-                                                  const Ref<const Matrix<T, Dynamic, 2> >& jkr_radius_table,
+                                                  const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_delta, 
+                                                  const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_gamma,
+                                                  ContactRadiiTable<T>& jkr_radius_table, 
                                                   const Ref<const Matrix<T, Dynamic, 1> >& radii_table_theta, 
                                                   const Ref<const Matrix<T, Dynamic, 1> >& radii_table_half_l,
                                                   const Ref<const Matrix<T, Dynamic, 1> >& radii_table_coords,
-                                                  std::unordered_map<
-                                                      std::tuple<int, int, int>,
-                                                      std::pair<T, T>,
-                                                      boost::hash<std::tuple<int, int, int> > >& curvature_radii_table,
+                                                  CurvatureRadiiTable<T>& curvature_radii_table, 
                                                   const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
                                                   const bool include_constraint = true)
 {
@@ -496,17 +505,17 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
 
         // Look up the corresponding principal radii of curvature at the 
         // two contact points  
-        int theta1_nearest = nearestValue<T>(radii_table_theta, theta1); 
-        int theta2_nearest = nearestValue<T>(radii_table_theta, theta2); 
-        int half_l1_nearest = nearestValue<T>(radii_table_half_l, half_l1); 
-        int half_l2_nearest = nearestValue<T>(radii_table_half_l, half_l2); 
-        int s_nearest = nearestValue<T>(radii_table_coords, s); 
-        int t_nearest = nearestValue<T>(radii_table_coords, t); 
+        int idx_theta1 = nearestValue<T>(radii_table_theta, theta1); 
+        int idx_theta2 = nearestValue<T>(radii_table_theta, theta2); 
+        int idx_half_l1 = nearestValue<T>(radii_table_half_l, half_l1); 
+        int idx_half_l2 = nearestValue<T>(radii_table_half_l, half_l2); 
+        int idx_s = nearestValue<T>(radii_table_coords, abs(s) / half_l1); 
+        int idx_t = nearestValue<T>(radii_table_coords, abs(t) / half_l2); 
         std::tuple<int, int, int> tuple1 = std::make_tuple(
-            theta1_nearest, half_l1_nearest, s_nearest
+            idx_theta1, idx_half_l1, idx_s
         ); 
         std::tuple<int, int, int> tuple2 = std::make_tuple(
-            theta2_nearest, half_l2_nearest, t_nearest
+            idx_theta2, idx_half_l2, idx_t
         );  
         std::pair<T, T> radii1 = curvature_radii_table[tuple1]; 
         std::pair<T, T> radii2 = curvature_radii_table[tuple2];
@@ -519,8 +528,9 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
         T area = hertzContactArea<T>(delta, Rx1, Ry1, Rx2, Ry2, n1, n2, ellip_table);
 
         // Compute the correction factor to account for JKR-based adhesion
-        int radius_nearest = nearestValue<T>(jkr_radius_table.col(0), delta); 
-        T jkr_radius = jkr_radius_table(radius_nearest, 1); 
+        int idx_delta = nearestValue<T>(jkr_table_delta, delta);
+        int idx_gamma = nearestValue<T>(jkr_table_gamma, gamma);  
+        T jkr_radius = jkr_radius_table[std::make_pair(idx_delta, idx_gamma)];
         T jkr_radius_factor = jkr_radius / sqrt(R * delta);
         T jkr_area = area * jkr_radius_factor * jkr_radius_factor; 
 
