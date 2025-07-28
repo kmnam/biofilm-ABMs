@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/25/2025
+ *     7/28/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -42,7 +42,9 @@ using boost::multiprecision::pow;
 using std::abs;
 using boost::multiprecision::abs;
 using std::isnan;
-using boost::multiprecision::isnan; 
+using boost::multiprecision::isnan;
+using std::min; 
+using boost::multiprecision::min; 
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef K::Segment_3 Segment_3;
@@ -64,14 +66,16 @@ enum class AdhesionMode
 template <typename T>
 struct JKRData
 {
+    T max_gamma; 
+    T gamma_switch_rate; 
+    Matrix<T, Dynamic, 1> overlaps; 
+    Matrix<T, Dynamic, 1> gamma; 
     Matrix<T, Dynamic, 4> ellip_table;
-    Matrix<T, Dynamic, 2> contact_radii;
     Matrix<T, Dynamic, 1> theta; 
     Matrix<T, Dynamic, 1> half_l; 
-    Matrix<T, Dynamic, 1> centerline_coords; 
-    std::unordered_map<std::tuple<int, int, int>,
-                       std::pair<T, T>,
-                       boost::hash<std::tuple<int, int, int> > > curvature_radii;  
+    Matrix<T, Dynamic, 1> centerline_coords;
+    ContactRadiiTable<T> contact_radii;
+    CurvatureRadiiTable<T> curvature_radii; 
 };
 
 /**
@@ -839,8 +843,6 @@ Array<T, Dynamic, 6> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
  * @param cells Current population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
- * @param to_adhere Boolean array specifying whether, for each pair of 
- *                  neighboring cells, the adhesive force is nonzero.
  * @param dt Timestep. Only used for debugging output.
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
@@ -850,19 +852,19 @@ Array<T, Dynamic, 6> cellCellRepulsiveForces(const Ref<const Array<T, Dynamic, D
  *                      (2). 
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
- * @param jkr_data 
+ * @param jkr_data Pre-computed values for calculating JKR forces.  
  * @returns Derivatives of the cell-cell adhesion energies with respect to  
  *          cell positions and orientations.   
  */
 template <typename T>
 Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                             const Ref<const Array<T, Dynamic, 7> >& neighbors,
-                                            const Ref<const Array<int, Dynamic, 1> >& to_adhere,
                                             const T dt, const int iter,
                                             const T R, const T Rcell, 
                                             const T E0, const AdhesionMode adhesion_mode, 
                                             std::unordered_map<std::string, T>& adhesion_params,
-                                            JKRData<T>& jkr_data)
+                                            JKRData<T>& jkr_data,
+                                            const int colidx_gamma)
 {
     int n = cells.rows();   // Number of cells
 
@@ -886,8 +888,8 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
         int i = static_cast<int>(neighbors(k, 0)); 
         int j = static_cast<int>(neighbors(k, 1));
 
-        // Check that the two cells adhere and their overlap is nonzero 
-        if (to_adhere(k) && overlaps(k) > 0)
+        // Check that the two cells overlap 
+        if (overlaps(k) > 0)
         {
             // Extract the cell position and orientation vectors 
             Matrix<T, 3, 1> ri = cells(i, __colseq_r).matrix();
@@ -904,23 +906,33 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
             Array<T, 2, 6> forces;
             if (adhesion_mode == AdhesionMode::JKR_ISOTROPIC)
             {
-                const T gamma = adhesion_params["surface_energy_density"]; 
+                // Get the adhesion energy density 
+                T gamma = min(cells(i, colidx_gamma), cells(j, colidx_gamma));
+
                 // Enforce orientation vector norm constraint
-                forces = forcesIsotropicJKRLagrange<T, 3>(
-                    ni, nj, dij, R, E0, gamma, si, sj, jkr_data.contact_radii,
-                    true
-                ); 
+                if (gamma > 0)
+                    forces = forcesIsotropicJKRLagrange<T, 3>(
+                        ni, nj, dij, R, E0, gamma, si, sj, jkr_data.overlaps, 
+                        jkr_data.gamma, jkr_data.contact_radii, true
+                    );
+                else 
+                    forces = Array<T, 2, 6>::Zero();  
             }
             else if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
             {
-                const T gamma = adhesion_params["surface_energy_density"]; 
-                // Enforce orientation vector norm constraint 
-                forces = forcesAnisotropicJKRLagrange<T, 3>(
-                    ni, half_li, nj, half_lj, dij, R, E0, gamma, si, sj, 
-                    jkr_data.contact_radii, jkr_data.theta, jkr_data.half_l,
-                    jkr_data.centerline_coords, jkr_data.curvature_radii,
-                    jkr_data.ellip_table, true
-                );
+                // Get the adhesion energy density 
+                T gamma = min(cells(i, colidx_gamma), cells(j, colidx_gamma));
+
+                // Enforce orientation vector norm constraint
+                if (gamma > 0)
+                    forces = forcesAnisotropicJKRLagrange<T, 3>(
+                        ni, half_li, nj, half_lj, dij, R, E0, gamma, si, sj,
+                        jkr_data.overlaps, jkr_data.gamma, jkr_data.contact_radii,
+                        jkr_data.theta, jkr_data.half_l, jkr_data.centerline_coords,
+                        jkr_data.curvature_radii, jkr_data.ellip_table, true
+                    );
+                else 
+                    forces = Array<T, 2, 6>::Zero(); 
             }
             #ifdef DEBUG_CHECK_CELL_CELL_ADHESIVE_FORCES_NAN
                 if (forces.isNaN().any() || forces.isInf().any())
@@ -955,8 +967,6 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
  * @param cells Existing population of cells. 
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
- * @param to_adhere Boolean array specifying whether, for each pair of 
- *                  neighboring cells, the adhesive force is nonzero.
  * @param dt Timestep. Only used for debugging output.
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
@@ -979,7 +989,6 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
 template <typename T>
 Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                            const Ref<const Array<T, Dynamic, 7> >& neighbors,
-                                           const Ref<const Array<int, Dynamic, 1> >& to_adhere,
                                            const T dt, const int iter,
                                            const T R, const T Rcell,
                                            const Ref<const Array<T, 3, 1> >& cell_cell_prefactors,
@@ -987,7 +996,7 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
                                            const Ref<const Array<int, Dynamic, 1> >& assume_2d,
                                            const AdhesionMode adhesion_mode,
                                            std::unordered_map<std::string, T>& adhesion_params,
-                                           JKRData<T>& jkr_data, 
+                                           JKRData<T>& jkr_data, const int colidx_gamma,  
                                            const bool no_surface,
                                            const bool multithread)
 {
@@ -1014,8 +1023,8 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
     if (adhesion_mode != AdhesionMode::NONE)
     {
         dEdq_adhesion = cellCellAdhesiveForces<T>(
-            cells, neighbors, to_adhere, dt, iter, R, Rcell, E0, adhesion_mode,
-            adhesion_params, jkr_data
+            cells, neighbors, dt, iter, R, Rcell, E0, adhesion_mode,
+            adhesion_params, jkr_data, colidx_gamma
         ); 
     }
 
@@ -1142,8 +1151,6 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  * @param cells Existing population of cells. 
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
- * @param to_adhere Boolean array specifying whether, for each pair of 
- *                  neighboring cells, the adhesive force is nonzero.
  * @param dt Timestep. Only used for debugging output.
  * @param iter Iteration number. Only used for debugging output. 
  * @param R Cell radius, including the EPS.
@@ -1168,7 +1175,6 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
 template <typename T>
 Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
                                    const Ref<const Array<T, Dynamic, 7> >& neighbors,
-                                   const Ref<const Array<int, Dynamic, 1> >& to_adhere,
                                    const T dt, const int iter, const T R, const T Rcell,
                                    const Ref<const Array<T, 3, 1> >& cell_cell_prefactors,
                                    const T E0,
@@ -1176,8 +1182,8 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const Ref<const Array<T, Dynamic, 6> >& noise,
                                    const AdhesionMode adhesion_mode,
                                    std::unordered_map<std::string, T>& adhesion_params,
-                                   JKRData<T>& jkr_data, const bool no_surface,
-                                   const bool multithread)
+                                   JKRData<T>& jkr_data, const int colidx_gamma,
+                                   const bool no_surface, const bool multithread)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -1210,9 +1216,9 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
 
     // Compute all conservative forces and add noise 
     Array<T, Dynamic, 6> forces = getConservativeForces<T>(
-        cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors, 
-        E0, assume_2d, adhesion_mode, adhesion_params, jkr_data, no_surface,
-        multithread
+        cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors, E0,
+        assume_2d, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
+        no_surface, multithread
     );
     forces += noise; 
     
@@ -1479,8 +1485,6 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param cells Existing population of cells.
  * @param neighbors Array specifying pairs of neighboring cells in the 
  *                  population.
- * @param to_adhere Boolean array specifying whether, for each pair of 
- *                  neighboring cells, the adhesive force is nonzero.
  * @param dt Timestep. 
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
@@ -1504,7 +1508,8 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  *                      (2). 
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
- * @param jkr_data 
+ * @param jkr_data
+ * @param colidx_gamma 
  * @param no_surface If true, omit the surface from the simulation. 
  * @param n_start_multithread Minimum number of cells at which to start using
  *                            multithreading. 
@@ -1518,7 +1523,6 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            const Ref<const Array<T, Dynamic, 1> >& bs, 
                            const Ref<const Array<T, Dynamic, Dynamic> >& cells,  
                            const Ref<const Array<T, Dynamic, 7> >& neighbors,
-                           const Ref<const Array<int, Dynamic, 1> >& to_adhere, 
                            const T dt, const int iter, const T R, const T Rcell,
                            const Ref<const Array<T, 3, 1> >& cell_cell_prefactors,
                            const T E0, const T nz_threshold, const T max_rxy_noise,
@@ -1527,8 +1531,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode,
                            std::unordered_map<std::string, T>& adhesion_params,
-                           JKRData<T>& jkr_data, const bool no_surface,
-                           const int n_start_multithread = 50)
+                           JKRData<T>& jkr_data, const int colidx_gamma, 
+                           const bool no_surface, const int n_start_multithread = 50)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
         for (int k = 0; k < neighbors.rows(); ++k)
@@ -1555,6 +1559,32 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
             }
         }
     #endif
+    #ifdef DEBUG_WARN_CELL_BODIES_CONTACTING
+        for (int k = 0; k < neighbors.rows(); ++k)
+        {
+            if (neighbors(k, Eigen::seq(2, 4)).matrix().norm() < 0.99 * (2 * Rcell))
+            {
+                int i = neighbors(k, 0); 
+                int j = neighbors(k, 1); 
+                std::cout << "[WARN] Iteration " << iter
+                          << ": Found cell body contact between cells " 
+                          << i << " and " << j << std::endl;
+                std::cout << "Timestep: " << dt << std::endl; 
+                pairConfigSummaryWithVelocities<T>(
+                    static_cast<int>(cells(i, __colidx_id)),
+                    cells(i, __colseq_r).matrix(),
+                    cells(i, __colseq_n).matrix(), cells(i, __colidx_half_l),
+                    cells(i, __colseq_dr).matrix(),
+                    static_cast<int>(cells(j, __colidx_id)),
+                    cells(j, __colseq_r).matrix(),
+                    cells(j, __colseq_n).matrix(), cells(j, __colidx_half_l),
+                    cells(j, __colseq_dr).matrix()
+                );
+                //throw std::runtime_error("Found near-zero distance");
+            }
+        }
+    #endif
+
 
     // Define an array of indicators for whether each cell is roughly horizontal
     //
@@ -1611,8 +1641,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
     bool multithread = (n >= n_start_multithread); 
     std::vector<Array<T, Dynamic, 6> > velocities;
     Array<T, Dynamic, 6> v0 = getVelocities<T>(
-        cells, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
-        E0, assume_2d, noise, adhesion_mode, adhesion_params, jkr_data, 
+        cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors, E0,
+        assume_2d, noise, adhesion_mode, adhesion_params, jkr_data, colidx_gamma, 
         no_surface, multithread
     );
     velocities.push_back(v0);
@@ -1625,9 +1655,9 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
         cells_i(Eigen::all, __colseq_coords) += multipliers * dt;
         normalizeOrientations<T>(cells_i, dt, iter);    
         Array<T, Dynamic, 6> vi = getVelocities<T>(
-            cells_i, neighbors, to_adhere, dt, iter, R, Rcell, cell_cell_prefactors,
+            cells_i, neighbors, dt, iter, R, Rcell, cell_cell_prefactors,
             E0, assume_2d, noise, adhesion_mode, adhesion_params, jkr_data,
-            no_surface, multithread
+            colidx_gamma, no_surface, multithread
         );
         velocities.push_back(vi);
     }
