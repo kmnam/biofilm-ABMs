@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/14/2025
+ *     7/28/2025
  */
 
 #ifndef BIOFILM_CELL_GROWTH_3D_HPP
@@ -764,7 +764,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
                          boost::random::mt19937& rng,
                          std::function<T(boost::random::mt19937&)>& daughter_length_dist,
                          std::function<T(boost::random::mt19937&)>& daughter_angle_xy_dist,
-                         std::function<T(boost::random::mt19937&)>& daughter_angle_z_dist)
+                         std::function<T(boost::random::mt19937&)>& daughter_angle_z_dist,
+                         const int colidx_negpole_t0, const int colidx_pospole_t0)
 {
     // If there are cells to be divided ...
     const int n_divide = to_divide.sum();
@@ -937,18 +938,19 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
             // The second daughter cell of length L2 inherits the *positive*
             // pole (cell body coordinate s = L / 2) in the mother cell, and
             // gets a new *negative* pole at cell body coordinate s = -L2 / 2
-            Array<T, Dynamic, 2> poles_t0(cells_total(idx_divide, __colseq_poles_t0));
+            std::vector<int> colseq_poles_t0 {colidx_negpole_t0, colidx_pospole_t0}; 
+            Array<T, Dynamic, 2> poles_t0(cells_total(idx_divide, colseq_poles_t0)); 
             for (int i = 0; i < n_divide; ++i)
             {
                 // First daughter cell inherits negative pole and gets new
                 // positive pole 
-                cells_total(idx_divide[i], __colidx_negpole_t0) = poles_t0(i, 0);
-                cells_total(idx_divide[i], __colidx_pospole_t0) = t;
+                cells_total(idx_divide[i], colidx_negpole_t0) = poles_t0(i, 0);
+                cells_total(idx_divide[i], colidx_pospole_t0) = t;
 
                 // Second daughter cell inherits positive pole and gets new
                 // negative pole 
-                new_cells(i, __colidx_negpole_t0) = t; 
-                new_cells(i, __colidx_pospole_t0) = poles_t0(i, 1);
+                new_cells(i, colidx_negpole_t0) = t; 
+                new_cells(i, colidx_pospole_t0) = poles_t0(i, 1);
             }
 
             // Update cell birth times
