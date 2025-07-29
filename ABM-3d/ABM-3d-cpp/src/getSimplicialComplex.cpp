@@ -23,7 +23,6 @@
 #include "../include/graphs.hpp"
 
 typedef double T;
-typedef boost::adjacency_list<boost::hash_setS, boost::vecS, boost::undirectedS> Graph; 
 
 int main(int argc, char** argv)
 {
