@@ -77,8 +77,8 @@ int main(int argc, char** argv)
             // Define the cell-cell neighbor graph and get its degree distribution
             // and connected components 
             Graph graph = getNeighborGraph<T>(cells, R, Ldiv);
-            std::vector<int> components = getConnectedComponents<T>(graph);
-            Array<int, Dynamic, 1> degrees = getDegrees<T>(graph);
+            std::vector<int> components = getConnectedComponents(graph);
+            Array<int, Dynamic, 1> degrees = getDegrees(graph);
 
             // Get the clustering coefficients 
             Array<T, Dynamic, 1> cluster_coefs = getLocalClusteringCoefficients<T>(graph);  
@@ -87,9 +87,9 @@ int main(int argc, char** argv)
             Array<int, Dynamic, 3> triangles(0, 3);
             Array<int, Dynamic, 4> tetrahedra(0, 4);  
             if (get_triangles)
-                triangles = getTriangles<T>(graph);
+                triangles = getTriangles(graph);
             if (get_tetrahedra)
-                tetrahedra = getTetrahedra<T>(graph); 
+                tetrahedra = getTetrahedra(graph); 
 
             // Output the graph 
             writeGraph<T>(
