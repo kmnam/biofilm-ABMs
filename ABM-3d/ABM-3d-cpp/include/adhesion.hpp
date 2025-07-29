@@ -99,7 +99,7 @@ Array<T, 2, 2 * Dim> forcesSimpleJKRLagrange(const Ref<const Matrix<T, Dim, 1> >
     const T dist = d12.norm(); 
 
     // If the distance is less than 2 * R ... 
-    if (dist <= 2 * R)
+    if (dist < 2 * R)
     {
         // Normalize the distance vector 
         Matrix<T, Dim, 1> d12n = d12 / dist;
@@ -175,7 +175,7 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
     const T dist = d12.norm(); 
 
     // If the distance is less than 2 * R ... 
-    if (dist <= 2 * R)
+    if (dist < 2 * R)
     {
         // Normalize the distance vector 
         Matrix<T, Dim, 1> d12n = d12 / dist;
@@ -262,7 +262,7 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
     const T dist = d12.norm(); 
 
     // If the distance is less than 2 * R ... 
-    if (dist <= 2 * R)
+    if (dist < 2 * R)
     {
         // Normalize the distance vector 
         Matrix<T, Dim, 1> d12n = d12 / dist;
@@ -358,7 +358,7 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
     const T dist = d12.norm(); 
 
     // If the distance is less than 2 * R ... 
-    if (dist <= 2 * R)
+    if (dist < 2 * R)
     {
         // Normalize the distance vector 
         Matrix<T, Dim, 1> d12n = d12 / dist;
@@ -492,7 +492,7 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
     const T dist = d12.norm(); 
 
     // If the distance is less than 2 * R ... 
-    if (dist <= 2 * R)
+    if (dist < 2 * R)
     {
         // Normalize the distance vector and get the overlap distance 
         Matrix<T, Dim, 1> d12n = d12 / dist;
@@ -510,7 +510,7 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
         int idx_half_l1 = nearestValue<T>(radii_table_half_l, half_l1); 
         int idx_half_l2 = nearestValue<T>(radii_table_half_l, half_l2); 
         int idx_s = nearestValue<T>(radii_table_coords, abs(s) / half_l1); 
-        int idx_t = nearestValue<T>(radii_table_coords, abs(t) / half_l2); 
+        int idx_t = nearestValue<T>(radii_table_coords, abs(t) / half_l2);
         std::tuple<int, int, int> tuple1 = std::make_tuple(
             idx_theta1, idx_half_l1, idx_s
         ); 
@@ -532,7 +532,7 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
         int idx_gamma = nearestValue<T>(jkr_table_gamma, gamma);  
         T jkr_radius = jkr_radius_table[std::make_pair(idx_delta, idx_gamma)];
         T jkr_radius_factor = jkr_radius / sqrt(R * delta);
-        T jkr_area = area * jkr_radius_factor * jkr_radius_factor; 
+        T jkr_area = area * jkr_radius_factor * jkr_radius_factor;
 
         // Calculate the generalized forces
         T term = 4 * sqrt(jkr_area * jkr_radius * gamma * E0);
