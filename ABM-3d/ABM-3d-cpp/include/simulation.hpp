@@ -537,7 +537,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 bool calibrate_endpoint_radii = true;
                 int n_theta = 100; 
                 int n_half_l = 100; 
-                int n_coords = 100; 
+                int n_coords = 100;
                 T project_tol = 1e-6; 
                 int project_max_iter = 100;  
                 if (adhesion_params.find("calibrate_endpoint_radii") != adhesion_params.end()) 
@@ -549,7 +549,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 if (adhesion_params.find("n_mesh_half_l") != adhesion_params.end())
                     n_half_l = static_cast<int>(adhesion_params["n_mesh_half_l"]); 
                 if (adhesion_params.find("n_mesh_centerline_coords") != adhesion_params.end())
-                    n_coords = static_cast<int>(adhesion_params["n_centerline_coords"]);
+                    n_coords = static_cast<int>(adhesion_params["n_mesh_centerline_coords"]);
                 if (adhesion_params.find("ellipsoid_project_tol") != adhesion_params.end())
                     project_tol = adhesion_params["ellipsoid_project_tol"];  
                 if (adhesion_params.find("ellipsoid_project_max_iter") != adhesion_params.end())
@@ -564,11 +564,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 );  
                 jkr_data.centerline_coords = Matrix<T, Dynamic, 1>::LinSpaced(
                     n_coords, 0.0, 1.0
-                ); 
+                );
                 jkr_data.curvature_radii = calculateCurvatureRadiiTable<T>(
                     jkr_data.theta, jkr_data.half_l, jkr_data.centerline_coords, 
                     R, calibrate_endpoint_radii, project_tol, project_max_iter
-                );  
+                );
             }
             else 
             {
