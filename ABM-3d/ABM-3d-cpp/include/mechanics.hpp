@@ -892,9 +892,7 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
         if (overlaps(k) > 0)
         {
             // Extract the cell position and orientation vectors 
-            Matrix<T, 3, 1> ri = cells(i, __colseq_r).matrix();
             Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix();
-            Matrix<T, 3, 1> rj = cells(j, __colseq_r).matrix();
             Matrix<T, 3, 1> nj = cells(j, __colseq_n).matrix();
             T half_li = cells(i, __colidx_half_l);
             T half_lj = cells(j, __colidx_half_l);
@@ -903,7 +901,7 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
             T sj = neighbors(k, 6); 
 
             // Get the corresponding forces
-            Array<T, 2, 6> forces;
+            Array<T, 2, 6> forces = Array<T, 2, 6>::Zero();
             if (adhesion_mode == AdhesionMode::JKR_ISOTROPIC)
             {
                 // Get the adhesion energy density 
@@ -915,8 +913,6 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                         ni, nj, dij, R, E0, gamma, si, sj, jkr_data.overlaps, 
                         jkr_data.gamma, jkr_data.contact_radii, true
                     );
-                else 
-                    forces = Array<T, 2, 6>::Zero();  
             }
             else if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
             {
@@ -931,8 +927,6 @@ Array<T, Dynamic, 6> cellCellAdhesiveForces(const Ref<const Array<T, Dynamic, Dy
                         jkr_data.theta, jkr_data.half_l, jkr_data.centerline_coords,
                         jkr_data.curvature_radii, jkr_data.ellip_table, true
                     );
-                else 
-                    forces = Array<T, 2, 6>::Zero(); 
             }
             #ifdef DEBUG_CHECK_CELL_CELL_ADHESIVE_FORCES_NAN
                 if (forces.isNaN().any() || forces.isInf().any())
