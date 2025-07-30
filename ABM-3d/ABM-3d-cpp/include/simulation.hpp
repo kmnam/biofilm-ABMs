@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/28/2025
+ *     7/30/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -360,39 +360,15 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     bs << 7./24., 1./4., 1./3., 1./8.;
     T error_order = 2; 
 
-    // Prefactors for cell-cell interaction forces
-    //
-    // TODO Change to balance with new JKR forces 
-    Array<T, 3, 1> cell_cell_prefactors; 
-    cell_cell_prefactors << 2.5 * E0 * sqrt(R),
-                            2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 2.5),
-                            2.5 * Ecell * sqrt(Rcell);
+    // Prefactors for cell-cell repulsion forces 
+    Array<T, 4, 1> repulsion_prefactors;
+    repulsion_prefactors << (4. / 3.) * E0 / R, 
+                            (4. / 3.) * E0 * sqrt(R),
+                            (4. / 3.) * Ecell * sqrt(Rcell), 
+                            (4. / 3.) * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5);
 
     // Compute initial array of neighboring cells
     Array<T, Dynamic, 7> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
-
-    // Allow adhesion between all pairs of neighboring cells according to the
-    // given adhesion map
-    /* 
-    Array<int, Dynamic, 1> to_adhere = Array<int, Dynamic, 1>::Zero(neighbors.rows());
-    for (int k = 0; k < neighbors.rows(); ++k)
-    {
-        int ni = neighbors(k, 0); 
-        int nj = neighbors(k, 1);
-        int gi = cells(ni, __colidx_group); 
-        int gj = cells(nj, __colidx_group);
-        std::pair<int, int> pair; 
-        if (gi < gj)
-            pair = std::make_pair(gi, gj); 
-        else 
-            pair = std::make_pair(gj, gi); 
-        T dist = neighbors(k, Eigen::seq(2, 4)).matrix().norm(); 
-        to_adhere(k) = (
-            adhesion_map.find(pair) != adhesion_map.end() &&
-            dist > R + Rcell && dist < 2 * R
-        ); 
-    }
-    */
 
     // Initialize parent IDs
     std::vector<int> parents(parents_init); 
@@ -507,7 +483,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         if (adhesion_params.find("n_mesh_gamma") != adhesion_params.end())
             n_gamma = adhesion_params["n_mesh_gamma"]; 
         jkr_data.overlaps = Matrix<T, Dynamic, 1>::LinSpaced(
-            n_overlap, 0, 1.2 * Rcell
+            n_overlap, 0, 2 * (R - Rcell)
         );
         jkr_data.gamma = Matrix<T, Dynamic, 1>::LinSpaced(
             n_gamma, 0, jkr_data.max_gamma
@@ -788,28 +764,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             
             // Update neighboring cells 
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
-
-            /*
-            // Update pairs of adhering cells 
-            to_adhere.resize(neighbors.rows());
-            for (int k = 0; k < neighbors.rows(); ++k)
-            {
-                int ni = neighbors(k, 0); 
-                int nj = neighbors(k, 1);
-                int gi = cells(ni, __colidx_group); 
-                int gj = cells(nj, __colidx_group);
-                std::pair<int, int> pair; 
-                if (gi < gj)
-                    pair = std::make_pair(gi, gj); 
-                else 
-                    pair = std::make_pair(gj, gi); 
-                T dist = neighbors(k, Eigen::seq(2, 4)).matrix().norm(); 
-                to_adhere(k) = (
-                    adhesion_map.find(pair) != adhesion_map.end() &&
-                    dist > R + Rcell && dist < 2 * R
-                ); 
-            }
-            */
         }
 
         // Update cell positions and orientations
@@ -822,9 +776,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         #endif
         auto result = stepRungeKuttaAdaptive<T>(
-            A, b, bs, cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors,
-            E0, nz_threshold, max_rxy_noise, max_rz_noise, max_nxy_noise,
-            max_nz_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+            A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
+            repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
+            max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
             jkr_data, __colidx_gamma, no_surface, n_start_multithread
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
@@ -860,11 +814,11 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 // the integration 
                 T dt_new = dt * factor; 
                 result = stepRungeKuttaAdaptive<T>(
-                    A, b, bs, cells, neighbors, dt_new, iter, R, Rcell,
-                    cell_cell_prefactors, E0, nz_threshold, max_rxy_noise,
+                    A, b, bs, cells, neighbors, dt_new, iter, R, Rcell, E0,
+                    repulsion_prefactors, nz_threshold, max_rxy_noise,
                     max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-                    adhesion_mode, adhesion_params, jkr_data, __colidx_gamma,
-                    no_surface, n_start_multithread
+                    adhesion_mode, jkr_data, __colidx_gamma, no_surface,
+                    n_start_multithread
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -900,9 +854,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             // Re-do the integration with the new stepsize
             dt *= factor;
             result = stepRungeKuttaAdaptive<T>(
-                A, b, bs, cells, neighbors, dt, iter, R, Rcell, cell_cell_prefactors,
-                E0, nz_threshold, max_rxy_noise, max_rz_noise, max_nxy_noise,
-                max_nz_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+                A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
+                repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
+                max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
                 jkr_data, __colidx_gamma, no_surface, n_start_multithread
             ); 
             cells_new = result.first;
@@ -988,31 +942,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // Update neighboring cells 
         if (iter % iter_update_neighbors == 0)
-        {
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
-            
-            // Update pairs of adhering cells 
-            /*
-            to_adhere.resize(neighbors.rows());
-            for (int k = 0; k < neighbors.rows(); ++k)
-            {
-                int ni = neighbors(k, 0); 
-                int nj = neighbors(k, 1);
-                int gi = cells(ni, __colidx_group); 
-                int gj = cells(nj, __colidx_group);
-                std::pair<int, int> pair; 
-                if (gi < gj)
-                    pair = std::make_pair(gi, gj); 
-                else 
-                    pair = std::make_pair(gj, gi); 
-                T dist = neighbors(k, Eigen::seq(2, 4)).matrix().norm(); 
-                to_adhere(k) = (
-                    adhesion_map.find(pair) != adhesion_map.end() &&
-                    dist > R + Rcell && dist < 2 * R
-                ); 
-            }
-            */
-        }
 
         // Switch cells between groups if desired 
         if (n >= n_cells_start_switch && switch_mode == SwitchMode::MARKOV)
@@ -1046,26 +976,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 } 
             }
             
-            /*
-            // Update pairs of adhering cells 
-            for (int k = 0; k < neighbors.rows(); ++k)
-            {
-                int ni = neighbors(k, 0); 
-                int nj = neighbors(k, 1);
-                int gi = cells(ni, __colidx_group); 
-                int gj = cells(nj, __colidx_group);
-                std::pair<int, int> pair; 
-                if (gi < gj)
-                    pair = std::make_pair(gi, gj); 
-                else 
-                    pair = std::make_pair(gj, gi); 
-                T dist = neighbors(k, Eigen::seq(2, 4)).matrix().norm(); 
-                to_adhere(k) = (
-                    adhesion_map.find(pair) != adhesion_map.end() &&
-                    dist > R + Rcell && dist < 2 * R
-                ); 
-            }
-            */
             // Truncate cell-surface friction coefficients according to Coulomb's law
             if (truncate_surface_friction)
             {
