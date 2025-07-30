@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/28/2025
+ *     7/29/2025
  */
 
 #ifndef ADHESION_POTENTIAL_FORCES_HPP
@@ -155,6 +155,8 @@ Array<T, 2, 2 * Dim> forcesSimpleJKRLagrange(const Ref<const Matrix<T, Dim, 1> >
  *          achieved. 
  * @param include_constraint If true, enforce the orientation vector norm 
  *                           constraint on the generalized torques.
+ * @param max_overlap If non-negative, cap the overlap distance at this 
+ *                    maximum value. 
  * @param imag_tol Tolerance for determining whether a root for the the JKR
  *                 contact radius polynomial is real.
  * @param aberth_tol Tolerance for the Aberth-Ehrlich method.
@@ -162,30 +164,37 @@ Array<T, 2, 2 * Dim> forcesSimpleJKRLagrange(const Ref<const Matrix<T, Dim, 1> >
  *          contact potential.
  */
 template <typename T, int Dim, int N = 100>
-Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
-                                                const Ref<const Matrix<T, Dim, 1> >& n2,
-                                                const Ref<const Matrix<T, Dim, 1> >& d12,
-                                                const T R, const T E0, const T gamma,
-                                                const T s, const T t,
-                                                const bool include_constraint = true,
-                                                const T imag_tol = 1e-20, 
-                                                const T aberth_tol = 1e-20)
+std::pair<Array<T, 2, 2 * Dim>, T> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
+                                                              const Ref<const Matrix<T, Dim, 1> >& n2,
+                                                              const Ref<const Matrix<T, Dim, 1> >& d12,
+                                                              const T R, const T E0,
+                                                              const T gamma,
+                                                              const T s, const T t,
+                                                              const bool include_constraint = true,
+                                                              const T max_overlap = -1, 
+                                                              const T imag_tol = 1e-20, 
+                                                              const T aberth_tol = 1e-20)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
-    const T dist = d12.norm(); 
+    const T dist = d12.norm();
+    T radius = 0;  
 
     // If the distance is less than 2 * R ... 
     if (dist < 2 * R)
     {
         // Normalize the distance vector 
         Matrix<T, Dim, 1> d12n = d12 / dist;
-        T delta = 2 * R - dist; 
+        T delta = 2 * R - dist;
+
+        // Cap the overlap at the maximum value if given 
+        if (max_overlap >= 0 && delta > max_overlap)
+            delta = max_overlap;  
 
         // Get the corresponding JKR contact area
         std::pair<T, T> radii = jkrContactRadius<T, N>(
             delta, R, E0, gamma, imag_tol, aberth_tol
         );
-        T radius = radii.second;    // Always choose the larger radius 
+        radius = radii.second;    // Always choose the larger radius 
 
         // Calculate the generalized forces
         T a3 = radius * radius * radius;  
@@ -213,7 +222,7 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
         }
     }
     
-    return dEdq.array(); 
+    return std::make_pair(dEdq.array(), radius); 
 }
 
 /**
@@ -241,6 +250,8 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
  *                         to be given in order of increasing overlap.  
  * @param include_constraint If true, enforce the orientation vector norm 
  *                           constraint on the generalized torques.
+ * @param max_overlap If non-negative, cap the overlap distance at this 
+ *                    maximum value. 
  * @returns Matrix of generalized forces arising from the simplified JKR
  *          contact potential.
  */
@@ -248,18 +259,21 @@ template <typename T>
 using ContactRadiiTable = std::unordered_map<std::pair<int, int>, T,
                                              boost::hash<std::pair<int, int> > >;
 template <typename T, int Dim>
-Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
-                                                const Ref<const Matrix<T, Dim, 1> >& n2,
-                                                const Ref<const Matrix<T, Dim, 1> >& d12,
-                                                const T R, const T E0, const T gamma,
-                                                const T s, const T t,
-                                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_delta, 
-                                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_gamma,
-                                                ContactRadiiTable<T>& jkr_radius_table, 
-                                                const bool include_constraint = true)
+std::pair<Array<T, 2, 2 * Dim>, T> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
+                                                              const Ref<const Matrix<T, Dim, 1> >& n2,
+                                                              const Ref<const Matrix<T, Dim, 1> >& d12,
+                                                              const T R, const T E0,
+                                                              const T gamma,
+                                                              const T s, const T t,
+                                                              const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_delta, 
+                                                              const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_gamma,
+                                                              ContactRadiiTable<T>& jkr_radius_table, 
+                                                              const bool include_constraint = true,
+                                                              const T max_overlap = -1)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
-    const T dist = d12.norm(); 
+    const T dist = d12.norm();
+    T radius = 0;  
 
     // If the distance is less than 2 * R ... 
     if (dist < 2 * R)
@@ -268,11 +282,15 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
         Matrix<T, Dim, 1> d12n = d12 / dist;
         T delta = 2 * R - dist;
 
+        // Cap the overlap at the maximum value if given 
+        if (max_overlap >= 0 && delta > max_overlap)
+            delta = max_overlap;  
+
         // Find the tabulated overlap value closest to delta, and the 
         // corresponding JKR contact radius 
         int idx_delta = nearestValue<T>(jkr_table_delta, delta);
         int idx_gamma = nearestValue<T>(jkr_table_gamma, gamma);  
-        T radius = jkr_radius_table[std::make_pair(idx_delta, idx_gamma)];
+        radius = jkr_radius_table[std::make_pair(idx_delta, idx_gamma)];
 
         // Calculate the generalized forces
         T a3 = radius * radius * radius;  
@@ -300,7 +318,7 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
         }
     }
     
-    return dEdq.array(); 
+    return std::make_pair(dEdq.array(), radius); 
 }
 
 /**
@@ -329,6 +347,8 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
  *                    and 1. 
  * @param include_constraint If true, enforce the orientation vector norm 
  *                           constraint on the generalized torques.
+ * @param max_overlap If non-negative, cap the overlap distance at this 
+ *                    maximum value. 
  * @param project_tol Tolerance for ellipsoid projection. 
  * @param project_max_iter Maximum number of iterations for ellipsoid projection. 
  * @param imag_tol Tolerance for determining whether a root for the the JKR
@@ -338,24 +358,27 @@ Array<T, 2, 2 * Dim> forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1
  *          contact potential.
  */
 template <typename T, int Dim, int N = 100>
-Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
-                                                  const Ref<const Matrix<T, Dim, 1> >& n1,
-                                                  const T half_l1,
-                                                  const Ref<const Matrix<T, Dim, 1> >& r2,
-                                                  const Ref<const Matrix<T, Dim, 1> >& n2,
-                                                  const T half_l2,
-                                                  const Ref<const Matrix<T, Dim, 1> >& d12,
-                                                  const T R, const T E0, const T gamma,
-                                                  const T s, const T t,
-                                                  const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
-                                                  const bool include_constraint = true,
-                                                  const T project_tol = 1e-6, 
-                                                  const int project_max_iter = 100,
-                                                  const T imag_tol = 1e-20, 
-                                                  const T aberth_tol = 1e-20)
+std::pair<Array<T, 2, 2 * Dim>, T> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& r1,
+                                                                const Ref<const Matrix<T, Dim, 1> >& n1,
+                                                                const T half_l1,
+                                                                const Ref<const Matrix<T, Dim, 1> >& r2,
+                                                                const Ref<const Matrix<T, Dim, 1> >& n2,
+                                                                const T half_l2,
+                                                                const Ref<const Matrix<T, Dim, 1> >& d12,
+                                                                const T R, const T E0,
+                                                                const T gamma,
+                                                                const T s, const T t,
+                                                                const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
+                                                                const bool include_constraint = true,
+                                                                const T max_overlap = -1,
+                                                                const T project_tol = 1e-6, 
+                                                                const int project_max_iter = 100,
+                                                                const T imag_tol = 1e-20, 
+                                                                const T aberth_tol = 1e-20)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
-    const T dist = d12.norm(); 
+    const T dist = d12.norm();
+    T radius = 0;  
 
     // If the distance is less than 2 * R ... 
     if (dist < 2 * R)
@@ -383,9 +406,10 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
         }
         T area = jkrContactAreaEllipsoid<T, N>(
             r1_, n1_, half_l1, r2_, n2_, half_l2, R, d12_, s, t, E0, gamma,
-            ellip_table, project_tol, project_max_iter, imag_tol, aberth_tol
+            ellip_table, max_overlap, project_tol, project_max_iter, imag_tol,
+            aberth_tol
         );
-        T radius = sqrt(area / boost::math::constants::pi<T>()); 
+        radius = sqrt(area / sqrt(boost::math::constants::pi<T>())); 
 
         // Calculate the generalized forces
         T term = 4 * sqrt(area * radius * gamma * E0);
@@ -412,7 +436,7 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
         }
     }
     
-    return dEdq.array(); 
+    return std::make_pair(dEdq.array(), radius); 
 }
 
 /**
@@ -463,6 +487,8 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
  *                    and 1. 
  * @param include_constraint If true, enforce the orientation vector norm 
  *                           constraint on the generalized torques.
+ * @param max_overlap If non-negative, cap the overlap distance at this 
+ *                    maximum value. 
  * @returns Matrix of generalized forces arising from the simplified JKR
  *          contact potential.
  */
@@ -471,32 +497,39 @@ using CurvatureRadiiTable = std::unordered_map<std::tuple<int, int, int>,
                                                std::pair<T, T>,
                                                boost::hash<std::tuple<int, int, int> > >;
 template <typename T, int Dim>
-Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
-                                                  const T half_l1,
-                                                  const Ref<const Matrix<T, Dim, 1> >& n2,
-                                                  const T half_l2,
-                                                  const Ref<const Matrix<T, Dim, 1> >& d12,
-                                                  const T R, const T E0, const T gamma, 
-                                                  const T s, const T t,
-                                                  const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_delta, 
-                                                  const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_gamma,
-                                                  ContactRadiiTable<T>& jkr_radius_table, 
-                                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_theta, 
-                                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_half_l,
-                                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_coords,
-                                                  CurvatureRadiiTable<T>& curvature_radii_table, 
-                                                  const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
-                                                  const bool include_constraint = true)
+std::pair<Array<T, 2, 2 * Dim>, T> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
+                                                                const T half_l1,
+                                                                const Ref<const Matrix<T, Dim, 1> >& n2,
+                                                                const T half_l2,
+                                                                const Ref<const Matrix<T, Dim, 1> >& d12,
+                                                                const T R, const T E0,
+                                                                const T gamma, 
+                                                                const T s, const T t,
+                                                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_delta, 
+                                                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_gamma,
+                                                                ContactRadiiTable<T>& jkr_radius_table, 
+                                                                const Ref<const Matrix<T, Dynamic, 1> >& radii_table_theta, 
+                                                                const Ref<const Matrix<T, Dynamic, 1> >& radii_table_half_l,
+                                                                const Ref<const Matrix<T, Dynamic, 1> >& radii_table_coords,
+                                                                CurvatureRadiiTable<T>& curvature_radii_table, 
+                                                                const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
+                                                                const bool include_constraint = true,
+                                                                const T max_overlap = -1)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
-    const T dist = d12.norm(); 
+    const T dist = d12.norm();
+    T jkr_radius = 0;  
 
     // If the distance is less than 2 * R ... 
     if (dist < 2 * R)
     {
         // Normalize the distance vector and get the overlap distance 
         Matrix<T, Dim, 1> d12n = d12 / dist;
-        T delta = 2 * R - dist; 
+        T delta = 2 * R - dist;
+
+        // Cap the overlap at the maximum value if given 
+        if (max_overlap >= 0 && delta > max_overlap)
+            delta = max_overlap;  
 
         // Get the angles between the overlap vector and the two orientation
         // vectors
@@ -527,11 +560,15 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
         // Calculate the expected contact area for a Hertzian contact 
         T area = hertzContactArea<T>(delta, Rx1, Ry1, Rx2, Ry2, n1, n2, ellip_table);
 
+        // Get the equivalent contact radius and overlap 
+        T equiv_radius = sqrt(area / boost::math::constants::pi<T>());
+        T equiv_overlap = equiv_radius * equiv_radius / R;  
+
         // Compute the correction factor to account for JKR-based adhesion
-        int idx_delta = nearestValue<T>(jkr_table_delta, delta);
+        int idx_delta = nearestValue<T>(jkr_table_delta, equiv_overlap); 
         int idx_gamma = nearestValue<T>(jkr_table_gamma, gamma);  
-        T jkr_radius = jkr_radius_table[std::make_pair(idx_delta, idx_gamma)];
-        T jkr_radius_factor = jkr_radius / sqrt(R * delta);
+        jkr_radius = jkr_radius_table[std::make_pair(idx_delta, idx_gamma)];
+        T jkr_radius_factor = jkr_radius / equiv_radius; 
         T jkr_area = area * jkr_radius_factor * jkr_radius_factor;
 
         // Calculate the generalized forces
@@ -559,7 +596,7 @@ Array<T, 2, 2 * Dim> forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim,
         }
     }
     
-    return dEdq.array(); 
+    return std::make_pair(dEdq.array(), jkr_radius);  
 }
 
 /* --------------------------------------------------------------------- //
