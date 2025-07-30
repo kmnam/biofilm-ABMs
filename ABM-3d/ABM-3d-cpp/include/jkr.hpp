@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/24/2025
+ *     7/29/2025
  */
 
 #ifndef BIOFILM_JKR_HPP
@@ -244,7 +244,9 @@ std::pair<T, T> jkrContactRadius(const T delta, const T R, const T E,
  * @param gamma Surface energy density. 
  * @param ellip_table Pre-computed table containing values for the elliptic
  *                    integral function for various eccentricities between 0
- *                    and 1. 
+ *                    and 1.
+ * @param max_overlap If non-negative, cap the overlap distance at this 
+ *                    maximum value. 
  * @param project_tol Tolerance for ellipsoid projection. 
  * @param project_max_iter Maximum number of iterations for ellipsoid projection. 
  * @param imag_tol Tolerance for determining whether a root for the the JKR
@@ -260,13 +262,18 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
                           const T R, const Ref<const Matrix<T, 3, 1> >& d12,
                           const T s, const T t, const T E0, const T gamma,
                           const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
-                          const T project_tol = 1e-6, const int project_max_iter = 100,
+                          const T max_overlap = -1, const T project_tol = 1e-6,
+                          const int project_max_iter = 100,
                           const T imag_tol = 1e-20, const T aberth_tol = 1e-20)
 {
     // Compute overlap between the two cells
     T dist = d12.norm(); 
     Matrix<T, 3, 1> d12n = d12 / dist; 
     T delta = 2 * R - dist;
+
+    // Cap the overlap at the maximum value if given 
+    if (max_overlap >= 0 && delta > max_overlap)
+        delta = max_overlap;  
 
     // Get the principal radii of curvature at the projected contact points
     std::pair<T, T> radii1 = projectAndGetPrincipalRadiiOfCurvature<T>(
@@ -283,14 +290,15 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
     // Compute the expected contact area for a Hertzian contact 
     T area = hertzContactArea<T>(delta, Rx1, Ry1, Rx2, Ry2, n1, n2, ellip_table);
 
+    // Get the equivalent contact radius and overlap 
+    T equiv_radius = sqrt(area / boost::math::constants::pi<T>());
+    T equiv_overlap = equiv_radius * equiv_radius / R;  
+
     // Compute the correction factor to account for JKR-based adhesion
-    //
-    // TODO Take care of the possibility of hysteresis (in which case the 
-    // lower radius value may need to be used) 
     std::pair<T, T> jkr_radius = jkrContactRadius<T, N>(
-        delta, R, E0, gamma, imag_tol, aberth_tol
+        equiv_overlap, R, E0, gamma, imag_tol, aberth_tol
     );
-    T jkr_radius_factor = jkr_radius.second / sqrt(R * delta);
+    T jkr_radius_factor = jkr_radius.second / equiv_radius; 
 
     return area * jkr_radius_factor * jkr_radius_factor;  
 }
