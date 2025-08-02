@@ -53,7 +53,7 @@ int main(int argc, char** argv)
     const T neighbor_threshold = 0.5 * (2 * R + Ldiv); 
     const int max_iter = json_data["max_iter"].as_int64();
     const int n_cells = json_data["n_cells"].as_int64();
-    const T max_time = json_data["max_time"].as_double(); 
+    const T max_time = static_cast<T>(json_data["max_time"].as_double()); 
     const T growth_mean = static_cast<T>(json_data["growth_mean"].as_double());
     const T growth_std = static_cast<T>(json_data["growth_std"].as_double());
     const T lifetime_mean1 = static_cast<T>(json_data["lifetime_mean1"].as_double()); 
