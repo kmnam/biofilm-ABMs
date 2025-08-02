@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/30/2025
+ *     8/1/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -801,14 +801,28 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     // If the adhesion energy density is nonzero ... 
                     if (gamma > 0)
                     {
-                        // Enforce orientation vector norm constraint
-                        auto result = forcesIsotropicJKRLagrange<T, 3>(
-                            ni, nj, dij, R, E0, gamma, si, sj, jkr_data.overlaps, 
-                            jkr_data.gamma, jkr_data.contact_radii, true, 
-                            2 * (R - Rcell)    // Cap overlap at 2 * (R - Rcell)
-                        );
-                        forces = result.first; 
-                        contact_radii(k) = result.second; 
+                        // Use pre-computed values if desired 
+                        if (adhesion_params["precompute_values"])
+                        {
+                            // Enforce orientation vector norm constraint
+                            auto result = forcesIsotropicJKRLagrange<T, 3>(
+                                ni, nj, dij, R, E0, gamma, si, sj, jkr_data.overlaps, 
+                                jkr_data.gamma, jkr_data.contact_radii, true, 
+                                2 * (R - Rcell)    // Cap overlap at 2 * (R - Rcell)
+                            );
+                            forces = result.first; 
+                            contact_radii(k) = result.second;
+                        }
+                        else    // Otherwise, compute forces from scratch  
+                        {
+                            // Enforce orientation vector norm constraint
+                            auto result = forcesIsotropicJKRLagrange<T, 3>(
+                                ni, nj, dij, R, E0, gamma, si, sj, true, 
+                                2 * (R - Rcell)    // Cap overlap at 2 * (R - Rcell)
+                            );
+                            forces = result.first; 
+                            contact_radii(k) = result.second;
+                        } 
                     }
                     // Otherwise, set adhesive forces and contact radius to the
                     // Hertzian expectation 
@@ -825,16 +839,34 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     // If the adhesion energy density is nonzero ... 
                     if (gamma > 0)
                     {
-                        // Enforce orientation vector norm constraint
-                        auto result = forcesAnisotropicJKRLagrange<T, 3>(
-                            ni, half_li, nj, half_lj, dij, R, E0, gamma, si, sj,
-                            jkr_data.overlaps, jkr_data.gamma, jkr_data.contact_radii,
-                            jkr_data.theta, jkr_data.half_l, jkr_data.centerline_coords,
-                            jkr_data.curvature_radii, jkr_data.ellip_table, true,
-                            2 * (R - Rcell)    // Cap overlap at 2 * (R - Rcell)
-                        );
-                        forces = result.first; 
-                        contact_radii(k) = result.second;
+                        // Use pre-computed values if desired 
+                        if (adhesion_params["precompute_values"])
+                        {
+                            // Enforce orientation vector norm constraint
+                            auto result = forcesAnisotropicJKRLagrange<T, 3>(
+                                ni, half_li, nj, half_lj, dij, R, E0, gamma, si,
+                                sj, jkr_data.overlaps, jkr_data.gamma,
+                                jkr_data.contact_radii, jkr_data.theta,
+                                jkr_data.half_l, jkr_data.centerline_coords,
+                                jkr_data.curvature_radii, jkr_data.ellip_table, true,
+                                2 * (R - Rcell)    // Cap overlap at 2 * (R - Rcell)
+                            );
+                            forces = result.first; 
+                            contact_radii(k) = result.second;
+                        }
+                        else    // Otherwise, compute forces from scratch 
+                        {
+                            // Enforce orientation vector norm constraint
+                            Matrix<T, 3, 1> ri = cells(i, __colseq_r).matrix();
+                            Matrix<T, 3, 1> rj = cells(j, __colseq_r).matrix();
+                            auto result = forcesAnisotropicJKRLagrange<T, 3>(
+                                ri, ni, half_li, rj, nj, half_lj, dij, R, E0,
+                                gamma, si, sj, jkr_data.ellip_table, true,
+                                2 * (R - Rcell)    // Cap overlap at 2 * (R - Rcell)
+                            );
+                            forces = result.first; 
+                            contact_radii(k) = result.second;
+                        }
                     }
                     // Otherwise, set adhesive forces and contact radius to the
                     // Hertzian expectation 
