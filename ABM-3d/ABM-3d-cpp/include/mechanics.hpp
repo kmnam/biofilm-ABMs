@@ -802,7 +802,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     if (gamma > 0)
                     {
                         // Use pre-computed values if desired 
-                        if (adhesion_params["precompute_values"])
+                        if (adhesion_params["precompute_values"] != 0)
                         {
                             // Enforce orientation vector norm constraint
                             auto result = forcesIsotropicJKRLagrange<T, 3>(
@@ -840,7 +840,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     if (gamma > 0)
                     {
                         // Use pre-computed values if desired 
-                        if (adhesion_params["precompute_values"])
+                        if (adhesion_params["precompute_values"] != 0)
                         {
                             // Enforce orientation vector norm constraint
                             auto result = forcesAnisotropicJKRLagrange<T, 3>(

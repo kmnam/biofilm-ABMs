@@ -478,7 +478,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
         // If desired, calculate JKR contact radii for a range of overlap
         // distances and surface energy densities
-        if (adhesion_params["precompute_values"])
+        if (adhesion_params["precompute_values"] != 0)
         { 
             int n_overlap = 100;
             int n_gamma = 100; 
