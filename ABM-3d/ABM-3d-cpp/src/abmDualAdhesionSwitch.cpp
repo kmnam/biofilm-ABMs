@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/28/2025
+ *     8/1/2025
  */
 
 #include <Eigen/Dense>
@@ -53,6 +53,7 @@ int main(int argc, char** argv)
     const T neighbor_threshold = 0.5 * (2 * R + Ldiv); 
     const int max_iter = json_data["max_iter"].as_int64();
     const int n_cells = json_data["n_cells"].as_int64();
+    const T max_time = json_data["max_time"].as_double(); 
     const T growth_mean = static_cast<T>(json_data["growth_mean"].as_double());
     const T growth_std = static_cast<T>(json_data["growth_std"].as_double());
     const T lifetime_mean1 = static_cast<T>(json_data["lifetime_mean1"].as_double()); 
@@ -248,7 +249,7 @@ int main(int argc, char** argv)
     
     // Run the simulation
     runSimulationAdaptiveLagrangian<T>(
-        cells, parents, max_iter, n_cells, R, Rcell, L0, Ldiv, E0, Ecell, 
+        cells, parents, max_iter, n_cells, max_time, R, Rcell, L0, Ldiv, E0, Ecell, 
         max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
         iter_update_stepsize, max_error_allowed, min_error, max_tries_update_stepsize,
         neighbor_threshold, nz_threshold, rng_seed, 2, group_attributes, growth_means,
