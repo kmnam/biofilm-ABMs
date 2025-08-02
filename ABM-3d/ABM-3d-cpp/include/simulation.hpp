@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/30/2025
+ *     8/1/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -188,7 +188,8 @@ CurvatureRadiiTable<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dy
  * @param parents_init Initial vector of parent cell IDs for each cell generated
  *                     throughout the simulation. 
  * @param max_iter Maximum number of iterations. 
- * @param n_cells Maximum number of cells. 
+ * @param n_cells Maximum number of cells.
+ * @param max_time Maximum simulation time.  
  * @param R Cell radius (including the EPS). 
  * @param Rcell Cell radius (excluding the EPS).
  * @param L0 Initial cell length.
@@ -273,6 +274,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     std::vector<int>& parents_init,
                                     const int max_iter,
                                     const int n_cells,
+                                    const T max_time, 
                                     const T R,
                                     const T Rcell,
                                     const T L0,
@@ -675,22 +677,49 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         writeCells<T>(cells, params, filename_init, write_other_cols);
     }
     
-    // Define termination criterion, assuming that at least one of n_cells
-    // or max_iter is positive
-    std::function<bool(int, int)> terminate = [&n_cells, &max_iter](int n, int iter)
+    // Define termination criterion, assuming that at least one of n_cells,
+    // max_iter, or max_time is positive
+    std::function<bool(int, int, T)> terminate = [&n_cells, &max_iter, &max_time](int n, int iter, T t) -> bool
     {
-        if (n_cells > 0 && max_iter > 0)
-            return (n >= n_cells || iter >= max_iter);
-        else if (n_cells > 0)    // Decide when to terminate only based on cell count
-            return (n >= n_cells); 
-        else if (max_iter > 0)   // Decide when to terminate only based on iteration count
-            return (iter >= max_iter);
-        else    // Otherwise, termination criteria are ill-defined, so always terminate
+        // If none of the three criteria was given, then the termination
+        // criterion is ill-defined, so always terminate
+        if (n_cells <= 0 && max_iter <= 0 && max_time <= 0) 
             return true;
+
+        // If all three criteria are given ...  
+        if (n_cells > 0 && max_iter > 0 && max_time > 0)
+        {
+            return (n >= n_cells || iter >= max_iter || t >= max_time);
+        } 
+        // If n_cells was not given ... 
+        else if (n_cells <= 0)
+        {
+            // Check if both max_iter and max_time were given
+            if (max_iter > 0 && max_time > 0)
+                return (iter >= max_iter || t >= max_time);
+            else if (max_iter > 0)    // Otherwise, max_iter or max_time must have been given 
+                return (iter >= max_iter); 
+            else
+                return (t >= max_time); 
+        }
+        // If max_iter was not given ...
+        else if (max_iter <= 0)
+        {
+            // Here, n_cells must have been given, so we check if max_time 
+            // was given  
+            if (max_time > 0)
+                return (n >= n_cells || t >= max_time); 
+            else 
+                return (n >= n_cells);  
+        }
+        else   // Otherwise, n_cells and max_iter must have been given 
+        {
+            return (n >= n_cells || iter >= max_iter); 
+        } 
     };
 
     // Run the simulation ...
-    while (!terminate(n, iter))
+    while (!terminate(n, iter, t))
     {
         // Divide the cells that have reached division length
         Array<int, Dynamic, 1> to_divide = divideMaxLength<T>(cells, Ldiv);
