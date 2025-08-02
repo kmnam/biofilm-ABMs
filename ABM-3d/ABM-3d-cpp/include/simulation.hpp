@@ -556,6 +556,17 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     throw std::runtime_error("Not yet implemented"); 
                 }
             }
+        }
+        // Otherwise, if anisotropic adhesion is desired, we must still compute
+        // the elliptic integral function
+        //
+        // TODO Implement a solver that performs this calculation on the fly 
+        else if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
+        {
+            int n_ellip = 100;
+            if (adhesion_params.find("n_ellip") != adhesion_params.end())
+                n_ellip = adhesion_params["n_ellip"];
+            jkr_data.ellip_table = getEllipticIntegralTable<T>(n_ellip);
         } 
     }
     // If there is no cell-cell adhesion, fix the surface energy density of 
