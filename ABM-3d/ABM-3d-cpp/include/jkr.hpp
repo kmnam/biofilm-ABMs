@@ -228,7 +228,7 @@ std::pair<T, T> jkrContactRadius(const T delta, const T R, const T E,
 
 /**
  * Solve for the estimated JKR contact area for an elliptical contact area,
- * according to the model given by Giudici et al., J. Phys. D (2024). 
+ * according to the model given by Giudici et al., J. Phys. D (2025). 
  *
  * This function assumes that the two bodies are prolate ellipsoids whose
  * major semi-axis lengths are given by half_l1 + R and half_l2 + R, and
