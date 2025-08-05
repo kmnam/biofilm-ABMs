@@ -456,8 +456,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // the corresponding surface energy density  
         const T eqdist = adhesion_params["eqdist"];
         jkr_data.max_gamma = jkrOptimalSurfaceEnergyDensity<T, 100>(
-            R, E0, eqdist, 1.0, 1000.0, 2 * R, 1e-8, 1e-6, 1.0, 1e-8, 
-            1e-8, imag_tol, aberth_tol, true
+            R, Rcell, E0, eqdist, 1.0, 1000.0, 1e-6, 1e-8, 1e-8, 1e-8, 1000,
+            1000, imag_tol, aberth_tol, true
         );
         if (adhesion_params["jkr_energy_density_switch_time"] == 0)
             jkr_data.gamma_switch_rate = std::numeric_limits<T>::infinity(); 
@@ -509,7 +509,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 int n_ellip = 100;
                 if (adhesion_params.find("n_ellip") != adhesion_params.end())
                     n_ellip = adhesion_params["n_ellip"];
-                jkr_data.ellip_table = getEllipticIntegralTable<T>(n_ellip); 
+                jkr_data.ellip_table = getHertzEllipticIntegralTable<T>(n_ellip); 
 
                 // Calculate the principal radii of curvature, if desired 
                 if (precompute_curvature_radii)
@@ -566,7 +566,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             int n_ellip = 100;
             if (adhesion_params.find("n_ellip") != adhesion_params.end())
                 n_ellip = adhesion_params["n_ellip"];
-            jkr_data.ellip_table = getEllipticIntegralTable<T>(n_ellip);
+            jkr_data.ellip_table = getHertzEllipticIntegralTable<T>(n_ellip);
         } 
     }
     // If there is no cell-cell adhesion, fix the surface energy density of 
@@ -822,7 +822,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
             repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
             max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
-            jkr_data, __colidx_gamma, no_surface, n_start_multithread
+            adhesion_params, jkr_data, __colidx_gamma, no_surface,
+            n_start_multithread
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 6> errors = result.second;
@@ -860,8 +861,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     A, b, bs, cells, neighbors, dt_new, iter, R, Rcell, E0,
                     repulsion_prefactors, nz_threshold, max_rxy_noise,
                     max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-                    adhesion_mode, jkr_data, __colidx_gamma, no_surface,
-                    n_start_multithread
+                    adhesion_mode, adhesion_params, jkr_data, __colidx_gamma,
+                    no_surface, n_start_multithread
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -900,7 +901,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
                 repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
                 max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
-                jkr_data, __colidx_gamma, no_surface, n_start_multithread
+                adhesion_params, jkr_data, __colidx_gamma, no_surface,
+                n_start_multithread
             ); 
             cells_new = result.first;
             errors = result.second;
