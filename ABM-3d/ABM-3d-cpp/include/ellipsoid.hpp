@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/24/2025
+ *     8/4/2025
  */
 
 #ifndef BIOFILM_ELLIPSOID_HPP
@@ -241,10 +241,19 @@ std::pair<T, T> getPrincipalRadiiOfCurvature(const Ref<const Matrix<T, 3, 1> >& 
  *
  * and E(e) is the complete elliptic integral of the second kind, 
  *
- * E(e) = \int_0^{\pi/2}{\sqrt{1 - e^2 \cos^2{\theta}} d\theta}
+ * E(e) = \int_0^{\pi/2}{\sqrt{1 - e^2 \cos^2{\theta}} d\theta}. 
+ *
+ * The four columns in this table provide values for: 
+ * 0) the eccentricity e, 
+ * 1) K(e), 
+ * 2) E(e), and 
+ * 3) the above function.
+ *
+ * @param n Number of rows in the table. 
+ * @returns Table containing the above values.  
  */
 template <typename T>
-Matrix<T, Dynamic, 4> getEllipticIntegralTable(const int n)
+Matrix<T, Dynamic, 4> getHertzEllipticIntegralTable(const int n)
 {
     Matrix<T, Dynamic, 4> ellip_table(n, 4); 
     Matrix<T, Dynamic, 1> e = Matrix<T, Dynamic, 1>::LinSpaced(n, 0.001, 0.999);
