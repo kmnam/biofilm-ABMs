@@ -96,6 +96,7 @@ int main(int argc, char** argv)
         adhesion_params["eqdist"] = static_cast<T>(
             json_data["adhesion_eqdist"].as_double()
         );
+        adhesion_params["precompute_values"] = 1;
         adhesion_params["jkr_energy_density_switch_time"] = static_cast<T>(
             json_data["adhesion_jkr_energy_density_switch_time"].as_double()
         ); 
