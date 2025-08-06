@@ -256,8 +256,8 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  *          contact potential.
  */
 template <typename T>
-using ContactRadiiTable = std::unordered_map<std::pair<int, int>, T,
-                                             boost::hash<std::pair<int, int> > >;
+using R2ToR1Table = std::unordered_map<std::pair<int, int>, T,
+                                       boost::hash<std::pair<int, int> > >;
 template <typename T, int Dim>
 std::pair<Array<T, 2, 2 * Dim>, T>
     forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
@@ -267,7 +267,7 @@ std::pair<Array<T, 2, 2 * Dim>, T>
                                const T t, const T t,
                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_delta, 
                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_gamma,
-                               ContactRadiiTable<T>& jkr_radius_table, 
+                               R2ToR1Table<T>& jkr_radius_table, 
                                const bool include_constraint = true,
                                const T max_overlap = -1)
 {
@@ -493,6 +493,10 @@ template <typename T>
 using R3ToR2Table = std::unordered_map<std::tuple<int, int, int>,
                                        std::pair<T, T>,
                                        boost::hash<std::tuple<int, int, int> > >;
+template <typename T>
+using R4ToR2Table = std::unordered_map<std::tuple<int, int, int, int>,
+                                       std::pair<T, T>, 
+                                       boost::hash<std::tuple<int, int, int, int> > >; 
 template <typename T, int Dim>
 std::pair<Array<T, 2, 2 * Dim>, T>
     forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
@@ -508,8 +512,9 @@ std::pair<Array<T, 2, 2 * Dim>, T>
                                  R3ToR2Table<T>& curvature_radii_table,
                                  const Ref<const Matrix<T, Dynamic, 1> >& force_table_Rx, 
                                  const Ref<const Matrix<T, Dynamic, 1> >& force_table_Ry, 
-                                 const Ref<const Matrix<T, Dynamic, 1> >& force_table_delta, 
-                                 R3ToR2Table<T>& force_table,  
+                                 const Ref<const Matrix<T, Dynamic, 1> >& force_table_delta,
+                                 const Ref<const Matrix<T, Dynamic, 1> >& force_table_gamma,  
+                                 R4ToR2Table<T>& force_table,  
                                  const bool include_constraint = true,
                                  const T max_overlap = -1)
 {
@@ -550,7 +555,7 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         T Rx2 = radii2.first; 
         T Ry2 = radii2.second;
 
-        // First calculate B and A ... 
+        // First calculate B and A, with the added assumption that B > A 
         T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
         T theta3 = acosSafe<T>(n1.dot(n2));
         T delta1 = (1.0 / Rx1 - 1.0 / Ry1); 
@@ -560,23 +565,6 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         );
         T B = 0.5 * (sum + diff);
         T A = sum - B;
-
-        // ... and check that B > A
-        if (B < A)
-        {
-            // If not, then switch the x- and y-axes and recalculate 
-            T Rx1_ = Ry1; 
-            T Ry1_ = Rx1; 
-            T Rx2_ = Ry2; 
-            T Ry2_ = Rx2;
-            delta1 = (1.0 / Rx1_ - 1.0 / Ry1_); 
-            delta2 = (1.0 / Rx2_ - 1.0 / Ry2_);
-            diff = 0.5 * sqrt(
-                delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * theta3)
-            ); 
-            B = 0.5 * (sum + diff); 
-            A = sum - B;
-        }
 
         // Calculate the composite radii of curvature (A < B, so Rx > Ry)
         T Rx = 1.0 / (2 * A); 
