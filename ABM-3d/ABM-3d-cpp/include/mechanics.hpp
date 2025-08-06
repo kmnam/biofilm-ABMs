@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/1/2025
+ *     8/6/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -70,12 +70,14 @@ struct JKRData
     T gamma_switch_rate; 
     Matrix<T, Dynamic, 1> overlaps; 
     Matrix<T, Dynamic, 1> gamma; 
-    Matrix<T, Dynamic, 4> ellip_table;
     Matrix<T, Dynamic, 1> theta; 
     Matrix<T, Dynamic, 1> half_l; 
     Matrix<T, Dynamic, 1> centerline_coords;
-    ContactRadiiTable<T> contact_radii;
-    CurvatureRadiiTable<T> curvature_radii; 
+    Matrix<T, Dynamic, 1> Rx; 
+    Matrix<T, Dynamic, 1> Ry; 
+    R2ToR1Table<T> contact_radii;
+    R3ToR2Table<T> curvature_radii;
+    R4ToR2Table<T> forces;  
 };
 
 /**
@@ -844,30 +846,44 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     // If the adhesion energy density is nonzero ... 
                     if (gamma > 0)
                     {
+                        // Cap overlap distance at 2 * (R - Rcell)
+                        T max_overlap = 2 * (R - Rcell); 
+
                         // Use pre-computed values if desired 
                         if (adhesion_params["precompute_values"] != 0)
                         {
                             // Enforce orientation vector norm constraint
                             auto result = forcesAnisotropicJKRLagrange<T, 3>(
                                 ni, half_li, nj, half_lj, dij, R, E0, gamma, si,
-                                sj, jkr_data.overlaps, jkr_data.gamma,
-                                jkr_data.contact_radii, jkr_data.theta,
-                                jkr_data.half_l, jkr_data.centerline_coords,
-                                jkr_data.curvature_radii, jkr_data.ellip_table, true,
-                                2 * (R - Rcell)    // Cap overlap at 2 * (R - Rcell)
+                                sj, jkr_data.theta, jkr_data.half_l, jkr_data.coords,
+                                jkr_data.curvature_radii, jkr_data.Rx, 
+                                jkr_data.Ry, jkr_data.overlaps, jkr_data.gamma, 
+                                jkr_data.forces, true, max_overlap
                             );
                             forces = result.first; 
                             contact_radii(k) = result.second;
                         }
                         else    // Otherwise, compute forces from scratch 
                         {
-                            // Enforce orientation vector norm constraint
                             Matrix<T, 3, 1> ri = cells(i, __colseq_r).matrix();
                             Matrix<T, 3, 1> rj = cells(j, __colseq_r).matrix();
+                            T min_aspect_ratio = adhesion_params["min_aspect_ratio"]; 
+                            T max_aspect_ratio = adhesion_params["max_aspect_ratio"]; 
+                            T project_tol = adhesion_params["project_tol"]; 
+                            int project_max_iter = static_cast<int>(
+                                adhesion_params["project_max_iter"]
+                            );
+                            T newton_tol = adhesion_params["newton_tol"];
+                            int newton_max_iter = static_cast<int>(
+                                adhesion_params["newton_max_iter"]
+                            ); 
+
+                            // Enforce orientation vector norm constraint
                             auto result = forcesAnisotropicJKRLagrange<T, 3, 30>(
                                 ri, ni, half_li, rj, nj, half_lj, dij, R, E0,
-                                gamma, si, sj, jkr_data.ellip_table, true,
-                                2 * (R - Rcell)    // Cap overlap at 2 * (R - Rcell)
+                                gamma, si, sj, true, max_overlap, min_aspect_ratio,
+                                max_aspect_ratio, project_tol, project_max_iter,
+                                newton_tol, newton_max_iter, false
                             );
                             forces = result.first; 
                             contact_radii(k) = result.second;

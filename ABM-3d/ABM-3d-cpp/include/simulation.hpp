@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/1/2025
+ *     8/6/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -62,7 +62,8 @@ std::string floatToString(T x, const int precision = 10)
 /**
  * Tabulate the JKR contact radius at a given collection of overlap distances.
  *
- * @param delta Input mesh of overlap distances. 
+ * @param delta Input mesh of overlap distances.
+ * @param gamma Input mesh of adhesion surface energy densities.  
  * @param R Cell radius (including the EPS). 
  * @param E0 Elastic modulus. 
  * @param gamma Surface energy density.
@@ -73,16 +74,16 @@ std::string floatToString(T x, const int precision = 10)
  * @param project_tol Tolerance for the ellipsoid projection method. 
  * @param project_max_iter Maximum number of iterations for the ellipsoid
  *                         projection method. 
- * @returns Table of calculated principal radii of curvature. 
+ * @returns Table of calculated JKR contact radii. 
  */
 template <typename T, int N = 100>
-ContactRadiiTable<T> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >& delta,
-                                              const Ref<const Matrix<T, Dynamic, 1> >& gamma, 
-                                              const T R, const T E0,
-                                              const T imag_tol = 1e-20, 
-                                              const T aberth_tol = 1e-20)
+R2ToR1Table<T> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >& delta,
+                                        const Ref<const Matrix<T, Dynamic, 1> >& gamma, 
+                                        const T R, const T E0,
+                                        const T imag_tol = 1e-20, 
+                                        const T aberth_tol = 1e-20)
 {
-    ContactRadiiTable<T> radii; 
+    R2ToR1Table<T> radii; 
 
     // For each overlap distance ... 
     for (int i = 0; i < delta.size(); ++i)
@@ -123,15 +124,15 @@ ContactRadiiTable<T> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic,
  * @returns Table of calculated principal radii of curvature. 
  */
 template <typename T>
-CurvatureRadiiTable<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1> >& theta,
-                                                    const Ref<const Matrix<T, Dynamic, 1> >& half_l,
-                                                    const Ref<const Matrix<T, Dynamic, 1> >& coords,
-                                                    const T R, 
-                                                    const bool calibrate_endpoint_radii = true, 
-                                                    const T project_tol = 1e-6,
-                                                    const int project_max_iter = 100)
+R3ToR2Table<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1> >& theta,
+                                            const Ref<const Matrix<T, Dynamic, 1> >& half_l,
+                                            const Ref<const Matrix<T, Dynamic, 1> >& coords,
+                                            const T R, 
+                                            const bool calibrate_endpoint_radii = true, 
+                                            const T project_tol = 1e-6,
+                                            const int project_max_iter = 100)
 {
-    CurvatureRadiiTable<T> radii;
+    R3ToR2Table<T> radii; 
 
     // For each cell half-length ... 
     for (int j = 0; j < half_l.size(); ++j)
@@ -174,6 +175,70 @@ CurvatureRadiiTable<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dy
     }
 
     return radii; 
+} 
+
+/**
+ * Tabulate the JKR force magnitudes and contact radii at a given collection 
+ * of cell-cell contact configurations, which are parametrized by the equivalent
+ * principal radii of curvature and overlap distance. 
+ *
+ * Each contact point is parametrized by:
+ *
+ * (1, 2) the equivalent principal radii of curvature at the contact point, and 
+ * (3) the overlap distance. 
+ *
+ * @param Rx Input mesh of values for the larger equivalent principal radius
+ *           of curvature at the contact point.  
+ * @param Ry Input mesh of values for the smaller equivalent principal radius
+ *           of curvature at the contact point. 
+ * @param delta Input mesh of overlap distances.
+ * @param gamma Input mesh of adhesion surface energy densities.  
+ * @param E0 Elastic modulus. 
+ * @param max_overlap If non-negative, cap the overlap distance at this 
+ *                    maximum value.
+ * @param min_aspect_ratio Minimum aspect ratio of the contact area. 
+ * @param max_aspect_ratio Maximum aspect ratio of the contact area.  
+ * @param newton_tol Tolerance for the Newton-Raphson method.  
+ * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
+ *                        method.
+ * @returns Table of calculated JKR force magnitudes and contact radii. 
+ */
+template <typename T>
+R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& Rx,
+                                      const Ref<const Matrix<T, Dynamic, 1> >& Ry,
+                                      const Ref<const Matrix<T, Dynamic, 1> >& delta,
+                                      const Ref<const Matrix<T, Dynamic, 1> >& gamma, 
+                                      const T E0, const T max_overlap = -1, 
+                                      const T min_aspect_ratio = 0.01, 
+                                      const T max_aspect_ratio = 100.0,  
+                                      const T newton_tol = 1e-8,
+                                      const int newton_max_iter = 1000)
+{
+    R4ToR2Table<T> forces; 
+
+    // For each cell-cell configuration ...
+    for (int i = 0; i < Rx.size(); ++i)
+    {
+        for (int j = 0; j < Ry.size(); ++j)
+        {
+            for (int k = 0; k < delta.size(); ++k)
+            {
+                for (int m = 0; m < gamma.size(); ++m)
+                {
+                    // Store the JKR force magnitude and contact radius 
+                    auto tuple = std::make_tuple(i, j, k, m); 
+                    auto result = jkrContactAreaAndForceEllipsoid<T>(
+                        Rx(i), Ry(j), delta(k), E0, gamma(m), max_overlap, 
+                        min_aspect_ratio, max_aspect_ratio, newton_tol, 
+                        newton_max_iter
+                    );
+                    forces[tuple] = std::make_pair(std::get<0>(result), std::get<1>(result));
+                } 
+            }
+        }
+    } 
+
+    return forces; 
 } 
 
 /**
@@ -464,7 +529,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         else
             jkr_data.gamma_switch_rate = ( 
                 jkr_data.max_gamma / adhesion_params["jkr_energy_density_switch_time"]
-            );  
+            );
 
         // Initialize the surface energy density for each cell to be 
         // the maximum value for group 1 cells and zero for group 2 cells
@@ -505,12 +570,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     adhesion_params["precompute_curvature_radii"]
                 );
 
-                // Calculate the elliptic integral function 
-                int n_ellip = 100;
-                if (adhesion_params.find("n_ellip") != adhesion_params.end())
-                    n_ellip = adhesion_params["n_ellip"];
-                jkr_data.ellip_table = getHertzEllipticIntegralTable<T>(n_ellip); 
-
                 // Calculate the principal radii of curvature, if desired 
                 if (precompute_curvature_radii)
                 {
@@ -518,24 +577,53 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     int n_theta = 100; 
                     int n_half_l = 100; 
                     int n_coords = 100;
-                    T project_tol = 1e-6; 
-                    int project_max_iter = 100;  
-                    if (adhesion_params.find("calibrate_endpoint_radii") != adhesion_params.end()) 
+                    int n_Rx = 100; 
+                    int n_Ry = 100; 
+                    T project_tol = 1e-8; 
+                    int project_max_iter = 1000; 
+                    T newton_tol = 1e-8; 
+                    int newton_max_iter = 1000;  
+                    if (adhesion_params.find("calibrate_endpoint_radii") != adhesion_params.end())
+                    { 
                         calibrate_endpoint_radii = static_cast<bool>(
                             adhesion_params["calibrate_endpoint_radii"]
                         );
+                    }
                     if (adhesion_params.find("n_mesh_theta") != adhesion_params.end())
-                        n_theta = static_cast<int>(adhesion_params["n_mesh_theta"]); 
+                    {
+                        n_theta = static_cast<int>(adhesion_params["n_mesh_theta"]);
+                    } 
                     if (adhesion_params.find("n_mesh_half_l") != adhesion_params.end())
-                        n_half_l = static_cast<int>(adhesion_params["n_mesh_half_l"]); 
+                    {
+                        n_half_l = static_cast<int>(adhesion_params["n_mesh_half_l"]);
+                    } 
                     if (adhesion_params.find("n_mesh_centerline_coords") != adhesion_params.end())
+                    {
                         n_coords = static_cast<int>(adhesion_params["n_mesh_centerline_coords"]);
+                    }
+                    if (adhesion_params.find("n_mesh_curvature_radii") != adhesion_params.end())
+                    {
+                        n_Rx = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
+                        n_Ry = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
+                    }
                     if (adhesion_params.find("ellipsoid_project_tol") != adhesion_params.end())
-                        project_tol = adhesion_params["ellipsoid_project_tol"];  
+                    {
+                        project_tol = adhesion_params["ellipsoid_project_tol"]; 
+                    } 
                     if (adhesion_params.find("ellipsoid_project_max_iter") != adhesion_params.end())
+                    {
                         project_max_iter = static_cast<int>(
                             adhesion_params["ellipsoid_project_max_iter"]
-                        );  
+                        );
+                    }
+                    if (adhesion_params.find("newton_tol") != adhesion_params.end())
+                    {
+                        project_tol = adhesion_params["newton_tol"]; 
+                    } 
+                    if (adhesion_params.find("newton_max_iter") != adhesion_params.end())
+                    {
+                        project_max_iter = static_cast<int>(adhesion_params["newton_max_iter"]);
+                    }  
                     jkr_data.theta = Matrix<T, Dynamic, 1>::LinSpaced(
                         n_theta, 0.0, boost::math::constants::half_pi<T>()
                     ); 
@@ -549,6 +637,17 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                         jkr_data.theta, jkr_data.half_l, jkr_data.centerline_coords, 
                         R, calibrate_endpoint_radii, project_tol, project_max_iter
                     );
+                    jkr_data.Rx = Matrix<T, Dynamic, 1>::LinSpaced(
+                        0.5 * R, R, n_Rx
+                    ); 
+                    jkr_data.Ry = Matrix<T, Dynamic, 1>::LinSpaced(
+                        0.5 * R, R, n_Ry
+                    ); 
+                    jkr_data.forces = calculateJKRForceTable<T>(
+                        jkr_data.Rx, jkr_data.Ry, jkr_data.overlaps, jkr_data.gamma, 
+                        E0, max_overlap, min_aspect_ratio, max_aspect_ratio, 
+                        newton_tol, newton_max_iter
+                    ); 
                 }
                 else 
                 {
@@ -557,17 +656,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 }
             }
         }
-        // Otherwise, if anisotropic adhesion is desired, we must still compute
-        // the elliptic integral function
-        //
-        // TODO Implement a solver that performs this calculation on the fly 
-        else if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
-        {
-            int n_ellip = 100;
-            if (adhesion_params.find("n_ellip") != adhesion_params.end())
-                n_ellip = adhesion_params["n_ellip"];
-            jkr_data.ellip_table = getHertzEllipticIntegralTable<T>(n_ellip);
-        } 
     }
     // If there is no cell-cell adhesion, fix the surface energy density of 
     // all cells to zero
