@@ -62,7 +62,7 @@ T hertzContactArea(const T delta, const T Rx1, const T Ry1, const T Rx2,
                    const Ref<const Matrix<T, 3, 1> >& n2, 
                    const Ref<const Matrix<T, Dynamic, 4> >& ellip_table)
 {
-    // First calculate B and A ... 
+    // First calculate B and A, with the added assumption that B > A 
     T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
     T theta = acosSafe<T>(n1.dot(n2));
     T delta1 = (1.0 / Rx1 - 1.0 / Ry1); 
@@ -72,23 +72,6 @@ T hertzContactArea(const T delta, const T Rx1, const T Ry1, const T Rx2,
     );
     T B = 0.5 * (sum + diff);
     T A = sum - B;
-
-    // ... and check that B > A
-    if (B < A)
-    {
-        // If not, then switch the x- and y-axes and recalculate 
-        T Rx1_ = Ry1; 
-        T Ry1_ = Rx1; 
-        T Rx2_ = Ry2; 
-        T Ry2_ = Rx2;
-        delta1 = (1.0 / Rx1_ - 1.0 / Ry1_); 
-        delta2 = (1.0 / Rx2_ - 1.0 / Ry2_);
-        diff = 0.5 * sqrt(
-            delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * theta)
-        ); 
-        B = 0.5 * (sum + diff); 
-        A = sum - B;
-    }
     T ratio = B / A; 
 
     // Column 0: eccentricity 
@@ -446,7 +429,7 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
     T Rx2 = radii2.first; 
     T Ry2 = radii2.second;
 
-    // First calculate B and A ... 
+    // First calculate B and A, with the added assumption that B > A 
     T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
     T theta = acosSafe<T>(n1.dot(n2));
     T delta1 = (1.0 / Rx1 - 1.0 / Ry1); 
@@ -456,23 +439,6 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
     );
     T B = 0.5 * (sum + diff);
     T A = sum - B;
-
-    // ... and check that B > A
-    if (B < A)
-    {
-        // If not, then switch the x- and y-axes and recalculate 
-        T Rx1_ = Ry1; 
-        T Ry1_ = Rx1; 
-        T Rx2_ = Ry2; 
-        T Ry2_ = Rx2;
-        delta1 = (1.0 / Rx1_ - 1.0 / Ry1_); 
-        delta2 = (1.0 / Rx2_ - 1.0 / Ry2_);
-        diff = 0.5 * sqrt(
-            delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * theta)
-        ); 
-        B = 0.5 * (sum + diff); 
-        A = sum - B;
-    }
 
     // Calculate the composite radii of curvature (A < B, so Rx > Ry)
     T Rx = 1.0 / (2 * A); 
@@ -545,17 +511,17 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
  * This is a version of the previous function that takes the equivalent
  * principal radii of curvature at the contact point and the overlap distance. 
  *
- * @param Rx
- * @param Ry
- * @param delta
+ * @param Rx Larger equivalent principal radius of curvature at the contact
+ *           point.  
+ * @param Ry Smaller equivalent principal radius of curvature at the contact
+ *           point. 
+ * @param delta Overlap distance. 
  * @param E0 Elastic modulus. 
  * @param gamma Surface energy density.
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value.
  * @param min_aspect_ratio Minimum aspect ratio of the contact area. 
  * @param max_aspect_ratio Maximum aspect ratio of the contact area.  
- * @param project_tol Tolerance for ellipsoid projection. 
- * @param project_max_iter Maximum number of iterations for ellipsoid projection.
  * @param newton_tol Tolerance for the Newton-Raphson method.  
  * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
  *                        method.
@@ -569,8 +535,6 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
                                                     const T gamma, const T max_overlap = -1,
                                                     const T min_aspect_ratio = 0.01,
                                                     const T max_aspect_ratio = 100.0,
-                                                    const T project_tol = 1e-6,
-                                                    const int project_max_iter = 100,
                                                     const T newton_tol = 1e-8,
                                                     const int newton_max_iter = 1000,
                                                     const bool verbose = false)
