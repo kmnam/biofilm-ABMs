@@ -345,14 +345,15 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * @param include_constraint If true, enforce the orientation vector norm 
  *                           constraint on the generalized torques.
  * @param max_overlap If non-negative, cap the overlap distance at this 
- *                    maximum value. 
+ *                    maximum value.
+ * @param min_aspect_ratio Minimum aspect ratio for the JKR contact area. 
+ * @param max_aspect_ratio Maximum aspect ratio for the JKR contact area.  
  * @param project_tol Tolerance for ellipsoid projection. 
  * @param project_max_iter Maximum number of iterations for ellipsoid projection. 
- * @param imag_tol Tolerance for determining whether a root for the the JKR
- *                 contact radius polynomial is real.
- * @param aberth_tol Tolerance for the Aberth-Ehrlich method.
- * @returns Matrix of generalized forces arising from the simplified JKR
- *          contact potential.
+ * @param newton_tol Tolerance for the Newton-Raphson method. 
+ * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
+ *                        method. 
+ * @returns Matrix of generalized forces arising from the anisotropic JKR contact.
  */
 template <typename T, int Dim, int N = 100>
 std::pair<Array<T, 2, 2 * Dim>, T>
@@ -463,9 +464,6 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  *          achieved. 
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
  *          achieved.
- * @param jkr_radius_table Pre-computed table of values for the overlap vs. 
- *                         JKR contact radius function. The rows are assumed
- *                         to be given in order of increasing overlap.  
  * @param radii_table_theta Array of input values for the angle between the 
  *                          overlap vector and the orientation vector, at 
  *                          which the principal radii of curvature were pre-
@@ -479,15 +477,25 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * @param curvature_radii_table Pre-computed table of values for the principal
  *                              radii of curvature as a function of the contact
  *                              point.
- * @param ellip_table Pre-computed table containing values for the elliptic
- *                    integral function for various eccentricities between 0
- *                    and 1. 
+ * @param force_table_Rx Array of input values for the larger equivalent
+ *                       principal radius of curvature at which the JKR force
+ *                       and contact radius were pre-computed (see below). 
+ * @param force_table_Ry Array of input values for the smaller equivalent
+ *                       principal radius of curvature at which the JKR force
+ *                       and contact radius were pre-computed (see below). 
+ * @param force_table_delta Array of input values for the overlap distance 
+ *                          at which the JKR force and contact radius were 
+ *                          pre-computed (see below). 
+ * @param force_table_gamma Array of input values for the surface adhesion 
+ *                          energy density at which the JKR force and contact 
+ *                          radius were pre-computed (see below). 
+ * @param force_table Pre-computed table of values for the JKR force magnitude 
+ *                    and contact radius as a function of the contact point.  
  * @param include_constraint If true, enforce the orientation vector norm 
  *                           constraint on the generalized torques.
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value. 
- * @returns Matrix of generalized forces arising from the simplified JKR
- *          contact potential.
+ * @returns Matrix of generalized forces arising from the anisotropic JKR contact. 
  */
 template <typename T>
 using R3ToR2Table = std::unordered_map<std::tuple<int, int, int>,
