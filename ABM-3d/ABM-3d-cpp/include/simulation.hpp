@@ -545,12 +545,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // distances and surface energy densities
         if (adhesion_params["precompute_values"] != 0)
         { 
-            int n_overlap = 100;
-            int n_gamma = 100; 
-            if (adhesion_params.find("n_mesh_overlap") != adhesion_params.end())
-                n_overlap = adhesion_params["n_mesh_overlap"];
-            if (adhesion_params.find("n_mesh_gamma") != adhesion_params.end())
-                n_gamma = adhesion_params["n_mesh_gamma"]; 
+            int n_overlap = static_cast<int>(adhesion_params["n_mesh_overlap"]);
+            int n_gamma = static_cast<int>(adhesion_params["n_mesh_gamma"]); 
             jkr_data.overlaps = Matrix<T, Dynamic, 1>::LinSpaced(
                 n_overlap, 0, 2 * (R - Rcell)
             );
@@ -566,64 +562,35 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             {
                 // Determine whether the principal radii of curvature should be
                 // computed 
-                const bool precompute_curvature_radii = static_cast<bool>(
-                    adhesion_params["precompute_curvature_radii"]
+                const bool precompute_jkr_forces = static_cast<bool>(
+                    adhesion_params["precompute_jkr_forces"]
                 );
 
-                // Calculate the principal radii of curvature, if desired 
-                if (precompute_curvature_radii)
+                // Calculate the principal radii of curvature and JKR contact
+                // forces, if desired 
+                if (precompute_jkr_forces)
                 {
-                    bool calibrate_endpoint_radii = true;
-                    int n_theta = 100; 
-                    int n_half_l = 100; 
-                    int n_coords = 100;
-                    int n_Rx = 100; 
-                    int n_Ry = 100; 
-                    T project_tol = 1e-8; 
-                    int project_max_iter = 1000; 
-                    T newton_tol = 1e-8; 
-                    int newton_max_iter = 1000;  
-                    if (adhesion_params.find("calibrate_endpoint_radii") != adhesion_params.end())
-                    { 
-                        calibrate_endpoint_radii = static_cast<bool>(
-                            adhesion_params["calibrate_endpoint_radii"]
-                        );
-                    }
-                    if (adhesion_params.find("n_mesh_theta") != adhesion_params.end())
-                    {
-                        n_theta = static_cast<int>(adhesion_params["n_mesh_theta"]);
-                    } 
-                    if (adhesion_params.find("n_mesh_half_l") != adhesion_params.end())
-                    {
-                        n_half_l = static_cast<int>(adhesion_params["n_mesh_half_l"]);
-                    } 
-                    if (adhesion_params.find("n_mesh_centerline_coords") != adhesion_params.end())
-                    {
-                        n_coords = static_cast<int>(adhesion_params["n_mesh_centerline_coords"]);
-                    }
-                    if (adhesion_params.find("n_mesh_curvature_radii") != adhesion_params.end())
-                    {
-                        n_Rx = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
-                        n_Ry = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
-                    }
-                    if (adhesion_params.find("ellipsoid_project_tol") != adhesion_params.end())
-                    {
-                        project_tol = adhesion_params["ellipsoid_project_tol"]; 
-                    } 
-                    if (adhesion_params.find("ellipsoid_project_max_iter") != adhesion_params.end())
-                    {
-                        project_max_iter = static_cast<int>(
-                            adhesion_params["ellipsoid_project_max_iter"]
-                        );
-                    }
-                    if (adhesion_params.find("newton_tol") != adhesion_params.end())
-                    {
-                        project_tol = adhesion_params["newton_tol"]; 
-                    } 
-                    if (adhesion_params.find("newton_max_iter") != adhesion_params.end())
-                    {
-                        project_max_iter = static_cast<int>(adhesion_params["newton_max_iter"]);
-                    }  
+                    bool calibrate_endpoint_radii = static_cast<bool>(
+                        adhesion_params["calibrate_endpoint_radii"]
+                    ); 
+                    int n_theta = static_cast<int>(adhesion_params["n_mesh_theta"]);
+                    int n_half_l = static_cast<int>(adhesion_params["n_mesh_half_l"]);
+                    int n_coords = static_cast<int>(
+                        adhesion_params["n_mesh_centerline_coords"]
+                    );
+                    int n_Rx = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
+                    int n_Ry = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
+                    T max_overlap = 2 * (R - Rcell);
+                    T min_aspect_ratio = adhesion_params["min_aspect_ratio"];
+                    T max_aspect_ratio = adhesion_params["max_aspect_ratio"]; 
+                    T project_tol = adhesion_params["ellipsoid_project_tol"]; 
+                    int project_max_iter = static_cast<int>(
+                        adhesion_params["ellipsoid_project_max_iter"]
+                    ); 
+                    T newton_tol = adhesion_params["newton_tol"];
+                    int newton_max_iter = static_cast<int>(
+                        adhesion_params["newton_max_iter"]
+                    ); 
                     jkr_data.theta = Matrix<T, Dynamic, 1>::LinSpaced(
                         n_theta, 0.0, boost::math::constants::half_pi<T>()
                     ); 
