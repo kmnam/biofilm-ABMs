@@ -855,7 +855,8 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                             // Enforce orientation vector norm constraint
                             auto result = forcesAnisotropicJKRLagrange<T, 3>(
                                 ni, half_li, nj, half_lj, dij, R, E0, gamma, si,
-                                sj, jkr_data.theta, jkr_data.half_l, jkr_data.coords,
+                                sj, jkr_data.theta, jkr_data.half_l,
+                                jkr_data.centerline_coords,
                                 jkr_data.curvature_radii, jkr_data.Rx, 
                                 jkr_data.Ry, jkr_data.overlaps, jkr_data.gamma, 
                                 jkr_data.forces, true, max_overlap
@@ -869,9 +870,9 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                             Matrix<T, 3, 1> rj = cells(j, __colseq_r).matrix();
                             T min_aspect_ratio = adhesion_params["min_aspect_ratio"]; 
                             T max_aspect_ratio = adhesion_params["max_aspect_ratio"]; 
-                            T project_tol = adhesion_params["project_tol"]; 
+                            T project_tol = adhesion_params["ellipsoid_project_tol"]; 
                             int project_max_iter = static_cast<int>(
-                                adhesion_params["project_max_iter"]
+                                adhesion_params["ellipsoid_project_max_iter"]
                             );
                             T newton_tol = adhesion_params["newton_tol"];
                             int newton_max_iter = static_cast<int>(
