@@ -454,7 +454,7 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
     auto result = newtonRaphson<T>(
         [&lambda, &R_, &E0, &gamma, &delta](const T g)
         {
-            return delta - overlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
+            return delta - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
         },
         1.0, 1e-8, min_aspect_ratio, max_aspect_ratio, newton_tol,
         newton_max_iter, verbose  
@@ -539,9 +539,10 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
                                                     const int newton_max_iter = 1000,
                                                     const bool verbose = false)
 {
-    // Cap the overlap at the maximum value if given 
+    // Cap the overlap at the maximum value if given
+    T delta_ = delta;  
     if (max_overlap >= 0 && delta > max_overlap)
-        delta = max_overlap;  
+        delta_ = max_overlap;  
 
     // Calculate the curvature parameters \lambda and R (which we denote
     // by R_), and the eccentricity e
@@ -551,9 +552,9 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
     // Compute the root of the overlap vs. aspect ratio function using the
     // Newton-Raphson method
     auto result = newtonRaphson<T>(
-        [&lambda, &R_, &E0, &gamma, &delta](const T g)
+        [&lambda, &R_, &E0, &gamma, &delta_](const T g)
         {
-            return delta - overlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
+            return delta_ - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
         },
         1.0, 1e-8, min_aspect_ratio, max_aspect_ratio, newton_tol,
         newton_max_iter, verbose  
