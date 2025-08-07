@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/1/2025
+ *     8/6/2025
  */
 
 #include <Eigen/Dense>
@@ -105,6 +105,7 @@ int main(int argc, char** argv)
         T imag_tol = 1e-8; 
         T aberth_tol = 1e-8; 
         T n_mesh_overlap = 100;
+        T n_mesh_gamma = 100; 
         try
         {
             imag_tol = static_cast<T>(json_data["adhesion_jkr_imag_tol"].as_double()); 
@@ -120,29 +121,41 @@ int main(int argc, char** argv)
             n_mesh_overlap = static_cast<T>(json_data["adhesion_n_mesh_overlap"].as_int64()); 
         }
         catch (boost::wrapexcept<boost::system::system_error>& e) { }
+        try
+        {
+            n_mesh_gamma = static_cast<T>(json_data["adhesion_n_mesh_gamma"].as_int64()); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { }
         adhesion_params["jkr_imag_tol"] = imag_tol; 
         adhesion_params["jkr_aberth_tol"] = aberth_tol;
-        adhesion_params["n_mesh_overlap"] = n_mesh_overlap; 
+        adhesion_params["n_mesh_overlap"] = n_mesh_overlap;
+        adhesion_params["n_mesh_gamma"] = n_mesh_gamma;  
 
         // If anisotropic JKR adhesion is desired ... 
         if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
         {
             // Parse essential input parameters
-            adhesion_params["compute_curvature_radii"] = static_cast<T>(
-                json_data["adhesion_compute_curvature_radii"].as_int64()
+            adhesion_params["precompute_jkr_forces"] = static_cast<T>(
+                json_data["adhesion_precompute_jkr_forces"].as_int64()
             ); 
 
             // Parse optional input parameters
-            T n_ellip = 100; 
             T n_mesh_theta = 100; 
             T n_mesh_half_l = 100; 
             T n_mesh_centerline_coords = 100;
+            T n_mesh_curvature_radii = 100;
             T calibrate_endpoint_radii = 1;
+            T min_aspect_ratio = 0.01; 
+            T max_aspect_ratio = 100.0; 
             T project_tol = 1e-8; 
-            T project_max_iter = 100;  
+            T project_max_iter = 100; 
+            T newton_tol = 1e-8; 
+            T newton_max_iter = 1000;  
             try
             {
-                n_ellip = static_cast<T>(json_data["adhesion_n_ellip"].as_int64()); 
+                calibrate_endpoint_radii = static_cast<T>(
+                    json_data["adhesion_calibrate_endpoint_radii"].as_int64()
+                ); 
             }
             catch (boost::wrapexcept<boost::system::system_error>& e) { }
             try
@@ -164,8 +177,8 @@ int main(int argc, char** argv)
             catch (boost::wrapexcept<boost::system::system_error>& e) { }
             try
             {
-                calibrate_endpoint_radii = static_cast<T>(
-                    json_data["adhesion_calibrate_endpoint_radii"].as_int64()
+                n_mesh_curvature_radii = static_cast<T>(
+                    json_data["adhesion_n_mesh_curvature_radii"].as_int64()
                 ); 
             }
             catch (boost::wrapexcept<boost::system::system_error>& e) { }
@@ -183,13 +196,31 @@ int main(int argc, char** argv)
                 ); 
             }
             catch (boost::wrapexcept<boost::system::system_error>& e) { }
-            adhesion_params["n_ellip"] = n_ellip; 
+            try
+            {
+                newton_tol = static_cast<T>(
+                    json_data["adhesion_newton_tol"].as_double()
+                ); 
+            }
+            catch (boost::wrapexcept<boost::system::system_error>& e) { }
+            try
+            {
+                newton_max_iter = static_cast<T>(
+                    json_data["adhesion_newton_max_iter"].as_int64()
+                ); 
+            }
+            catch (boost::wrapexcept<boost::system::system_error>& e) { }
+            adhesion_params["calibrate_endpoint_radii"] = calibrate_endpoint_radii;
             adhesion_params["n_mesh_theta"] = n_mesh_theta; 
             adhesion_params["n_mesh_half_l"] = n_mesh_half_l; 
             adhesion_params["n_mesh_centerline_coords"] = n_mesh_centerline_coords; 
-            adhesion_params["calibrate_endpoint_radii"] = calibrate_endpoint_radii; 
+            adhesion_params["n_mesh_curvature_radii"] = n_mesh_curvature_radii;
+            adhesion_params["min_aspect_ratio"] = min_aspect_ratio; 
+            adhesion_params["max_aspect_ratio"] = max_aspect_ratio; 
             adhesion_params["ellipsoid_project_tol"] = project_tol; 
-            adhesion_params["ellipsoid_project_max_iter"] = project_max_iter; 
+            adhesion_params["ellipsoid_project_max_iter"] = project_max_iter;
+            adhesion_params["newton_tol"] = newton_tol;
+            adhesion_params["newton_max_iter"] = newton_max_iter;  
         } 
     }
 
