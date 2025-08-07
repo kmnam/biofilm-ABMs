@@ -264,7 +264,7 @@ std::pair<Array<T, 2, 2 * Dim>, T>
                                const Ref<const Matrix<T, Dim, 1> >& n2,
                                const Ref<const Matrix<T, Dim, 1> >& d12,
                                const T R, const T E0, const T gamma,
-                               const T t, const T t,
+                               const T s, const T t,
                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_delta, 
                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_gamma,
                                R2ToR1Table<T>& jkr_radius_table, 
@@ -528,7 +528,7 @@ std::pair<Array<T, 2, 2 * Dim>, T>
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
     const T dist = d12.norm();
-    T jkr_radius = 0;  
+    T radius = 0; 
 
     // If the distance is less than 2 * R ... 
     if (dist < 2 * R)
@@ -582,10 +582,11 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         int idx_Rx = nearestValue<T>(force_table_Rx, Rx); 
         int idx_Ry = nearestValue<T>(force_table_Ry, Ry); 
         int idx_delta = nearestValue<T>(force_table_delta, delta);
-        auto tuple3 = std::make_tuple(idx_Rx, idx_Ry, idx_delta); 
+        int idx_gamma = nearestValue<T>(force_table_gamma, gamma); 
+        auto tuple3 = std::make_tuple(idx_Rx, idx_Ry, idx_delta, idx_gamma); 
         std::pair<T, T> result = force_table[tuple3];
         T force = result.first; 
-        T radius = result.second; 
+        radius = result.second; 
 
         // Calculate the generalized forces
         Matrix<T, Dim, 1> v = force * d12n;  
