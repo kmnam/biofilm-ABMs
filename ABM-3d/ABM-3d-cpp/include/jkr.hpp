@@ -43,7 +43,9 @@ enum class JKRMode
  * bodies.
  *
  * This calculation follows the approach prescribed in Barber (Eqs. 3.35 and
- * 3.36; see also Eqs. 3.19 and 3.29). 
+ * 3.36; see also Eqs. 3.19 and 3.29).
+ *
+ * TODO Retire this function 
  *
  * @param delta Overlap between the two contacting bodies. 
  * @param Rx1 Principal radius of curvature of body 1 along long axis. 
@@ -122,7 +124,7 @@ T hertzContactArea(const T delta, const T Rx1, const T Ry1, const T Rx2,
  * @param delta Overlap between the two contacting bodies. 
  * @param R Equivalent radius of the two contacting bodies.
  * @parma E Equivalent elastic modulus of the two contacting bodies. 
- * @param gamma Surface energy density. 
+ * @param gamma Surface adhesion energy density. 
  * @param imag_tol Tolerance for determining whether a root for the the JKR
  *                 contact radius polynomial is real.
  * @param aberth_tol Tolerance for Aberth-Ehrlich method. 
@@ -295,13 +297,15 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
  * g, of the JKR contact region, using the expressions given by Giudici 
  * et al. (2025).
  *
+ * The aspect ratio is assumed to be less than 1. 
+ *
  * @param lambda Square root of the ratio of the equivalent radii of curvature
  *               from the two bodies. 
  * @param R_ Geometric mean of the equivalent radii of curvature from the two
  *           bodies. 
  * @param E0 Elastic modulus. 
- * @param gamma Adhesion surface energy density. 
- * @param g Contact region aspect ratio. 
+ * @param gamma Surface adhesion energy density. 
+ * @param g Contact region aspect ratio. Assumed to be less than 1.  
  * @returns Corresponding overlap distance. 
  */
 template <typename T>
@@ -376,18 +380,23 @@ T jkrOverlapFromAspectRatio(const T lambda, const T R_, const T E0, const T gamm
  * @param s Centerline coordinate along body 1 determining tail of overlap vector.  
  * @param t Centerline coordinate along body 2 determining head of overlap vector. 
  * @param E0 Elastic modulus. 
- * @param gamma Surface energy density.
+ * @param gamma Surface adhesion energy density.
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value.
+ * @param calibrate_endpoint_radii If true, calibrate the principal radii of
+ *                                 curvature so that its minimum value is R. 
  * @param min_aspect_ratio Minimum aspect ratio of the contact area. 
  * @param project_tol Tolerance for ellipsoid projection. 
  * @param project_max_iter Maximum number of iterations for ellipsoid projection.
  * @param newton_tol Tolerance for the Newton-Raphson method.  
  * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
  *                        method.
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method.
  * @param verbose If true, print intermittent output to stdout.  
- * @returns Estimated JKR contact area, as well as the contact area dimensions,
- *          in terms of the equivalent radius and the aspect ratio.  
+ * @returns Estimated JKR force, as well as the contact area dimensions, in
+ *          terms of the equivalent radius and the aspect ratio.  
  */
 template <typename T, int N = 100>
 std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1, 
@@ -458,20 +467,25 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
     T Ry = 1.0 / (2 * B);
 
     // Calculate the curvature parameters \lambda and R (which we denote
-    // by R_), and the eccentricity e
+    // here by R_)
     T lambda = sqrt(Ry / Rx);
     T R_ = sqrt(Rx * Ry);
 
     // Compute the root of the overlap vs. aspect ratio function using the
     // Newton-Raphson method
-    auto result = newtonRaphson<T>(
-        [&lambda, &R_, &E0, &gamma, &delta](const T g)
-        {
-            return delta - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
-        },
-        1.0, 1e-8, min_aspect_ratio, 1.0, newton_tol, newton_max_iter, verbose  
-    ); 
-    T g = result.first;
+    T g = 1.0; 
+    if (Rx > Ry)
+    {
+        // Here, the aspect ratio should be less than 1
+        auto result = newtonRaphson<T>(
+            [&lambda, &R_, &E0, &gamma, &delta](const T g)
+            {
+                return delta - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
+            },
+            1.0, 1e-8, min_aspect_ratio, 1.0, newton_tol, newton_max_iter, verbose  
+        ); 
+        g = result.first;
+    }
 
     // If the aspect ratio is 1, use jkrContactRadius(), as the elliptic 
     // integrals are ill-defined
