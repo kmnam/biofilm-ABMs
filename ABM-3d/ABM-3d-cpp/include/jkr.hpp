@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/6/2025
+ *     8/7/2025
  */
 
 #ifndef BIOFILM_JKR_HPP
@@ -380,7 +380,6 @@ T jkrOverlapFromAspectRatio(const T lambda, const T R_, const T E0, const T gamm
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value.
  * @param min_aspect_ratio Minimum aspect ratio of the contact area. 
- * @param max_aspect_ratio Maximum aspect ratio of the contact area.  
  * @param project_tol Tolerance for ellipsoid projection. 
  * @param project_max_iter Maximum number of iterations for ellipsoid projection.
  * @param newton_tol Tolerance for the Newton-Raphson method.  
@@ -400,12 +399,14 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
                                                     const Ref<const Matrix<T, 3, 1> >& d12,
                                                     const T s, const T t, const T E0,
                                                     const T gamma, const T max_overlap = -1,
+                                                    const bool calibrate_endpoint_radii = true, 
                                                     const T min_aspect_ratio = 0.01,
-                                                    const T max_aspect_ratio = 100.0,
                                                     const T project_tol = 1e-6,
                                                     const int project_max_iter = 100,
                                                     const T newton_tol = 1e-8,
                                                     const int newton_max_iter = 1000,
+                                                    const T imag_tol = 1e-20, 
+                                                    const T aberth_tol = 1e-20, 
                                                     const bool verbose = false)
 {
     // Compute overlap between the two cells
@@ -429,6 +430,18 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
     T Rx2 = radii2.first; 
     T Ry2 = radii2.second;
 
+    // If desired, calibrate the radii of curvature so that they match that 
+    // of a sphere at the endpoints of the ellipsoid 
+    if (calibrate_endpoint_radii)
+    {
+        T factor1 = (half_l1 + R) / R;   // = R / (R * R / (half_l1 + R))
+        T factor2 = (half_l2 + R) / R;   // = R / (R * R / (half_l2 + R))
+        Rx1 *= factor1; 
+        Ry1 *= factor1; 
+        Rx2 *= factor2; 
+        Ry2 *= factor2; 
+    } 
+
     // First calculate B and A, with the added assumption that B > A 
     T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
     T theta = acosSafe<T>(n1.dot(n2));
@@ -447,7 +460,7 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
     // Calculate the curvature parameters \lambda and R (which we denote
     // by R_), and the eccentricity e
     T lambda = sqrt(Ry / Rx);
-    T R_ = sqrt(Rx * Ry);  
+    T R_ = sqrt(Rx * Ry);
 
     // Compute the root of the overlap vs. aspect ratio function using the
     // Newton-Raphson method
@@ -456,50 +469,64 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
         {
             return delta - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
         },
-        1.0, 1e-8, min_aspect_ratio, max_aspect_ratio, newton_tol,
-        newton_max_iter, verbose  
+        1.0, 1e-8, min_aspect_ratio, 1.0, newton_tol, newton_max_iter, verbose  
     ); 
-    T g = result.first; 
+    T g = result.first;
 
-    // Calculate the eccentricity 
-    T e = sqrt(1 - g * g); 
+    // If the aspect ratio is 1, use jkrContactRadius(), as the elliptic 
+    // integrals are ill-defined
+    T force, c;  
+    if (g == 1)
+    {
+        auto result = jkrContactRadius<T, N>(delta, R, E0, gamma, imag_tol, aberth_tol);
+        c = result.second;
+        T c3 = c * c * c;
+        T force1 = (4 * E0 * c3) / (3 * R); 
+        T force2 = 4 * sqrt(boost::math::constants::pi<T>() * c3 * gamma * E0);
+        force = force1 - force2;    // Repulsive force minus attractive force  
+    }
+    else    // Otherwise ... 
+    { 
+        // Calculate the eccentricity
+        T e = sqrt(1 - g * g);
 
-    // Calculate the elliptic integrals (Eqns. 6, 7, 8) 
-    T Ke = boost::math::ellint_1<T>(e); 
-    T Ee = boost::math::ellint_2<T>(e);
-    T De = (Ke - Ee) / (e * e); 
-    T Be = Ke - De;
-    T Ce = (De - Be) / (e * e);
-    T g2Ce = g * g * Ce;
+        // Calculate the elliptic integrals (Eqns. 6, 7, 8) 
+        T Ke = boost::math::ellint_1<T>(e); 
+        T Ee = boost::math::ellint_2<T>(e);
+        T De = (Ke - Ee) / (e * e); 
+        T Be = Ke - De;
+        T Ce = (De - Be) / (e * e);
+        T g2Ce = g * g * Ce;
 
-    // Calculate the non-dimensional parameters alpha and beta (Eqns. 10 and 11)
-    T l2 = lambda * lambda; 
-    T alpha_numer = l2 * (Be + g2Ce) + g2Ce; 
-    T beta_numer = (l2 + 1) * Ce + De;
-    T denom = lambda * sqrt(g) * (Be * Ce + Be * De + g2Ce * De);
-    T alpha = alpha_numer / denom; 
-    T beta = beta_numer / denom;
-    T g2beta = g * g * beta;  
+        // Calculate the non-dimensional parameters alpha and beta (Eqns. 10 and 11)
+        T l2 = lambda * lambda; 
+        T alpha_numer = l2 * (Be + g2Ce) + g2Ce; 
+        T beta_numer = (l2 + 1) * Ce + De;
+        T denom = lambda * sqrt(g) * (Be * Ce + Be * De + g2Ce * De);
+        T alpha = alpha_numer / denom; 
+        T beta = beta_numer / denom;
+        T g2beta = g * g * beta;  
 
-    // Calculate the equivalent contact radius (Eqns. 17 and 18)
-    T sqrt_g = sqrt(g);
-    T term1 = (sqrt_g - 1) * (alpha * Be + g2beta * De); 
-    T term2 = Ke * (g2beta - alpha * sqrt_g); 
-    T f_numer = lambda * (term1 + term2);
-    T term3 = g2beta * (2 * sqrt_g + 1);  
-    T term4 = alpha * (sqrt_g + 2); 
-    T f_denom = 1.0 / (term3 - term4);
-    T f = f_numer / f_denom; 
-    T c_numer = 12 * (sqrt_g - 1) * (sqrt_g - 1) * pow(g, 2.5) * lambda;
-    T term5 = (g - sqrt_g) * (pow(g, 1.5) + l2) * (g2beta - alpha);
-    T c_denom = f - term5;
-    T c = pow((c_numer / c_denom) * (gamma * R_ * R_ / E0), 1.0 / 3.0);  
+        // Calculate the equivalent contact radius (Eqns. 17 and 18)
+        T sqrt_g = sqrt(g);
+        T term1 = (sqrt_g - 1) * (alpha * Be + g2beta * De); 
+        T term2 = Ke * (g2beta - alpha * sqrt_g); 
+        T f_numer = lambda * (term1 + term2);
+        T term3 = g2beta * (2 * sqrt_g + 1);  
+        T term4 = alpha * (sqrt_g + 2); 
+        T f_denom = 1.0 / (term3 - term4);
+        T f = f_numer / f_denom; 
+        T c_numer = 12 * (sqrt_g - 1) * (sqrt_g - 1) * pow(g, 2.5) * lambda;
+        T term5 = (g - sqrt_g) * (pow(g, 1.5) + l2) * (g2beta - alpha);
+        T c_denom = f - term5;
+        c = pow((c_numer / c_denom) * (gamma * R_ * R_ / E0), 1.0 / 3.0);
 
-    // Calculate the force magnitude (Eqn. 15)
-    T c3 = c * c * c; 
-    T force_numer = (2 * sqrt_g + 1) * g2beta - (sqrt_g + 2) * alpha;
-    T force_denom = (sqrt_g - 1) * pow(g, 1.5) * R_;
-    T force = boost::math::constants::third_pi<T>() * E0 * c3 * force_numer / (3 * force_denom);
+        // Calculate the force magnitude (Eqn. 15)
+        T c3 = c * c * c; 
+        T force_numer = (2 * sqrt_g + 1) * g2beta - (sqrt_g + 2) * alpha;
+        T force_denom = (sqrt_g - 1) * pow(g, 1.5) * R_;
+        force = boost::math::constants::third_pi<T>() * E0 * c3 * force_numer / (3 * force_denom);
+    } 
 
     return std::make_tuple(force, c, g); 
 }
@@ -521,7 +548,6 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value.
  * @param min_aspect_ratio Minimum aspect ratio of the contact area. 
- * @param max_aspect_ratio Maximum aspect ratio of the contact area.  
  * @param newton_tol Tolerance for the Newton-Raphson method.  
  * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
  *                        method.
@@ -534,9 +560,10 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
                                                     const T delta, const T E0,
                                                     const T gamma, const T max_overlap = -1,
                                                     const T min_aspect_ratio = 0.01,
-                                                    const T max_aspect_ratio = 100.0,
                                                     const T newton_tol = 1e-8,
                                                     const int newton_max_iter = 1000,
+                                                    const T imag_tol = 1e-20, 
+                                                    const T aberth_tol = 1e-20, 
                                                     const bool verbose = false)
 {
     // Cap the overlap at the maximum value if given
@@ -556,50 +583,64 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
         {
             return delta_ - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
         },
-        1.0, 1e-8, min_aspect_ratio, max_aspect_ratio, newton_tol,
-        newton_max_iter, verbose  
-    ); 
+        1.0, 1e-8, min_aspect_ratio, 1.0, newton_tol, newton_max_iter, verbose  
+    );
     T g = result.first; 
 
-    // Calculate the eccentricity 
-    T e = sqrt(1 - g * g); 
+    // If the aspect ratio is 1, use jkrContactRadius(), as the elliptic 
+    // integrals are ill-defined
+    T force, c;  
+    if (g == 1)
+    {
+        auto result = jkrContactRadius<T, N>(delta, R_, E0, gamma, imag_tol, aberth_tol);
+        c = result.second;
+        T c3 = c * c * c;
+        T force1 = (4 * E0 * c3) / (3 * R_); 
+        T force2 = 4 * sqrt(boost::math::constants::pi<T>() * c3 * gamma * E0);
+        force = force1 - force2;    // Repulsive force minus attractive force  
+    }
+    else    // Otherwise ... 
+    { 
+        // Calculate the eccentricity 
+        T e = sqrt(1 - g * g); 
 
-    // Calculate the elliptic integrals (Eqns. 6, 7, 8) 
-    T Ke = boost::math::ellint_1<T>(e); 
-    T Ee = boost::math::ellint_2<T>(e);
-    T De = (Ke - Ee) / (e * e); 
-    T Be = Ke - De;
-    T Ce = (De - Be) / (e * e);
-    T g2Ce = g * g * Ce;
+        // Calculate the elliptic integrals (Eqns. 6, 7, 8) 
+        T Ke = boost::math::ellint_1<T>(e); 
+        T Ee = boost::math::ellint_2<T>(e);
+        T De = (Ke - Ee) / (e * e); 
+        T Be = Ke - De;
+        T Ce = (De - Be) / (e * e);
+        T g2Ce = g * g * Ce;
 
-    // Calculate the non-dimensional parameters alpha and beta (Eqns. 10 and 11)
-    T l2 = lambda * lambda; 
-    T alpha_numer = l2 * (Be + g2Ce) + g2Ce; 
-    T beta_numer = (l2 + 1) * Ce + De;
-    T denom = lambda * sqrt(g) * (Be * Ce + Be * De + g2Ce * De);
-    T alpha = alpha_numer / denom; 
-    T beta = beta_numer / denom;
-    T g2beta = g * g * beta;  
+        // Calculate the non-dimensional parameters alpha and beta (Eqns. 10 and 11)
+        T l2 = lambda * lambda; 
+        T alpha_numer = l2 * (Be + g2Ce) + g2Ce; 
+        T beta_numer = (l2 + 1) * Ce + De;
+        T denom = lambda * sqrt(g) * (Be * Ce + Be * De + g2Ce * De);
+        T alpha = alpha_numer / denom; 
+        T beta = beta_numer / denom;
+        T g2beta = g * g * beta;  
 
-    // Calculate the equivalent contact radius (Eqns. 17 and 18)
-    T sqrt_g = sqrt(g);
-    T term1 = (sqrt_g - 1) * (alpha * Be + g2beta * De); 
-    T term2 = Ke * (g2beta - alpha * sqrt_g); 
-    T f_numer = lambda * (term1 + term2);
-    T term3 = g2beta * (2 * sqrt_g + 1);  
-    T term4 = alpha * (sqrt_g + 2); 
-    T f_denom = 1.0 / (term3 - term4);
-    T f = f_numer / f_denom; 
-    T c_numer = 12 * (sqrt_g - 1) * (sqrt_g - 1) * pow(g, 2.5) * lambda;
-    T term5 = (g - sqrt_g) * (pow(g, 1.5) + l2) * (g2beta - alpha);
-    T c_denom = f - term5;
-    T c = pow((c_numer / c_denom) * (gamma * R_ * R_ / E0), 1.0 / 3.0);  
+        // Calculate the equivalent contact radius (Eqns. 17 and 18)
+        T sqrt_g = sqrt(g);
+        T term1 = (sqrt_g - 1) * (alpha * Be + g2beta * De); 
+        T term2 = Ke * (g2beta - alpha * sqrt_g); 
+        T f_numer = lambda * (term1 + term2);
+        T term3 = g2beta * (2 * sqrt_g + 1);  
+        T term4 = alpha * (sqrt_g + 2); 
+        T f_denom = 1.0 / (term3 - term4);
+        T f = f_numer / f_denom; 
+        T c_numer = 12 * (sqrt_g - 1) * (sqrt_g - 1) * pow(g, 2.5) * lambda;
+        T term5 = (g - sqrt_g) * (pow(g, 1.5) + l2) * (g2beta - alpha);
+        T c_denom = f - term5;
+        c = pow((c_numer / c_denom) * (gamma * R_ * R_ / E0), 1.0 / 3.0);  
 
-    // Calculate the force magnitude (Eqn. 15)
-    T c3 = c * c * c; 
-    T force_numer = (2 * sqrt_g + 1) * g2beta - (sqrt_g + 2) * alpha;
-    T force_denom = (sqrt_g - 1) * pow(g, 1.5) * R_;
-    T force = boost::math::constants::third_pi<T>() * E0 * c3 * force_numer / (3 * force_denom);
+        // Calculate the force magnitude (Eqn. 15)
+        T c3 = c * c * c; 
+        T force_numer = (2 * sqrt_g + 1) * g2beta - (sqrt_g + 2) * alpha;
+        T force_denom = (sqrt_g - 1) * pow(g, 1.5) * R_;
+        force = boost::math::constants::third_pi<T>() * E0 * c3 * force_numer / (3 * force_denom);
+    }
 
     return std::make_tuple(force, c, g); 
 }
