@@ -145,6 +145,9 @@ Array<T, 2, 2 * Dim> forcesSimpleJKRLagrange(const Ref<const Matrix<T, Dim, 1> >
  * Note that this function technically calculates the *negatives* of the
  * generalized forces.
  *
+ * The forces that are calculated by this function are the *full* JKR forces
+ * (repulsion plus adhesion).  
+ *
  * @param n1 Orientation of cell 1.
  * @param n2 Orientation of cell 2. 
  * @param d12 Shortest distance vector from cell 1 to cell 2.
@@ -159,7 +162,7 @@ Array<T, 2, 2 * Dim> forcesSimpleJKRLagrange(const Ref<const Matrix<T, Dim, 1> >
  *                           constraint on the generalized torques.
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value. 
- * @param imag_tol Tolerance for determining whether a root for the the JKR
+ * @param imag_tol Tolerance for determining whether a root for the JKR
  *                 contact radius polynomial is real.
  * @param aberth_tol Tolerance for the Aberth-Ehrlich method.
  * @returns Matrix of generalized forces arising from the isotropic JKR
@@ -245,6 +248,9 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * This function takes in a pre-computed table of values for the JKR contact
  * radius as a function of the overlap distance and surface adhesion energy
  * density.  
+ *
+ * The forces that are calculated by this function are the *full* JKR forces
+ * (repulsion plus adhesion).  
  *
  * @param n1 Orientation of cell 1.
  * @param n2 Orientation of cell 2. 
@@ -365,7 +371,7 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * @param d12 Shortest distance vector from cell 1 to cell 2.
  * @param R Cell radius, including the EPS.
  * @param E0 Elastic modulus of EPS. 
- * @param gamma Surface energy density. 
+ * @param gamma Surface adhesion energy density. 
  * @param s Cell-body coordinate along cell 1 at which shortest distance is 
  *          achieved. 
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
@@ -374,14 +380,19 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  *                           constraint on the generalized torques.
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value.
+ * @param calibrate_endpoint_radii If true, calibrate the principal radii of
+ *                                 curvature so that its minimum value is R. 
  * @param min_aspect_ratio Minimum aspect ratio for the JKR contact area. 
- * @param max_aspect_ratio Maximum aspect ratio for the JKR contact area.  
  * @param project_tol Tolerance for ellipsoid projection. 
  * @param project_max_iter Maximum number of iterations for ellipsoid projection. 
  * @param newton_tol Tolerance for the Newton-Raphson method. 
  * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
  *                        method. 
- * @returns Matrix of generalized forces arising from the anisotropic JKR contact.
+ * @param imag_tol Tolerance for determining whether a root for the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for the Aberth-Ehrlich method.
+ * @returns Matrix of generalized forces arising from the anisotropic JKR
+ *          interaction, together with the JKR contact radius.  
  */
 template <typename T, int Dim, int N = 100>
 std::pair<Array<T, 2, 2 * Dim>, T>
@@ -403,8 +414,7 @@ std::pair<Array<T, 2, 2 * Dim>, T>
                                  const T newton_tol = 1e-8, 
                                  const int newton_max_iter = 1000,
                                  const T imag_tol = 1e-20, 
-                                 const T aberth_tol = 1e-20,
-                                 const bool verbose = false)
+                                 const T aberth_tol = 1e-20)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
     const T dist = d12.norm();
@@ -435,7 +445,7 @@ std::pair<Array<T, 2, 2 * Dim>, T>
             r1_, n1_, half_l1, r2_, n2_, half_l2, R, d12_, s, t, E0, gamma, 
             max_overlap, calibrate_endpoint_radii, min_aspect_ratio, project_tol,
             project_max_iter, newton_tol, newton_max_iter, imag_tol, aberth_tol,
-            verbose
+            false
         );
         T force = std::get<0>(result);  
         radius = std::get<1>(result); 
@@ -503,7 +513,7 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * @param d12 Shortest distance vector from cell 1 to cell 2.
  * @param R Cell radius, including the EPS.
  * @param E0 Elastic modulus of EPS. 
- * @param gamma Surface energy density. 
+ * @param gamma Surface adhesion energy density. 
  * @param s Cell-body coordinate along cell 1 at which shortest distance is 
  *          achieved. 
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
@@ -539,7 +549,8 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  *                           constraint on the generalized torques.
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value. 
- * @returns Matrix of generalized forces arising from the anisotropic JKR contact. 
+ * @returns Matrix of generalized forces arising from the anisotropic JKR
+ *          interaction, together with the JKR contact radius.  
  */
 template <typename T>
 using R3ToR2Table = std::unordered_map<std::tuple<int, int, int>,
