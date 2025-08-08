@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/6/2025
+ *     8/7/2025
  */
 
 #ifndef ADHESION_POTENTIAL_FORCES_HPP
@@ -197,9 +197,17 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         radius = radii.second;    // Always choose the larger radius 
 
         // Calculate the generalized forces
-        T a3 = radius * radius * radius;  
-        T term = 4 * sqrt(boost::math::constants::pi<T>() * a3 * gamma * E0);
-        Matrix<T, Dim, 1> v = term * d12n;  
+        //
+        // Start with the repulsive force ...
+        T a3 = radius * radius * radius;
+        T term1 = 4 * E0 * a3 / (3 * R);  
+
+        // ... then calculate the adhesive force 
+        T term2 = 4 * sqrt(boost::math::constants::pi<T>() * a3 * gamma * E0);
+
+        // The force has a positive repulsive contribution and a negative 
+        // adhesive contribution; calculate the negative 
+        Matrix<T, Dim, 1> v = (term2 - term1) * d12n; 
         
         // Partial derivatives w.r.t cell 1 center 
         dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
@@ -293,9 +301,17 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         radius = jkr_radius_table[std::make_pair(idx_delta, idx_gamma)];
 
         // Calculate the generalized forces
-        T a3 = radius * radius * radius;  
-        T term = 4 * sqrt(boost::math::constants::pi<T>() * a3 * gamma * E0);
-        Matrix<T, Dim, 1> v = term * d12n;  
+        //
+        // Start with the repulsive force ...
+        T a3 = radius * radius * radius;
+        T term1 = 4 * E0 * a3 / (3 * R);  
+
+        // ... then calculate the adhesive force 
+        T term2 = 4 * sqrt(boost::math::constants::pi<T>() * a3 * gamma * E0);
+
+        // The force has a positive repulsive contribution and a negative 
+        // adhesive contribution; calculate the negative 
+        Matrix<T, Dim, 1> v = (term2 - term1) * d12n; 
         
         // Partial derivatives w.r.t cell 1 center 
         dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
@@ -327,6 +343,9 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  *
  * Note that this function technically calculates the *negatives* of the
  * generalized forces.
+ *
+ * The forces that are calculated by this function are the *full* JKR forces
+ * (repulsion plus adhesion).  
  *
  * @param r1 Center of cell 1.
  * @param n1 Orientation of cell 1.
@@ -368,12 +387,14 @@ std::pair<Array<T, 2, 2 * Dim>, T>
                                  const T s, const T t,
                                  const bool include_constraint = true,
                                  const T max_overlap = -1,
+                                 const bool calibrate_endpoint_radii = true,
                                  const T min_aspect_ratio = 0.01, 
-                                 const T max_aspect_ratio = 100.0,
                                  const T project_tol = 1e-6,
                                  const int project_max_iter = 100,
                                  const T newton_tol = 1e-8, 
-                                 const int newton_max_iter = 1000, 
+                                 const int newton_max_iter = 1000,
+                                 const T imag_tol = 1e-20, 
+                                 const T aberth_tol = 1e-20,
                                  const bool verbose = false)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
@@ -403,16 +424,25 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         }
         auto result = jkrContactAreaAndForceEllipsoid<T>(
             r1_, n1_, half_l1, r2_, n2_, half_l2, R, d12_, s, t, E0, gamma, 
-            max_overlap, min_aspect_ratio, max_aspect_ratio, project_tol,
-            project_max_iter, newton_tol, newton_max_iter, verbose
+            max_overlap, calibrate_endpoint_radii, min_aspect_ratio, project_tol,
+            project_max_iter, newton_tol, newton_max_iter, imag_tol, aberth_tol,
+            verbose
         );
         T force = std::get<0>(result);  
         radius = std::get<1>(result); 
 
-        // Normalize the distance vector and calculate generalized forces  
+        // Normalize the distance vector and calculate generalized forces 
+        //
+        // The force has a positive repulsive contribution and a negative 
+        // adhesive contribution; calculate the negative 
         Matrix<T, Dim, 1> d12n = d12 / dist;
-        Matrix<T, Dim, 1> v = force * d12n;  
-        
+        Matrix<T, Dim, 1> v = -force * d12n;
+
+        // The partial derivatives w.r.t the cell 1 center (which are the
+        // negatives of the force on cell 1) should be parallel to d12n if 
+        // the force is net repulsive and antiparallel if the force is net
+        // adhesive 
+        // 
         // Partial derivatives w.r.t cell 1 center 
         dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
 
@@ -444,13 +474,18 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * Note that this function technically calculates the *negatives* of the
  * generalized forces.
  *
- * This function takes in three pre-computed tables of values for:
+ * This function takes in two pre-computed tables of values for:
  * - the principal radii of curvature at the contact point, as a function of 
  *   (1) the angle between the overlap vector and the orientation vector, 
  *   (2) the cell half-length, and
  *   (3) the centerline coordinate at which the overlap vector is positioned; 
- * - the JKR contact radius as a function of overlap distance, and 
- * - the elliptic integral function. 
+ * - the JKR contact force magnitude and radius, as a function of
+ *   (1,2) the equivalent principal radii of curvature at the contact point,
+ *   (3) the overlap distance, and
+ *   (4) the surface adhesion energy density.  
+ *
+ * The forces that are calculated by this function are the *full* JKR forces
+ * (repulsion plus adhesion).  
  *
  * @param n1 Orientation of cell 1.
  * @param half_l1 Half-length of cell 1.
@@ -589,7 +624,10 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         radius = result.second; 
 
         // Calculate the generalized forces
-        Matrix<T, Dim, 1> v = force * d12n;  
+        //
+        // The force has a positive repulsive contribution and a negative 
+        // adhesive contribution; calculate the negative 
+        Matrix<T, Dim, 1> v = -force * d12n;  
         
         // Partial derivatives w.r.t cell 1 center 
         dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
