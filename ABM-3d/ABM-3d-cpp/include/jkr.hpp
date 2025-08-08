@@ -558,16 +558,19 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
  *           point. 
  * @param delta Overlap distance. 
  * @param E0 Elastic modulus. 
- * @param gamma Surface energy density.
+ * @param gamma Surface adhesion energy density.
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value.
  * @param min_aspect_ratio Minimum aspect ratio of the contact area. 
  * @param newton_tol Tolerance for the Newton-Raphson method.  
  * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
  *                        method.
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method.
  * @param verbose If true, print intermittent output to stdout.  
- * @returns Estimated JKR contact area, as well as the contact area dimensions,
- *          in terms of the equivalent radius and the aspect ratio.  
+ * @returns Estimated JKR force, as well as the contact area dimensions, in
+ *          terms of the equivalent radius and the aspect ratio.  
  */
 template <typename T, int N = 100>
 std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
@@ -586,20 +589,25 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
         delta_ = max_overlap;  
 
     // Calculate the curvature parameters \lambda and R (which we denote
-    // by R_), and the eccentricity e
+    // here by R_)
     T lambda = sqrt(Ry / Rx);
     T R_ = sqrt(Rx * Ry);  
 
     // Compute the root of the overlap vs. aspect ratio function using the
     // Newton-Raphson method
-    auto result = newtonRaphson<T>(
-        [&lambda, &R_, &E0, &gamma, &delta_](const T g)
-        {
-            return delta_ - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
-        },
-        1.0, 1e-8, min_aspect_ratio, 1.0, newton_tol, newton_max_iter, verbose  
-    );
-    T g = result.first; 
+    T g = 1.0; 
+    if (Rx > Ry)
+    {
+        // Here, the aspect ratio should be less than 1
+        auto result = newtonRaphson<T>(
+            [&lambda, &R_, &E0, &gamma, &delta](const T g)
+            {
+                return delta - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
+            },
+            1.0, 1e-8, min_aspect_ratio, 1.0, newton_tol, newton_max_iter, verbose  
+        ); 
+        g = result.first;
+    }
 
     // If the aspect ratio is 1, use jkrContactRadius(), as the elliptic 
     // integrals are ill-defined
