@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/6/2025
+ *     8/7/2025
  */
 
 #include <Eigen/Dense>
@@ -146,11 +146,10 @@ int main(int argc, char** argv)
             T n_mesh_curvature_radii = 100;
             T calibrate_endpoint_radii = 1;
             T min_aspect_ratio = 0.01; 
-            T max_aspect_ratio = 100.0; 
             T project_tol = 1e-8; 
             T project_max_iter = 100; 
             T newton_tol = 1e-8; 
-            T newton_max_iter = 1000;  
+            T newton_max_iter = 1000;
             try
             {
                 calibrate_endpoint_radii = static_cast<T>(
@@ -216,7 +215,6 @@ int main(int argc, char** argv)
             adhesion_params["n_mesh_centerline_coords"] = n_mesh_centerline_coords; 
             adhesion_params["n_mesh_curvature_radii"] = n_mesh_curvature_radii;
             adhesion_params["min_aspect_ratio"] = min_aspect_ratio; 
-            adhesion_params["max_aspect_ratio"] = max_aspect_ratio; 
             adhesion_params["ellipsoid_project_tol"] = project_tol; 
             adhesion_params["ellipsoid_project_max_iter"] = project_max_iter;
             adhesion_params["newton_tol"] = newton_tol;
