@@ -74,6 +74,8 @@ T potentialHertz(const T dist, const T R, const T Rcell, const T E0, const T Ece
  * Note that this function technically calculates the *negatives* of the
  * generalized forces.
  *
+ * TODO Retire this function
+ *
  * @param n1 Orientation of cell 1.
  * @param n2 Orientation of cell 2. 
  * @param d12 Shortest distance vector from cell 1 to cell 2.
@@ -148,7 +150,7 @@ Array<T, 2, 2 * Dim> forcesSimpleJKRLagrange(const Ref<const Matrix<T, Dim, 1> >
  * @param d12 Shortest distance vector from cell 1 to cell 2.
  * @param R Cell radius, including the EPS.
  * @param E0 Elastic modulus of EPS.
- * @param gamma Surface energy density. 
+ * @param gamma Surface adhesion energy density. 
  * @param s Cell-body coordinate along cell 1 at which shortest distance is 
  *          achieved. 
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
@@ -160,8 +162,8 @@ Array<T, 2, 2 * Dim> forcesSimpleJKRLagrange(const Ref<const Matrix<T, Dim, 1> >
  * @param imag_tol Tolerance for determining whether a root for the the JKR
  *                 contact radius polynomial is real.
  * @param aberth_tol Tolerance for the Aberth-Ehrlich method.
- * @returns Matrix of generalized forces arising from the simplified JKR
- *          contact potential.
+ * @returns Matrix of generalized forces arising from the isotropic JKR
+ *          interaction, together with the JKR contact radius.  
  */
 template <typename T, int Dim, int N = 100>
 std::pair<Array<T, 2, 2 * Dim>, T>
@@ -241,18 +243,25 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * generalized forces.
  *
  * This function takes in a pre-computed table of values for the JKR contact
- * radius as a function of the overlap distance. 
+ * radius as a function of the overlap distance and surface adhesion energy
+ * density.  
  *
  * @param n1 Orientation of cell 1.
  * @param n2 Orientation of cell 2. 
  * @param d12 Shortest distance vector from cell 1 to cell 2.
  * @param R Cell radius, including the EPS.
  * @param E0 Elastic modulus of EPS.
- * @param gamma Surface energy density. 
+ * @param gamma Surface adhesion energy density. 
  * @param s Cell-body coordinate along cell 1 at which shortest distance is 
  *          achieved. 
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
  *          achieved.
+ * @param jkr_table_delta Array of input values for the overlap distance 
+ *                        at which the JKR contact radius was pre-computed
+ *                        (see below). 
+ * @param jkr_table_gamma Array of input values for the surface adhesion
+ *                        energy density at which the JKR contact radius was
+ *                        pre-computed (see below). 
  * @param jkr_radius_table Pre-computed table of values for the overlap vs. 
  *                         JKR contact radius function. The rows are assumed
  *                         to be given in order of increasing overlap.  
@@ -260,8 +269,8 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  *                           constraint on the generalized torques.
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value. 
- * @returns Matrix of generalized forces arising from the simplified JKR
- *          contact potential.
+ * @returns Matrix of generalized forces arising from the isotropic JKR
+ *          interaction, together with the JKR contact radius.  
  */
 template <typename T>
 using R2ToR1Table = std::unordered_map<std::pair<int, int>, T,
