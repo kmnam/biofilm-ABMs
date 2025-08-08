@@ -66,14 +66,9 @@ std::string floatToString(T x, const int precision = 10)
  * @param gamma Input mesh of adhesion surface energy densities.  
  * @param R Cell radius (including the EPS). 
  * @param E0 Elastic modulus. 
- * @param gamma Surface energy density.
- * @param calibrate_endpoint_radii If true, calibrate the principal radii of 
- *                                 curvature so that the minimum radius is R
- *                                 and the maximum radius is always greater 
- *                                 than R.
- * @param project_tol Tolerance for the ellipsoid projection method. 
- * @param project_max_iter Maximum number of iterations for the ellipsoid
- *                         projection method. 
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method. 
  * @returns Table of calculated JKR contact radii. 
  */
 template <typename T, int N = 100>
@@ -142,12 +137,7 @@ R3ToR2Table<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1
         {
             // Get the principal radii of curvature at the endpoint of the 
             // inscribed ellipsoid
-            std::pair<T, T> radii_endpoint = projectAndGetPrincipalRadiiOfCurvature<T>(
-                half_l(j), R, 0.0, half_l(j), project_tol, project_max_iter
-            );
-
-            // Calculate a calibration factor for the minor radius 
-            rmax_factor = R / radii_endpoint.second;  
+            rmax_factor = (half_l(j) + R) / R;   // = R / (R * R / (half_l(j) + R)) 
         }
 
         // For each overlap-orientation angle ... 
@@ -197,22 +187,25 @@ R3ToR2Table<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value.
  * @param min_aspect_ratio Minimum aspect ratio of the contact area. 
- * @param max_aspect_ratio Maximum aspect ratio of the contact area.  
  * @param newton_tol Tolerance for the Newton-Raphson method.  
  * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
  *                        method.
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method. 
  * @returns Table of calculated JKR force magnitudes and contact radii. 
  */
-template <typename T>
+template <typename T, int N = 100>
 R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& Rx,
                                       const Ref<const Matrix<T, Dynamic, 1> >& Ry,
                                       const Ref<const Matrix<T, Dynamic, 1> >& delta,
                                       const Ref<const Matrix<T, Dynamic, 1> >& gamma, 
                                       const T E0, const T max_overlap = -1, 
                                       const T min_aspect_ratio = 0.01, 
-                                      const T max_aspect_ratio = 100.0,  
                                       const T newton_tol = 1e-8,
-                                      const int newton_max_iter = 1000)
+                                      const int newton_max_iter = 1000,
+                                      const T imag_tol = 1e-20, 
+                                      const T aberth_tol = 1e-20)
 {
     R4ToR2Table<T> forces; 
 
@@ -227,10 +220,10 @@ R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
                 {
                     // Store the JKR force magnitude and contact radius 
                     auto tuple = std::make_tuple(i, j, k, m); 
-                    auto result = jkrContactAreaAndForceEllipsoid<T>(
+                    auto result = jkrContactAreaAndForceEllipsoid<T, N>(
                         Rx(i), Ry(j), delta(k), E0, gamma(m), max_overlap, 
-                        min_aspect_ratio, max_aspect_ratio, newton_tol, 
-                        newton_max_iter
+                        min_aspect_ratio, newton_tol, newton_max_iter, 
+                        imag_tol, aberth_tol
                     );
                     forces[tuple] = std::make_pair(std::get<0>(result), std::get<1>(result));
                 } 
@@ -582,7 +575,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     int n_Ry = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
                     T max_overlap = 2 * (R - Rcell);
                     T min_aspect_ratio = adhesion_params["min_aspect_ratio"];
-                    T max_aspect_ratio = adhesion_params["max_aspect_ratio"]; 
                     T project_tol = adhesion_params["ellipsoid_project_tol"]; 
                     int project_max_iter = static_cast<int>(
                         adhesion_params["ellipsoid_project_max_iter"]
@@ -590,7 +582,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     T newton_tol = adhesion_params["newton_tol"];
                     int newton_max_iter = static_cast<int>(
                         adhesion_params["newton_max_iter"]
-                    ); 
+                    );
                     jkr_data.theta = Matrix<T, Dynamic, 1>::LinSpaced(
                         n_theta, 0.0, boost::math::constants::half_pi<T>()
                     ); 
@@ -612,8 +604,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     ); 
                     jkr_data.forces = calculateJKRForceTable<T>(
                         jkr_data.Rx, jkr_data.Ry, jkr_data.overlaps, jkr_data.gamma, 
-                        E0, max_overlap, min_aspect_ratio, max_aspect_ratio, 
-                        newton_tol, newton_max_iter
+                        E0, max_overlap, min_aspect_ratio, newton_tol,
+                        newton_max_iter, imag_tol, aberth_tol
                     ); 
                 }
                 else 
