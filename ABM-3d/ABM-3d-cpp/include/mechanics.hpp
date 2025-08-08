@@ -867,7 +867,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                 gamma, si, sj, true, max_overlap,
                                 calibrate_endpoint_radii, min_aspect_ratio,
                                 project_tol, project_max_iter, newton_tol,
-                                newton_max_iter, imag_tol, aberth_tol, false
+                                newton_max_iter, imag_tol, aberth_tol
                             );
                             forces = result.first; 
                         }
