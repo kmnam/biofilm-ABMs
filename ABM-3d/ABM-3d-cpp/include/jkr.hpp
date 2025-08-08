@@ -673,13 +673,18 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
  *
  * @param R Cell radius (including the EPS). 
  * @param E0 Elastic modulus.
- * @param gamma Surface energy density.
- * @param dinit Initial overlap distance.  
+ * @param gamma Surface adhesion energy density.
+ * @param dinit Initial cell-cell distance (from centerline to centerline). 
+ * @param dmin Minimum cell-cell distance (from centerline to centerline),
+ *             which determines the maximum overlap distance.   
  * @param increment_overlap Increment for finite differences approximation.
- * @param tol Tolerance for Newton's method.  
+ * @param newton_tol Tolerance for the Newton-Raphson method.  
+ * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
+ *                        method.
  * @param imag_tol Tolerance for determining whether a root for the the JKR
  *                 contact radius polynomial is real.
  * @param aberth_tol Tolerance for Aberth-Ehrlich method.
+ * @param verbose If true, print intermittent output to stdout.  
  * @returns Equilibrium cell-cell distance.  
  */
 template <typename T, int N = 100>
@@ -720,15 +725,20 @@ T jkrEquilibriumDistance(const T R, const T E0, const T gamma, const T dinit,
  * @param R Cell radius (including the EPS). 
  * @param E0 Elastic modulus.
  * @param deq_target Target equilibrium cell-cell distance. 
- * @param min_gamma Minimum surface energy density.
- * @param max_gamma Maximum surface energy density.  
- * @param dinit Initial overlap distance.  
- * @param tol Tolerance for (steepest) gradient descent.
+ * @param min_gamma Minimum surface adhesion energy density.
+ * @param max_gamma Maximum surface adhesion energy density.  
  * @param log_increment_gamma Increment for finite differences approximation 
  *                            w.r.t log10(gamma) during gradient descent. 
  * @param increment_overlap Increment for finite differences approximation
  *                          w.r.t overlap in jkrEquilibriumDistance().
- * @param newton_tol Tolerance for Newton's method in jkrEquilibriumDistance().  
+ * @param outer_newton_tol Tolerance for Newton-Raphson method in the 
+ *                         function proper. 
+ * @param inner_newton_tol Tolerance for Newton-Raphson method in each inner
+ *                         call to jkrEquilibriumDistance().
+ * @param outer_max_iter Maximum number of iterations for Newton-Raphson
+ *                       method in the function proper. 
+ * @param inner_max_iter Maximum number of iterations for Newton-Raphson
+ *                       method in each inner call to jkrEquilibriumDistance(). 
  * @param imag_tol Tolerance for determining whether a root for the the JKR
  *                 contact radius polynomial is real.
  * @param aberth_tol Tolerance for Aberth-Ehrlich method.
