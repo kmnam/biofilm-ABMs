@@ -230,7 +230,7 @@ int main(int argc, char** argv)
 
     // Parse cell-cell friction coefficient
     T eta_cell_cell = 0.0; 
-    if (friction_mode != FrictionMode::KINETIC)
+    if (friction_mode == FrictionMode::KINETIC)
         eta_cell_cell = static_cast<T>(json_data["eta_cell_cell"].as_double());
 
     // Omit the surface, if desired 
