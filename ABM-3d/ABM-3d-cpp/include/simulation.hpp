@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/6/2025
+ *     8/10/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -278,10 +278,6 @@ R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
  * @param growth_means Mean growth rate for cells in each group.
  * @param growth_stds Standard deviation of growth rate for cells in each
  *                    group.
- * @param attribute_means Array of mean attribute values for cells in each
- *                        group.
- * @param attribute_stds Array of standard deviations of attributes for cells
- *                       in each group.
  * @param switch_mode Switching mode. Can by NONE (0), MARKOV (1), or INHERIT
  *                    (2).
  * @param switch_rates Array of between-group switching rates. In the Markovian
@@ -356,10 +352,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     std::vector<int>& group_attributes,
                                     const Ref<const Array<T, Dynamic, 1> >& growth_means,
                                     const Ref<const Array<T, Dynamic, 1> >& growth_stds,
-                                    const Ref<const Array<T, Dynamic, Dynamic> >& attribute_means,
-                                    const Ref<const Array<T, Dynamic, Dynamic> >& attribute_stds,
+                                    const Ref<const Array<T, Dynamic, Dynamic> >& attribute_values,
                                     const SwitchMode switch_mode,
                                     const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
+                                    const T switch_timescale, 
                                     const T daughter_length_std,
                                     const T daughter_angle_xy_bound,
                                     const T daughter_angle_z_bound,
@@ -374,6 +370,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     const AdhesionMode adhesion_mode, 
                                     std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > >& adhesion_map, 
                                     std::unordered_map<std::string, T>& adhesion_params,
+                                    const FrictionMode friction_mode,
                                     const bool no_surface = false,
                                     const int n_cells_start_switch = 0,
                                     const bool track_poles = false,
@@ -389,22 +386,35 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     boost::random::mt19937 rng(rng_seed);
 
     // Define additional column indices, if desired
-    int __colidx_gamma = -1; 
+    int __colidx_gamma = -1;
+    int __colidx_eta_cell_cell = -1;  
     int __colidx_negpole_t0 = -1; 
     int __colidx_pospole_t0 = -1;
     if (adhesion_mode != AdhesionMode::NONE)
     {
-        __colidx_gamma = 22;
-        if (track_poles)
+        __colidx_gamma = 22; 
+    }
+    if (friction_mode != FrictionMode::NONE)
+    {
+        __colidx_eta_cell_cell = (adhesion_mode != AdhesionMode::NONE ? 23 : 22);
+    }
+    if (track_poles)
+    {
+        if (adhesion_mode != AdhesionMode::NONE && friction_mode != FrictionMode::NONE)
+        {
+            __colidx_negpole_t0 = 24; 
+            __colidx_pospole_t0 = 25;
+        }
+        else if (adhesion_mode != AdhesionMode::NONE || friction_mode != FrictionMode::NONE)
         {
             __colidx_negpole_t0 = 23; 
-            __colidx_pospole_t0 = 24;
+            __colidx_pospole_t0 = 24; 
         }
-    }
-    else if (track_poles)
-    {
-        __colidx_negpole_t0 = 22; 
-        __colidx_pospole_t0 = 23;
+        else 
+        {
+            __colidx_negpole_t0 = 22;  
+            __colidx_pospole_t0 = 23; 
+        }
     }
 
     // Define Butcher tableau for order 3(2) Runge-Kutta method by Bogacki
@@ -435,6 +445,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
     // Growth rate distribution functions: normal distributions with given means
     // and standard deviations
+    const int n_attributes = group_attributes.size(); 
     boost::random::uniform_01<> uniform_dist; 
     std::vector<std::function<T(boost::random::mt19937&)> > growth_dists; 
     for (int i = 0; i < n_groups; ++i)
@@ -447,26 +458,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 return growth_mean + growth_std * standardNormal<T>(rng, uniform_dist);
             };
         growth_dists.push_back(growth_dist);
-    }
-
-    // Attribute distribution functions: normal distributions with given means
-    // and standard deviations
-    const int n_attributes = group_attributes.size();
-    std::map<std::pair<int, int>, std::function<T(boost::random::mt19937&)> > attribute_dists;
-    for (int i = 0; i < n_groups; ++i)
-    {
-        for (int j = 0; j < n_attributes; ++j)
-        {
-            T attribute_mean = attribute_means(i, j); 
-            T attribute_std = attribute_stds(i, j);
-            auto pair = std::make_pair(i, j);
-            std::function<T(boost::random::mt19937&)> attribute_dist =
-                [attribute_mean, attribute_std, &uniform_dist](boost::random::mt19937& rng)
-                {
-                    return attribute_mean + attribute_std * standardNormal<T>(rng, uniform_dist);
-                };
-            attribute_dists[pair] = attribute_dist;
-        }
     }
 
     // Daughter cell length ratio distribution function: normal distribution
@@ -517,12 +508,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             R, Rcell, E0, eqdist, 1.0, 1000.0, 1e-6, 1e-8, 1e-8, 1e-8, 1000,
             1000, imag_tol, aberth_tol, true
         );
-        if (adhesion_params["jkr_energy_density_switch_time"] == 0)
+        if (switch_timescale == 0)
             jkr_data.gamma_switch_rate = std::numeric_limits<T>::infinity(); 
         else
-            jkr_data.gamma_switch_rate = ( 
-                jkr_data.max_gamma / adhesion_params["jkr_energy_density_switch_time"]
-            );
+            jkr_data.gamma_switch_rate = jkr_data.max_gamma / switch_timescale;  
 
         // Initialize the surface energy density for each cell to be 
         // the maximum value for group 1 cells and zero for group 2 cells
@@ -666,11 +655,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         ss.str(std::string());
         for (int j = 0; j < n_attributes; ++j)
         {
-            ss << "attribute_mean_" << i + 1 << "_" << j + 1;
-            params[ss.str()] = floatToString<T>(attribute_means(i, j), precision);
-            ss.str(std::string());
-            ss << "attribute_std_" << i + 1 << "_" << j + 1;
-            params[ss.str()] = floatToString<T>(attribute_stds(i, j), precision);
+            ss << "attribute_values_" << i + 1 << "_" << j + 1;
+            params[ss.str()] = floatToString<T>(attribute_values(i, j), precision);
             ss.str(std::string());
         }
     }
@@ -691,6 +677,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         }
     }
+    params["switch_timescale"] = floatToString<T>(switch_timescale, precision); 
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_xy_bound"] = floatToString<T>(daughter_angle_xy_bound, precision);
     params["daughter_angle_z_bound"] = floatToString<T>(daughter_angle_z_bound, precision);
@@ -714,6 +701,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             params[ss.str()] = floatToString<T>(value); 
         }
     }
+    params["cell_cell_friction_mode"] = std::to_string(static_cast<int>(friction_mode)); 
     params["track_poles"] = (track_poles ? "1" : "0");
     params["no_surface"] = (no_surface ? "1" : "0");
     params["n_cells_start_switch"] = std::to_string(n_cells_start_switch);
@@ -724,9 +712,13 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     {
         write_other_cols[__colidx_gamma] = 1;    // Write adhesion energy densities as floats
     }
+    if (friction_mode != FrictionMode::NONE)
+    {
+        write_other_cols[__colidx_eta_cell_cell] = 1;   // Write friction coefficients as floats
+    }
     if (track_poles)
     {
-        write_other_cols[__colidx_negpole_t0] = 1;    // Write pole ages as floats
+        write_other_cols[__colidx_negpole_t0] = 1;      // Write pole ages as floats
         write_other_cols[__colidx_pospole_t0] = 1;
     }
     if (write)
@@ -816,40 +808,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             if (n >= n_cells_start_switch && switch_mode == SwitchMode::INHERIT)
             {
                 switchGroupsInherit<T>(
-                    cells, daughter_pairs, group_attributes, n_groups,
-                    switch_rates, growth_dists, attribute_dists, rng, uniform_dist
+                    cells, daughter_pairs, n_groups, switch_rates, growth_dists,
+                    rng, uniform_dist
                 );
-
-                // Update cell surface adhesion energy densities 
-                for (int i = 0; i < n; ++i)
-                {
-                    if (cells(i, __colidx_group) == 1)
-                    {
-                        if (jkr_data.gamma_switch_rate == std::numeric_limits<T>::infinity())
-                        {
-                            cells(i, __colidx_gamma) = jkr_data.max_gamma; 
-                        }
-                        else if (cells(i, __colidx_gamma) < jkr_data.max_gamma)
-                        {
-                            cells(i, __colidx_gamma) += jkr_data.gamma_switch_rate * dt;
-                            if (cells(i, __colidx_gamma) > jkr_data.max_gamma)
-                                cells(i, __colidx_gamma) = jkr_data.max_gamma; 
-                        }
-                    }
-                    else    // cells(i, __colidx_group == 2)
-                    {
-                        if (jkr_data.gamma_switch_rate == std::numeric_limits<T>::infinity())
-                        {
-                            cells(i, __colidx_gamma) = 0; 
-                        }
-                        else if (cells(i, __colidx_gamma) > 0)
-                        {
-                            cells(i, __colidx_gamma) -= jkr_data.gamma_switch_rate * dt; 
-                            if (cells(i, __colidx_gamma) < 0)
-                                cells(i, __colidx_gamma) = 0; 
-                        }
-                    } 
-                }
             }
             
             // Update neighboring cells 
@@ -869,8 +830,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
             repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
             max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
-            adhesion_params, jkr_data, __colidx_gamma, no_surface,
-            n_start_multithread
+            adhesion_params, jkr_data, __colidx_gamma, friction_mode, 
+            __colidx_eta_cell_cell, no_surface, n_start_multithread
         ); 
         Array<T, Dynamic, Dynamic> cells_new = result.first;
         Array<T, Dynamic, 6> errors = result.second;
@@ -909,7 +870,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     repulsion_prefactors, nz_threshold, max_rxy_noise,
                     max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
                     adhesion_mode, adhesion_params, jkr_data, __colidx_gamma,
-                    no_surface, n_start_multithread
+                    friction_mode, __colidx_eta_cell_cell, no_surface,
+                    n_start_multithread
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -948,8 +910,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
                 repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
                 max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
-                adhesion_params, jkr_data, __colidx_gamma, no_surface,
-                n_start_multithread
+                adhesion_params, jkr_data, __colidx_gamma, friction_mode, 
+                __colidx_eta_cell_cell, no_surface, n_start_multithread
             ); 
             cells_new = result.first;
             errors = result.second;
@@ -1027,7 +989,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
             }
         }
-
+        
         // Update current time 
         t += dt;
         iter++;
@@ -1039,53 +1001,124 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         // Switch cells between groups if desired 
         if (n >= n_cells_start_switch && switch_mode == SwitchMode::MARKOV)
         {
-            // First switch the cells 
             switchGroupsMarkov<T>(
-                cells, group_attributes, n_groups, dt, switch_rates, growth_dists,
-                attribute_dists, rng, uniform_dist
+                cells, n_groups, dt, switch_rates, growth_dists, rng, uniform_dist
             );
-            
-            // Update cell surface adhesion energy densities 
-            for (int i = 0; i < n; ++i)
+        }
+
+        // If there is cell switching, update group attributes
+        if (switch_mode != SwitchMode::NONE)
+        {
+            // Switch each group attribute ... 
+            for (int k = 0; k < n_attributes; ++k)
             {
-                if (cells(i, __colidx_group) == 1)
+                T target1 = attribute_values(0, k);   // Target value for group 1
+                T target2 = attribute_values(1, k);   // Target value for group 2
+                T rate;                               // Rate of attribute change 
+                if (switch_timescale == 0) 
+                    rate = std::numeric_limits<T>::infinity(); 
+                else 
+                    rate = abs(target1 - target2) / switch_timescale;
+
+                // For each cell ...  
+                for (int i = 0; i < n; ++i)
                 {
-                    if (cells(i, __colidx_gamma) < jkr_data.max_gamma)
+                    int group = static_cast<int>(cells(i, __colidx_group));
+                    T value = cells(i, group_attributes[k]);
+                    if (group == 1)
                     {
-                        cells(i, __colidx_gamma) += jkr_data.gamma_switch_rate * dt; 
-                        if (cells(i, __colidx_gamma) > jkr_data.max_gamma)
-                            cells(i, __colidx_gamma) = jkr_data.max_gamma;
-                    } 
+                        if (switch_timescale == 0 && value != target1)
+                        {
+                            cells(i, group_attributes[k]) = target1; 
+                        }
+                        else if (target1 > target2 && value < target1)
+                        {
+                            cells(i, group_attributes[k]) += rate * dt;
+                            if (cells(i, group_attributes[k]) > target1)
+                                cells(i, group_attributes[k]) = target1;  
+                        }
+                        else if (target1 < target2 && value > target1) 
+                        {
+                            cells(i, group_attributes[k]) -= rate * dt;
+                            if (cells(i, group_attributes[k]) < target1)
+                                cells(i, group_attributes[k]) = target1;  
+                        }
+                        else if (target1 == target2 && value != target1)
+                        {
+                            cells(i, group_attributes[k]) = target1; 
+                        } 
+                    }
+                    else    // cells(i, __colidx_group == 2)
+                    {
+                        if (switch_timescale == 0 && value != target2)
+                        {
+                            cells(i, group_attributes[k]) = target2; 
+                        }
+                        else if (target2 > target1 && value < target2)
+                        {
+                            cells(i, group_attributes[k]) += rate * dt; 
+                            if (cells(i, group_attributes[k]) > target2)
+                                cells(i, group_attributes[k]) = target2;  
+                        }
+                        else if (target2 < target1 && value > target2) 
+                        {
+                            cells(i, group_attributes[k]) -= rate * dt;
+                            if (cells(i, group_attributes[k]) < target2)
+                                cells(i, group_attributes[k]) = target2;  
+                        }
+                        else if (target1 == target2 && value != target2)
+                        {
+                            cells(i, group_attributes[k]) = target2; 
+                        } 
+                    }
                 }
-                else    // cells(i, __colidx_group == 2)
-                {
-                    if (cells(i, __colidx_gamma) > 0)
-                    {
-                        cells(i, __colidx_gamma) -= jkr_data.gamma_switch_rate * dt; 
-                        if (cells(i, __colidx_gamma) < 0)
-                            cells(i, __colidx_gamma) = 0; 
-                    }                     
-                } 
-            }
-            
-            // Truncate cell-surface friction coefficients according to Coulomb's law
-            if (truncate_surface_friction)
-            {
-                // TODO Implement this
-                throw std::runtime_error("Not implemented");
-                /*
-                truncateSurfaceFrictionCoeffsCoulomb<T>(
-                    cells, R, E0, surface_contact_density, surface_coulomb_coeff
-                );
-                */
-            }
-            else    // Otherwise, ensure that friction coefficients are correct after switching 
+            } 
+
+            // ... as well as the surface adhesion energy density, if there
+            // is cell-cell adhesion 
+            if (adhesion_mode != AdhesionMode::NONE)
             {
                 for (int i = 0; i < n; ++i)
-                    cells(i, __colidx_eta1) = cells(i, __colidx_maxeta1);
+                {
+                    if (cells(i, __colidx_group) == 1)
+                    {
+                        if (cells(i, __colidx_gamma) < jkr_data.max_gamma)
+                        {
+                            cells(i, __colidx_gamma) += jkr_data.gamma_switch_rate * dt; 
+                            if (cells(i, __colidx_gamma) > jkr_data.max_gamma)
+                                cells(i, __colidx_gamma) = jkr_data.max_gamma;
+                        } 
+                    }
+                    else    // cells(i, __colidx_group == 2)
+                    {
+                        if (cells(i, __colidx_gamma) > 0)
+                        {
+                            cells(i, __colidx_gamma) -= jkr_data.gamma_switch_rate * dt; 
+                            if (cells(i, __colidx_gamma) < 0)
+                                cells(i, __colidx_gamma) = 0; 
+                        }                     
+                    } 
+                }
             }
         }
-        
+
+        // Truncate cell-surface friction coefficients according to Coulomb's law
+        if (truncate_surface_friction)
+        {
+            // TODO Implement this
+            throw std::runtime_error("Not implemented");
+            /*
+            truncateSurfaceFrictionCoeffsCoulomb<T>(
+                cells, R, E0, surface_contact_density, surface_coulomb_coeff
+            );
+            */
+        }
+        else    // Otherwise, ensure that friction coefficients are correct after switching 
+        {
+            for (int i = 0; i < n; ++i)
+                cells(i, __colidx_eta1) = cells(i, __colidx_maxeta1);
+        }
+
         // Write the current population to file if the simulation time has 
         // just passed a multiple of dt_write 
         double t_old_factor = std::fmod(t - dt + 1e-12, dt_write);

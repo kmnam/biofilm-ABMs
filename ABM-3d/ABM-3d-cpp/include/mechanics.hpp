@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/7/2025
+ *     8/10/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -50,13 +50,22 @@ typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 typedef K::Segment_3 Segment_3;
 
 /**
- * An enum that enumerates the different adhesion force types. 
+ * An enum that enumerates the different cell-cell adhesion force types. 
  */
 enum class AdhesionMode
 {
     NONE = 0,
     JKR_ISOTROPIC = 1,
     JKR_ANISOTROPIC = 2
+};
+
+/**
+ * An enum that enumerates the different cell-cell friction force types. 
+ */
+enum class FrictionMode
+{
+    NONE = 0, 
+    KINETIC = 1
 };
 
 /**
@@ -739,7 +748,8 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
  *                        forces.
  * @param jkr_data Pre-computed values for calculating JKR forces. 
  * @param colidx_gamma Column index for cell-cell adhesion surface energy 
- *                     density. 
+ *                     density.
+ * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient. 
  * @returns Derivatives of the cell-cell adhesion energies with respect to  
  *          cell positions and orientations.   
  */
@@ -752,7 +762,9 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                                const AdhesionMode adhesion_mode,
                                                std::unordered_map<std::string, T>& adhesion_params,
                                                JKRData<T>& jkr_data,
-                                               const int colidx_gamma)
+                                               const int colidx_gamma,
+                                               const FrictionMode friction_mode, 
+                                               const int colidx_eta_cell_cell)
 {
     int n = cells.rows();       // Number of cells
     int m = neighbors.rows();   // Number of cell-cell neighbors 
@@ -765,6 +777,9 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
     // with respect to x-position, y-position, z-position, x-orientation,
     // y-orientation, z-orientation
     Array<T, Dynamic, 6> dEdq = Array<T, Dynamic, 6>::Zero(n, 6);
+
+    // Maintain array of contact radii for all pairs of neighboring cells 
+    Array<T, Dynamic, 1> radii = Array<T, Dynamic, 1>::Zero(m);  
 
     // Compute cell-cell distance and overlap for each pair of neighboring cells 
     Array<T, Dynamic, 1> distances = neighbors(Eigen::all, Eigen::seq(2, 4)).matrix().rowwise().norm().array();
@@ -792,6 +807,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                 T sj = neighbors(k, 6);                      // Cell-body coordinate along cell j
                 Array<T, 3, 1> dijn = dij / distances(k);    // Normalized distance vector
                 Array<T, 2, 6> forces = Array<T, 2, 6>::Zero();
+                T radius = 0; 
                 
                 // Cap overlap distance at 2 * (R - Rcell)
                 T max_overlap = 2 * (R - Rcell);
@@ -814,7 +830,8 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                 jkr_data.gamma, jkr_data.contact_radii, true,
                                 max_overlap 
                             );
-                            forces = result.first; 
+                            forces = result.first;
+                            radius = result.second;  
                         }
                         else    // Otherwise, compute forces from scratch  
                         {
@@ -823,7 +840,8 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                 ni, nj, dij, R, E0, gamma, si, sj, true, 
                                 max_overlap
                             );
-                            forces = result.first; 
+                            forces = result.first;
+                            radius = result.second; 
                         } 
                     }
                     else if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
@@ -840,7 +858,8 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                 jkr_data.Ry, jkr_data.overlaps, jkr_data.gamma, 
                                 jkr_data.forces, true, max_overlap
                             );
-                            forces = result.first; 
+                            forces = result.first;
+                            radius = result.second; 
                         }
                         else    // Otherwise, compute forces from scratch 
                         {
@@ -869,14 +888,15 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                 project_tol, project_max_iter, newton_tol,
                                 newton_max_iter, imag_tol, aberth_tol
                             );
-                            forces = result.first; 
+                            forces = result.first;
+                            radius = result.second; 
                         }
                     }
                 }
                 // Otherwise, calculate the Hertzian repulsive force 
                 else 
                 {
-                    // Define the repulsive force magnitude 
+                    // Define the repulsive force magnitude and contact radius  
                     T magnitude = 0; 
 
                     // Case 1: the overlap is positive but less than 2 * (R - Rcell)
@@ -884,7 +904,8 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     if (overlaps(k) <= 2 * (R - Rcell))
                     {
                         // The force magnitude is (4 / 3) * E0 * sqrt(R) * pow(overlap, 1.5)
-                        magnitude = repulsion_prefactors(1) * pow(overlaps(k), 1.5); 
+                        magnitude = repulsion_prefactors(1) * pow(overlaps(k), 1.5);
+                        radius = sqrt(R * overlaps(k)); 
                     }
                     // Case 2: the overlap is instead greater than 2 * R - 2 * Rcell
                     // (i.e., it encroaches into the bodies of the two cells)
@@ -893,7 +914,8 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                         // The (soft-shell) force magnitude is
                         // (4 / 3) * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5)
                         magnitude = repulsion_prefactors(3);
-                    } 
+                        radius = sqrt(R * 2 * (R - Rcell)); 
+                    }
                 
                     // Compute the derivatives of the cell-cell repulsion energy
                     // between cells i and j
@@ -901,7 +923,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     forces(0, Eigen::seq(0, 2)) = vij; 
                     forces(0, Eigen::seq(3, 5)) = si * vij;
                     forces(1, Eigen::seq(0, 2)) = -vij; 
-                    forces(1, Eigen::seq(3, 5)) = -sj * vij;  
+                    forces(1, Eigen::seq(3, 5)) = -sj * vij;
                 }
                 #ifdef DEBUG_CHECK_CELL_CELL_ADHESIVE_FORCES_NAN
                     if (forces.isNaN().any() || forces.isInf().any())
@@ -922,8 +944,11 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                         throw std::runtime_error("Found nan in adhesive forces"); 
                     }
                 #endif
+
+                // Update forces and store contact radius
                 dEdq.row(i) += forces.row(0); 
                 dEdq.row(j) += forces.row(1);
+                radii(k) = radius;  
 
                 // If the overlap exceeds the maximum, add an additional 
                 // hard-core repulsive force 
@@ -960,6 +985,8 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                             throw std::runtime_error("Found nan in repulsive forces"); 
                         }
                     #endif
+
+                    // Update forces 
                     dEdq.row(i) += forces_hard.row(0); 
                     dEdq.row(j) += forces_hard.row(1);
                 }
@@ -986,15 +1013,17 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
             Array<T, 3, 1> dijn = dij / distances(k);     // Normalized distance vector 
             T overlap = overlaps(k);                      // Cell-cell overlap
 
-            // Define the repulsive force magnitude 
+            // Define the repulsive force magnitude and contact radius  
             T magnitude = 0; 
+            T radius = 0; 
 
             // Case 1: the overlap is positive but less than 2 * (R - Rcell)
             // (i.e., it is limited to within the EPS coating)
             if (overlap > 0 && overlap <= 2 * (R - Rcell))
             {
                 // The force magnitude is (4 / 3) * E0 * sqrt(R) * pow(overlap, 1.5)
-                magnitude = repulsion_prefactors(1) * pow(overlap, 1.5); 
+                magnitude = repulsion_prefactors(1) * pow(overlap, 1.5);
+                radius = sqrt(R * overlap);  
             }
             // Case 2: the overlap is instead greater than 2 * R - 2 * Rcell
             // (i.e., it encroaches into the bodies of the two cells)
@@ -1004,7 +1033,8 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                 // + (4 / 3) * Ecell * sqrt(Rcell) * pow(2 * Rcell + overlap - 2 * R, 1.5)
                 T term1 = repulsion_prefactors(3);  
                 T term2 = repulsion_prefactors(2) * pow(overlap - 2 * (R - Rcell), 1.5);
-                magnitude = term1 + term2; 
+                magnitude = term1 + term2;
+                radius = sqrt(R * 2 * (R - Rcell));  
             }
             
             if (overlap > 0)
@@ -1037,11 +1067,79 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                         throw std::runtime_error("Found nan in repulsive forces"); 
                     }
                 #endif
+
+                // Update forces and store contact radius
                 dEdq.row(i) += forces.row(0); 
-                dEdq.row(j) += forces.row(1); 
+                dEdq.row(j) += forces.row(1);
+                radii(k) = radius;  
             }
         }
     }
+
+    // Compute cell-cell friction forces ...
+    if (friction_mode != FrictionMode::NONE)
+    {
+        // First get the angular velocity of each cell 
+        Matrix<T, Dynamic, 3> angvels = Matrix<T, Dynamic, 3>::Zero(n, 3);
+        for (int i = 0; i < n; ++i)
+        {
+            Matrix<T, 3, 1> u = cells(i, __colseq_n).matrix();
+            Matrix<T, 3, 1> v = cells(i, __colseq_dn).matrix();  
+            angvels.row(i) = u.cross(v).transpose(); 
+        } 
+       
+        // Then, for each pair of neighboring cells ...  
+        for (int k = 0; k < m; ++k)
+        {
+            int i = static_cast<int>(neighbors(k, 0)); 
+            int j = static_cast<int>(neighbors(k, 1));
+            Matrix<T, 3, 1> dij = neighbors(k, Eigen::seq(2, 4)).matrix();
+            T si = neighbors(k, 5);                       // Cell-body coordinate along cell i
+            T sj = neighbors(k, 6);                       // Cell-body coordinate along cell j
+            Array<T, 3, 1> dijn = dij / distances(k);     // Normalized distance vector 
+            T overlap = overlaps(k);                      // Cell-cell overlap
+
+            // If the cells are overlapping ... 
+            if (overlap > 0)
+            {
+                // Determine the cell-cell friction coefficient 
+                T eta = min(cells(i, colidx_eta_cell_cell), cells(j, colidx_eta_cell_cell)); 
+
+                // Get the contact point
+                Matrix<T, 3, 1> ri = cells(i, __colseq_r).matrix(); 
+                Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix();
+                Matrix<T, 3, 1> rj = cells(j, __colseq_r).matrix(); 
+                Matrix<T, 3, 1> nj = cells(j, __colseq_n).matrix();  
+                Matrix<T, 3, 1> qij = ri + si * ni + dij / 2;
+
+                // Get the relative velocity of the cells at the contact point
+                Matrix<T, 3, 1> vi = cells(i, __colseq_dr).matrix() + angvels.row(i).cross(qij - ri); 
+                Matrix<T, 3, 1> vj = cells(j, __colseq_dr).matrix() + angvels.row(j).cross(qij - rj);  
+                Matrix<T, 3, 1> rvij = vi - vj;
+
+                // Get the rejection of the relative velocity along the tangential
+                // direction
+                Matrix<T, 3, 1> vijt = rvij - rvij.dot(dijn.matrix()) * dijn.matrix();
+
+                // Get the negative of the cell-cell friction force on each cell 
+                //
+                // The force on cell i should act in the opposite direction as 
+                // vijt; the force on cell j should act in the same direction as
+                // vijt
+                Matrix<T, 3, 1> force = eta * radii(k) * vijt;
+
+                // Get the corresponding torques
+                Matrix<T, 3, 1> torque_i = (si * ni).cross(force);
+                Matrix<T, 3, 1> torque_j = (sj * nj).cross(-force);
+
+                // Update forces  
+                dEdq(i, Eigen::seq(0, 2)) += force.array().transpose();
+                dEdq(i, Eigen::seq(3, 5)) += torque_i.array().transpose();  
+                dEdq(j, Eigen::seq(0, 2)) -= force.array().transpose();
+                dEdq(j, Eigen::seq(3, 5)) += torque_j.array().transpose();  
+            }
+        }
+    } 
 
     return dEdq; 
 }
@@ -1072,7 +1170,10 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
  *                        forces.
  * @param jkr_data Pre-computed values for calculating JKR forces. 
  * @param colidx_gamma Column index for cell-cell adhesion surface energy 
- *                     density. 
+ *                     density.
+ * @param friction_mode Choice of model for cell-cell friction. Can be NONE (0)
+ *                      or KINETIC (1). 
+ * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient. 
  * @param no_surface If true, omit the surface from the simulation. 
  * @param multithread If true, use multithreading. 
  * @returns Array of translational and orientational velocities.   
@@ -1086,7 +1187,10 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
                                            const Ref<const Array<int, Dynamic, 1> >& assume_2d,
                                            const AdhesionMode adhesion_mode,
                                            std::unordered_map<std::string, T>& adhesion_params,
-                                           JKRData<T>& jkr_data, const int colidx_gamma,  
+                                           JKRData<T>& jkr_data,
+                                           const int colidx_gamma,
+                                           const FrictionMode friction_mode, 
+                                           const int colidx_eta_cell_cell,  
                                            const bool no_surface,
                                            const bool multithread)
 {
@@ -1106,7 +1210,8 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
     // Compute the cell-cell interaction forces 
     Array<T, Dynamic, 6> dEdq_cell_interaction = cellCellInteractionForces<T>(
         cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors,
-        adhesion_mode, adhesion_params, jkr_data, colidx_gamma
+        adhesion_mode, adhesion_params, jkr_data, colidx_gamma, friction_mode,
+        colidx_eta_cell_cell
     ); 
     
     // Compute the cell-surface interaction forces (if present)
@@ -1250,7 +1355,10 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  *                        forces.
  * @param jkr_data Pre-computed values for calculating JKR forces. 
  * @param colidx_gamma Column index for cell-cell adhesion surface energy 
- *                     density. 
+ *                     density.
+ * @param friction_mode Choice of model for cell-cell friction. Can be NONE (0)
+ *                      or KINETIC (1). 
+ * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient. 
  * @param no_surface If true, omit the surface from the simulation. 
  * @param multithread If true, use multithreading. 
  * @returns Array of translational and orientational velocities.   
@@ -1266,6 +1374,8 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const AdhesionMode adhesion_mode,
                                    std::unordered_map<std::string, T>& adhesion_params,
                                    JKRData<T>& jkr_data, const int colidx_gamma,
+                                   const FrictionMode friction_mode, 
+                                   const int colidx_eta_cell_cell, 
                                    const bool no_surface, const bool multithread)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
@@ -1301,7 +1411,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     Array<T, Dynamic, 6> forces = getConservativeForces<T>(
         cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors, 
         assume_2d, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
-        no_surface, multithread
+        friction_mode, colidx_eta_cell_cell, no_surface, multithread
     );
     forces += noise; 
     
@@ -1593,7 +1703,10 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  *                        forces.
  * @param jkr_data Pre-computed values for calculating JKR forces.  
  * @param colidx_gamma Column index for cell-cell adhesion surface energy 
- *                     density. 
+ *                     density.
+ * @param friction_mode Choice of model for cell-cell friction. Can be NONE (0)
+ *                      or KINETIC (1). 
+ * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient. 
  * @param no_surface If true, omit the surface from the simulation. 
  * @param n_start_multithread Minimum number of cells at which to start using
  *                            multithreading. 
@@ -1616,8 +1729,10 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode,
                            std::unordered_map<std::string, T>& adhesion_params,
-                           JKRData<T>& jkr_data, const int colidx_gamma, 
-                           const bool no_surface, const int n_start_multithread = 50)
+                           JKRData<T>& jkr_data, const int colidx_gamma,
+                           const FrictionMode friction_mode, 
+                           const int colidx_eta_cell_cell, const bool no_surface,
+                           const int n_start_multithread = 50)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
         for (int k = 0; k < neighbors.rows(); ++k)
@@ -1728,7 +1843,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
     Array<T, Dynamic, 6> v0 = getVelocities<T>(
         cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors, 
         assume_2d, noise, adhesion_mode, adhesion_params, jkr_data,
-        colidx_gamma, no_surface, multithread
+        colidx_gamma, friction_mode, colidx_eta_cell_cell, no_surface,
+        multithread
     );
     velocities.push_back(v0);
     for (int i = 1; i < s; ++i)
@@ -1742,7 +1858,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
         Array<T, Dynamic, 6> vi = getVelocities<T>(
             cells_i, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors,
             assume_2d, noise, adhesion_mode, adhesion_params, jkr_data,
-            colidx_gamma, no_surface, multithread
+            colidx_gamma, friction_mode, colidx_eta_cell_cell, no_surface,
+            multithread
         );
         velocities.push_back(vi);
     }
