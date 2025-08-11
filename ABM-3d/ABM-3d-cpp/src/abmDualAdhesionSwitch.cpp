@@ -58,6 +58,7 @@ int main(int argc, char** argv)
     const T growth_std = static_cast<T>(json_data["growth_std"].as_double());
     const T lifetime_mean1 = static_cast<T>(json_data["lifetime_mean1"].as_double()); 
     const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
+    const T switch_timescale = static_cast<T>(json_data["switch_timescale"].as_double()); 
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T daughter_angle_xy_bound = static_cast<T>(json_data["daughter_angle_xy_bound"].as_double());
     const T daughter_angle_z_bound = static_cast<T>(json_data["daughter_angle_z_bound"].as_double());
@@ -76,17 +77,25 @@ int main(int argc, char** argv)
         basal_only ? static_cast<T>(json_data["basal_min_overlap"].as_double()) : 0.0
     ); 
     
-    // Parse cell-cell adhesion parameters
-    AdhesionMode adhesion_mode; 
-    const int token = json_data["adhesion_mode"].as_int64(); 
-    if (token == 0)
+    // Parse cell-cell adhesion and friction parameters
+    AdhesionMode adhesion_mode;
+    FrictionMode friction_mode;  
+    const int token1 = json_data["adhesion_mode"].as_int64(); 
+    if (token1 == 0)
         adhesion_mode = AdhesionMode::NONE;
-    else if (token == 1)
+    else if (token1 == 1)
         adhesion_mode = AdhesionMode::JKR_ISOTROPIC; 
-    else if (token == 2)
+    else if (token1 == 2)
         adhesion_mode = AdhesionMode::JKR_ANISOTROPIC; 
     else 
-        throw std::runtime_error("Invalid cell-cell adhesion mode specified"); 
+        throw std::runtime_error("Invalid cell-cell adhesion mode specified");
+    const int token2 = json_data["cell_cell_friction_mode"].as_int64(); 
+    if (token2 == 0)
+        friction_mode = FrictionMode::NONE; 
+    else if (token2 == 1)
+        friction_mode = FrictionMode::KINETIC; 
+    else 
+        throw std::runtime_error("Invalid cell-cell friction mode specified"); 
     std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map;
     adhesion_map.insert(std::make_pair(1, 1)); 
     std::unordered_map<std::string, T> adhesion_params;
@@ -97,9 +106,6 @@ int main(int argc, char** argv)
             json_data["adhesion_eqdist"].as_double()
         );
         adhesion_params["precompute_values"] = 1;
-        adhesion_params["jkr_energy_density_switch_time"] = static_cast<T>(
-            json_data["adhesion_jkr_energy_density_switch_time"].as_double()
-        ); 
 
         // Parse optional input parameters for both JKR adhesion modes 
         T imag_tol = 1e-8; 
@@ -222,6 +228,11 @@ int main(int argc, char** argv)
         } 
     }
 
+    // Parse cell-cell friction coefficient
+    T eta_cell_cell = 0.0; 
+    if (friction_mode != FrictionMode::KINETIC)
+        eta_cell_cell = static_cast<T>(json_data["eta_cell_cell"].as_double());
+
     // Omit the surface, if desired 
     bool no_surface = false; 
     try
@@ -247,11 +258,10 @@ int main(int argc, char** argv)
 
     // Vectors of friction coefficient means and standard deviations (identical
     // for both groups)
-    std::vector<int> group_attributes { __colidx_maxeta1 };
-    Array<T, Dynamic, Dynamic> attribute_means(2, 1);
-    Array<T, Dynamic, Dynamic> attribute_stds(2, 1);
-    attribute_means << eta_surface, eta_surface; 
-    attribute_stds << 0.0, 0.0;
+    const int __colidx_eta_cell_cell = __ncols_required + 1; 
+    std::vector<int> group_attributes { __colidx_eta_cell_cell }; 
+    Array<T, Dynamic, Dynamic> attribute_values(2, 1);
+    attribute_values << eta_cell_cell, eta_cell_cell;  
 
     // Switching rates between groups 1 and 2
     Array<T, Dynamic, Dynamic> switch_rates(2, 2); 
@@ -269,9 +279,9 @@ int main(int argc, char** argv)
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
     // with zero velocity, mean growth rate, and default viscosity and friction
     // coefficients
-    Array<T, Dynamic, Dynamic> cells(1, __ncols_required + 1);
+    Array<T, Dynamic, Dynamic> cells(1, __ncols_required + 2);
     cells << 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
-             eta_ambient, eta_surface, eta_surface, sigma0, 1, 0;
+             eta_ambient, eta_surface, eta_surface, sigma0, 1, 0, eta_cell_cell;
 
     // Initialize parent IDs 
     std::vector<int> parents; 
@@ -283,11 +293,11 @@ int main(int argc, char** argv)
         max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
         iter_update_stepsize, max_error_allowed, min_error, max_tries_update_stepsize,
         neighbor_threshold, nz_threshold, rng_seed, 2, group_attributes, growth_means,
-        growth_stds, attribute_means, attribute_stds, SwitchMode::MARKOV, switch_rates,
+        growth_stds, attribute_values, SwitchMode::MARKOV, switch_rates, switch_timescale,
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_rxy_noise, max_rz_noise,
         max_nxy_noise, max_nz_noise, basal_only, basal_min_overlap, adhesion_mode,
-        adhesion_map, adhesion_params, no_surface, n_cells_start_switch
+        adhesion_map, adhesion_params, friction_mode, no_surface, n_cells_start_switch
     ); 
     
     return 0; 
