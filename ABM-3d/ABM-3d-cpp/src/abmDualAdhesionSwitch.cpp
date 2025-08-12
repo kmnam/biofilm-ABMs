@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/7/2025
+ *     8/12/2025
  */
 
 #include <Eigen/Dense>
@@ -75,7 +75,7 @@ int main(int argc, char** argv)
     const bool basal_only = json_data["basal_only"].as_int64(); 
     const T basal_min_overlap = (
         basal_only ? static_cast<T>(json_data["basal_min_overlap"].as_double()) : 0.0
-    ); 
+    );
     
     // Parse cell-cell adhesion and friction parameters
     AdhesionMode adhesion_mode;
@@ -96,8 +96,6 @@ int main(int argc, char** argv)
         friction_mode = FrictionMode::KINETIC; 
     else 
         throw std::runtime_error("Invalid cell-cell friction mode specified"); 
-    std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map;
-    adhesion_map.insert(std::make_pair(1, 1)); 
     std::unordered_map<std::string, T> adhesion_params;
     if (adhesion_mode != AdhesionMode::NONE)
     {
@@ -105,7 +103,6 @@ int main(int argc, char** argv)
         adhesion_params["eqdist"] = static_cast<T>(
             json_data["adhesion_eqdist"].as_double()
         );
-        adhesion_params["precompute_values"] = 1;
 
         // Parse optional input parameters for both JKR adhesion modes 
         T imag_tol = 1e-8; 
@@ -228,6 +225,15 @@ int main(int argc, char** argv)
         } 
     }
 
+    // Parse pre-computed anisotropic JKR files, if desired
+    std::string adhesion_curvature_filename = ""; 
+    std::string adhesion_jkr_forces_filename = "";  
+    if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC && adhesion_params["precompute_jkr_forces"] == 0)
+    {
+        adhesion_curvature_filename = "aniso_adhesion_JKR_300nm_curvature.txt"; 
+        adhesion_jkr_forces_filename = "aniso_adhesion_JKR_300nm_forces.txt";  
+    }
+
     // Parse cell-cell friction coefficient
     T eta_cell_cell = 0.0; 
     if (friction_mode == FrictionMode::KINETIC)
@@ -297,7 +303,8 @@ int main(int argc, char** argv)
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_rxy_noise, max_rz_noise,
         max_nxy_noise, max_nz_noise, basal_only, basal_min_overlap, adhesion_mode,
-        adhesion_map, adhesion_params, friction_mode, no_surface, n_cells_start_switch
+        adhesion_params, adhesion_curvature_filename, adhesion_jkr_forces_filename,
+        friction_mode, no_surface, n_cells_start_switch
     ); 
     
     return 0; 
