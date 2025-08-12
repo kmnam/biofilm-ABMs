@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/23/2025
+ *     8/11/2025
  */
 
 #ifndef BIOFILM_UTILS_3D_HPP
@@ -947,28 +947,49 @@ Matrix<T, Dynamic, Dim> uniformLattice(const int n, const T dmin, const T dmax,
 template <typename T>
 int nearestValue(const Ref<const Matrix<T, Dynamic, 1> >& values, const T x)
 {
+    // Quickly check if x is less than the first value or greater than the
+    // last value
+    if (x <= values(0))
+        return 0; 
+    else if (x >= values(values.size() - 1))
+        return values.size() - 1;  
+
+    // Otherwise, do binary search 
     int low = 0; 
     int high = values.size() - 1;
-    T nearest = std::numeric_limits<T>::infinity();
-    int nearest_idx = 0;  
+    int nearest_idx = 0;
     while (low <= high)
     {
         int mid = (low + high) / 2;
-        if (values[mid] == x)
-            return mid;
-        else if (values[mid] < x)
-            low = mid + 1; 
-        else    // values[mid] > x
-            high = mid - 1;
-        
-        if (abs(values[mid] - x) < nearest)
+
+        // If x falls between values(mid) and values(mid + 1), set mid 
+        // as the nearest index
+        if (values(mid) <= x && x < values(mid + 1))
         {
-            nearest = values[mid];
             nearest_idx = mid; 
+            break;
+        }
+        // If x is greater than values(mid + 1), then increase low 
+        else if (x >= values(mid + 1))
+        {
+            low = mid + 1;
+        }
+        // If x is less than values(mid), then decrease high  
+        else
+        {
+            high = mid - 1;
         }
     }
 
-    return nearest_idx; 
+    // Note that this loop cannot have exited due to low > high
+    if (low > high)
+        throw std::runtime_error("Unexpected error during binary search");
+
+    // Check which of the two endpoints of the interval is nearest
+    if (x - values(nearest_idx) < values(nearest_idx + 1) - x)
+        return nearest_idx; 
+    else 
+        return nearest_idx + 1;  
 }
 
 /**
