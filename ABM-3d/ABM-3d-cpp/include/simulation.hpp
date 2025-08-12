@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/10/2025
+ *     8/12/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -174,8 +174,9 @@ R3ToR2Table<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1
  *
  * Each contact point is parametrized by:
  *
- * (1, 2) the equivalent principal radii of curvature at the contact point, and 
- * (3) the overlap distance. 
+ * (1, 2) the equivalent principal radii of curvature at the contact point, 
+ * (3) the overlap distance, and 
+ * (4) the surface adhesion energy density.  
  *
  * @param Rx Input mesh of values for the larger equivalent principal radius
  *           of curvature at the contact point.  
@@ -234,7 +235,254 @@ R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
     } 
 
     return forces; 
-} 
+}
+
+/**
+ * Parse the given file of pre-computed values for the principal radii of 
+ * curvature at a collection of contact points. 
+ *
+ * Each contact point is parametrized by:
+ *
+ * (1) the angle between the overlap vector and the cell's orientation vector,
+ * (2) the cell's half-length, and 
+ * (3) the centerline coordinate at which the overlap vector is positioned.
+ *
+ * @param filename Input filename. 
+ * @returns 
+ */
+template <typename T>
+std::tuple<Matrix<T, Dynamic, 1>,
+           Matrix<T, Dynamic, 1>, 
+           Matrix<T, Dynamic, 1>, 
+           R3ToR2Table<T> > parseCurvatureRadiiTable(std::string filename)
+{
+    std::vector<T> theta, half_l, coords; 
+    R3ToR2Table<T> radii; 
+
+    // Open the file 
+    std::ifstream infile(filename);
+
+    // Parse the first line in the file 
+    std::string line, token; 
+    T theta_curr, half_l_curr, coord_curr, Rx_curr, Ry_curr, 
+      theta_next, half_l_next, coord_next, Rx_next, Ry_next;
+    int theta_i = 0; 
+    int half_l_i = 0; 
+    int coord_i = 0;  
+    std::stringstream ss; 
+    std::getline(infile, line);
+    ss << line;
+    std::getline(ss, token, '\t'); 
+    theta_curr = static_cast<T>(std::stod(token)); 
+    std::getline(ss, token, '\t'); 
+    half_l_curr = static_cast<T>(std::stod(token)); 
+    std::getline(ss, token, '\t'); 
+    coord_curr = static_cast<T>(std::stod(token)); 
+    std::getline(ss, token, '\t'); 
+    Rx_curr = static_cast<T>(std::stod(token)); 
+    std::getline(ss, token, '\t'); 
+    Ry_curr = static_cast<T>(std::stod(token)); 
+    theta.push_back(theta_curr); 
+    half_l.push_back(half_l_curr); 
+    coords.push_back(coord_curr); 
+    radii[std::make_tuple(0, 0, 0)] = std::make_pair(Rx_curr, Ry_curr); 
+
+    // For each subsequent line in the file ...
+    while (std::getline(infile, line))
+    {
+        // Get each token in the line
+        ss.str(std::string()); 
+        ss.clear(); 
+        ss << line; 
+        std::getline(ss, token, '\t'); 
+        theta_next = static_cast<T>(std::stod(token)); 
+        std::getline(ss, token, '\t'); 
+        half_l_next = static_cast<T>(std::stod(token)); 
+        std::getline(ss, token, '\t'); 
+        coord_next = static_cast<T>(std::stod(token)); 
+        std::getline(ss, token, '\t');
+        Rx_next = static_cast<T>(std::stod(token)); 
+        std::getline(ss, token, '\t'); 
+        Ry_next = static_cast<T>(std::stod(token)); 
+
+        // Check which of the three input values is new 
+        if (theta_next != theta_curr)          // Encountered a new theta value 
+        {
+            theta.push_back(theta_next); 
+            theta_i++;
+            half_l_i = 0; 
+            coord_i = 0; 
+        }
+        else if (half_l_next != half_l_curr)   // Encountered a new half_l value 
+        {
+            // If still processing the zeroth theta value, add to list 
+            if (theta_i == 0)
+                half_l.push_back(half_l_next); 
+            half_l_i++; 
+            coord_i = 0; 
+        } 
+        else     // Encountered a new coord value 
+        {
+            // If still processing the zeroth theta and half_l values, add to list
+            if (theta_i == 0 && half_l_i == 0)
+                coords.push_back(coord_next); 
+            coord_i++; 
+        }
+        auto tuple = std::make_tuple(theta_i, half_l_i, coord_i); 
+        radii[tuple] = std::make_pair(Rx_next, Ry_next); 
+
+        theta_curr = theta_next; 
+        half_l_curr = half_l_next; 
+        coord_curr = coord_next; 
+        Rx_curr = Rx_next; 
+        Ry_curr = Ry_next; 
+    }
+
+    Matrix<T, Dynamic, 1> theta_(theta.size()); 
+    for (int i = 0; i < theta.size(); ++i)
+        theta_(i) = theta[i]; 
+    Matrix<T, Dynamic, 1> half_l_(half_l.size()); 
+    for (int i = 0; i < half_l.size(); ++i)
+        half_l_(i) = half_l[i]; 
+    Matrix<T, Dynamic, 1> coords_(coords.size()); 
+    for (int i = 0; i < coords.size(); ++i)
+        coords_(i) = coords[i];  
+    return std::make_tuple(theta_, half_l_, coords_, radii); 
+}
+
+/**
+ * Parse the given file of pre-computed values for the JKR force and contact
+ * radius at a collection of cell-cell configurations. 
+ *
+ * Each contact point is parametrized by:
+ *
+ * (1, 2) the equivalent principal radii of curvature at the contact point, 
+ * (3) the overlap distance, and 
+ * (4) the surface adhesion energy density.  
+ *
+ * @param filename Input filename. 
+ * @returns 
+ */
+template <typename T>
+std::tuple<Matrix<T, Dynamic, 1>,
+           Matrix<T, Dynamic, 1>, 
+           Matrix<T, Dynamic, 1>, 
+           Matrix<T, Dynamic, 1>,
+           R4ToR2Table<T> > parseJKRForceTable(std::string filename)
+{
+    std::vector<T> Rx, Ry, delta, gamma; 
+    R4ToR2Table<T> forces;
+
+    // Open the file 
+    std::ifstream infile(filename);
+
+    // Parse the first line in the file 
+    std::string line, token; 
+    T Rx_curr, Ry_curr, delta_curr, gamma_curr, force_curr, radius_curr,
+      Rx_next, Ry_next, delta_next, gamma_next, force_next, radius_next;
+    int Rx_i = 0; 
+    int Ry_i = 0; 
+    int delta_i = 0; 
+    int gamma_i = 0; 
+    std::stringstream ss; 
+    std::getline(infile, line);
+    ss << line; 
+    std::getline(ss, token, '\t');
+    Rx_curr = static_cast<T>(std::stod(token)); 
+    std::getline(ss, token, '\t'); 
+    Ry_curr = static_cast<T>(std::stod(token)); 
+    std::getline(ss, token, '\t'); 
+    delta_curr = static_cast<T>(std::stod(token)); 
+    std::getline(ss, token, '\t'); 
+    gamma_curr = static_cast<T>(std::stod(token)); 
+    std::getline(ss, token, '\t'); 
+    force_curr = static_cast<T>(std::stod(token)); 
+    std::getline(ss, token, '\t'); 
+    radius_curr = static_cast<T>(std::stod(token));
+    Rx.push_back(Rx_curr); 
+    Ry.push_back(Ry_curr); 
+    delta.push_back(delta_curr); 
+    gamma.push_back(gamma_curr);
+    forces[std::make_tuple(0, 0, 0, 0)] = std::make_pair(force_curr, radius_curr); 
+
+    // For each subsequent line in the file ...
+    while (std::getline(infile, line))
+    {
+        // Get each token in the line
+        ss.str(std::string()); 
+        ss.clear(); 
+        ss << line; 
+        std::getline(ss, token, '\t');
+        Rx_next = static_cast<T>(std::stod(token)); 
+        std::getline(ss, token, '\t'); 
+        Ry_next = static_cast<T>(std::stod(token)); 
+        std::getline(ss, token, '\t'); 
+        delta_next = static_cast<T>(std::stod(token)); 
+        std::getline(ss, token, '\t'); 
+        gamma_next = static_cast<T>(std::stod(token)); 
+        std::getline(ss, token, '\t'); 
+        force_next = static_cast<T>(std::stod(token)); 
+        std::getline(ss, token, '\t'); 
+        radius_next = static_cast<T>(std::stod(token));
+
+        // Check which of the four input values is new
+        if (Rx_next != Rx_curr)         // Encountered a new Rx value 
+        {
+            Rx.push_back(Rx_next); 
+            Rx_i++;
+            Ry_i = 0; 
+            delta_i = 0; 
+            gamma_i = 0;  
+        }
+        else if (Ry_next != Ry_curr)    // Encountered a new Ry value 
+        {
+            // If still processing the zeroth Rx value, add to list 
+            if (Rx_i == 0)
+                Ry.push_back(Ry_next); 
+            Ry_i++; 
+            delta_i = 0; 
+            gamma_i = 0; 
+        } 
+        else if (delta_next != delta_curr)    // Encountered a new delta value
+        {
+            // If still processing the zeroth Rx and Ry values, add to list
+            if (Rx_i == 0 && Ry_i == 0)
+                delta.push_back(delta_next); 
+            delta_i++; 
+            gamma_i = 0; 
+        }
+        else     // Encountered a new gamma value 
+        {
+            // If still processing the zeroth Rx, Ry, and delta values, add to list
+            if (Rx_i == 0 && Ry_i == 0 && delta_i == 0)
+                gamma.push_back(gamma_next); 
+            gamma_i++; 
+        }
+        auto tuple = std::make_tuple(Rx_i, Ry_i, delta_i, gamma_i); 
+        forces[tuple] = std::make_pair(force_next, radius_next); 
+
+        Rx_curr = Rx_next; 
+        Ry_curr = Ry_next; 
+        delta_curr = delta_next; 
+        gamma_curr = gamma_next; 
+        force_curr = force_next; 
+        radius_curr = radius_next; 
+    }
+
+    Matrix<T, Dynamic, 1> Rx_(Rx.size());
+    for (int i = 0; i < Rx.size(); ++i)
+        Rx_(i) = Rx[i];  
+    Matrix<T, Dynamic, 1> Ry_(Ry.size());
+    for (int i = 0; i < Ry.size(); ++i)
+        Ry_(i) = Ry[i];  
+    Matrix<T, Dynamic, 1> delta_(delta.size());
+    for (int i = 0; i < delta.size(); ++i)
+        delta_(i) = delta[i]; 
+    Matrix<T, Dynamic, 1> gamma_(gamma.size());
+    for (int i = 0; i < gamma.size(); ++i)
+        gamma_(i) = gamma[i]; 
+    return std::make_tuple(Rx_, Ry_, delta_, gamma_, forces);  
+}
 
 /**
  * Run a simulation with the given initial population of cells.
@@ -313,10 +561,12 @@ R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
  *                          overlap is greater than this value. Can be negative.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), KIHARA (1), or GBK (2).
- * @param adhesion_map Set of pairs of group IDs (1, 2, ...) for which cells 
- *                     can adhere to each other. 
  * @param adhesion_params Parameters required to compute cell-cell adhesion
  *                        forces.
+ * @param adhesion_curvature_filename File containing pre-computed values for
+ *                                    principal radii of curvature. 
+ * @param adhesion_jkr_forces_filename File containing pre-computed values for
+ *                                     JKR forces. 
  * @param no_surface If true, omit the surface from the simulations. 
  * @param n_cells_start_switch Number of cells at which to begin switching.
  *                             All switching is suppressed until this number
@@ -370,8 +620,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     const bool basal_only,
                                     const T basal_min_overlap, 
                                     const AdhesionMode adhesion_mode, 
-                                    std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > >& adhesion_map, 
                                     std::unordered_map<std::string, T>& adhesion_params,
+                                    const std::string adhesion_curvature_filename, 
+                                    const std::string adhesion_jkr_forces_filename, 
                                     const FrictionMode friction_mode,
                                     const bool no_surface = false,
                                     const int n_cells_start_switch = 0,
@@ -525,12 +776,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 cells(i, __colidx_gamma) = 0.0; 
         }
 
-        // If desired, calculate JKR contact radii for a range of overlap
-        // distances and surface energy densities
-        if (adhesion_params["precompute_values"] != 0)
-        { 
+        // If isotropic JKR adhesion is desired, calculate JKR contact radii
+        // for a range of overlap distances and surface energy densities
+        if (adhesion_mode == AdhesionMode::JKR_ISOTROPIC)
+        {
             int n_overlap = static_cast<int>(adhesion_params["n_mesh_overlap"]);
-            int n_gamma = static_cast<int>(adhesion_params["n_mesh_gamma"]); 
+            int n_gamma = static_cast<int>(adhesion_params["n_mesh_gamma"]);
             jkr_data.overlaps = Matrix<T, Dynamic, 1>::LinSpaced(
                 n_overlap, 0, 2 * (R - Rcell)
             );
@@ -540,70 +791,77 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             jkr_data.contact_radii = calculateJKRContactRadii<T, 100>(
                 jkr_data.overlaps, jkr_data.gamma, R, E0, imag_tol, aberth_tol
             ); 
+        }
+        else     // Otherwise, if anisotropic JKR adhesion is desired ... 
+        {
+            // Determine whether the principal radii of curvature should be
+            // computed 
+            const bool precompute_jkr_forces = static_cast<bool>(
+                adhesion_params["precompute_jkr_forces"]
+            );
 
-            // If anisotropic JKR adhesion is desired ... 
-            if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
+            // Calculate the principal radii of curvature and JKR contact
+            // forces, if desired 
+            if (precompute_jkr_forces)
             {
-                // Determine whether the principal radii of curvature should be
-                // computed 
-                const bool precompute_jkr_forces = static_cast<bool>(
-                    adhesion_params["precompute_jkr_forces"]
+                bool calibrate_endpoint_radii = static_cast<bool>(
+                    adhesion_params["calibrate_endpoint_radii"]
+                ); 
+                int n_theta = static_cast<int>(adhesion_params["n_mesh_theta"]);
+                int n_half_l = static_cast<int>(adhesion_params["n_mesh_half_l"]);
+                int n_coords = static_cast<int>(
+                    adhesion_params["n_mesh_centerline_coords"]
                 );
-
-                // Calculate the principal radii of curvature and JKR contact
-                // forces, if desired 
-                if (precompute_jkr_forces)
-                {
-                    bool calibrate_endpoint_radii = static_cast<bool>(
-                        adhesion_params["calibrate_endpoint_radii"]
-                    ); 
-                    int n_theta = static_cast<int>(adhesion_params["n_mesh_theta"]);
-                    int n_half_l = static_cast<int>(adhesion_params["n_mesh_half_l"]);
-                    int n_coords = static_cast<int>(
-                        adhesion_params["n_mesh_centerline_coords"]
-                    );
-                    int n_Rx = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
-                    int n_Ry = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
-                    T max_overlap = 2 * (R - Rcell);
-                    T min_aspect_ratio = adhesion_params["min_aspect_ratio"];
-                    T project_tol = adhesion_params["ellipsoid_project_tol"]; 
-                    int project_max_iter = static_cast<int>(
-                        adhesion_params["ellipsoid_project_max_iter"]
-                    ); 
-                    T newton_tol = adhesion_params["newton_tol"];
-                    int newton_max_iter = static_cast<int>(
-                        adhesion_params["newton_max_iter"]
-                    );
-                    jkr_data.theta = Matrix<T, Dynamic, 1>::LinSpaced(
-                        n_theta, 0.0, boost::math::constants::half_pi<T>()
-                    ); 
-                    jkr_data.half_l = Matrix<T, Dynamic, 1>::LinSpaced(
-                        n_half_l, 0.5 * L0, 0.5 * Ldiv
-                    );  
-                    jkr_data.centerline_coords = Matrix<T, Dynamic, 1>::LinSpaced(
-                        n_coords, 0.0, 1.0
-                    );
-                    jkr_data.curvature_radii = calculateCurvatureRadiiTable<T>(
-                        jkr_data.theta, jkr_data.half_l, jkr_data.centerline_coords, 
-                        R, calibrate_endpoint_radii, project_tol, project_max_iter
-                    );
-                    jkr_data.Rx = Matrix<T, Dynamic, 1>::LinSpaced(
-                        n_Rx, 0.5 * R, R
-                    ); 
-                    jkr_data.Ry = Matrix<T, Dynamic, 1>::LinSpaced(
-                        n_Ry, 0.5 * R, R
-                    ); 
-                    jkr_data.forces = calculateJKRForceTable<T>(
-                        jkr_data.Rx, jkr_data.Ry, jkr_data.overlaps, jkr_data.gamma, 
-                        E0, max_overlap, min_aspect_ratio, newton_tol,
-                        newton_max_iter, imag_tol, aberth_tol
-                    ); 
-                }
-                else 
-                {
-                    // TODO Implement this 
-                    throw std::runtime_error("Not yet implemented"); 
-                }
+                int n_Rx = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
+                int n_Ry = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
+                T max_overlap = 2 * (R - Rcell);
+                T min_aspect_ratio = adhesion_params["min_aspect_ratio"];
+                T project_tol = adhesion_params["ellipsoid_project_tol"]; 
+                int project_max_iter = static_cast<int>(
+                    adhesion_params["ellipsoid_project_max_iter"]
+                ); 
+                T newton_tol = adhesion_params["newton_tol"];
+                int newton_max_iter = static_cast<int>(
+                    adhesion_params["newton_max_iter"]
+                );
+                jkr_data.theta = Matrix<T, Dynamic, 1>::LinSpaced(
+                    n_theta, 0.0, boost::math::constants::half_pi<T>()
+                ); 
+                jkr_data.half_l = Matrix<T, Dynamic, 1>::LinSpaced(
+                    n_half_l, 0.5 * L0, 0.5 * Ldiv
+                );  
+                jkr_data.centerline_coords = Matrix<T, Dynamic, 1>::LinSpaced(
+                    n_coords, 0.0, 1.0
+                );
+                jkr_data.curvature_radii = calculateCurvatureRadiiTable<T>(
+                    jkr_data.theta, jkr_data.half_l, jkr_data.centerline_coords, 
+                    R, calibrate_endpoint_radii, project_tol, project_max_iter
+                );
+                jkr_data.Rx = Matrix<T, Dynamic, 1>::LinSpaced(
+                    n_Rx, 0.5 * R, R
+                ); 
+                jkr_data.Ry = Matrix<T, Dynamic, 1>::LinSpaced(
+                    n_Ry, 0.5 * R, R
+                ); 
+                jkr_data.forces = calculateJKRForceTable<T>(
+                    jkr_data.Rx, jkr_data.Ry, jkr_data.overlaps, jkr_data.gamma, 
+                    E0, max_overlap, min_aspect_ratio, newton_tol,
+                    newton_max_iter, imag_tol, aberth_tol
+                ); 
+            }
+            else    // Otherwise, parse pre-computed values 
+            {
+                auto result1 = parseCurvatureRadiiTable<T>(adhesion_curvature_filename); 
+                jkr_data.theta = std::get<0>(result1); 
+                jkr_data.half_l = std::get<1>(result1); 
+                jkr_data.centerline_coords = std::get<2>(result1); 
+                jkr_data.curvature_radii = std::get<3>(result1); 
+                auto result2 = parseJKRForceTable<T>(adhesion_jkr_forces_filename); 
+                jkr_data.Rx = std::get<0>(result2); 
+                jkr_data.Ry = std::get<1>(result2); 
+                jkr_data.overlaps = std::get<2>(result2); 
+                jkr_data.gamma = std::get<3>(result2); 
+                jkr_data.forces = std::get<4>(result2);
             }
         }
     }
