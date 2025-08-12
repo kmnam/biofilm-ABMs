@@ -230,8 +230,8 @@ int main(int argc, char** argv)
     std::string adhesion_jkr_forces_filename = "";  
     if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC && adhesion_params["precompute_jkr_forces"] == 0)
     {
-        adhesion_curvature_filename = "aniso_adhesion_JKR_300nm_curvature.txt"; 
-        adhesion_jkr_forces_filename = "aniso_adhesion_JKR_300nm_forces.txt";  
+        adhesion_curvature_filename = json_data["adhesion_curvature_filename"].as_string().c_str(); 
+        adhesion_jkr_forces_filename = json_data["adhesion_jkr_forces_filename"].as_string().c_str();
     }
 
     // Parse cell-cell friction coefficient
