@@ -214,6 +214,8 @@ R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
     {
         for (int j = 0; j < Ry.size(); ++j)
         {
+            std::cout << "... Calculating anisotropic JKR forces for Rx = "
+                      << Rx(i) << ", Ry = " << Ry(j) << std::endl; 
             for (int k = 0; k < delta.size(); ++k)
             {
                 for (int m = 0; m < gamma.size(); ++m)
@@ -586,10 +588,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                         R, calibrate_endpoint_radii, project_tol, project_max_iter
                     );
                     jkr_data.Rx = Matrix<T, Dynamic, 1>::LinSpaced(
-                        0.5 * R, R, n_Rx
+                        n_Rx, 0.5 * R, R
                     ); 
                     jkr_data.Ry = Matrix<T, Dynamic, 1>::LinSpaced(
-                        0.5 * R, R, n_Ry
+                        n_Ry, 0.5 * R, R
                     ); 
                     jkr_data.forces = calculateJKRForceTable<T>(
                         jkr_data.Rx, jkr_data.Ry, jkr_data.overlaps, jkr_data.gamma, 
