@@ -1512,6 +1512,8 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  * In this function, the pairs of neighboring cells in the population have 
  * been pre-computed.
  *
+ * Cell-cell friction is not incorporated in this function. 
+ *
  * @param cells Existing population of cells. 
  * @param neighbors Array specifying pairs of neighboring cells in the
  *                  population.
@@ -1534,9 +1536,6 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  * @param jkr_data Pre-computed values for calculating JKR forces. 
  * @param colidx_gamma Column index for cell-cell adhesion surface energy 
  *                     density.
- * @param friction_mode Choice of model for cell-cell friction. Can be NONE (0)
- *                      or KINETIC (1). 
- * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient. 
  * @param no_surface If true, omit the surface from the simulation. 
  * @param multithread If true, use multithreading.
  * @returns Array of translational and orientational velocities.   
@@ -1552,8 +1551,6 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const AdhesionMode adhesion_mode,
                                    std::unordered_map<std::string, T>& adhesion_params,
                                    JKRData<T>& jkr_data, const int colidx_gamma,
-                                   const FrictionMode friction_mode, 
-                                   const int colidx_eta_cell_cell, 
                                    const bool no_surface, const bool multithread)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
@@ -1589,7 +1586,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     Array<T, Dynamic, 6> forces = getConservativeForces<T>(
         cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors, 
         assume_2d, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
-        friction_mode, colidx_eta_cell_cell, no_surface, multithread, false
+        FrictionMode::NONE, -1, no_surface, multithread, false
     );
     forces += noise; 
     
@@ -1825,7 +1822,9 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * been pre-computed.
  *
  * Since the differential equations are time-autonomous, the nodes of the 
- * Butcher tableau are not required. 
+ * Butcher tableau are not required.
+ *
+ * Cell-cell friction is not incorporated in this function. 
  *
  * @param A Runge-Kutta matrix of Butcher tableau. Should be lower triangular
  *          with zero diagonal. 
@@ -1860,9 +1859,6 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param jkr_data Pre-computed values for calculating JKR forces.  
  * @param colidx_gamma Column index for cell-cell adhesion surface energy 
  *                     density.
- * @param friction_mode Choice of model for cell-cell friction. Can be NONE (0)
- *                      or KINETIC (1). 
- * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient. 
  * @param no_surface If true, omit the surface from the simulation. 
  * @param n_start_multithread Minimum number of cells at which to start using
  *                            multithreading. 
@@ -1886,9 +1882,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            const AdhesionMode adhesion_mode,
                            std::unordered_map<std::string, T>& adhesion_params,
                            JKRData<T>& jkr_data, const int colidx_gamma,
-                           const FrictionMode friction_mode, 
-                           const int colidx_eta_cell_cell, const bool no_surface,
-                           const int n_start_multithread = 50)
+                           const bool no_surface, const int n_start_multithread = 50)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
         for (int k = 0; k < neighbors.rows(); ++k)
@@ -1940,7 +1934,6 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
             }
         }
     #endif
-
 
     // Define an array of indicators for whether each cell is roughly horizontal
     //
@@ -1999,8 +1992,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
     Array<T, Dynamic, 6> v0 = getVelocities<T>(
         cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors, 
         assume_2d, noise, adhesion_mode, adhesion_params, jkr_data,
-        colidx_gamma, friction_mode, colidx_eta_cell_cell, no_surface,
-        multithread
+        colidx_gamma, no_surface, multithread
     );
     velocities.push_back(v0);
     for (int i = 1; i < s; ++i)
@@ -2014,8 +2006,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
         Array<T, Dynamic, 6> vi = getVelocities<T>(
             cells_i, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors,
             assume_2d, noise, adhesion_mode, adhesion_params, jkr_data,
-            colidx_gamma, friction_mode, colidx_eta_cell_cell, no_surface,
-            multithread
+            colidx_gamma, no_surface, multithread
         );
         velocities.push_back(vi);
     }
@@ -2117,23 +2108,159 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
-Array<T, Dynamic, 6> getVelocitiesVerlet(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                                         const Ref<const Array<T, Dynamic, 7> >& neighbors,
-                                         const T dt, const int iter, const T R,
-                                         const T Rcell, const T E0, 
-                                         const Ref<const Array<T, 4, 1> >& repulsion_prefactors,
-                                         const Ref<const Array<int, Dynamic, 1> >& assume_2d,
-                                         const Ref<const Array<T, Dynamic, 6> >& noise,
-                                         const AdhesionMode adhesion_mode,
-                                         std::unordered_map<std::string, T>& adhesion_params,
-                                         JKRData<T>& jkr_data, const int colidx_gamma,
-                                         const FrictionMode friction_mode, 
-                                         const int colidx_eta_cell_cell, 
-                                         const bool no_surface,
-                                         const bool multithread)
+Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                              const Ref<const Array<T, Dynamic, 7> >& neighbors,
+                                              const T dt, const int iter, const T R,
+                                              const T Rcell, const T E0, const T rho,
+                                              const Ref<const Array<T, 4, 1> >& repulsion_prefactors,
+                                              const T nz_threshold, 
+                                              const T max_rxy_noise, 
+                                              const T max_rz_noise, 
+                                              const T max_nxy_noise, 
+                                              const T max_nz_noise, 
+                                              boost::random::mt19937& rng, 
+                                              boost::random::uniform_01<>& uniform_dist, 
+                                              const AdhesionMode adhesion_mode,
+                                              std::unordered_map<std::string, T>& adhesion_params,
+                                              JKRData<T>& jkr_data, const int colidx_gamma,
+                                              const FrictionMode friction_mode, 
+                                              const int colidx_eta_cell_cell, 
+                                              const bool no_surface,
+                                              const int n_start_multithread = 50)
 {
+    #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
+        for (int k = 0; k < neighbors.rows(); ++k)
+        {
+            if (neighbors(k, Eigen::seq(2, 4)).matrix().norm() < 1e-8)
+            {
+                int i = neighbors(k, 0); 
+                int j = neighbors(k, 1); 
+                std::cerr << "Iteration " << iter
+                          << ": Found near-zero distance between cells "
+                          << i << " and " << j << std::endl;
+                std::cerr << "Timestep: " << dt << std::endl; 
+                pairConfigSummaryWithVelocities<T>(
+                    static_cast<int>(cells(i, __colidx_id)),
+                    cells(i, __colseq_r).matrix(),
+                    cells(i, __colseq_n).matrix(), cells(i, __colidx_half_l),
+                    cells(i, __colseq_dr).matrix(),
+                    static_cast<int>(cells(j, __colidx_id)),
+                    cells(j, __colseq_r).matrix(),
+                    cells(j, __colseq_n).matrix(), cells(j, __colidx_half_l),
+                    cells(j, __colseq_dr).matrix()
+                );
+                throw std::runtime_error("Found near-zero distance");
+            }
+        }
+    #endif
+    #ifdef DEBUG_WARN_CELL_BODIES_CONTACTING
+        for (int k = 0; k < neighbors.rows(); ++k)
+        {
+            if (neighbors(k, Eigen::seq(2, 4)).matrix().norm() < 0.99 * (2 * Rcell))
+            {
+                int i = neighbors(k, 0); 
+                int j = neighbors(k, 1); 
+                std::cout << "[WARN] Iteration " << iter
+                          << ": Found cell body contact between cells " 
+                          << i << " and " << j << std::endl;
+                std::cout << "Timestep: " << dt << std::endl; 
+                pairConfigSummaryWithVelocities<T>(
+                    static_cast<int>(cells(i, __colidx_id)),
+                    cells(i, __colseq_r).matrix(),
+                    cells(i, __colseq_n).matrix(), cells(i, __colidx_half_l),
+                    cells(i, __colseq_dr).matrix(),
+                    static_cast<int>(cells(j, __colidx_id)),
+                    cells(j, __colseq_r).matrix(),
+                    cells(j, __colseq_n).matrix(), cells(j, __colidx_half_l),
+                    cells(j, __colseq_dr).matrix()
+                );
+                //throw std::runtime_error("Found near-zero distance");
+            }
+        }
+    #endif
+
+    // Define an array of indicators for whether each cell is roughly horizontal
+    //
+    // This array is utilized for each step in the Runge-Kutta update
     int n = cells.rows(); 
-    Array<T, Dynamic, 6> velocities = Array<T, Dynamic, 6>::Zero(n, 6);
+    Array<int, Dynamic, 1> assume_2d(n);
+    for (int i = 0; i < n; ++i)
+        assume_2d(i) = (cells(i, __colidx_nz) < nz_threshold);
+
+    // Sample noise components prior to velocity calculations, so that they 
+    // are the same in each calculation 
+    Array<T, Dynamic, 6> noise = Array<T, Dynamic, 6>::Zero(n, 6);  
+    if (max_rxy_noise > 0 || max_rz_noise > 0 || max_nxy_noise > 0 || max_nz_noise > 0)
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            for (int j = 0; j < 6; ++j)
+            {
+                T r = uniform_dist(rng); 
+                if (j == 0 || j == 1)
+                    noise(i, j) = -max_rxy_noise + 2 * max_rxy_noise * r;
+                else if (j == 3 || j == 4)
+                    noise(i, j) = -max_nxy_noise + 2 * max_nxy_noise * r;
+                else if (j == 2) 
+                    noise(i, j) = -max_rz_noise + 2 * max_rz_noise * r;
+                else    // j == 5
+                    noise(i, j) = -max_nz_noise + 2 * max_nz_noise * r; 
+            }
+        }
+    }
+    #ifdef DEBUG_CHECK_NOISE_MAGNITUDES
+        for (int i = 0; i < n; ++i)
+        { 
+            if (abs(noise(i, 0)) > max_rxy_noise || abs(noise(i, 1)) > max_rxy_noise ||
+                abs(noise(i, 2)) > max_rz_noise  || abs(noise(i, 3)) > max_nxy_noise ||
+                abs(noise(i, 4)) > max_nxy_noise || abs(noise(i, 5)) > max_nz_noise)
+            {
+                std::cerr << std::setprecision(10);
+                std::cerr << "Iteration " << iter
+                          << ": Generated out-of-bounds noise vector for cell " << i << std::endl;
+                std::cerr << "Timestep: " << dt << std::endl;
+                std::cerr << "Noise = (" << noise(i, 0) << ", " << noise(i, 1) << ", "
+                                         << noise(i, 2) << ", " << noise(i, 3) << ", "
+                                         << noise(i, 4) << ", " << noise(i, 5) << ")"
+                                         << std::endl;  
+                throw std::runtime_error("Generated out-of-bounds noise vectors"); 
+            }
+        }
+    #endif 
+
+    // Get the mass of each cell 
+    Array<T, Dynamic, 1> masses(n); 
+    for (int i = 0; i < n; ++i)
+    {
+        T length = cells(i, __colidx_l); 
+        T volume = boost::math::constants::pi<T>() * ((4. / 3.) * pow(R, 3) + R * R * length;
+        masses(i) = rho * volume; 
+    }
+
+    // Get the angular velocity of each cell 
+    Array<T, Dynamic, 3> angvels = Array<T, Dynamic, 3>::Zero(n, 3);
+    for (int i = 0; i < n; ++i)
+    {
+        Matrix<T, 3, 1> u = cells(i, __colseq_n).matrix();
+        Matrix<T, 3, 1> v = cells(i, __colseq_dn).matrix();  
+        angvels.row(i) = u.cross(v).array().transpose(); 
+    }
+
+    // Get the moments of inertia along the long and short axes of each cell 
+    Array<T, Dynamic, 2> moments = Array<T, Dynamic, 2>::Zero(n, 2); 
+    for (int i = 0; i < n; ++i)
+    {
+        T diam = 2 * R; 
+        T d2 = diam * diam; 
+        T d3 = d2 * diam; 
+        T d4 = d3 * diam; 
+        T length = cells(i, __colidx_l);
+        T l2 = length * length; 
+        T l3 = l2 * length; 
+        moments(i, 0) = d4 * (length / 32 + diam / 60);
+        moments(i, 1) = d2 * (4 * d3 + 15 * length * d2 + 20 * l2 * diam + 10 * l3) / 480;  
+    }
+    moments *= (rho * boost::math::constants::pi<T>()); 
 
     // Get cell-body coordinates at which cell-surface overlap is zero for 
     // each cell
@@ -2146,260 +2273,102 @@ Array<T, Dynamic, 6> getVelocitiesVerlet(const Ref<const Array<T, Dynamic, Dynam
             ss(i) = sstar(cells(i, __colidx_rz), cells(i, __colidx_nz), R); 
     }
 
-    // Compute all conservative forces and add noise 
+    // Update cell positions, orientations, and velocities ... 
+    Array<T, Dynamic, Dynamic> cells_new(cells); 
+    Array<T, Dynamic, 6> velocities = Array<T, Dynamic, 6>::Zero(n, 6);
+    bool multithread = (n >= n_start_multithread); 
+
+    // Compute all conservative forces with the orientation vector norm 
+    // constraint (with or without cell-cell friction), and add noise 
     Array<T, Dynamic, 6> forces = getConservativeForces<T>(
         cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors, 
         assume_2d, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
-        friction_mode, colidx_eta_cell_cell, no_surface, multithread
+        friction_mode, colidx_eta_cell_cell, no_surface, multithread, true
     );
-    forces += noise; 
+    forces += (0.5 * noise);
 
-    // For each cell ...
-    #pragma omp parallel for if(multithread)
+    // Compute the ambient viscosity and cell-surface friction forces
+    forces -= cellSurfaceFrictionForces<T>(cells, dt, iter, ss, R, assume_2d, multithread);
+    forces -= ambientViscosityForces<T>(cells, dt, iter, R);
+
+    // Decompose the torques into parallel and perpendicular contributions
+    Array<T, Dynamic, 3> torques = forces(Eigen::all, Eigen::seq(3, 5)); 
+    Array<T, Dynamic, 3> torques_par(n, 3), torques_perp(n, 3);  
     for (int i = 0; i < n; ++i)
     {
-        // Is the cell contacting the surface?
-        bool contacting_surface = false;
-        if (!assume_2d(i))    // If the cell is not horizontal, then ... 
-        {
-            // Identify the cell height at either endpoint and check that
-            // there is some cell-surface overlap 
-            T z1 = cells(i, __colidx_rz) - cells(i, __colidx_half_l) * cells(i, __colidx_nz); 
-            T z2 = cells(i, __colidx_rz) + cells(i, __colidx_half_l) * cells(i, __colidx_nz);
-            contacting_surface = (z1 < R || z2 < R); 
-        }
-        else    // If the cell is horizontal, then ... 
-        {
-            // Simply check the height of the cell center 
-            contacting_surface = (cells(i, __colidx_rz) < R); 
-        }
+        Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix(); 
+        torques_par.row(i) = torques.row(i).matrix().dot(ni) * ni;
+        torques_perp.row(i) = torques.row(i) - torques_par.row(i); 
+    } 
 
-        // If there is no surface or the cell is not contacting the surface,
-        // solve the simplified 3D system of equations with no cell-surface
-        // friction 
-        if (no_surface || !contacting_surface)
-        {
+    // Calculate the half-updated velocity and angular velocity of each cell
+    Array<T, Dynamic, 3> delta1 = forces(Eigen::all, Eigen::seq(0, 2)).colwise() / masses;
+    Array<T, Dynamic, 3> delta2 = (
+        torques_par.colwise() / moments.col(0) + torques_perp.colwise() / moments.col(1)
+    ); 
+    Array<T, Dynamic, 3> velocities_half = cells(Eigen::all, __colseq_dr) + 0.5 * dt * delta1; 
+    Array<T, Dynamic, 3> angvels_half = angvels + 0.5 * dt * delta2; 
 
+    // Update cell positions and orientations for the full timestep, and 
+    // translational and orientational velocities for the half-timestep 
+    for (int i = 0; i < n; ++i)
+    {
+        // Update positions and orientations 
+        Matrix<T, 3, 1> ri = cells(i, __colseq_r).matrix(); 
+        Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix();
+        T half_li = cells(i, __colidx_half_l); 
+        Matrix<T, 3, 1> pi = ri - half_li * ni; 
+        Matrix<T, 3, 1> qi = ri + half_li * ni; 
+        Matrix<T, 3, 1> vi = velocities_half.row(i).matrix();
+        Matrix<T, 3, 1> wi = angvels_half.row(i).matrix();
+        Matrix<T, 3, 1> cross = wi.cross(pi - qi) / 2;  
+        Matrix<T, 3, 1> p_new = pi + dt * (vi + cross);
+        Matrix<T, 3, 1> q_new = qi + dt * (vi - cross);
+        Matrix<T, 3, 1> r_new = (p_new + q_new) / 2; 
+        Matrix<T, 3, 1> n_new = (q_new - p_new) / (q_new - p_new).norm();
+        cells_new(i, __colseq_r) = r_new.array(); 
+        cells_new(i, __colseq_n) = n_new.array();
 
-            T K = cells(i, __colidx_eta0) * cells(i, __colidx_l);
-            T L = K * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
-            T mult = -(
-                cells(i, __colidx_nx) * forces(i, 3) +
-                cells(i, __colidx_ny) * forces(i, 4) +
-                cells(i, __colidx_nz) * forces(i, 5)
-            ); 
-            velocities(i, Eigen::seq(0, 2)) = forces(i, Eigen::seq(0, 2)) / K;  
-            velocities(i, Eigen::seq(3, 5)) = (forces(i, Eigen::seq(3, 5)) + mult * cells(i, __colseq_n)) / L;
-            #ifdef DEBUG_CHECK_VELOCITIES_NAN
-                if (velocities.row(i).isNaN().any() || velocities.row(i).isInf().any())
-                {
-                    std::cerr << std::setprecision(10); 
-                    std::cerr << "Iteration " << iter
-                              << ": Found nan in velocities of cell " << i << std::endl; 
-                    std::cerr << "Timestep: " << dt << std::endl;
-                    std::cerr << "Contacting surface: 0" << std::endl; 
-                    std::cerr << "Cell center = (" << cells(i, __colidx_rx) << ", "
-                                                   << cells(i, __colidx_ry) << ", "
-                                                   << cells(i, __colidx_rz) << ")" << std::endl
-                              << "Cell orientation = (" << cells(i, __colidx_nx) << ", "
-                                                        << cells(i, __colidx_ny) << ", "
-                                                        << cells(i, __colidx_nz) << ")" << std::endl
-                              << "Cell half-length = " << cells(i, __colidx_half_l) << std::endl
-                              << "Cell translational velocity = (" << velocities(i, 0) << ", "
-                                                                   << velocities(i, 1) << ", "
-                                                                   << velocities(i, 2) << ")" << std::endl
-                              << "Cell orientational velocity = (" << velocities(i, 3) << ", "
-                                                                   << velocities(i, 4) << ", "
-                                                                   << velocities(i, 5) << ")" << std::endl
-                              << "Constraint variable = " << mult / 2.0 << std::endl
-                              << "Composite viscosity prefactors = " << K << ", " << L << std::endl
-                              << "Conservative force vector = (" << forces(i, 0) << ", "
-                                                                 << forces(i, 1) << ", "
-                                                                 << forces(i, 2) << ", "
-                                                                 << forces(i, 3) << ", "
-                                                                 << forces(i, 4) << ", "
-                                                                 << forces(i, 5) << ")" << std::endl; 
-                    throw std::runtime_error("Found nan in velocities"); 
-                }
-            #endif
-        }
-        // Otherwise, if the cell is roughly horizontal, solve the 2D system
-        // of equations with cell-surface friction 
-        else if (assume_2d(i))
-        {
-            T K, L;                              // Viscosity force prefactors 
-            T a = sqrt(R * (R - cells(i, __colidx_rz))); 
-            K = cells(i, __colidx_l) * (
-                cells(i, __colidx_eta0) + cells(i, __colidx_eta1) * a / R
-            );  
-            L = K * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
-            T mult = -(cells(i, __colidx_nx) * forces(i, 3) + cells(i, __colidx_ny) * forces(i, 4)); 
-            velocities(i, 0) = forces(i, 0) / K; 
-            velocities(i, 1) = forces(i, 1) / K;
-            velocities(i, 3) = (forces(i, 3) + mult * cells(i, __colidx_nx)) / L;
-            velocities(i, 4) = (forces(i, 4) + mult * cells(i, __colidx_ny)) / L;
-
-            // Set velocities in z-direction, which may be nonzero due to noise 
-            velocities(i, 2) = forces(i, 2) / (cells(i, __colidx_eta0) * cells(i, __colidx_l));
-            velocities(i, 5) = 12 * forces(i, 5) / (
-                cells(i, __colidx_eta0) * cells(i, __colidx_l) * cells(i, __colidx_l) *
-                cells(i, __colidx_l)
-            );
-            #ifdef DEBUG_CHECK_VELOCITIES_NAN
-                if (velocities.row(i).isNaN().any() || velocities.row(i).isInf().any())
-                {
-                    std::cerr << std::setprecision(10); 
-                    std::cerr << "Iteration " << iter
-                              << ": Found nan in velocities of cell " << i << std::endl; 
-                    std::cerr << "Timestep: " << dt << std::endl;
-                    std::cerr << "Contacting surface: 1" << std::endl; 
-                    std::cerr << "2D assumption: 1" << std::endl; 
-                    std::cerr << "Cell center = (" << cells(i, __colidx_rx) << ", "
-                                                   << cells(i, __colidx_ry) << ", "
-                                                   << cells(i, __colidx_rz) << ")" << std::endl
-                              << "Cell orientation = (" << cells(i, __colidx_nx) << ", "
-                                                        << cells(i, __colidx_ny) << ", "
-                                                        << cells(i, __colidx_nz) << ")" << std::endl
-                              << "Cell half-length = " << cells(i, __colidx_half_l) << std::endl
-                              << "Cell translational velocity = (" << velocities(i, 0) << ", "
-                                                                   << velocities(i, 1) << ", "
-                                                                   << velocities(i, 2) << ")" << std::endl
-                              << "Cell orientational velocity = (" << velocities(i, 3) << ", "
-                                                                   << velocities(i, 4) << ", "
-                                                                   << velocities(i, 5) << ")" << std::endl
-                              << "Constraint variable = " << mult / 2.0 << std::endl
-                              << "Composite viscosity prefactors = " << K << ", " << L << std::endl
-                              << "Conservative force vector = (" << forces(i, 0) << ", "
-                                                                 << forces(i, 1) << ", "
-                                                                 << forces(i, 2) << ", "
-                                                                 << forces(i, 3) << ", "
-                                                                 << forces(i, 4) << ", "
-                                                                 << forces(i, 5) << ")" << std::endl; 
-                    throw std::runtime_error("Found nan in velocities"); 
-                }
-            #endif
-        }
-        else     // Otherwise, solve the full 3D system of equations 
-        {
-            /*
-            Array<T, 7, 7> A = Array<T, 7, 7>::Zero();
-            Array<T, 7, 1> b = Array<T, 7, 1>::Zero();
-
-            // Compute the derivatives of the dissipation with respect to the 
-            // cell's translational and orientational velocities
-            A(Eigen::seq(0, 5), Eigen::seq(0, 5)) = compositeViscosityForceMatrix<T>(
-                cells(i, __colidx_rz), cells(i, __colidx_nz), cells(i, __colidx_l),
-                cells(i, __colidx_half_l), ss(i), cells(i, __colidx_eta0),
-                cells(i, __colidx_eta1), R, i, dt, iter
-            );
-            A(3, 6) = -2 * cells(i, __colidx_nx); 
-            A(4, 6) = -2 * cells(i, __colidx_ny);
-            A(5, 6) = -2 * cells(i, __colidx_nz);
-            A(6, 3) = cells(i, __colidx_nx); 
-            A(6, 4) = cells(i, __colidx_ny);
-            A(6, 5) = cells(i, __colidx_nz);
-
-            // Solve the corresponding linear system
-            //
-            // TODO Which decomposition to use?
-            b.head(6) = forces.row(i);
-            auto LU = A.matrix().partialPivLu();
-            Array<T, 7, 1> x = LU.solve(b.matrix()).array();
-            //auto QR = A.matrix().colPivHouseholderQr(); 
-            //Array<T, 7, 1> x = QR.solve(b.matrix()).array();
-            */
-
-            // Solve the linear system explicitly, using back-substitution 
-            const T rz = cells(i, __colidx_rz); 
-            const T nz = cells(i, __colidx_nz); 
-            const T l = cells(i, __colidx_l); 
-            const T half_l = cells(i, __colidx_half_l);
-            const T eta0 = cells(i, __colidx_eta0); 
-            const T eta1 = cells(i, __colidx_eta1); 
-            std::tuple<T, T, T> integrals = areaIntegrals<T>(rz, nz, R, half_l, ss(i)); 
-            const T c1 = eta0 * l + (eta1 / R) * std::get<0>(integrals);
-            const T c2 = eta0 * l; 
-            const T c3 = c2 * l * l / 12 + (eta1 / R) * std::get<2>(integrals);
-            const T c4 = c2 * l * l / 12; 
-            const T c5 = (eta1 / R) * std::get<1>(integrals);
-            const T term1 = c3 - (c5 * c5 / c1);
-            const T w4 = forces(i, 3) - forces(i, 0) * (c5 / c1); 
-            const T w5 = forces(i, 4) - forces(i, 1) * (c5 / c1); 
-
-            // Calculate the Lagrange multiplier ...  
-            const T nx = cells(i, __colidx_nx); 
-            const T ny = cells(i, __colidx_ny); 
-            const T nx2 = nx / term1; 
-            const T ny2 = ny / term1; 
-            const T nz2 = nz / c4; 
-            const T alpha = 2 * (nx * nx2 + ny * ny2 + nz * nz2);
-            const T beta = -(w4 * nx2 + w5 * ny2 + forces(i, 5) * nz2);
-            const T lambda = beta / alpha;
-
-            // ... then calculate the velocities via back-substitution 
-            velocities(i, 5) = (forces(i, 5) + 2 * nz * lambda) / c4;
-            velocities(i, 4) = (w5 + 2 * ny * lambda) / term1; 
-            velocities(i, 3) = (w4 + 2 * nx * lambda) / term1; 
-            velocities(i, 2) = forces(i, 2) / c2; 
-            velocities(i, 1) = (forces(i, 1) - c5 * velocities(i, 4)) / c1; 
-            velocities(i, 0) = (forces(i, 0) - c5 * velocities(i, 3)) / c1;
-
-            // TODO Update debug here
-            #ifdef DEBUG_CHECK_VELOCITIES_NAN
-                //if (x.isNaN().any() || x.isInf().any())
-                if (velocities.row(i).isNaN().any() || velocities.row(i).isInf().any())
-                {
-                    std::cerr << std::setprecision(10); 
-                    std::cerr << "Iteration " << iter
-                              << ": Found nan in velocities of cell " << i << std::endl; 
-                    std::cerr << "Timestep: " << dt << std::endl;
-                    std::cerr << "Contacting surface: 1" << std::endl; 
-                    std::cerr << "2D assumption: 0" << std::endl; 
-                    std::cerr << "Cell center = (" << cells(i, __colidx_rx) << ", "
-                                                   << cells(i, __colidx_ry) << ", "
-                                                   << cells(i, __colidx_rz) << ")" << std::endl
-                              << "Cell orientation = (" << cells(i, __colidx_nx) << ", "
-                                                        << cells(i, __colidx_ny) << ", "
-                                                        << cells(i, __colidx_nz) << ")" << std::endl
-                              << "Cell half-length = " << cells(i, __colidx_half_l) << std::endl
-                              //<< "Cell translational velocity = (" << x(0) << ", "
-                              //                                     << x(1) << ", "
-                              //                                     << x(2) << ")" << std::endl
-                              //<< "Cell orientational velocity = (" << x(3) << ", "
-                              //                                     << x(4) << ", "
-                              //                                     << x(5) << ")" << std::endl
-                              //<< "Constraint variable = " << x(6) << std::endl
-                              << "Cell translational velocity = (" << velocities(i, 0) << ", "
-                                                                   << velocities(i, 1) << ", "
-                                                                   << velocities(i, 2) << ")" << std::endl
-                              << "Cell orientational velocity = (" << velocities(i, 3) << ", "
-                                                                   << velocities(i, 4) << ", "
-                                                                   << velocities(i, 5) << ")" << std::endl
-                              << "Constraint variable = " << lambda << std::endl
-                              << "Composite viscosity force matrix = " << std::endl;
-                    /* 
-                    for (int j = 0; j < 7; ++j)
-                    {
-                        std::cerr << "  [";
-                        for (int k = 0; k < 6; ++k)
-                            std::cerr << A(j, k) << ", ";
-                        std::cerr << A(j, 6) << "]" << std::endl; 
-                    }
-                    std::cerr << "Conservative force vector = (" << b(0) << ", "
-                                                                 << b(1) << ", "
-                                                                 << b(2) << ", "
-                                                                 << b(3) << ", "
-                                                                 << b(4) << ", "
-                                                                 << b(5) << ")" << std::endl;
-                    */
-                    throw std::runtime_error("Found nan in velocities"); 
-                }
-            #endif
-            //velocities.row(i) = x.head(6);
-        }
+        // Update translational and orientational velocities 
+        cells_new(i, __colseq_dr) = vi.array(); 
+        cells_new(i, __colseq_dn) = wi.cross(ni).array(); 
     }
-    
-    return velocities;  
+
+    // Compute new forces with the updated positions, orientations, and 
+    // velocities
+    forces = getConservativeForces<T>(
+        cells_new, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors, 
+        assume_2d, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
+        friction_mode, colidx_eta_cell_cell, no_surface, multithread, true
+    );
+    forces += (0.5 * noise);
+    forces -= cellSurfaceFrictionForces<T>(cells_new, dt, iter, ss, R, assume_2d, multithread);
+    forces -= ambientViscosityForces<T>(cells_new, dt, iter, R);
+
+    // Decompose the torques into parallel and perpendicular contributions
+    torques = forces(Eigen::all, Eigen::seq(3, 5)); 
+    for (int i = 0; i < n; ++i)
+    {
+        Matrix<T, 3, 1> ni = cells_new(i, __colseq_n).matrix(); 
+        torques_par.row(i) = torques.row(i).matrix().dot(ni) * ni;
+        torques_perp.row(i) = torques.row(i) - torques_par.row(i); 
+    }
+
+    // Calculate the updated velocity and angular velocity of each cell, and 
+    // update the full array 
+    delta1 = forces(Eigen::all, Eigen::seq(0, 2)).colwise() / masses;
+    delta2 = (
+        torques_par.colwise() / moments.col(0) + torques_perp.colwise() / moments.col(1)
+    ); 
+    cells_new(Eigen::all, __colseq_dr) += 0.5 * dt * delta1; 
+    Array<T, Dynamic, 3> angvels_full = angvels_half + 0.5 * dt * delta2;
+    for (int i = 0; i < n; ++i)
+    {
+        Matrix<T, 3, 1> ni = cells_new(i, __colseq_n).matrix(); 
+        cells_new(i, __colseq_dn) = angvels_full.row(i).matrix().cross(ni).array(); 
+    } 
+   
+    return cells_new; 
 }
 
 #endif
