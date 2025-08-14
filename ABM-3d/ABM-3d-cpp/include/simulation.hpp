@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/12/2025
+ *     8/14/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -587,6 +587,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     const T Ldiv,
                                     const T E0,
                                     const T Ecell,
+                                    const T M0, 
                                     const T max_stepsize,
                                     const T min_stepsize,
                                     const bool write,
@@ -624,6 +625,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                     const std::string adhesion_curvature_filename, 
                                     const std::string adhesion_jkr_forces_filename, 
                                     const FrictionMode friction_mode,
+                                    const bool use_verlet = false,
                                     const bool no_surface = false,
                                     const int n_cells_start_switch = 0,
                                     const bool track_poles = false,
@@ -692,6 +694,19 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
     // Compute initial array of neighboring cells
     Array<T, Dynamic, 7> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
+
+    // Define cell density, if velocity Verlet is to be used
+    T rho = 0; 
+    if (use_verlet)
+    {
+        if (M0 <= 0)
+            throw std::runtime_error(
+                "Initial cell mass must be defined when using velocity Verlet"
+            );
+
+        T volume = boost::math::constants::pi<T>() * ((4. / 3.) * pow(R, 3) + R * R * L0);
+        rho = volume / M0; 
+    }
 
     // Initialize parent IDs
     std::vector<int> parents(parents_init); 
@@ -1077,7 +1092,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
         }
 
-        // Update cell positions and orientations
+        // Update cell positions and orientations, using the desired integration
+        // method 
         #ifdef _OPENMP
             if (n >= n_start_multithread && !started_multithread)
             {
@@ -1086,112 +1102,129 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 started_multithread = true; 
             }
         #endif
-        auto result = stepRungeKuttaAdaptive<T>(
-            A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
-            repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
-            max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
-            adhesion_params, jkr_data, __colidx_gamma, friction_mode, 
-            __colidx_eta_cell_cell, no_surface, n_start_multithread
-        ); 
-        Array<T, Dynamic, Dynamic> cells_new = result.first;
-        Array<T, Dynamic, 6> errors = result.second;
-
-        // If the error is big, retry the step with a smaller stepsize (up to
-        // a given maximum number of attempts)
-        if (iter % iter_update_stepsize == 0)
+        Array<T, Dynamic, Dynamic> cells_new; 
+        if (!use_verlet)
         {
-            // Enforce a composite error of the form tol * (1 + y), for the
-            // maximum error
-            //
-            // Here, y (which determines the scale of the error) is taken to 
-            // be the old cell positions and orientations 
-            Array<T, Dynamic, 6> z = (
-                Array<T, Dynamic, 6>::Ones(n, 6) + cells(Eigen::all, __colseq_coords).abs()
+            // Update using adaptive Runge-Kutta
+            auto result = stepRungeKuttaAdaptive<T>(
+                A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
+                repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
+                max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
+                adhesion_params, jkr_data, __colidx_gamma, no_surface,
+                n_start_multithread
             ); 
-            Array<T, Dynamic, 6> max_scale = max_error_allowed * z;
-            T max_error = max((errors / max_scale).maxCoeff(), min_error); 
-            bool error_exceeded = (max_error > 1.0); 
+            cells_new = result.first;
+            Array<T, Dynamic, 6> errors = result.second;
 
-            // Ensure that the updated stepsize is between 0.2 times and 10 times
-            // the previous stepsize
-            T factor = 0.9 * pow(1.0 / max_error, 1.0 / (error_order + 1)); 
-            if (factor >= 10)
-                factor = 10;
-            else if (factor < 0.2)
-                factor = 0.2;
-            int j = 0;
-            while (error_exceeded && j < max_tries_update_stepsize)
+            // If the error is big, retry the step with a smaller stepsize (up to
+            // a given maximum number of attempts)
+            if (iter % iter_update_stepsize == 0)
             {
-                // Try updating the stepsize by the given factor and re-run 
-                // the integration 
-                T dt_new = dt * factor; 
+                // Enforce a composite error of the form tol * (1 + y), for the
+                // maximum error
+                //
+                // Here, y (which determines the scale of the error) is taken to 
+                // be the old cell positions and orientations 
+                Array<T, Dynamic, 6> z = (
+                    Array<T, Dynamic, 6>::Ones(n, 6) + cells(Eigen::all, __colseq_coords).abs()
+                ); 
+                Array<T, Dynamic, 6> max_scale = max_error_allowed * z;
+                T max_error = max((errors / max_scale).maxCoeff(), min_error); 
+                bool error_exceeded = (max_error > 1.0); 
+
+                // Ensure that the updated stepsize is between 0.2 times and 10 times
+                // the previous stepsize
+                T factor = 0.9 * pow(1.0 / max_error, 1.0 / (error_order + 1)); 
+                if (factor >= 10)
+                    factor = 10;
+                else if (factor < 0.2)
+                    factor = 0.2;
+                int j = 0;
+                while (error_exceeded && j < max_tries_update_stepsize)
+                {
+                    // Try updating the stepsize by the given factor and re-run 
+                    // the integration 
+                    T dt_new = dt * factor; 
+                    result = stepRungeKuttaAdaptive<T>(
+                        A, b, bs, cells, neighbors, dt_new, iter, R, Rcell, E0,
+                        repulsion_prefactors, nz_threshold, max_rxy_noise,
+                        max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
+                        adhesion_mode, adhesion_params, jkr_data, __colidx_gamma,
+                        no_surface, n_start_multithread
+                    ); 
+                    cells_new = result.first;
+                    errors = result.second;
+
+                    // Compute the new error
+                    max_error = max((errors / max_scale).maxCoeff(), min_error); 
+                    error_exceeded = (max_error > 1.0);  
+
+                    // Multiply by the new factor (note that this factor is being 
+                    // multiplied to the *original* dt to determine the new stepsize,
+                    // so the factors across all loop iterations must be accumulated)
+                    factor *= 0.9 * pow(1.0 / max_error, 1.0 / (error_order + 1)); 
+                    if (factor >= 10)
+                    {
+                        factor = 10;
+                        break;
+                    }
+                    else if (factor < 0.2)
+                    {
+                        factor = 0.2;
+                        break;
+                    }
+                    j++;  
+                }
+                
+                // Ensure that the proposed stepsize is between the minimum and 
+                // maximum
+                if (dt * factor < min_stepsize)
+                    factor = min_stepsize / dt; 
+                else if (dt * factor > max_stepsize)
+                    factor = max_stepsize / dt;
+
+                // Re-do the integration with the new stepsize
+                dt *= factor;
                 result = stepRungeKuttaAdaptive<T>(
-                    A, b, bs, cells, neighbors, dt_new, iter, R, Rcell, E0,
-                    repulsion_prefactors, nz_threshold, max_rxy_noise,
-                    max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
-                    adhesion_mode, adhesion_params, jkr_data, __colidx_gamma,
-                    friction_mode, __colidx_eta_cell_cell, no_surface,
+                    A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
+                    repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
+                    max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
+                    adhesion_params, jkr_data, __colidx_gamma, no_surface,
                     n_start_multithread
                 ); 
                 cells_new = result.first;
                 errors = result.second;
-
-                // Compute the new error
-                max_error = max((errors / max_scale).maxCoeff(), min_error); 
-                error_exceeded = (max_error > 1.0);  
-
-                // Multiply by the new factor (note that this factor is being 
-                // multiplied to the *original* dt to determine the new stepsize,
-                // so the factors across all loop iterations must be accumulated)
-                factor *= 0.9 * pow(1.0 / max_error, 1.0 / (error_order + 1)); 
-                if (factor >= 10)
-                {
-                    factor = 10;
-                    break;
-                }
-                else if (factor < 0.2)
-                {
-                    factor = 0.2;
-                    break;
-                }
-                j++;  
             }
-            
-            // Ensure that the proposed stepsize is between the minimum and 
-            // maximum
-            if (dt * factor < min_stepsize)
-                factor = min_stepsize / dt; 
-            else if (dt * factor > max_stepsize)
-                factor = max_stepsize / dt;
-
-            // Re-do the integration with the new stepsize
-            dt *= factor;
-            result = stepRungeKuttaAdaptive<T>(
-                A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
-                repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
-                max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
-                adhesion_params, jkr_data, __colidx_gamma, friction_mode, 
-                __colidx_eta_cell_cell, no_surface, n_start_multithread
-            ); 
-            cells_new = result.first;
-            errors = result.second;
+            // If desired, print a warning message if the error is big
+            #ifdef DEBUG_WARN_LARGE_ERROR
+                Array<T, Dynamic, 6> z = (
+                    Array<T, Dynamic, 6>::Ones(n, 6) + cells(Eigen::all, __colseq_coords).abs()
+                );
+                Array<T, Dynamic, 6> max_scale = max_error_allowed * z;
+                T max_error = max((errors / max_scale).maxCoeff(), min_error);
+                if (max_error > 5)
+                {
+                    std::cout << "[WARN] Maximum error = " << max_error
+                              << " is > 5 times the desired error "
+                              << "(absolute tol = relative tol = " << max_error_allowed
+                              << ", iteration " << iter << ", time = " << t
+                              << ", dt = " << dt << ")" << std::endl;
+                }
+            #endif
         }
-        // If desired, print a warning message if the error is big
-        #ifdef DEBUG_WARN_LARGE_ERROR
-            Array<T, Dynamic, 6> z = (
-                Array<T, Dynamic, 6>::Ones(n, 6) + cells(Eigen::all, __colseq_coords).abs()
-            );
-            Array<T, Dynamic, 6> max_scale = max_error_allowed * z;
-            T max_error = max((errors / max_scale).maxCoeff(), min_error);
-            if (max_error > 5)
-            {
-                std::cout << "[WARN] Maximum error = " << max_error
-                          << " is > 5 times the desired error "
-                          << "(absolute tol = relative tol = " << max_error_allowed
-                          << ", iteration " << iter << ", time = " << t
-                          << ", dt = " << dt << ")" << std::endl;
-            }
-        #endif
+        else 
+        {
+            // Update using velocity Verlet 
+            cells_new = stepVelocityVerlet<T>(
+                cells, neighbors, dt, iter, R, Rcell, E0, rho, repulsion_prefactors,
+                nz_threshold, max_rxy_noise, max_rz_noise, max_nxy_noise,
+                max_nz_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
+                jkr_data, __colidx_gamma, friction_mode, __colidx_eta_cell_cell,
+                no_surface, n_start_multithread
+            ); 
+        }
+        cells = cells_new;
+        
         // If desired, check that the cell coordinates do not contain any 
         // undefined values 
         #ifdef DEBUG_CHECK_CELL_COORDINATES_NAN
@@ -1213,7 +1246,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                }
            } 
         #endif
-        cells = cells_new;
 
         // Grow the cells
         growCells<T>(cells, dt, R);
