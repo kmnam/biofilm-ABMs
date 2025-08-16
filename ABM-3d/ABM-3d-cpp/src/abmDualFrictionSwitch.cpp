@@ -10,7 +10,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/1/2025
+ *     8/16/2025
  */
 
 #include <Eigen/Dense>
@@ -38,14 +38,14 @@ int main(int argc, char** argv)
     // Check if the simulation varies just the cell-surface adhesion energy
     // density (default), the cell-surface friction coefficient (--coef), or 
     // both (--combined)
-    int friction_mode = 0; 
+    int surface_friction_mode = 0; 
     if (argc > 4)
     {
         std::string arg = argv[4];
         if (arg == "--coef")
-            friction_mode = 1;
+            surface_friction_mode = 1;
         else if (arg == "--combined")
-            friction_mode = 2; 
+            surface_friction_mode = 2; 
         else
             throw std::runtime_error(
                 "Unrecognized input argument for friction mode"
@@ -72,38 +72,30 @@ int main(int argc, char** argv)
     const T max_time = static_cast<T>(json_data["max_time"].as_double());  
     const T growth_mean = static_cast<T>(json_data["growth_mean"].as_double());
     const T growth_std = static_cast<T>(json_data["growth_std"].as_double());
-    T sigma0_mean1, sigma0_std1, sigma0_mean2, sigma0_std2; 
-    T eta1_mean1, eta1_std1, eta1_mean2, eta1_std2;
-    if (friction_mode == 0 || friction_mode == 2)
+    T sigma0_mean1, sigma0_mean2, eta1_mean1, eta1_mean2;
+    if (surface_friction_mode == 0 || surface_friction_mode == 2)
     { 
         sigma0_mean1 = static_cast<T>(json_data["sigma0_mean1"].as_double()); 
-        sigma0_std1 = static_cast<T>(json_data["sigma0_std1"].as_double()); 
         sigma0_mean2 = static_cast<T>(json_data["sigma0_mean2"].as_double());
-        sigma0_std2 = static_cast<T>(json_data["sigma0_std2"].as_double());
     }
-    else 
+    else    // surface_friction_mode == 1 
     {
         sigma0_mean1 = static_cast<T>(json_data["sigma0"].as_double());
-        sigma0_std1 = 0.0; 
         sigma0_mean2 = 0.0; 
-        sigma0_std2 = 0.0; 
     }
-    if (friction_mode == 1 || friction_mode == 2)
+    if (surface_friction_mode == 1 || surface_friction_mode == 2)
     {
         eta1_mean1 = static_cast<T>(json_data["eta1_mean1"].as_double()); 
-        eta1_std1 = static_cast<T>(json_data["eta1_std1"].as_double()); 
         eta1_mean2 = static_cast<T>(json_data["eta1_mean2"].as_double());
-        eta1_std2 = static_cast<T>(json_data["eta1_std2"].as_double());
     }
-    else 
+    else    // surface_friction_mode == 0 
     {
         eta1_mean1 = static_cast<T>(json_data["eta_surface"].as_double());
-        eta1_std1 = 0.0; 
         eta1_mean2 = 0.0; 
-        eta1_std2 = 0.0; 
     }
     const T lifetime_mean1 = static_cast<T>(json_data["lifetime_mean1"].as_double()); 
-    const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double()); 
+    const T lifetime_mean2 = static_cast<T>(json_data["lifetime_mean2"].as_double());
+    const T switch_timescale = static_cast<T>(json_data["switch_timescale"].as_double()); 
     const T daughter_length_std = static_cast<T>(json_data["daughter_length_std"].as_double());
     const T daughter_angle_xy_bound = static_cast<T>(json_data["daughter_angle_xy_bound"].as_double());
     const T daughter_angle_z_bound = static_cast<T>(json_data["daughter_angle_z_bound"].as_double());
@@ -121,9 +113,53 @@ int main(int argc, char** argv)
     const T basal_min_overlap = (
         basal_only ? static_cast<T>(json_data["basal_min_overlap"].as_double()) : 0.0
     ); 
-    const AdhesionMode adhesion_mode = AdhesionMode::NONE;           // No cell-cell adhesion
-    std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int> > > adhesion_map; 
+
+    // No cell-cell adhesion
+    const AdhesionMode adhesion_mode = AdhesionMode::NONE;
     std::unordered_map<std::string, T> adhesion_params;
+
+    // Parse cell-cell friction parameters
+    FrictionMode friction_mode; 
+    const int token = json_data["cell_cell_friction_mode"].as_int64(); 
+    if (token == 0)
+        friction_mode = FrictionMode::NONE; 
+    else if (token == 1)
+        friction_mode = FrictionMode::KINETIC; 
+    else 
+        throw std::runtime_error("Invalid cell-cell friction mode specified");
+
+    // Parse cell-cell friction coefficient
+    T eta_cell_cell = 0.0; 
+    if (friction_mode == FrictionMode::KINETIC)
+        eta_cell_cell = static_cast<T>(json_data["eta_cell_cell"].as_double());
+
+    // Decide between Runge-Kutta and velocity Verlet 
+    bool use_verlet = false; 
+    if (friction_mode == FrictionMode::KINETIC)
+    {
+        use_verlet = true;
+    }
+    else 
+    {
+        try
+        {
+            use_verlet = json_data["use_verlet"].as_int64(); 
+        }
+        catch (boost::wrapexcept<boost::system::system_error>& e) { } 
+    }
+
+    // If velocity Verlet is desired, parse the initial cell mass
+    T M0 = 0.0; 
+    if (use_verlet)
+        M0 = static_cast<T>(json_data["M0"].as_double());
+
+    // Parse minimum number of cells at which to start switching, if given
+    int n_cells_start_switch = 0; 
+    try
+    {
+        n_cells_start_switch = json_data["n_cells_start_switch"].as_int64(); 
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e) { }
 
     // Vectors of growth rate means and standard deviations (identical for
     // both groups) 
@@ -135,33 +171,28 @@ int main(int argc, char** argv)
     // Vectors of cell-surface adhesion energy density and/or friction
     // coefficient means and standard deviations
     std::vector<int> group_attributes; 
-    Array<T, Dynamic, Dynamic> attribute_means, attribute_stds;
-    if (friction_mode == 0)
+    Array<T, Dynamic, Dynamic> attribute_values;
+    if (surface_friction_mode == 0)
     {
         group_attributes.push_back(__colidx_sigma0);
-        attribute_means.resize(2, 1); 
-        attribute_stds.resize(2, 1);  
-        attribute_means << sigma0_mean1, sigma0_mean2;
-        attribute_stds << sigma0_std1, sigma0_std2;
+        attribute_values.resize(2, 1); 
+        attribute_values << sigma0_mean1,
+                            sigma0_mean2;
     } 
-    else if (friction_mode == 1)
+    else if (surface_friction_mode == 1)
     {
         group_attributes.push_back(__colidx_maxeta1);
-        attribute_means.resize(2, 1); 
-        attribute_stds.resize(2, 1);  
-        attribute_means << eta1_mean1, eta1_mean2;
-        attribute_stds << eta1_std1, eta1_std2;
+        attribute_values.resize(2, 1); 
+        attribute_values << eta1_mean1,
+                            eta1_mean2;
     }
-    else 
+    else    // surface_friction_mode == 2 
     {
         group_attributes.push_back(__colidx_maxeta1);
         group_attributes.push_back(__colidx_sigma0); 
-        attribute_means.resize(2, 2); 
-        attribute_stds.resize(2, 2);  
-        attribute_means << eta1_mean1, sigma0_mean1,
-                           eta1_mean2, sigma0_mean2;
-        attribute_stds << eta1_std1, sigma0_std1,
-                          eta1_std2, sigma0_std2;
+        attribute_values.resize(2, 2); 
+        attribute_values << eta1_mean1, sigma0_mean1,
+                            eta1_mean2, sigma0_mean2;
     }
 
     // Switching rates between groups 1 and 2
@@ -180,25 +211,26 @@ int main(int argc, char** argv)
     // Define a founder cell at the origin at time zero, parallel to x-axis, 
     // with zero velocity, mean growth rate, and default viscosity and friction
     // coefficients
-    Array<T, Dynamic, Dynamic> cells(1, __ncols_required);
-    cells << 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
-             eta_ambient, eta1_mean1, eta1_mean1, sigma0_mean1, 1;
+    Array<T, Dynamic, Dynamic> cells(1, __ncols_required + 1);
+    T rz = R - pow(sigma0_mean1 * sqrt(R) / (4 * E0), 2. / 3.); 
+    cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
+             eta_ambient, eta1_mean1, eta1_mean1, sigma0_mean1, 1, eta_cell_cell;
 
     // Initialize parent IDs 
     std::vector<int> parents; 
     parents.push_back(-1); 
     
     // Run the simulation
-    runSimulationAdaptiveLagrangian<T>(
+    runSimulation<T>(
         cells, parents, max_iter, n_cells, max_time, R, Rcell, L0, Ldiv, E0, Ecell, 
-        max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
+        M0, max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
         iter_update_stepsize, max_error_allowed, min_error, max_tries_update_stepsize,
         neighbor_threshold, nz_threshold, rng_seed, 2, group_attributes, growth_means,
-        growth_stds, attribute_means, attribute_stds, SwitchMode::MARKOV, switch_rates,
+        growth_stds, attribute_values, SwitchMode::MARKOV, switch_rates, switch_timescale,
         daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
         truncate_surface_friction, surface_coulomb_coeff, max_rxy_noise, max_rz_noise,
         max_nxy_noise, max_nz_noise, basal_only, basal_min_overlap, adhesion_mode,
-        adhesion_map, adhesion_params
+        adhesion_params, "", "", friction_mode, use_verlet, false, 0 
     ); 
     
     return 0; 
