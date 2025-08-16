@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/14/2025
+ *     8/16/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -908,7 +908,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                 jkr_data.forces, include_constraint, max_overlap
                             );
                             forces = result.first;
-                            radius = result.second; 
+                            radius = result.second;
                         }
                         else    // Otherwise, compute forces from scratch 
                         {
@@ -978,10 +978,12 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     }
                     else    // Correct torques to account for orientation norm constraint
                     {
-                        T wi = ni.dot(-vij); 
-                        T wj = nj.dot(-vij); 
-                        forces(0, Eigen::seq(3, 5)) = si * (wi * ni + vij); 
-                        forces(1, Eigen::seq(3, 5)) = sj * (-wj * nj - vij);  
+                        //T wi = ni.dot(-vij.matrix()); 
+                        //T wj = nj.dot(-vij.matrix()); 
+                        //forces(0, Eigen::seq(3, 5)) = si * (wi * ni.array() + vij); 
+                        //forces(1, Eigen::seq(3, 5)) = sj * (-wj * nj.array() - vij); 
+                        forces(0, Eigen::seq(3, 5)) = (si * ni).cross(vij.matrix()).array(); 
+                        forces(1, Eigen::seq(3, 5)) = (sj * nj).cross(-vij.matrix()).array();  
                     }
                 }
                 #ifdef DEBUG_CHECK_CELL_CELL_ADHESIVE_FORCES_NAN
@@ -1030,10 +1032,12 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     }
                     else    // Correct torques to account for orientation norm constraint
                     {
-                        T wi = ni.dot(-vij); 
-                        T wj = nj.dot(-vij); 
-                        forces_hard(0, Eigen::seq(3, 5)) = si * (wi * ni + vij); 
-                        forces_hard(1, Eigen::seq(3, 5)) = sj * (-wj * nj - vij);  
+                        //T wi = ni.dot(-vij.matrix()); 
+                        //T wj = nj.dot(-vij.matrix()); 
+                        //forces_hard(0, Eigen::seq(3, 5)) = si * (wi * ni.array() + vij); 
+                        //forces_hard(1, Eigen::seq(3, 5)) = sj * (-wj * nj.array() - vij);
+                        forces_hard(0, Eigen::seq(3, 5)) = (si * ni).cross(vij.matrix()).array(); 
+                        forces_hard(1, Eigen::seq(3, 5)) = (sj * nj).cross(-vij.matrix()).array();  
                     }
                     #ifdef DEBUG_CHECK_CELL_CELL_REPULSIVE_FORCES_NAN
                         if (forces_hard.isNaN().any() || forces_hard.isInf().any())
@@ -1121,10 +1125,14 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                 }
                 else    // Correct torques to account for orientation norm constraint
                 {
-                    T wi = ni.dot(-vij); 
-                    T wj = nj.dot(-vij); 
-                    forces(0, Eigen::seq(3, 5)) = si * (wi * ni + vij); 
-                    forces(1, Eigen::seq(3, 5)) = sj * (-wj * nj - vij);  
+                    Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix(); 
+                    Matrix<T, 3, 1> nj = cells(j, __colseq_n).matrix(); 
+                    //T wi = ni.dot(-vij.matrix()); 
+                    //T wj = nj.dot(-vij.matrix()); 
+                    //forces(0, Eigen::seq(3, 5)) = si * (wi * ni.array() + vij); 
+                    //forces(1, Eigen::seq(3, 5)) = sj * (-wj * nj.array() - vij);
+                    forces(0, Eigen::seq(3, 5)) = (si * ni).cross(vij.matrix()).array();
+                    forces(1, Eigen::seq(3, 5)) = (sj * nj).cross(-vij.matrix()).array();  
                 }
                 #ifdef DEBUG_CHECK_CELL_CELL_REPULSIVE_FORCES_NAN
                     if (forces.isNaN().any() || forces.isInf().any())
@@ -1220,7 +1228,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                 dEdq(j, Eigen::seq(3, 5)) -= torque_j.array().transpose();
             }
         }
-    } 
+    }
 
     return dEdq; 
 }
@@ -1321,10 +1329,34 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
 // -------------------------------------------------------------------- */ 
 
 /**
- * Compute the force and moment vectors due to cell-surface friction on 
- * the given cell.
- *
- * This function assumes that the z-orientation (n[2]) is nonnegative.  
+ * Compute the forces and torques due to ambient viscosity on each cell. 
+ */
+template <typename T>
+Array<T, Dynamic, 6> ambientViscosityForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
+                                            const T dt, const int iter, const T R)
+{
+    Array<T, Dynamic, 6> dEdq = Array<T, Dynamic, 6>::Zero(cells.rows(), 6);
+
+    // For each cell ...
+    for (int i = 0; i < cells.rows(); ++i)
+    {
+        // Get the angular velocity of the cell
+        Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix();
+        Matrix<T, 3, 1> dni = cells(i, __colseq_dn).matrix();  
+        Matrix<T, 3, 1> angvel = ni.cross(dni);
+
+        // Compute the force and torque
+        T eta = cells(i, __colidx_eta0);
+        T li = pow(cells(i, __colidx_l), 3); 
+        dEdq(i, Eigen::seq(0, 2)) = eta * li * cells(i, __colseq_dr);
+        dEdq(i, Eigen::seq(3, 5)) = eta * li * li * li * angvel.array() / 12; 
+    }
+
+    return dEdq; 
+}
+
+/**
+ * Compute the forces and torques due to cell-surface friction on each cell. 
  *
  * @param cells Existing population of cells.
  * @param dt Timestep. Only used for debugging output.
@@ -1366,7 +1398,7 @@ Array<T, Dynamic, 6> cellSurfaceFrictionForces(const Ref<const Array<T, Dynamic,
         Matrix<T, 3, 1> m;  
         m << angvel(1) * ni(2) - angvel(2) * ni(1), 
              angvel(2) * ni(0) - angvel(0) * ni(2), 
-             0; 
+             0;
 
         // If the z-coordinate of the cell's orientation is zero ...
         T eta = cells(i, __colidx_eta1);  
@@ -2226,24 +2258,15 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
                 throw std::runtime_error("Generated out-of-bounds noise vectors"); 
             }
         }
-    #endif 
+    #endif
 
     // Get the mass of each cell 
     Array<T, Dynamic, 1> masses(n); 
     for (int i = 0; i < n; ++i)
     {
         T length = cells(i, __colidx_l); 
-        T volume = boost::math::constants::pi<T>() * ((4. / 3.) * pow(R, 3) + R * R * length;
+        T volume = boost::math::constants::pi<T>() * ((4. / 3.) * pow(R, 3) + R * R * length);
         masses(i) = rho * volume; 
-    }
-
-    // Get the angular velocity of each cell 
-    Array<T, Dynamic, 3> angvels = Array<T, Dynamic, 3>::Zero(n, 3);
-    for (int i = 0; i < n; ++i)
-    {
-        Matrix<T, 3, 1> u = cells(i, __colseq_n).matrix();
-        Matrix<T, 3, 1> v = cells(i, __colseq_dn).matrix();  
-        angvels.row(i) = u.cross(v).array().transpose(); 
     }
 
     // Get the moments of inertia along the long and short axes of each cell 
@@ -2260,7 +2283,7 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
         moments(i, 0) = d4 * (length / 32 + diam / 60);
         moments(i, 1) = d2 * (4 * d3 + 15 * length * d2 + 20 * l2 * diam + 10 * l3) / 480;  
     }
-    moments *= (rho * boost::math::constants::pi<T>()); 
+    moments *= (rho * boost::math::constants::pi<T>());
 
     // Get cell-body coordinates at which cell-surface overlap is zero for 
     // each cell
@@ -2273,9 +2296,17 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
             ss(i) = sstar(cells(i, __colidx_rz), cells(i, __colidx_nz), R); 
     }
 
+    // Get the angular velocity of each cell 
+    Array<T, Dynamic, 3> angvels = Array<T, Dynamic, 3>::Zero(n, 3);
+    for (int i = 0; i < n; ++i)
+    {
+        Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix();
+        Matrix<T, 3, 1> dni = cells(i, __colseq_dn).matrix();  
+        angvels.row(i) = ni.cross(dni).array().transpose(); 
+    }
+
     // Update cell positions, orientations, and velocities ... 
     Array<T, Dynamic, Dynamic> cells_new(cells); 
-    Array<T, Dynamic, 6> velocities = Array<T, Dynamic, 6>::Zero(n, 6);
     bool multithread = (n >= n_start_multithread); 
 
     // Compute all conservative forces with the orientation vector norm 
@@ -2285,11 +2316,12 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
         assume_2d, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
         friction_mode, colidx_eta_cell_cell, no_surface, multithread, true
     );
-    forces += (0.5 * noise);
+    forces += noise; 
 
     // Compute the ambient viscosity and cell-surface friction forces
-    forces -= cellSurfaceFrictionForces<T>(cells, dt, iter, ss, R, assume_2d, multithread);
     forces -= ambientViscosityForces<T>(cells, dt, iter, R);
+    if (!no_surface)
+        forces -= cellSurfaceFrictionForces<T>(cells, dt, iter, ss, R, assume_2d, multithread);
 
     // Decompose the torques into parallel and perpendicular contributions
     Array<T, Dynamic, 3> torques = forces(Eigen::all, Eigen::seq(3, 5)); 
@@ -2299,15 +2331,14 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
         Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix(); 
         torques_par.row(i) = torques.row(i).matrix().dot(ni) * ni;
         torques_perp.row(i) = torques.row(i) - torques_par.row(i); 
-    } 
+    }
 
     // Calculate the half-updated velocity and angular velocity of each cell
     Array<T, Dynamic, 3> delta1 = forces(Eigen::all, Eigen::seq(0, 2)).colwise() / masses;
-    Array<T, Dynamic, 3> delta2 = (
-        torques_par.colwise() / moments.col(0) + torques_perp.colwise() / moments.col(1)
-    ); 
+    Array<T, Dynamic, 3> delta2 = torques_par.colwise() / moments.col(0); 
+    delta2 += torques_perp.colwise() / moments.col(1);
     Array<T, Dynamic, 3> velocities_half = cells(Eigen::all, __colseq_dr) + 0.5 * dt * delta1; 
-    Array<T, Dynamic, 3> angvels_half = angvels + 0.5 * dt * delta2; 
+    Array<T, Dynamic, 3> angvels_half = angvels + 0.5 * dt * delta2;
 
     // Update cell positions and orientations for the full timestep, and 
     // translational and orientational velocities for the half-timestep 
@@ -2325,7 +2356,7 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
         Matrix<T, 3, 1> p_new = pi + dt * (vi + cross);
         Matrix<T, 3, 1> q_new = qi + dt * (vi - cross);
         Matrix<T, 3, 1> r_new = (p_new + q_new) / 2; 
-        Matrix<T, 3, 1> n_new = (q_new - p_new) / (q_new - p_new).norm();
+        Matrix<T, 3, 1> n_new = (q_new - p_new) / cells(i, __colidx_l); 
         cells_new(i, __colseq_r) = r_new.array(); 
         cells_new(i, __colseq_n) = n_new.array();
 
@@ -2334,16 +2365,34 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
         cells_new(i, __colseq_dn) = wi.cross(ni).array(); 
     }
 
+    // Renormalize orientations 
+    normalizeOrientations<T>(cells_new, dt, iter);
+
+    // Update cell-cell neighbor distances
+    Array<T, Dynamic, 7> neighbors_new(neighbors);  
+    updateNeighborDistances<T>(cells_new, neighbors_new);
+
+    // Update cell-surface overlap coordinates
+    for (int i = 0; i < n; ++i)
+    {
+        assume_2d(i) = (cells_new(i, __colidx_nz) < nz_threshold);
+        if (assume_2d(i))
+            ss(i) = std::numeric_limits<T>::quiet_NaN();
+        else
+            ss(i) = sstar(cells_new(i, __colidx_rz), cells_new(i, __colidx_nz), R); 
+    }
+
     // Compute new forces with the updated positions, orientations, and 
     // velocities
     forces = getConservativeForces<T>(
-        cells_new, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors, 
+        cells_new, neighbors_new, dt, iter, R, Rcell, E0, repulsion_prefactors, 
         assume_2d, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
         friction_mode, colidx_eta_cell_cell, no_surface, multithread, true
     );
-    forces += (0.5 * noise);
-    forces -= cellSurfaceFrictionForces<T>(cells_new, dt, iter, ss, R, assume_2d, multithread);
+    forces += noise; 
     forces -= ambientViscosityForces<T>(cells_new, dt, iter, R);
+    if (!no_surface)
+        forces -= cellSurfaceFrictionForces<T>(cells_new, dt, iter, ss, R, assume_2d, multithread);
 
     // Decompose the torques into parallel and perpendicular contributions
     torques = forces(Eigen::all, Eigen::seq(3, 5)); 
@@ -2357,16 +2406,18 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
     // Calculate the updated velocity and angular velocity of each cell, and 
     // update the full array 
     delta1 = forces(Eigen::all, Eigen::seq(0, 2)).colwise() / masses;
-    delta2 = (
-        torques_par.colwise() / moments.col(0) + torques_perp.colwise() / moments.col(1)
-    ); 
+    delta2 = torques_par.colwise() / moments.col(0); 
+    delta2 += torques_perp.colwise() / moments.col(1); 
     cells_new(Eigen::all, __colseq_dr) += 0.5 * dt * delta1; 
     Array<T, Dynamic, 3> angvels_full = angvels_half + 0.5 * dt * delta2;
     for (int i = 0; i < n; ++i)
     {
         Matrix<T, 3, 1> ni = cells_new(i, __colseq_n).matrix(); 
         cells_new(i, __colseq_dn) = angvels_full.row(i).matrix().cross(ni).array(); 
-    } 
+    }
+
+    // Renormalize orientations 
+    normalizeOrientations<T>(cells_new, dt, iter);
    
     return cells_new; 
 }
