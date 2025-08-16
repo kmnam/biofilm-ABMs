@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/7/2025
+ *     8/16/2025
  */
 
 #ifndef BIOFILM_JKR_HPP
@@ -600,9 +600,9 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
     {
         // Here, the aspect ratio should be less than 1
         auto result = newtonRaphson<T>(
-            [&lambda, &R_, &E0, &gamma, &delta](const T g)
+            [&lambda, &R_, &E0, &gamma, &delta_](const T g)
             {
-                return delta - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
+                return delta_ - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
             },
             1.0, 1e-8, min_aspect_ratio, 1.0, newton_tol, newton_max_iter, verbose  
         ); 
@@ -614,12 +614,12 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
     T force, c;  
     if (g == 1)
     {
-        auto result = jkrContactRadius<T, N>(delta, R_, E0, gamma, imag_tol, aberth_tol);
+        auto result = jkrContactRadius<T, N>(delta_, R_, E0, gamma, imag_tol, aberth_tol);
         c = result.second;
         T c3 = c * c * c;
-        T force1 = (4 * E0 * c3) / (3 * R_); 
+        T force1 = (4 * E0 * c3) / (3 * R_);
         T force2 = 4 * sqrt(boost::math::constants::pi<T>() * c3 * gamma * E0);
-        force = force1 - force2;    // Repulsive force minus attractive force  
+        force = force1 - force2;    // Repulsive force minus attractive force 
     }
     else    // Otherwise ... 
     { 
