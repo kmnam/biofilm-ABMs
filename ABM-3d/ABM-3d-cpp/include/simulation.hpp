@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/14/2025
+ *     8/16/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -576,60 +576,60 @@ std::tuple<Matrix<T, Dynamic, 1>,
  */
 template <typename T>
 std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
-    runSimulationAdaptiveLagrangian(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
-                                    std::vector<int>& parents_init,
-                                    const int max_iter,
-                                    const int n_cells,
-                                    const T max_time, 
-                                    const T R,
-                                    const T Rcell,
-                                    const T L0,
-                                    const T Ldiv,
-                                    const T E0,
-                                    const T Ecell,
-                                    const T M0, 
-                                    const T max_stepsize,
-                                    const T min_stepsize,
-                                    const bool write,
-                                    const std::string outprefix,
-                                    const T dt_write,
-                                    const int iter_update_neighbors,
-                                    const int iter_update_stepsize,
-                                    const T max_error_allowed,
-                                    const T min_error,
-                                    const int max_tries_update_stepsize,
-                                    const T neighbor_threshold,
-                                    const T nz_threshold,
-                                    const int rng_seed,
-                                    const int n_groups,
-                                    std::vector<int>& group_attributes,
-                                    const Ref<const Array<T, Dynamic, 1> >& growth_means,
-                                    const Ref<const Array<T, Dynamic, 1> >& growth_stds,
-                                    const Ref<const Array<T, Dynamic, Dynamic> >& attribute_values,
-                                    const SwitchMode switch_mode,
-                                    const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
-                                    const T switch_timescale, 
-                                    const T daughter_length_std,
-                                    const T daughter_angle_xy_bound,
-                                    const T daughter_angle_z_bound,
-                                    const bool truncate_surface_friction,
-                                    const T surface_coulomb_coeff,
-                                    const T max_rxy_noise,
-                                    const T max_rz_noise,
-                                    const T max_nxy_noise,
-                                    const T max_nz_noise, 
-                                    const bool basal_only,
-                                    const T basal_min_overlap, 
-                                    const AdhesionMode adhesion_mode, 
-                                    std::unordered_map<std::string, T>& adhesion_params,
-                                    const std::string adhesion_curvature_filename, 
-                                    const std::string adhesion_jkr_forces_filename, 
-                                    const FrictionMode friction_mode,
-                                    const bool use_verlet = false,
-                                    const bool no_surface = false,
-                                    const int n_cells_start_switch = 0,
-                                    const bool track_poles = false,
-                                    const int n_start_multithread = 50)
+    runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
+                  std::vector<int>& parents_init,
+                  const int max_iter,
+                  const int n_cells,
+                  const T max_time, 
+                  const T R,
+                  const T Rcell,
+                  const T L0,
+                  const T Ldiv,
+                  const T E0,
+                  const T Ecell,
+                  const T M0, 
+                  const T max_stepsize,
+                  const T min_stepsize,
+                  const bool write,
+                  const std::string outprefix,
+                  const T dt_write,
+                  const int iter_update_neighbors,
+                  const int iter_update_stepsize,
+                  const T max_error_allowed,
+                  const T min_error,
+                  const int max_tries_update_stepsize,
+                  const T neighbor_threshold,
+                  const T nz_threshold,
+                  const int rng_seed,
+                  const int n_groups,
+                  std::vector<int>& group_attributes,
+                  const Ref<const Array<T, Dynamic, 1> >& growth_means,
+                  const Ref<const Array<T, Dynamic, 1> >& growth_stds,
+                  const Ref<const Array<T, Dynamic, Dynamic> >& attribute_values,
+                  const SwitchMode switch_mode,
+                  const Ref<const Array<T, Dynamic, Dynamic> >& switch_rates,
+                  const T switch_timescale, 
+                  const T daughter_length_std,
+                  const T daughter_angle_xy_bound,
+                  const T daughter_angle_z_bound,
+                  const bool truncate_surface_friction,
+                  const T surface_coulomb_coeff,
+                  const T max_rxy_noise,
+                  const T max_rz_noise,
+                  const T max_nxy_noise,
+                  const T max_nz_noise, 
+                  const bool basal_only,
+                  const T basal_min_overlap, 
+                  const AdhesionMode adhesion_mode, 
+                  std::unordered_map<std::string, T>& adhesion_params,
+                  const std::string adhesion_curvature_filename, 
+                  const std::string adhesion_jkr_forces_filename, 
+                  const FrictionMode friction_mode,
+                  const bool use_verlet = false,
+                  const bool no_surface = false,
+                  const int n_cells_start_switch = 0,
+                  const bool track_poles = false,
+                  const int n_start_multithread = 50)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
     T t = 0;
@@ -705,7 +705,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             );
 
         T volume = boost::math::constants::pi<T>() * ((4. / 3.) * pow(R, 3) + R * R * L0);
-        rho = volume / M0; 
+        rho = M0 / volume; 
     }
 
     // Initialize parent IDs
@@ -1102,7 +1102,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 started_multithread = true; 
             }
         #endif
-        Array<T, Dynamic, Dynamic> cells_new; 
+        Array<T, Dynamic, Dynamic> cells_new;
+        Array<T, Dynamic, 6> errors = Array<T, Dynamic, 6>::Zero(n, 6);  
         if (!use_verlet)
         {
             // Update using adaptive Runge-Kutta
@@ -1114,7 +1115,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 n_start_multithread
             ); 
             cells_new = result.first;
-            Array<T, Dynamic, 6> errors = result.second;
+            errors = result.second;
 
             // If the error is big, retry the step with a smaller stepsize (up to
             // a given maximum number of attempts)
@@ -1419,12 +1420,21 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         {
             auto t_now = std::chrono::system_clock::now();
             std::chrono::duration<double> elapsed = t_now - t_real;
-            t_real = t_now;  
-            std::cout << "Iteration " << iter << ": " << n << " cells, time = "
-                      << t << ", time elapsed = " << elapsed.count() << " sec"
-                      << ", max error = " << errors.abs().maxCoeff()
-                      << ", avg error = " << errors.abs().sum() / (6 * n)
-                      << ", dt = " << dt << std::endl;
+            t_real = t_now;
+            if (!use_verlet)
+            { 
+                std::cout << "Iteration " << iter << ": " << n << " cells, time = "
+                          << t << ", time elapsed = " << elapsed.count() << " sec"
+                          << ", max error = " << errors.abs().maxCoeff()
+                          << ", avg error = " << errors.abs().sum() / (6 * n)
+                          << ", dt = " << dt << std::endl;
+            }
+            else 
+            {
+                std::cout << "Iteration " << iter << ": " << n << " cells, time = "
+                          << t << ", time elapsed = " << elapsed.count() << " sec"
+                          << ", dt = " << dt << std::endl;
+            }
             params["t_curr"] = floatToString<T>(t);
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
