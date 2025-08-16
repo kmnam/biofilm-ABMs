@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/7/2025
+ *     8/16/2025
  */
 
 #ifndef ADHESION_POTENTIAL_FORCES_HPP
@@ -448,7 +448,7 @@ std::pair<Array<T, 2, 2 * Dim>, T>
             false
         );
         T force = std::get<0>(result);  
-        radius = std::get<1>(result); 
+        radius = std::get<1>(result);
 
         // Normalize the distance vector and calculate generalized forces 
         //
@@ -598,8 +598,12 @@ std::pair<Array<T, 2, 2 * Dim>, T>
 
         // Get the angles between the overlap vector and the two orientation
         // vectors
-        T theta1 = acosSafe<T>(d12n.dot(n1)); 
+        T theta1 = acosSafe<T>(d12n.dot(n1));
+        if (theta1 > boost::math::constants::half_pi<T>())
+            theta1 = acosSafe<T>(d12n.dot(-n1)); 
         T theta2 = acosSafe<T>((-d12n).dot(n2));
+        if (theta2 > boost::math::constants::half_pi<T>())
+            theta2 = acosSafe<T>((-d12n).dot(-n2)); 
 
         // Look up the corresponding principal radii of curvature at the 
         // two contact points  
@@ -634,14 +638,14 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         T Ry = 1.0 / (2 * B);
 
         // Look up the corresponding JKR force and contact radius
-        int idx_Rx = nearestValue<T>(force_table_Rx, Rx); 
-        int idx_Ry = nearestValue<T>(force_table_Ry, Ry); 
+        int idx_Rx = nearestValue<T>(force_table_Rx, Rx);
+        int idx_Ry = nearestValue<T>(force_table_Ry, Ry);
         int idx_delta = nearestValue<T>(force_table_delta, delta);
-        int idx_gamma = nearestValue<T>(force_table_gamma, gamma); 
-        auto tuple3 = std::make_tuple(idx_Rx, idx_Ry, idx_delta, idx_gamma); 
+        int idx_gamma = nearestValue<T>(force_table_gamma, gamma);
+        auto tuple3 = std::make_tuple(idx_Rx, idx_Ry, idx_delta, idx_gamma);
         std::pair<T, T> result = force_table[tuple3];
         T force = result.first; 
-        radius = result.second; 
+        radius = result.second;
 
         // Calculate the generalized forces
         //
