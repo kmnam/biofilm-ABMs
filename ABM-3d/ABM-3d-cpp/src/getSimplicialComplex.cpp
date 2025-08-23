@@ -10,7 +10,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/21/2025
+ *     8/23/2025
  */
 
 #include <iostream>
@@ -27,26 +27,29 @@ typedef double T;
 int main(int argc, char** argv)
 {
     std::string dir = argv[1];
-    std::string graph_dir = (argc > 2 ? argv[2] : std::filesystem::path(dir) / "graphs");
 
-    // Check if triangles and tetrahedra are to be identified 
+    // Parse additional arguments 
+    std::string graph_dir = std::filesystem::path(dir) / "graphs";
     bool get_triangles = false; 
     bool get_tetrahedra = false; 
     if (argc > 2)
     {
-        std::string arg = argv[2];
-        if (arg.compare(0, arg.size(), "-3") == 0)
+        std::vector<std::string> args; 
+        for (int i = 2; i < argc; ++i)
+            args.push_back(argv[i]);
+
+        if (args[0] != "-3" && args[0] != "-4")
+        {
+            graph_dir = args[0]; 
+        }        
+        if (std::find(args.begin(), args.end(), "-3") != args.end())
         {
             get_triangles = true; 
         }
-        else if (arg.compare(0, arg.size(), "-4") == 0) 
+        if (std::find(args.begin(), args.end(), "-4") != args.end())
         {
             get_triangles = true; 
             get_tetrahedra = true; 
-        }
-        else 
-        {
-            throw std::invalid_argument("Invalid input argument specified"); 
         }
     }
 
