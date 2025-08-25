@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/11/2025
+ *     8/25/2025
  */
 
 #ifndef BIOFILM_UTILS_3D_HPP
@@ -254,6 +254,37 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
 
     // Close output file 
     outfile.close();  
+}
+
+/**
+ * Read the given lineage file. 
+ *
+ * @param filename Input lineage filename. 
+ * @returns A dictionary containing the parent cell ID for each cell. 
+ */
+std::unordered_map<int, int> readLineage(const std::string filename)
+{
+    // Parse the lineage file 
+    std::unordered_map<int, int> parents; 
+    std::ifstream infile(filename); 
+    std::string line;
+    ss.str(std::string()); 
+    ss.clear(); 
+    while (std::getline(infile, line))
+    {
+        // Each line contains the cell ID and the corresponding parent ID
+        // (with parent ID = -1 for the initial cell)
+        ss << line; 
+        std::getline(ss, token, '\t');
+        int child = std::stoi(token); 
+        std::getline(ss, token); 
+        int parent = std::stoi(token);
+        parents[child] = parent; 
+        ss.str(std::string()); 
+        ss.clear(); 
+    }
+
+    return parents; 
 }
 
 /**
