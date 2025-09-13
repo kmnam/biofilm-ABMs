@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/16/2025
+ *     9/12/2025
  */
 
 #include <Eigen/Dense>
@@ -238,25 +238,26 @@ int main(int argc, char** argv)
     if (friction_mode == FrictionMode::KINETIC)
         eta_cell_cell = static_cast<T>(json_data["eta_cell_cell"].as_double());
 
-    // Decide between Runge-Kutta and velocity Verlet 
-    bool use_verlet = false; 
-    if (friction_mode == FrictionMode::KINETIC)
+    // Set the Coulomb coefficient for cell-cell and cell-surface friction 
+    T cell_cell_coulomb_coeff = 1.0;
+    T cell_surface_coulomb_coeff = 1.0;
+    try 
     {
-        use_verlet = true;
+        cell_surface_coulomb_coeff = static_cast<T>(
+            json_data["cell_surface_coulomb_coeff"].as_double()
+        ); 
     }
-    else 
+    catch (boost::wrapexcept<boost::system::system_error>& e) { }
+    if (friction_mode == FrictionMode::KINETIC)
     {
         try
         {
-            use_verlet = json_data["use_verlet"].as_int64(); 
+            cell_cell_coulomb_coeff = static_cast<T>(
+                json_data["cell_cell_coulomb_coeff"].as_double()
+            ); 
         }
         catch (boost::wrapexcept<boost::system::system_error>& e) { } 
     }
-
-    // If velocity Verlet is desired, parse the initial cell mass
-    T M0 = 0.0; 
-    if (use_verlet)
-        M0 = static_cast<T>(json_data["M0"].as_double()); 
 
     // Omit the surface, if desired 
     bool no_surface = false; 
@@ -294,13 +295,37 @@ int main(int argc, char** argv)
 
     // Initialize simulation ...
     //
-    // Define a founder cell at the origin at time zero, parallel to x-axis, 
-    // with zero velocity, mean growth rate, and default viscosity and friction
-    // coefficients
-    Array<T, Dynamic, Dynamic> cells(1, __ncols_required + 2);
-    T rz = R - pow(sigma0 * sqrt(R) / (4 * E0), 2. / 3.); 
-    cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
-             eta_ambient, eta_surface, eta_surface, sigma0, 1, 0, eta_cell_cell;
+    // Check whether an initial file was specified
+    Array<T, Dynamic, Dynamic> cells; 
+    std::string init_filename = ""; 
+    try
+    {
+        init_filename = json_data["init_filename"].as_string().c_str(); 
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e) { }
+    if (init_filename.size() > 0)
+    {
+        auto result = readCells<T>(init_filename); 
+        cells = result.first; 
+        if (cells.cols() != __ncols_required + 2)
+        {
+            throw std::runtime_error(
+                "File specifying initial population contains incorrect number of "
+                "columns"
+            ); 
+        }
+    }
+    // Otherwise ... 
+    else
+    { 
+        // Define a founder cell at the origin at time zero, parallel to x-axis, 
+        // with zero velocity, mean growth rate, and default viscosity and friction
+        // coefficients
+        cells.resize(1, __ncols_required + 2); 
+        T rz = R - pow(sigma0 * sqrt(R) / (4 * E0), 2. / 3.); 
+        cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
+                 eta_ambient, eta_surface, eta_surface, sigma0, 1, 0, eta_cell_cell;
+    }
 
     // Initialize parent IDs 
     std::vector<int> parents; 
@@ -309,7 +334,7 @@ int main(int argc, char** argv)
     // Run the simulation
     runSimulation<T>(
         cells, parents, max_iter, n_cells, max_time, R, Rcell, L0, Ldiv, E0, Ecell, 
-        M0, max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
+        0, max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
         iter_update_stepsize, max_error_allowed, min_error, max_tries_update_stepsize,
         neighbor_threshold, nz_threshold, rng_seed, 1, group_attributes, growth_means,
         growth_stds, attribute_values, SwitchMode::NONE, switch_rates, switch_timescale,
@@ -317,7 +342,8 @@ int main(int argc, char** argv)
         truncate_surface_friction, surface_coulomb_coeff, max_rxy_noise, max_rz_noise,
         max_nxy_noise, max_nz_noise, basal_only, basal_min_overlap, adhesion_mode,
         adhesion_params, adhesion_curvature_filename, adhesion_jkr_forces_filename,
-        friction_mode, use_verlet, no_surface, n_cells_start_switch
+        friction_mode, false, no_surface, n_cells_start_switch, false, 
+        cell_cell_coulomb_coeff, cell_surface_coulomb_coeff, 50
     ); 
     
     return 0; 
