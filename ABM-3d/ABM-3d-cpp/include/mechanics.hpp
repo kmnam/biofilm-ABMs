@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/16/2025
+ *     9/13/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -813,7 +813,8 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                                const int colidx_gamma,
                                                const FrictionMode friction_mode, 
                                                const int colidx_eta_cell_cell,
-                                               const bool include_constraint = false)
+                                               const bool include_constraint = false, 
+                                               const T cell_cell_coulomb_coeff = 1.0)
 {
     int n = cells.rows();       // Number of cells
     int m = neighbors.rows();   // Number of cell-cell neighbors 
@@ -1214,7 +1215,19 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                 // The force on cell i should act in the opposite direction as 
                 // vijt; the force on cell j should act in the same direction as
                 // vijt
-                Matrix<T, 3, 1> force = -eta * radius * vijt;
+                //
+                // Use the Hertzian contact radius for the friction force, 
+                // following Parteli et al. (2014) 
+                Matrix<T, 3, 1> force = -eta * sqrt(R * overlap) * vijt;
+
+                // Truncate the friction force according to Coulomb's law of 
+                // friction, if desired 
+                if (cell_cell_coulomb_coeff > 0)
+                {
+                    T max_norm = cell_cell_coulomb_coeff * (4. / 3.) * E0 * sqrt(R) * pow(overlap, 1.5); 
+                    if (force.norm() > max_norm)
+                        force *= (max_norm / force.norm());
+                } 
 
                 // Get the corresponding torques, which include the orientation
                 // norm constraint 
@@ -1285,7 +1298,8 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
                                            const int colidx_eta_cell_cell,  
                                            const bool no_surface,
                                            const bool multithread,
-                                           const bool include_constraint = false)
+                                           const bool include_constraint = false,
+                                           const T cell_cell_coulomb_coeff = 1.0)
 {
     int n = cells.rows(); 
 
@@ -1304,7 +1318,7 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
     Array<T, Dynamic, 6> dEdq_cell_interaction = cellCellInteractionForces<T>(
         cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors,
         adhesion_mode, adhesion_params, jkr_data, colidx_gamma, friction_mode,
-        colidx_eta_cell_cell, include_constraint
+        colidx_eta_cell_cell, include_constraint, cell_cell_coulomb_coeff
     ); 
     
     // Compute the cell-surface interaction forces (if present)
@@ -1455,29 +1469,6 @@ Array<T, Dynamic, 6> cellSurfaceFrictionForces(const Ref<const Array<T, Dynamic,
 /* -------------------------------------------------------------------- // 
 //                      ADDITIONAL UTILITY FUNCTIONS                    //
 // -------------------------------------------------------------------- */
-
-/**
- * Truncate the cell-surface friction coefficients so that the cell velocities
- * in the next timestep (which should be similar to the given array of cell
- * velocities for the current timestep) obey Coulomb's law of friction.
- *
- * The given array of cell data is updated in place. 
- *
- * @param cells Current population of cells.
- * @param R Cell radius, including the EPS.
- * @param E0 Elastic modulus of EPS. 
- * @param surface_coulomb_coeff Friction coefficient that relates the velocity
- *                              of each cell to the normal force due to cell-
- *                              surface repulsion. 
- */
-template <typename T>
-void truncateSurfaceFrictionCoeffsCoulomb(Ref<Array<T, Dynamic, Dynamic> > cells,
-                                          const T R, const T E0,
-                                          const T surface_coulomb_coeff)
-{
-    // TODO Implement this 
-}
-
 /**
  * Normalize the orientation vectors of all cells in the given population,
  * and redirect all orientation vectors so that they always have positive
@@ -1583,7 +1574,9 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const AdhesionMode adhesion_mode,
                                    std::unordered_map<std::string, T>& adhesion_params,
                                    JKRData<T>& jkr_data, const int colidx_gamma,
-                                   const bool no_surface, const bool multithread)
+                                   const bool no_surface, const bool multithread,
+                                   const T cell_cell_coulomb_coeff = 1.0,
+                                   const T cell_surface_coulomb_coeff = 1.0)
 {
     // For each cell, the relevant Lagrangian mechanics are given by 
     // 
@@ -1618,7 +1611,8 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
     Array<T, Dynamic, 6> forces = getConservativeForces<T>(
         cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors, 
         assume_2d, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
-        FrictionMode::NONE, -1, no_surface, multithread, false
+        FrictionMode::NONE, -1, no_surface, multithread, false,
+        cell_cell_coulomb_coeff
     );
     forces += noise; 
     
@@ -1693,15 +1687,46 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
         // of equations with cell-surface friction 
         else if (assume_2d(i))
         {
-            T K, L;                              // Viscosity force prefactors 
-            T a = sqrt(R * (R - cells(i, __colidx_rz))); 
-            K = cells(i, __colidx_l) * (
-                cells(i, __colidx_eta0) + cells(i, __colidx_eta1) * a / R
-            );  
-            L = K * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
-            T mult = -(
-                cells(i, __colidx_nx) * forces(i, 3) + cells(i, __colidx_ny) * forces(i, 4)
-            );
+            T K, L; 
+
+            // If Coulomb's law for surface friction is not to be enforced ...  
+            if (cell_surface_coulomb_coeff == 0)
+            {
+                T a = sqrt(R * (R - cells(i, __colidx_rz)));
+                T eta_combined = cells(i, __colidx_eta0) + cells(i, __colidx_eta1) * a / R;  
+                K = eta_combined * cells(i, __colidx_l);  
+                L = K * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
+            }
+            // Otherwise ... 
+            else 
+            {
+                // Calculate the ambient viscosity force prefactors  
+                T K_vis = cells(i, __colidx_eta0) * cells(i, __colidx_l);
+                T L_vis = K_vis * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
+
+                // Truncate the cell-surface friction coefficient according to 
+                // Coulomb's law, based on its current velocity and overlap 
+                T a = sqrt(R * (R - cells(i, __colidx_rz)));
+                T K_fric = cells(i, __colidx_eta1) * cells(i, __colidx_l) * a / R;
+                T drxy = cells(i, Eigen::seq(__colidx_drx, __colidx_dry)).matrix().norm(); 
+                T friction_norm = K_fric * drxy;
+                T max_norm = cell_surface_coulomb_coeff * (
+                    2 * E0 * (R - cells(i, __colidx_rz)) * cells(i, __colidx_l)
+                ); 
+                if (friction_norm > max_norm)
+                {
+                    T eta1_truncated = max_norm * R / (drxy * cells(i, __colidx_l) * a);
+                    K_fric = eta1_truncated * cells(i, __colidx_l) * a / R; 
+                } 
+                T L_fric = K_fric * cells(i, __colidx_l) * cells(i, __colidx_l) / 12;
+
+                // Calculate the composite viscosity force prefactors 
+                K = K_vis + K_fric; 
+                L = L_vis + L_fric;
+            }
+
+            // Calculate the Lagrange multiplier and the velocities 
+            T mult = -(cells(i, __colidx_nx) * forces(i, 3) + cells(i, __colidx_ny) * forces(i, 4));
             velocities(i, 0) = forces(i, 0) / K; 
             velocities(i, 1) = forces(i, 1) / K;
             velocities(i, 3) = (forces(i, 3) + mult * cells(i, __colidx_nx)) / L;
@@ -1713,6 +1738,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                 cells(i, __colidx_eta0) * cells(i, __colidx_l) * cells(i, __colidx_l) *
                 cells(i, __colidx_l)
             );
+
             #ifdef DEBUG_CHECK_VELOCITIES_NAN
                 if (velocities.row(i).isNaN().any() || velocities.row(i).isInf().any())
                 {
@@ -1776,15 +1802,36 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
             //auto QR = A.matrix().colPivHouseholderQr(); 
             //Array<T, 7, 1> x = QR.solve(b.matrix()).array();
             */
-
-            // Solve the linear system explicitly, using back-substitution 
             const T rz = cells(i, __colidx_rz); 
             const T nz = cells(i, __colidx_nz); 
             const T l = cells(i, __colidx_l); 
             const T half_l = cells(i, __colidx_half_l);
             const T eta0 = cells(i, __colidx_eta0); 
-            const T eta1 = cells(i, __colidx_eta1); 
+            T eta1 = cells(i, __colidx_eta1);
             std::tuple<T, T, T> integrals = areaIntegrals<T>(rz, nz, R, half_l, ss(i)); 
+
+            // Truncate the cell-surface friction coefficient according to 
+            // Coulomb's law
+            if (cell_surface_coulomb_coeff > 0)
+            {
+                // Calculate the cell-surface friction force according to 
+                // the current cell velocity
+                T drxy = cells(i, Eigen::seq(__colidx_drx, __colidx_dry)).matrix().norm();
+                T dnxy = cells(i, Eigen::seq(__colidx_dnx, __colidx_dny)).matrix().norm();  
+                T friction_norm = std::get<0>(integrals) * drxy; 
+                friction_norm += std::get<1>(integrals) * dnxy;
+                friction_norm *= (eta1 / R);
+
+                // Calculate the cell-surface repulsive force and truncate 
+                // the cell-surface friction coefficient accordingly  
+                T max_norm = (1 - nz * nz) * integral1<T>(rz, nz, R, half_l, 1, ss(i));
+                max_norm += sqrt(R) * nz * nz * integral1<T>(rz, nz, R, half_l, 0.5, ss(i));
+                max_norm *= (2 * E0 * cell_surface_coulomb_coeff);  
+                if (friction_norm > max_norm)
+                    eta1 = max_norm * R / (std::get<0>(integrals) * drxy + std::get<1>(integrals) * dnxy); 
+            }
+
+            // Solve the linear system explicitly, using back-substitution
             const T c1 = eta0 * l + (eta1 / R) * std::get<0>(integrals);
             const T c2 = eta0 * l; 
             const T c3 = c2 * l * l / 12 + (eta1 / R) * std::get<2>(integrals);
@@ -1812,7 +1859,6 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
             velocities(i, 1) = (forces(i, 1) - c5 * velocities(i, 4)) / c1; 
             velocities(i, 0) = (forces(i, 0) - c5 * velocities(i, 3)) / c1;
 
-            // TODO Update debug here
             #ifdef DEBUG_CHECK_VELOCITIES_NAN
                 if (velocities.row(i).isNaN().any() || velocities.row(i).isInf().any())
                 {
@@ -1824,11 +1870,11 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                     std::cerr << "2D assumption: 0" << std::endl; 
                     std::cerr << "Cell center = (" << cells(i, __colidx_rx) << ", "
                                                    << cells(i, __colidx_ry) << ", "
-                                                   << cells(i, __colidx_rz) << ")" << std::endl
+                                                   << rz << ")" << std::endl
                               << "Cell orientation = (" << cells(i, __colidx_nx) << ", "
                                                         << cells(i, __colidx_ny) << ", "
-                                                        << cells(i, __colidx_nz) << ")" << std::endl
-                              << "Cell half-length = " << cells(i, __colidx_half_l) << std::endl
+                                                        << nz << ")" << std::endl
+                              << "Cell half-length = " << half_l << std::endl 
                               << "Cell translational velocity = (" << velocities(i, 0) << ", "
                                                                    << velocities(i, 1) << ", "
                                                                    << velocities(i, 2) << ")" << std::endl
@@ -1836,7 +1882,12 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                                                    << velocities(i, 4) << ", "
                                                                    << velocities(i, 5) << ")" << std::endl
                               << "Constraint variable = " << lambda << std::endl
-                              << "Composite viscosity force matrix = " << std::endl;
+                              << "Composite viscosity force matrix = " 
+                              << compositeViscosityForceMatrix<T>(
+                                     rz, nz, l, half_l, ss(i), eta0, eta1, R,
+                                     i, dt, iter
+                                 )
+                              << std::endl;
                     throw std::runtime_error("Found nan in velocities"); 
                 }
             #endif
@@ -1914,7 +1965,10 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            const AdhesionMode adhesion_mode,
                            std::unordered_map<std::string, T>& adhesion_params,
                            JKRData<T>& jkr_data, const int colidx_gamma,
-                           const bool no_surface, const int n_start_multithread = 50)
+                           const bool no_surface,
+                           const T cell_cell_coulomb_coeff = 1.0,
+                           const T cell_surface_coulomb_coeff = 1.0,
+                           const int n_start_multithread = 50)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
         for (int k = 0; k < neighbors.rows(); ++k)
@@ -2024,7 +2078,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
     Array<T, Dynamic, 6> v0 = getVelocities<T>(
         cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors, 
         assume_2d, noise, adhesion_mode, adhesion_params, jkr_data,
-        colidx_gamma, no_surface, multithread
+        colidx_gamma, no_surface, multithread, cell_cell_coulomb_coeff,
+        cell_surface_coulomb_coeff
     );
     velocities.push_back(v0);
     for (int i = 1; i < s; ++i)
@@ -2038,7 +2093,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
         Array<T, Dynamic, 6> vi = getVelocities<T>(
             cells_i, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors,
             assume_2d, noise, adhesion_mode, adhesion_params, jkr_data,
-            colidx_gamma, no_surface, multithread
+            colidx_gamma, no_surface, multithread, cell_cell_coulomb_coeff,
+            cell_surface_coulomb_coeff
         );
         velocities.push_back(vi);
     }
@@ -2158,6 +2214,8 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
                                               const FrictionMode friction_mode, 
                                               const int colidx_eta_cell_cell, 
                                               const bool no_surface,
+                                              const T cell_cell_coulomb_coeff = 1.0,
+                                              const T cell_surface_coulomb_coeff = 1.0,
                                               const int n_start_multithread = 50)
 {
     #ifdef DEBUG_CHECK_NEIGHBOR_DISTANCES_ZERO
@@ -2314,14 +2372,36 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
     Array<T, Dynamic, 6> forces = getConservativeForces<T>(
         cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors, 
         assume_2d, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
-        friction_mode, colidx_eta_cell_cell, no_surface, multithread, true
+        friction_mode, colidx_eta_cell_cell, no_surface, multithread, true,
+        cell_cell_coulomb_coeff
     );
     forces += noise; 
 
     // Compute the ambient viscosity and cell-surface friction forces
     forces -= ambientViscosityForces<T>(cells, dt, iter, R);
     if (!no_surface)
-        forces -= cellSurfaceFrictionForces<T>(cells, dt, iter, ss, R, assume_2d, multithread);
+    {
+        Array<T, Dynamic, 6> cell_surface_friction = cellSurfaceFrictionForces<T>(
+            cells, dt, iter, ss, R, assume_2d, multithread
+        );
+
+        // Truncate the cell-surface friction forces according to Coulomb's
+        // law of friction, if desired 
+        if (cell_surface_coulomb_coeff > 0)
+        {
+            Array<T, Dynamic, 6> cell_surface_repulsive = cellSurfaceRepulsionForces<T>(
+                cells, dt, iter, ss, R, E0, assume_2d, multithread, true
+            ); 
+            for (int i = 0; i < n; ++i)
+            {
+                T friction_norm = cell_surface_friction.row(i).matrix().norm(); 
+                T max_norm = cell_surface_coulomb_coeff * cell_surface_repulsive.row(i).matrix().norm(); 
+                if (friction_norm > max_norm)
+                    cell_surface_friction.row(i) *= (max_norm / friction_norm); 
+            } 
+        }
+        forces -= cell_surface_friction;
+    }
 
     // Decompose the torques into parallel and perpendicular contributions
     Array<T, Dynamic, 3> torques = forces(Eigen::all, Eigen::seq(3, 5)); 
@@ -2387,12 +2467,34 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
     forces = getConservativeForces<T>(
         cells_new, neighbors_new, dt, iter, R, Rcell, E0, repulsion_prefactors, 
         assume_2d, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
-        friction_mode, colidx_eta_cell_cell, no_surface, multithread, true
+        friction_mode, colidx_eta_cell_cell, no_surface, multithread, true,
+        cell_cell_coulomb_coeff
     );
     forces += noise; 
     forces -= ambientViscosityForces<T>(cells_new, dt, iter, R);
     if (!no_surface)
-        forces -= cellSurfaceFrictionForces<T>(cells_new, dt, iter, ss, R, assume_2d, multithread);
+    {
+        Array<T, Dynamic, 6> cell_surface_friction = cellSurfaceFrictionForces<T>(
+            cells, dt, iter, ss, R, assume_2d, multithread
+        );
+
+        // Truncate the cell-surface friction forces according to Coulomb's
+        // law of friction, if desired 
+        if (cell_surface_coulomb_coeff > 0)
+        {
+            Array<T, Dynamic, 6> cell_surface_repulsive = cellSurfaceRepulsionForces<T>(
+                cells, dt, iter, ss, R, E0, assume_2d, multithread, true
+            ); 
+            for (int i = 0; i < n; ++i)
+            {
+                T friction_norm = cell_surface_friction.row(i).matrix().norm(); 
+                T max_norm = cell_surface_coulomb_coeff * cell_surface_repulsive.row(i).matrix().norm(); 
+                if (friction_norm > max_norm)
+                    cell_surface_friction.row(i) *= (max_norm / friction_norm); 
+            } 
+        }
+        forces -= cell_surface_friction;
+    }
 
     // Decompose the torques into parallel and perpendicular contributions
     torques = forces(Eigen::all, Eigen::seq(3, 5)); 
