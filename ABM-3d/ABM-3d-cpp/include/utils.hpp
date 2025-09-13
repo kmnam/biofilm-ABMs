@@ -267,9 +267,8 @@ std::unordered_map<int, int> readLineage(const std::string filename)
     // Parse the lineage file 
     std::unordered_map<int, int> parents; 
     std::ifstream infile(filename); 
-    std::string line;
-    ss.str(std::string()); 
-    ss.clear(); 
+    std::string line, token;
+    std::stringstream ss; 
     while (std::getline(infile, line))
     {
         // Each line contains the cell ID and the corresponding parent ID
