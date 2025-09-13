@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/16/2025
+ *     9/13/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -629,6 +629,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const bool no_surface = false,
                   const int n_cells_start_switch = 0,
                   const bool track_poles = false,
+                  const T cell_cell_coulomb_coeff = 1.0,
+                  const T cell_surface_coulomb_coeff = 1.0,
                   const int n_start_multithread = 50)
 {
     Array<T, Dynamic, Dynamic> cells(cells_init);
@@ -976,7 +978,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             params[ss.str()] = floatToString<T>(value); 
         }
     }
-    params["cell_cell_friction_mode"] = std::to_string(static_cast<int>(friction_mode)); 
+    params["cell_cell_friction_mode"] = std::to_string(static_cast<int>(friction_mode));
+    params["cell_cell_coulomb_coeff"] = floatToString<T>(cell_cell_coulomb_coeff, precision);
+    params["cell_surface_coulomb_coeff"] = floatToString<T>(cell_surface_coulomb_coeff, precision);  
     params["track_poles"] = (track_poles ? "1" : "0");
     params["no_surface"] = (no_surface ? "1" : "0");
     params["n_cells_start_switch"] = std::to_string(n_cells_start_switch);
@@ -1112,6 +1116,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
                 max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
                 adhesion_params, jkr_data, __colidx_gamma, no_surface,
+                cell_cell_coulomb_coeff, cell_surface_coulomb_coeff, 
                 n_start_multithread
             ); 
             cells_new = result.first;
@@ -1151,7 +1156,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                         repulsion_prefactors, nz_threshold, max_rxy_noise,
                         max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
                         adhesion_mode, adhesion_params, jkr_data, __colidx_gamma,
-                        no_surface, n_start_multithread
+                        no_surface, cell_cell_coulomb_coeff, cell_surface_coulomb_coeff,
+                        n_start_multithread
                     ); 
                     cells_new = result.first;
                     errors = result.second;
@@ -1191,6 +1197,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
                     max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
                     adhesion_params, jkr_data, __colidx_gamma, no_surface,
+                    cell_cell_coulomb_coeff, cell_surface_coulomb_coeff,
                     n_start_multithread
                 ); 
                 cells_new = result.first;
@@ -1221,7 +1228,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 nz_threshold, max_rxy_noise, max_rz_noise, max_nxy_noise,
                 max_nz_noise, rng, uniform_dist, adhesion_mode, adhesion_params,
                 jkr_data, __colidx_gamma, friction_mode, __colidx_eta_cell_cell,
-                no_surface, n_start_multithread
+                no_surface, cell_cell_coulomb_coeff, cell_surface_coulomb_coeff,
+                n_start_multithread
             ); 
         }
         cells = cells_new;
