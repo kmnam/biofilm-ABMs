@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/13/2025
+ *     9/22/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -43,6 +43,18 @@ using std::max;
 using boost::multiprecision::max;
 
 /**
+ * An enum that enumerates the different numerical integration methods. 
+ */
+enum class IntegrationMode
+{
+    VELOCITY_VERLET = 0, 
+    HEUN_EULER = 1,
+    BOGACKI_SHAMPINE = 2,
+    RUNGE_KUTTA_FEHLBERG = 3,
+    DORMAND_PRINCE = 4
+}; 
+
+/**
  * Return a string containing a floating-point number, specified to the 
  * given precision. 
  *
@@ -63,7 +75,38 @@ std::string floatToString(T x, const int precision = 10)
  * Tabulate the JKR contact radius at a given collection of overlap distances.
  *
  * @param delta Input mesh of overlap distances.
- * @param gamma Input mesh of adhesion surface energy densities.  
+ * @param R Cell radius (including the EPS). 
+ * @param E0 Elastic modulus. 
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method. 
+ * @returns Table of calculated JKR contact radii. 
+ */
+template <typename T, int N = 100>
+std::unordered_map<int, T> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >& delta,
+                                                    const T gamma, const T R,
+                                                    const T E0,
+                                                    const T imag_tol = 1e-20, 
+                                                    const T aberth_tol = 1e-20)
+{
+    std::unordered_map<int, T> radii; 
+
+    // For each overlap distance ... 
+    for (int i = 0; i < delta.size(); ++i)
+    {
+        // Calculate the JKR contact radius 
+        radii[i] = jkrContactRadius<T, N>(delta(i), R, E0, gamma, imag_tol, aberth_tol).second; 
+    }
+
+    return radii;  
+} 
+
+/**
+ * Tabulate the JKR contact radius at a given collection of overlap distances
+ * and surface adhesion energy densities. 
+ *
+ * @param delta Input mesh of overlap distances.
+ * @param gamma Input mesh of surface adhesion energy densities. 
  * @param R Cell radius (including the EPS). 
  * @param E0 Elastic modulus. 
  * @param imag_tol Tolerance for determining whether a root for the the JKR
@@ -541,12 +584,6 @@ std::tuple<Matrix<T, Dynamic, 1>,
  *                                in xy-plane.
  * @param daughter_angle_z_bound Bound on daughter cell re-orientation angle 
  *                               out of xy-plane.
- * @param truncate_surface_friction If true, truncate cell-surface friction
- *                                  coefficients according to Coulomb's law
- *                                  of friction.
- * @param surface_coulomb_coeff Friction coefficient that relates the velocity
- *                              of each cell to the normal force due to cell-
- *                              surface repulsion. 
  * @param max_rxy_noise Maximum noise to be added to each generalized force in
  *                      the x- and y-directions.
  * @param max_rz_noise Maximum noise to be added to each generalized force in
@@ -578,6 +615,7 @@ template <typename T>
 std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     runSimulation(const Ref<const Array<T, Dynamic, Dynamic> >& cells_init,
                   std::vector<int>& parents_init,
+                  const IntegrationMode integration_mode, 
                   const int max_iter,
                   const int n_cells,
                   const T max_time, 
@@ -612,8 +650,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const T daughter_length_std,
                   const T daughter_angle_xy_bound,
                   const T daughter_angle_z_bound,
-                  const bool truncate_surface_friction,
-                  const T surface_coulomb_coeff,
                   const T max_rxy_noise,
                   const T max_rz_noise,
                   const T max_nxy_noise,
@@ -625,7 +661,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const std::string adhesion_curvature_filename, 
                   const std::string adhesion_jkr_forces_filename, 
                   const FrictionMode friction_mode,
-                  const bool use_verlet = false,
                   const bool no_surface = false,
                   const int n_cells_start_switch = 0,
                   const bool track_poles = false,
@@ -674,18 +709,68 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         }
     }
 
-    // Define Butcher tableau for order 3(2) Runge-Kutta method by Bogacki
-    // and Shampine 
-    Array<T, Dynamic, Dynamic> A(4, 4); 
-    A << 0,     0,     0,     0,
-         1./2., 0,     0,     0,
-         0,     3./4., 0,     0,
-         2./9., 1./3., 4./9., 0;
-    Array<T, Dynamic, 1> b(4);
-    b << 2./9., 1./3., 4./9., 0;
-    Array<T, Dynamic, 1> bs(4); 
-    bs << 7./24., 1./4., 1./3., 1./8.;
-    T error_order = 2; 
+    // Define Butcher tableau for the desired Runge-Kutta method
+    Array<T, Dynamic, Dynamic> A;
+    Array<T, Dynamic, 1> b, bs;
+    T error_order = 0; 
+    if (integration_mode == IntegrationMode::HEUN_EULER)
+    {
+        // Heun-Euler, order 2(1)
+        A.resize(2, 2); 
+        A << 0, 0, 1, 0; 
+        b.resize(2); 
+        b << 0.5, 0.5; 
+        bs.resize(2); 
+        bs << 1, 0;
+        error_order = 1;  
+    } 
+    else if (integration_mode == IntegrationMode::BOGACKI_SHAMPINE)
+    { 
+        // Bogacki-Shampine, order 3(2)
+        A.resize(4, 4); 
+        A << 0,     0,     0,     0,
+             1./2., 0,     0,     0,
+             0,     3./4., 0,     0,
+             2./9., 1./3., 4./9., 0;
+        b.resize(4); 
+        b << 2./9., 1./3., 4./9., 0;
+        bs.resize(4); 
+        bs << 7./24., 1./4., 1./3., 1./8.;
+        error_order = 2;
+    }
+    else if (integration_mode == IntegrationMode::RUNGE_KUTTA_FEHLBERG)
+    {
+        // Runge-Kutta-Fehlberg, order 5(4)
+        A.resize(6, 6);
+        A << 0,           0,            0,            0,           0,        0,
+             1./4.,       0,            0,            0,           0,        0,
+             3./32.,      9./32.,       0,            0,           0,        0,
+             1932./2197., -7200./2197., 7296./2197.,  0,           0,        0,
+             439./216.,   -8.0,         3680./513.,   -845./4104., 0,        0,
+             -8./27.,     2.0,          -3544./2565., 1859./4104., -11./40., 0;
+        b.resize(6); 
+        b << 16./135., 0, 6656./12825., 28561./56430., -9./50., 2./55.;
+        bs.resize(6); 
+        bs << 25./216., 0, 1408./2565., 2197./4104., -1./5., 0; 
+        error_order = 4;
+    }
+    else if (integration_mode == IntegrationMode::DORMAND_PRINCE)
+    {
+        // Dormand-Prince, order 5(4)
+        A.resize(7, 7); 
+        A << 0,            0,             0,            0,         0,             0,       0,
+             1./5.,        0,             0,            0,         0,             0,       0,
+             3./40.,       9./40.,        0,            0,         0,             0,       0,
+             44./45.,      -56./15.,      32./9.,       0,         0,             0,       0,
+             19372./6561., -25360./2187., 64448./6561., -212./729, 0,             0,       0,
+             9017./3168.,  -355./33.,     46732./5247., 49./176.,  -5103./18656., 0,       0,
+             35./384.,     0,             500./1113.,   125./192., -2187./6784.,  11./84., 0;
+        b.resize(7); 
+        b << 35./384., 0, 500./1113., 125./192., -2187./6784., 11./84., 0;
+        bs.resize(7); 
+        bs << 5179./57600., 0, 7571./16695., 393./640., -92097./339200., 187./2100., 1./40.;
+        error_order = 4;
+    }
 
     // Prefactors for cell-cell repulsion forces 
     Array<T, 4, 1> repulsion_prefactors;
@@ -699,7 +784,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
 
     // Define cell density, if velocity Verlet is to be used
     T rho = 0; 
-    if (use_verlet)
+    if (integration_mode == IntegrationMode::VELOCITY_VERLET)
     {
         if (M0 <= 0)
             throw std::runtime_error(
@@ -760,7 +845,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         };
 
     JKRData<T> jkr_data;
-    jkr_data.max_gamma = 0; 
+    jkr_data.max_gamma = 0;
     if (adhesion_mode != AdhesionMode::NONE)
     {
         // First parse polynomial-solving parameters, if given 
@@ -778,7 +863,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             R, Rcell, E0, eqdist, 1.0, 1000.0, 1e-6, 1e-8, 1e-8, 1e-8, 1000,
             1000, imag_tol, aberth_tol, true
         );
-        if (switch_timescale == 0)
+        jkr_data.gamma_fixed = (switch_mode == SwitchMode::NONE);
+        if (switch_mode == SwitchMode::NONE || switch_timescale == 0)
             jkr_data.gamma_switch_rate = std::numeric_limits<T>::infinity(); 
         else
             jkr_data.gamma_switch_rate = jkr_data.max_gamma / switch_timescale;  
@@ -802,12 +888,22 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             jkr_data.overlaps = Matrix<T, Dynamic, 1>::LinSpaced(
                 n_overlap, 0, 2 * (R - Rcell)
             );
-            jkr_data.gamma = Matrix<T, Dynamic, 1>::LinSpaced(
-                n_gamma, 0, jkr_data.max_gamma
-            );
-            jkr_data.contact_radii = calculateJKRContactRadii<T, 100>(
-                jkr_data.overlaps, jkr_data.gamma, R, E0, imag_tol, aberth_tol
-            ); 
+            if (!jkr_data.gamma_fixed)
+            {
+                jkr_data.gamma = Matrix<T, Dynamic, 1>::LinSpaced(
+                    n_gamma, 0, jkr_data.max_gamma
+                );
+                jkr_data.contact_radii = calculateJKRContactRadii<T, 100>(
+                    jkr_data.overlaps, jkr_data.gamma, R, E0, imag_tol, aberth_tol
+                );
+            }
+            else 
+            {
+                jkr_data.contact_radii_1d = calculateJKRContactRadii<T, 100>(
+                    jkr_data.overlaps, jkr_data.max_gamma, R, E0, imag_tol,
+                    aberth_tol
+                );
+            } 
         }
         else     // Otherwise, if anisotropic JKR adhesion is desired ... 
         {
@@ -904,6 +1000,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["Ldiv"] = floatToString<T>(Ldiv, precision);
     params["E0"] = floatToString<T>(E0, precision);
     params["Ecell"] = floatToString<T>(Ecell, precision);
+    params["integration_mode"] = std::to_string(static_cast<int>(integration_mode)); 
     params["max_stepsize"] = floatToString<T>(max_stepsize, precision);
     params["min_stepsize"] = floatToString<T>(min_stepsize, precision); 
     params["dt_write"] = floatToString<T>(dt_write, precision); 
@@ -958,8 +1055,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     params["daughter_length_std"] = floatToString<T>(daughter_length_std, precision);
     params["daughter_angle_xy_bound"] = floatToString<T>(daughter_angle_xy_bound, precision);
     params["daughter_angle_z_bound"] = floatToString<T>(daughter_angle_z_bound, precision);
-    params["truncate_surface_friction"] = (truncate_surface_friction ? "1" : "0"); 
-    params["surface_coulomb_coeff"] = floatToString<T>(surface_coulomb_coeff, precision); 
     params["max_rxy_noise"] = floatToString<T>(max_rxy_noise, precision);
     params["max_rz_noise"] = floatToString<T>(max_rz_noise, precision);
     params["max_nxy_noise"] = floatToString<T>(max_nxy_noise, precision);
@@ -1108,16 +1203,16 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
         #endif
         Array<T, Dynamic, Dynamic> cells_new;
         Array<T, Dynamic, 6> errors = Array<T, Dynamic, 6>::Zero(n, 6);  
-        if (!use_verlet)
+        if (integration_mode != IntegrationMode::VELOCITY_VERLET)
         {
             // Update using adaptive Runge-Kutta
             auto result = stepRungeKuttaAdaptive<T>(
                 A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
                 repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
                 max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
-                adhesion_params, jkr_data, __colidx_gamma, no_surface,
-                cell_cell_coulomb_coeff, cell_surface_coulomb_coeff, 
-                n_start_multithread
+                adhesion_params, jkr_data, __colidx_gamma, friction_mode,
+                __colidx_eta_cell_cell, no_surface, cell_cell_coulomb_coeff,
+                cell_surface_coulomb_coeff, n_start_multithread
             ); 
             cells_new = result.first;
             errors = result.second;
@@ -1156,7 +1251,8 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                         repulsion_prefactors, nz_threshold, max_rxy_noise,
                         max_rz_noise, max_nxy_noise, max_nz_noise, rng, uniform_dist,
                         adhesion_mode, adhesion_params, jkr_data, __colidx_gamma,
-                        no_surface, cell_cell_coulomb_coeff, cell_surface_coulomb_coeff,
+                        friction_mode, __colidx_eta_cell_cell, no_surface,
+                        cell_cell_coulomb_coeff, cell_surface_coulomb_coeff,
                         n_start_multithread
                     ); 
                     cells_new = result.first;
@@ -1196,9 +1292,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                     A, b, bs, cells, neighbors, dt, iter, R, Rcell, E0, 
                     repulsion_prefactors, nz_threshold, max_rxy_noise, max_rz_noise,
                     max_nxy_noise, max_nz_noise, rng, uniform_dist, adhesion_mode,
-                    adhesion_params, jkr_data, __colidx_gamma, no_surface,
-                    cell_cell_coulomb_coeff, cell_surface_coulomb_coeff,
-                    n_start_multithread
+                    adhesion_params, jkr_data, __colidx_gamma, friction_mode,
+                    __colidx_eta_cell_cell, no_surface, cell_cell_coulomb_coeff,
+                    cell_surface_coulomb_coeff, n_start_multithread
                 ); 
                 cells_new = result.first;
                 errors = result.second;
@@ -1403,23 +1499,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         }
 
-        // Truncate cell-surface friction coefficients according to Coulomb's law
-        if (truncate_surface_friction)
-        {
-            // TODO Implement this
-            throw std::runtime_error("Not implemented");
-            /*
-            truncateSurfaceFrictionCoeffsCoulomb<T>(
-                cells, R, E0, surface_contact_density, surface_coulomb_coeff
-            );
-            */
-        }
-        else    // Otherwise, ensure that friction coefficients are correct after switching 
-        {
-            for (int i = 0; i < n; ++i)
-                cells(i, __colidx_eta1) = cells(i, __colidx_maxeta1);
-        }
-
         // Write the current population to file if the simulation time has 
         // just passed a multiple of dt_write 
         double t_old_factor = std::fmod(t - dt + 1e-12, dt_write);
@@ -1429,7 +1508,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             auto t_now = std::chrono::system_clock::now();
             std::chrono::duration<double> elapsed = t_now - t_real;
             t_real = t_now;
-            if (!use_verlet)
+            if (integration_mode != IntegrationMode::VELOCITY_VERLET)
             { 
                 std::cout << "Iteration " << iter << ": " << n << " cells, time = "
                           << t << ", time elapsed = " << elapsed.count() << " sec"

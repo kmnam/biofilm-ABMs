@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/12/2025
+ *     9/22/2025
  */
 
 #include <Eigen/Dense>
@@ -349,7 +349,7 @@ int main(int argc, char** argv)
         cells.resize(1, __ncols_required + 2); 
         T rz = R - pow(sigma0 * sqrt(R) / (4 * E0), 2. / 3.); 
         cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
-                 eta_ambient, eta_surface, eta_surface, sigma0, 1, 0, eta_cell_cell;
+                 eta_ambient, eta_surface, sigma0, 1, 0, eta_cell_cell;
     }
 
     // Initialize parent IDs 
@@ -364,11 +364,11 @@ int main(int argc, char** argv)
         min_error, max_tries_update_stepsize, neighbor_threshold, nz_threshold,
         rng_seed, 1, group_attributes, growth_means, growth_stds, attribute_values,
         SwitchMode::NONE, switch_rates, switch_timescale, daughter_length_std,
-        daughter_angle_xy_bound, daughter_angle_z_bound, truncate_surface_friction,
-        surface_coulomb_coeff, max_rxy_noise, max_rz_noise, max_nxy_noise,
-        max_nz_noise, basal_only, basal_min_overlap, adhesion_mode, adhesion_params,
-        adhesion_curvature_filename, adhesion_jkr_forces_filename, friction_mode,
-        no_surface, n_cells_start_switch, false, cell_cell_coulomb_coeff,
+        daughter_angle_xy_bound, daughter_angle_z_bound, max_rxy_noise,
+        max_rz_noise, max_nxy_noise, max_nz_noise, basal_only, basal_min_overlap,
+        adhesion_mode, adhesion_params, adhesion_curvature_filename,
+        adhesion_jkr_forces_filename, friction_mode, no_surface,
+        n_cells_start_switch, false, cell_cell_coulomb_coeff,
         cell_surface_coulomb_coeff, 50
     ); 
     
