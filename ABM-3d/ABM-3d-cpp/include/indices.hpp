@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/28/2025
+ *     9/22/2025
  */
 
 #ifndef CELL_ARRAY_INDEX_DECLARATIONS_3D_HPP
@@ -39,12 +39,11 @@ const int __colidx_t0 = 15;
 const int __colidx_growth = 16; 
 const int __colidx_eta0 = 17; 
 const int __colidx_eta1 = 18;
-const int __colidx_maxeta1 = 19;
-const int __colidx_sigma0 = 20; 
-const int __colidx_group = 21;
+const int __colidx_sigma0 = 19; 
+const int __colidx_group = 20;
 const std::vector<int> __colvec_required {
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
 };
-const int __ncols_required = 22;
+const int __ncols_required = 21;
 
 #endif 
