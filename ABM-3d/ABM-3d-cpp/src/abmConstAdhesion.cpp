@@ -259,6 +259,31 @@ int main(int argc, char** argv)
         catch (boost::wrapexcept<boost::system::system_error>& e) { } 
     }
 
+    // Use Verlet integration, if desired 
+    IntegrationMode integration_mode = IntegrationMode::HEUN_EULER; 
+    T M0 = 0.0; 
+    try
+    {
+        const int token3 = json_data["integration_mode"].as_int64(); 
+        if (token3 == 0)
+            integration_mode = IntegrationMode::VELOCITY_VERLET; 
+        else if (token3 == 1)
+            integration_mode = IntegrationMode::HEUN_EULER;
+        else if (token3 == 2)
+            integration_mode = IntegrationMode::BOGACKI_SHAMPINE; 
+        else if (token3 == 3)
+            integration_mode = IntegrationMode::RUNGE_KUTTA_FEHLBERG; 
+        else if (token3 == 4) 
+            integration_mode = IntegrationMode::DORMAND_PRINCE; 
+        else 
+            throw std::runtime_error("Invalid integration mode specified");
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e) { }
+    if (integration_mode == IntegrationMode::VELOCITY_VERLET)
+    {
+        M0 = static_cast<T>(json_data["M0"].as_double());
+    } 
+
     // Omit the surface, if desired 
     bool no_surface = false; 
     try
@@ -333,17 +358,18 @@ int main(int argc, char** argv)
     
     // Run the simulation
     runSimulation<T>(
-        cells, parents, max_iter, n_cells, max_time, R, Rcell, L0, Ldiv, E0, Ecell, 
-        0, max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
-        iter_update_stepsize, max_error_allowed, min_error, max_tries_update_stepsize,
-        neighbor_threshold, nz_threshold, rng_seed, 1, group_attributes, growth_means,
-        growth_stds, attribute_values, SwitchMode::NONE, switch_rates, switch_timescale,
-        daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_rxy_noise, max_rz_noise,
-        max_nxy_noise, max_nz_noise, basal_only, basal_min_overlap, adhesion_mode,
-        adhesion_params, adhesion_curvature_filename, adhesion_jkr_forces_filename,
-        friction_mode, false, no_surface, n_cells_start_switch, false, 
-        cell_cell_coulomb_coeff, cell_surface_coulomb_coeff, 50
+        cells, parents, integration_mode, max_iter, n_cells, max_time, R, Rcell,
+        L0, Ldiv, E0, Ecell, M0, max_stepsize, min_stepsize, true, outprefix,
+        dt_write, iter_update_neighbors, iter_update_stepsize, max_error_allowed,
+        min_error, max_tries_update_stepsize, neighbor_threshold, nz_threshold,
+        rng_seed, 1, group_attributes, growth_means, growth_stds, attribute_values,
+        SwitchMode::NONE, switch_rates, switch_timescale, daughter_length_std,
+        daughter_angle_xy_bound, daughter_angle_z_bound, truncate_surface_friction,
+        surface_coulomb_coeff, max_rxy_noise, max_rz_noise, max_nxy_noise,
+        max_nz_noise, basal_only, basal_min_overlap, adhesion_mode, adhesion_params,
+        adhesion_curvature_filename, adhesion_jkr_forces_filename, friction_mode,
+        no_surface, n_cells_start_switch, false, cell_cell_coulomb_coeff,
+        cell_surface_coulomb_coeff, 50
     ); 
     
     return 0; 
