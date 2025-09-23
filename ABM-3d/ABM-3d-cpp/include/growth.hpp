@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/28/2025
+ *     9/22/2025
  */
 
 #ifndef BIOFILM_CELL_GROWTH_3D_HPP
@@ -402,7 +402,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
         // If the minimum distance criterion has not been satisfied for every
         // cell, then print a warning
         if (satisfies_distance.sum() < n_divide)
-            std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion";
+            std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion" << std::endl;
 
         // Update cell ID and lineages 
         int max_id = parents.size() - 1; 
@@ -698,7 +698,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
         // If the minimum distance criterion has not been satisfied for every
         // cell, then print a warning
         if (satisfies_distance.sum() < n_divide)
-            std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion";
+            std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion" << std::endl;
 
         // Update cell ID and lineages 
         int max_id = parents.size() - 1; 
@@ -1023,7 +1023,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<std::pair<int, int> > >
         // If the minimum distance criterion has not been satisfied for every
         // cell, then print a warning
         if (satisfies_distance.sum() < n_divide)
-            std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion";
+            std::cout << "[WARN] Cell division cannot satisfy minimum distance criterion" << std::endl;
 
         // Update cell ID and lineages 
         int max_id = parents.size() - 1; 
