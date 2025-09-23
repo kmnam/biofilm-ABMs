@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/16/2025
+ *     9/22/2025
  */
 
 #ifndef ADHESION_POTENTIAL_FORCES_HPP
@@ -246,6 +246,136 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * generalized forces.
  *
  * This function takes in a pre-computed table of values for the JKR contact
+ * radius as a function of the overlap distance, assuming a fixed surface 
+ * adhesion energy density. 
+ *
+ * The forces that are calculated by this function are the *full* JKR forces
+ * (repulsion plus adhesion).  
+ *
+ * @param n1 Orientation of cell 1.
+ * @param n2 Orientation of cell 2. 
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param R Cell radius, including the EPS.
+ * @param E0 Elastic modulus of EPS.
+ * @param gamma Surface adhesion energy density. 
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved.
+ * @param jkr_table_delta Array of input values for the overlap distance 
+ *                        at which the JKR contact radius was pre-computed
+ *                        (see below). 
+ * @param jkr_table_gamma Array of input values for the surface adhesion
+ *                        energy density at which the JKR contact radius was
+ *                        pre-computed (see below). 
+ * @param jkr_radius_table Pre-computed table of values for the overlap vs. 
+ *                         JKR contact radius function. The rows are assumed
+ *                         to be given in order of increasing overlap.  
+ * @param include_constraint If true, enforce the orientation vector norm 
+ *                           constraint on the generalized torques.
+ * @param max_overlap If non-negative, cap the overlap distance at this 
+ *                    maximum value. 
+ * @returns Matrix of generalized forces arising from the isotropic JKR
+ *          interaction, together with the JKR contact radius.  
+ */
+template <typename T, int Dim>
+std::pair<Array<T, 2, 2 * Dim>, T>
+    forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
+                               const Ref<const Matrix<T, Dim, 1> >& n2,
+                               const Ref<const Matrix<T, Dim, 1> >& d12,
+                               const T R, const T E0, const T gamma,
+                               const T s, const T t,
+                               const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_delta, 
+                               std::unordered_map<int, T>& jkr_radius_table, 
+                               const bool include_constraint = true,
+                               const T max_overlap = -1,
+                               const bool interpolate = true)
+{
+    Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
+    const T dist = d12.norm();
+    T radius = 0;  
+
+    // If the distance is less than 2 * R ... 
+    if (dist < 2 * R)
+    {
+        // Normalize the distance vector 
+        Matrix<T, Dim, 1> d12n = d12 / dist;
+        T delta = 2 * R - dist;
+
+        // Cap the overlap at the maximum value if given 
+        if (max_overlap >= 0 && delta > max_overlap)
+            delta = max_overlap;  
+
+        // Find the tabulated overlap value closest to delta, and the 
+        // corresponding JKR contact radius
+        int idx_d1 = nearestValue<T>(jkr_table_delta, delta);
+        if (interpolate)
+        { 
+            int idx_d2 = (jkr_table_delta[idx_d1] < delta ? idx_d1 + 1 : idx_d1 - 1);
+            if (idx_d1 > idx_d2)
+            {
+                int tmp = idx_d2; 
+                idx_d2 = idx_d1; 
+                idx_d1 = tmp; 
+            }
+            T d1 = jkr_table_delta[idx_d1];
+            T d2 = jkr_table_delta[idx_d2];
+            T r1 = jkr_radius_table[idx_d1]; 
+            T r2 = jkr_radius_table[idx_d2]; 
+            radius = (r1 * (d2 - delta) + r2 * (delta - d1)) / (d2 - d1);
+        }
+        else 
+        {
+            radius = jkr_table_delta[idx_d1]; 
+        }
+
+        // Calculate the generalized forces
+        //
+        // Start with the repulsive force ...
+        T a3 = radius * radius * radius;
+        T term1 = 4 * E0 * a3 / (3 * R);  
+
+        // ... then calculate the adhesive force 
+        T term2 = 4 * sqrt(boost::math::constants::pi<T>() * a3 * gamma * E0);
+
+        // The force has a positive repulsive contribution and a negative 
+        // adhesive contribution; calculate the negative 
+        Matrix<T, Dim, 1> v = (term2 - term1) * d12n; 
+        
+        // Partial derivatives w.r.t cell 1 center 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
+
+        // Partial derivatives w.r.t cell 2 center 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = v;
+
+        // Partial derivatives w.r.t cell orientations 
+        if (!include_constraint)
+        {
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -s * v; 
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * v;
+        }
+        else    // Correct torques to account for orientation norm constraint 
+        {
+            T w1 = n1.dot(-v);
+            T w2 = n2.dot(-v);  
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = s * (-w1 * n1 - v);
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * (w2 * n2 + v);  
+        }
+    }
+    
+    return std::make_pair(dEdq.array(), radius); 
+}
+
+
+
+/**
+ * Compute the Lagrangian generalized forces between two neighboring cells
+ * that arise from the isotropic JKR force in arbitrary dimensions (2 or 3).
+ *
+ * Note that this function technically calculates the *negatives* of the
+ * generalized forces.
+ *
+ * This function takes in a pre-computed table of values for the JKR contact
  * radius as a function of the overlap distance and surface adhesion energy
  * density.  
  *
@@ -292,7 +422,8 @@ std::pair<Array<T, 2, 2 * Dim>, T>
                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_gamma,
                                R2ToR1Table<T>& jkr_radius_table, 
                                const bool include_constraint = true,
-                               const T max_overlap = -1)
+                               const T max_overlap = -1,
+                               const bool interpolate = true)
 {
     Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
     const T dist = d12.norm();
@@ -310,10 +441,43 @@ std::pair<Array<T, 2, 2 * Dim>, T>
             delta = max_overlap;  
 
         // Find the tabulated overlap value closest to delta, and the 
-        // corresponding JKR contact radius 
-        int idx_delta = nearestValue<T>(jkr_table_delta, delta);
-        int idx_gamma = nearestValue<T>(jkr_table_gamma, gamma);  
-        radius = jkr_radius_table[std::make_pair(idx_delta, idx_gamma)];
+        // corresponding JKR contact radius
+        int idx_d1 = nearestValue<T>(jkr_table_delta, delta);
+        int idx_g1 = nearestValue<T>(jkr_table_gamma, gamma);
+        if (interpolate)
+        {
+            int idx_d2 = (jkr_table_delta[idx_d1] < delta ? idx_d1 + 1 : idx_d1 - 1);
+            if (idx_d1 > idx_d2)
+            {
+                int tmp = idx_d2; 
+                idx_d2 = idx_d1; 
+                idx_d1 = tmp; 
+            } 
+            int idx_g2 = (jkr_table_gamma[idx_g1] < gamma ? idx_g1 + 1 : idx_g1 - 1);
+            if (idx_g1 > idx_g2)
+            {
+                int tmp = idx_g2; 
+                idx_g2 = idx_g1; 
+                idx_g1 = tmp; 
+            }
+            T d1 = jkr_table_delta[idx_d1];
+            T d2 = jkr_table_delta[idx_d2]; 
+            T g1 = jkr_table_gamma[idx_g1]; 
+            T g2 = jkr_table_gamma[idx_g2];
+            T denom = (d2 - d1) * (g2 - g1); 
+            T w11 = (d2 - delta) * (g2 - gamma) / denom; 
+            T w12 = (d2 - delta) * (gamma - g1) / denom; 
+            T w21 = (delta - d1) * (g2 - gamma) / denom; 
+            T w22 = (delta - d1) * (gamma - g1) / denom; 
+            radius += w11 * jkr_radius_table[std::make_pair(idx_d1, idx_g1)]; 
+            radius += w12 * jkr_radius_table[std::make_pair(idx_d1, idx_g2)]; 
+            radius += w21 * jkr_radius_table[std::make_pair(idx_d2, idx_g1)]; 
+            radius += w22 * jkr_radius_table[std::make_pair(idx_d2, idx_g2)];
+        }
+        else 
+        {
+            radius = jkr_radius_table[std::make_pair(idx_d1, idx_g1)]; 
+        }
 
         // Calculate the generalized forces
         //
