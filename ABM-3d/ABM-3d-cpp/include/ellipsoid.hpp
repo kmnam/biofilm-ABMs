@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/4/2025
+ *     9/30/2025
  */
 
 #ifndef BIOFILM_ELLIPSOID_HPP
@@ -71,6 +71,12 @@ Matrix<T, 3, 3> rotationToXUnitVector(const Ref<const Matrix<T, 3, 1> >& n)
  * x.T * A * x + 2 * b.T * x = c.
  *
  * The interior of the ellipsoid satisfies x.T * A * x + 2 * b.T * x <= c.
+ *
+ * @param r Ellipsoid center. 
+ * @param n Ellipsoid orientation (i.e., direction of long axis).
+ * @param R Semi-minor axis length. 
+ * @param half_l Semi-major axis length minus R.
+ * @returns The quadratic form describing the ellipsoid.  
  */
 template <typename T>
 std::tuple<Matrix<T, 3, 3>, Matrix<T, 3, 1>, T> getEllipsoidQuadraticForm(const Ref<const Matrix<T, 3, 1> >& r,
@@ -97,7 +103,7 @@ std::tuple<Matrix<T, 3, 3>, Matrix<T, 3, 1>, T> getEllipsoidQuadraticForm(const 
 }
 
 /**
- * Project the given query point, a, onto the surface of the given ellipsoid
+ * Project the given query point, p, onto the surface of the given ellipsoid
  * given by the quadratic form, 
  *
  * x.T * A * x <= 1,
@@ -107,6 +113,16 @@ std::tuple<Matrix<T, 3, 3>, Matrix<T, 3, 1>, T> getEllipsoidQuadraticForm(const 
  *
  * The problem is solved by first centering the ellipsoid at the origin, 
  * then translating the result by r. 
+ *
+ * @param p Query point. 
+ * @param A Matrix in the ellipsoidal quadratic form. 
+ * @param r Ellipsoid center. 
+ * @param tol Tolerance for terminating the algorithm. 
+ * @param max_iter Maximum number of iterations. 
+ * @param verbose If true, print intermittent output to stdout. 
+ * @param verbose_iter If verbose == true, print output every this many 
+ *                     iterations. 
+ * @returns Projection of query point onto the ellipsoidal surface.  
  */
 template <typename T>
 Matrix<T, 3, 1> projectOntoEllipsoid(const Ref<const Matrix<T, 3, 1> >& p,
@@ -162,7 +178,16 @@ Matrix<T, 3, 1> projectOntoEllipsoid(const Ref<const Matrix<T, 3, 1> >& p,
 /**
  * Get the principal radii of curvature at the given point x along the surface
  * of the prolate ellipsoid with major axis orientation n, semi-major axis 
- * length R + half_l, and semi-minor axis length R. 
+ * length R + half_l, and semi-minor axis length R.
+ *
+ * @param n Ellipsoid orientation (i.e., direction of long axis).
+ * @param R Semi-minor axis length. 
+ * @param half_l Semi-major axis length minus R. 
+ * @param x Point on ellipsoidal surface. 
+ * @param umbilic_tol Tolerance for determining whether x is an umbilic point
+ *                    (i.e., the Gaussian and mean curvatures at this point 
+ *                    are equal). 
+ * @returns Principal radii of curvature (maximum first, minimum second).  
  */
 template <typename T>
 std::pair<T, T> getPrincipalRadiiOfCurvature(const Ref<const Matrix<T, 3, 1> >& n, 
@@ -332,9 +357,10 @@ std::pair<T, T> projectAndGetPrincipalRadiiOfCurvature(const T half_l, const T R
  * Given a point on a spherocylinder's surface, solve for the principal
  * radii of curvature at the nearest point on the inscribed ellipsoid.
  *
+ * This function assumes that the spherocylinder is centered at the origin.
+ *
  * @param r Spherocylinder center. 
  * @param n Spherocylinder orientation. 
- * @param half_l Spherocylinder centerline half-length. 
  * @param R Spherocylinder radius. 
  * @param dnorm Normalized overlap vector along which the point on the 
  *              spherocylinder is determined. 
@@ -346,8 +372,7 @@ std::pair<T, T> projectAndGetPrincipalRadiiOfCurvature(const T half_l, const T R
  *          onto the inscribed ellipsoid.  
  */
 template <typename T>
-std::pair<T, T> projectAndGetPrincipalRadiiOfCurvature(const Ref<const Matrix<T, 3, 1> >& r, 
-                                                       const Ref<const Matrix<T, 3, 1> >& n,
+std::pair<T, T> projectAndGetPrincipalRadiiOfCurvature(const Ref<const Matrix<T, 3, 1> >& n,
                                                        const T half_l, const T R, 
                                                        const Ref<const Matrix<T, 3, 1> >& dnorm,
                                                        const T s,
@@ -363,17 +388,17 @@ std::pair<T, T> projectAndGetPrincipalRadiiOfCurvature(const Ref<const Matrix<T,
     auto form = getEllipsoidQuadraticForm<T>(origin, n, R, half_l); 
     Matrix<T, 3, 3> A = std::get<0>(form);
     std::function<bool(const Ref<const Matrix<T, 3, 1> >&)> in_ellipsoid
-        = [&A, &r](const Ref<const Matrix<T, 3, 1> >& q) -> bool
+        = [&A](const Ref<const Matrix<T, 3, 1> >& q) -> bool
         {
-            return ((q - r).dot(A * (q - r)) <= 1.0); 
+            return (q.dot(A * q) <= 1.0); 
         };
-    Matrix<T, 3, 1> u = r + s * n + R * dnorm; 
+    Matrix<T, 3, 1> u = s * n + R * dnorm; 
     while (in_ellipsoid(u))
         u += 0.1 * dnorm;
 
-    // Now project this point onto the ellipsoid surface 
+    // Now project this point onto the ellipsoid surface
     u = projectOntoEllipsoid<T>(
-        u, A, r, project_tol, project_max_iter, verbose, verbose_iter
+        u, A, origin, project_tol, project_max_iter, verbose, verbose_iter
     );
 
     // Compute the principal radii of curvature at this point 
