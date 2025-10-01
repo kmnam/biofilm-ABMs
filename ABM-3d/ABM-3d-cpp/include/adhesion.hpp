@@ -310,7 +310,8 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         // corresponding JKR contact radius
         int idx_d1 = nearestValue<T>(jkr_table_delta, delta);
         if (interpolate)
-        { 
+        {
+            // Linearly interpolate between the two overlap values around delta
             int idx_d2 = (jkr_table_delta[idx_d1] < delta ? idx_d1 + 1 : idx_d1 - 1);
             if (idx_d1 > idx_d2)
             {
@@ -440,12 +441,14 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         if (max_overlap >= 0 && delta > max_overlap)
             delta = max_overlap;  
 
-        // Find the tabulated overlap value closest to delta, and the 
-        // corresponding JKR contact radius
+        // Find the tabulated overlap value closest to delta and the tabulated
+        // surface adhesion energy density value closest to gamma 
         int idx_d1 = nearestValue<T>(jkr_table_delta, delta);
         int idx_g1 = nearestValue<T>(jkr_table_gamma, gamma);
         if (interpolate)
         {
+            // Bilinearly interpolate between the four points in the table 
+            // surrounding delta and gamma 
             int idx_d2 = (jkr_table_delta[idx_d1] < delta ? idx_d1 + 1 : idx_d1 - 1);
             if (idx_d1 > idx_d2)
             {
@@ -546,12 +549,14 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  *                    maximum value.
  * @param calibrate_endpoint_radii If true, calibrate the principal radii of
  *                                 curvature so that its minimum value is R. 
- * @param min_aspect_ratio Minimum aspect ratio for the JKR contact area. 
+ * @param min_aspect_ratio Minimum aspect ratio for the JKR contact area.
+ * @param max_aspect_ratio Maximum aspect ratio for anisotropic JKR contacts.  
  * @param project_tol Tolerance for ellipsoid projection. 
  * @param project_max_iter Maximum number of iterations for ellipsoid projection. 
- * @param newton_tol Tolerance for the Newton-Raphson method. 
- * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
- *                        method. 
+ * @param brent_tol Tolerance for Brent's method. 
+ * @param brent_max_iter Maximum number of iterations for Brent's method.
+ * @param init_bracket_dx Increment for bracket initialization. 
+ * @param n_tries_bracket Number of attempts for bracket initialization. 
  * @param imag_tol Tolerance for determining whether a root for the JKR
  *                 contact radius polynomial is real.
  * @param aberth_tol Tolerance for the Aberth-Ehrlich method.
@@ -572,11 +577,14 @@ std::pair<Array<T, 2, 2 * Dim>, T>
                                  const bool include_constraint = true,
                                  const T max_overlap = -1,
                                  const bool calibrate_endpoint_radii = true,
-                                 const T min_aspect_ratio = 0.01, 
+                                 const T min_aspect_ratio = 0.01,
+                                 const T max_aspect_ratio = 0.99, 
                                  const T project_tol = 1e-6,
                                  const int project_max_iter = 100,
-                                 const T newton_tol = 1e-8, 
-                                 const int newton_max_iter = 1000,
+                                 const T brent_tol = 1e-8, 
+                                 const int brent_max_iter = 1000,
+                                 const T init_bracket_dx = 1e-3, 
+                                 const int n_tries_bracket = 5,
                                  const T imag_tol = 1e-20, 
                                  const T aberth_tol = 1e-20)
 {
@@ -607,9 +615,10 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         }
         auto result = jkrContactAreaAndForceEllipsoid<T>(
             r1_, n1_, half_l1, r2_, n2_, half_l2, R, d12_, s, t, E0, gamma, 
-            max_overlap, calibrate_endpoint_radii, min_aspect_ratio, project_tol,
-            project_max_iter, newton_tol, newton_max_iter, imag_tol, aberth_tol,
-            false
+            max_overlap, calibrate_endpoint_radii, min_aspect_ratio,
+            max_aspect_ratio, project_tol, project_max_iter, brent_tol, 
+            brent_max_iter, init_bracket_dx, n_tries_bracket, imag_tol,
+            aberth_tol, false
         );
         T force = std::get<0>(result);  
         radius = std::get<1>(result);
@@ -626,6 +635,191 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         // the force is net repulsive and antiparallel if the force is net
         // adhesive 
         // 
+        // Partial derivatives w.r.t cell 1 center 
+        dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
+
+        // Partial derivatives w.r.t cell 2 center 
+        dEdq(1, Eigen::seq(0, Dim - 1)) = v;
+
+        // Partial derivatives w.r.t cell orientations 
+        if (!include_constraint)
+        {
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = -s * v; 
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * v;
+        }
+        else    // Correct torques to account for orientation norm constraint 
+        {
+            T w1 = n1.dot(-v);
+            T w2 = n2.dot(-v);  
+            dEdq(0, Eigen::seq(Dim, 2 * Dim - 1)) = s * (-w1 * n1 - v);
+            dEdq(1, Eigen::seq(Dim, 2 * Dim - 1)) = t * (w2 * n2 + v);  
+        }
+    }
+    
+    return std::make_pair(dEdq.array(), radius); 
+}
+
+/**
+ * Compute the Lagrangian generalized forces between two neighboring cells
+ * that arise from the anisotropic JKR force in arbitrary dimensions (2 or 3).
+ *
+ * Note that this function technically calculates the *negatives* of the
+ * generalized forces.
+ *
+ * This function takes in two pre-computed tables of values for:
+ * - the principal radii of curvature at the contact point, as a function of 
+ *   (1) the angle between the overlap vector and the orientation vector, 
+ *   (2) the cell half-length, and
+ *   (3) the centerline coordinate at which the overlap vector is positioned; 
+ * - the JKR contact force magnitude and radius, as a function of
+ *   (1,2) the equivalent principal radii of curvature at the contact point, and
+ *   (3) the overlap distance.
+ *
+ * The forces that are calculated by this function are the *full* JKR forces
+ * (repulsion plus adhesion).  
+ *
+ * @param n1 Orientation of cell 1.
+ * @param half_l1 Half-length of cell 1.
+ * @param n2 Orientation of cell 2.
+ * @param half_l2 Half-length of cell 2. 
+ * @param d12 Shortest distance vector from cell 1 to cell 2.
+ * @param R Cell radius, including the EPS.
+ * @param E0 Elastic modulus of EPS. 
+ * @param gamma Surface adhesion energy density. 
+ * @param s Cell-body coordinate along cell 1 at which shortest distance is 
+ *          achieved. 
+ * @param t Cell-body coordinate along cell 2 at which shortest distance is
+ *          achieved.
+ * @param radii_table_theta Array of input values for the angle between the 
+ *                          overlap vector and the orientation vector, at 
+ *                          which the principal radii of curvature were pre-
+ *                          computed (see below). 
+ * @param radii_table_half_l Array of input values for the cell half-lengths
+ *                           at which the principal radii of curvature were
+ *                           pre-computed (see below). 
+ * @param radii_table_coords Array of input values for the centerline 
+ *                           coordinates at which the principal radii of 
+ *                           curvature were pre-computed (see below). 
+ * @param curvature_radii_table Pre-computed table of values for the principal
+ *                              radii of curvature as a function of the contact
+ *                              point.
+ * @param force_table_Rx Array of input values for the larger equivalent
+ *                       principal radius of curvature at which the JKR force
+ *                       and contact radius were pre-computed (see below). 
+ * @param force_table_Ry Array of input values for the smaller equivalent
+ *                       principal radius of curvature at which the JKR force
+ *                       and contact radius were pre-computed (see below). 
+ * @param force_table_delta Array of input values for the overlap distance 
+ *                          at which the JKR force and contact radius were 
+ *                          pre-computed (see below). 
+ * @param force_table Pre-computed table of values for the JKR force magnitude 
+ *                    and contact radius as a function of the contact point.  
+ * @param include_constraint If true, enforce the orientation vector norm 
+ *                           constraint on the generalized torques.
+ * @param max_overlap If non-negative, cap the overlap distance at this 
+ *                    maximum value. 
+ * @returns Matrix of generalized forces arising from the anisotropic JKR
+ *          interaction, together with the JKR contact radius.  
+ */
+template <typename T>
+using R3ToR2Table = std::unordered_map<std::tuple<int, int, int>,
+                                       std::pair<T, T>,
+                                       boost::hash<std::tuple<int, int, int> > >;
+template <typename T>
+using R4ToR2Table = std::unordered_map<std::tuple<int, int, int, int>,
+                                       std::pair<T, T>, 
+                                       boost::hash<std::tuple<int, int, int, int> > >;
+template <typename T, int Dim>
+std::pair<Array<T, 2, 2 * Dim>, T>
+    forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
+                                 const T half_l1,
+                                 const Ref<const Matrix<T, Dim, 1> >& n2,
+                                 const T half_l2,
+                                 const Ref<const Matrix<T, Dim, 1> >& d12,
+                                 const T R, const T E0, const T gamma, 
+                                 const T s, const T t,
+                                 const Ref<const Matrix<T, Dynamic, 1> >& radii_table_theta, 
+                                 const Ref<const Matrix<T, Dynamic, 1> >& radii_table_half_l,
+                                 const Ref<const Matrix<T, Dynamic, 1> >& radii_table_coords,
+                                 R3ToR2Table<T>& curvature_radii_table,
+                                 const Ref<const Matrix<T, Dynamic, 1> >& force_table_Rx, 
+                                 const Ref<const Matrix<T, Dynamic, 1> >& force_table_Ry, 
+                                 const Ref<const Matrix<T, Dynamic, 1> >& force_table_delta,
+                                 R3ToR2Table<T>& force_table,  
+                                 const bool include_constraint = true,
+                                 const T max_overlap = -1)
+{
+    Matrix<T, 2, 2 * Dim> dEdq = Matrix<T, 2, 2 * Dim>::Zero();
+    const T dist = d12.norm();
+    T radius = 0; 
+
+    // If the distance is less than 2 * R ... 
+    if (dist < 2 * R)
+    {
+        // Normalize the distance vector and get the overlap distance 
+        Matrix<T, Dim, 1> d12n = d12 / dist;
+        T delta = 2 * R - dist;
+
+        // Cap the overlap at the maximum value if given 
+        if (max_overlap >= 0 && delta > max_overlap)
+            delta = max_overlap;  
+
+        // Get the angles between the overlap vector and the two orientation
+        // vectors
+        T theta1 = acosSafe<T>(d12n.dot(n1));
+        if (theta1 > boost::math::constants::half_pi<T>())
+            theta1 = acosSafe<T>(d12n.dot(-n1)); 
+        T theta2 = acosSafe<T>((-d12n).dot(n2));
+        if (theta2 > boost::math::constants::half_pi<T>())
+            theta2 = acosSafe<T>((-d12n).dot(-n2)); 
+
+        // Look up the corresponding principal radii of curvature at the 
+        // two contact points  
+        int idx_theta1 = nearestValue<T>(radii_table_theta, theta1); 
+        int idx_theta2 = nearestValue<T>(radii_table_theta, theta2); 
+        int idx_half_l1 = nearestValue<T>(radii_table_half_l, half_l1); 
+        int idx_half_l2 = nearestValue<T>(radii_table_half_l, half_l2); 
+        int idx_s = nearestValue<T>(radii_table_coords, abs(s) / half_l1); 
+        int idx_t = nearestValue<T>(radii_table_coords, abs(t) / half_l2);
+        auto tuple1 = std::make_tuple(idx_theta1, idx_half_l1, idx_s); 
+        auto tuple2 = std::make_tuple(idx_theta2, idx_half_l2, idx_t);  
+        std::pair<T, T> radii1 = curvature_radii_table[tuple1]; 
+        std::pair<T, T> radii2 = curvature_radii_table[tuple2];
+        T Rx1 = radii1.first; 
+        T Ry1 = radii1.second; 
+        T Rx2 = radii2.first; 
+        T Ry2 = radii2.second;
+
+        // First calculate B and A, with the added assumption that B > A 
+        T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
+        T theta3 = acosSafe<T>(n1.dot(n2));
+        T delta1 = (1.0 / Rx1 - 1.0 / Ry1); 
+        T delta2 = (1.0 / Rx2 - 1.0 / Ry2); 
+        T diff = 0.5 * sqrt(
+            delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * theta3)
+        );
+        T B = 0.5 * (sum + diff);
+        T A = sum - B;
+
+        // Calculate the composite radii of curvature (A < B, so Rx > Ry)
+        T Rx = 1.0 / (2 * A); 
+        T Ry = 1.0 / (2 * B);
+
+        // Look up the corresponding JKR force and contact radius
+        int idx_Rx = nearestValue<T>(force_table_Rx, Rx);
+        int idx_Ry = nearestValue<T>(force_table_Ry, Ry);
+        int idx_delta = nearestValue<T>(force_table_delta, delta);
+        auto tuple3 = std::make_tuple(idx_Rx, idx_Ry, idx_delta);
+        std::pair<T, T> result = force_table[tuple3];
+        T force = result.first; 
+        radius = result.second;
+
+        // Calculate the generalized forces
+        //
+        // The force has a positive repulsive contribution and a negative 
+        // adhesive contribution; calculate the negative 
+        Matrix<T, Dim, 1> v = -force * d12n;  
+        
         // Partial derivatives w.r.t cell 1 center 
         dEdq(0, Eigen::seq(0, Dim - 1)) = -v; 
 
@@ -716,14 +910,6 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * @returns Matrix of generalized forces arising from the anisotropic JKR
  *          interaction, together with the JKR contact radius.  
  */
-template <typename T>
-using R3ToR2Table = std::unordered_map<std::tuple<int, int, int>,
-                                       std::pair<T, T>,
-                                       boost::hash<std::tuple<int, int, int> > >;
-template <typename T>
-using R4ToR2Table = std::unordered_map<std::tuple<int, int, int, int>,
-                                       std::pair<T, T>, 
-                                       boost::hash<std::tuple<int, int, int, int> > >; 
 template <typename T, int Dim>
 std::pair<Array<T, 2, 2 * Dim>, T>
     forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
