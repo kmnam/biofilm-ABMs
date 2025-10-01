@@ -885,28 +885,28 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     int __colidx_pospole_t0 = -1;
     if (adhesion_mode != AdhesionMode::NONE)
     {
-        __colidx_gamma = 22; 
+        __colidx_gamma = 21;  
     }
     if (friction_mode != FrictionMode::NONE)
     {
-        __colidx_eta_cell_cell = (adhesion_mode != AdhesionMode::NONE ? 23 : 22);
+        __colidx_eta_cell_cell = (adhesion_mode != AdhesionMode::NONE ? 22 : 21);
     }
     if (track_poles)
     {
         if (adhesion_mode != AdhesionMode::NONE && friction_mode != FrictionMode::NONE)
         {
-            __colidx_negpole_t0 = 24; 
-            __colidx_pospole_t0 = 25;
+            __colidx_negpole_t0 = 23; 
+            __colidx_pospole_t0 = 24;
         }
         else if (adhesion_mode != AdhesionMode::NONE || friction_mode != FrictionMode::NONE)
         {
-            __colidx_negpole_t0 = 23; 
-            __colidx_pospole_t0 = 24; 
+            __colidx_negpole_t0 = 22; 
+            __colidx_pospole_t0 = 23; 
         }
         else 
         {
-            __colidx_negpole_t0 = 22;  
-            __colidx_pospole_t0 = 23; 
+            __colidx_negpole_t0 = 21;  
+            __colidx_pospole_t0 = 22; 
         }
     }
 
@@ -1209,18 +1209,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         }
     }
-    // If there is no cell-cell adhesion, fix the surface energy density of 
-    // all cells to zero
-    else 
-    {
-        cells.col(__colidx_gamma) = Array<T, Dynamic, 1>::Zero(n); 
-    } 
-
-    // Check that the cell data array has the correct size if pole ages are 
-    // to be tracked 
-    if (track_poles && cells.cols() < __ncols_required + 2)
-        throw std::runtime_error("Insufficient number of columns for tracking pole ages");  
-
+    
     // Write simulation parameters to a dictionary
     std::map<std::string, std::string> params;
     const int precision = 10;
