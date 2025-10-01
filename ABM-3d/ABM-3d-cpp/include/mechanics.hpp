@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/22/2025
+ *     9/30/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -85,9 +85,10 @@ struct JKRData
     Matrix<T, Dynamic, 1> Rx; 
     Matrix<T, Dynamic, 1> Ry;
     bool gamma_fixed; 
-    std::unordered_map<int, T> contact_radii_1d;  
+    std::unordered_map<int, T> contact_radii_reduced;  
     R2ToR1Table<T> contact_radii;
     R3ToR2Table<T> curvature_radii;
+    R3ToR2Table<T> forces_reduced; 
     R4ToR2Table<T> forces;  
 };
 
@@ -1025,7 +1026,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     if (adhesion_mode == AdhesionMode::JKR_ISOTROPIC)
                     {
                         // Use pre-computed values if desired 
-                        if (jkr_data.contact_radii.size() > 0 || jkr_data.contact_radii_1d.size() > 0)
+                        if (jkr_data.contact_radii.size() > 0 || jkr_data.contact_radii_reduced.size() > 0)
                         {
                             // Assume a fixed surface adhesion energy density 
                             // if desired 
@@ -1033,7 +1034,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                             {
                                 auto result = forcesIsotropicJKRLagrange<T, 3>(
                                     ni, nj, dij, R, E0, gamma, si, sj,
-                                    jkr_data.overlaps, jkr_data.contact_radii_1d,
+                                    jkr_data.overlaps, jkr_data.contact_radii_reduced,
                                     include_constraint, max_overlap 
                                 );
                                 forces = result.first;
@@ -1064,18 +1065,37 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     else if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
                     {
                         // Use pre-computed values if desired 
-                        if (jkr_data.forces.size() > 0)
+                        if (jkr_data.forces.size() > 0 || jkr_data.forces_reduced.size() > 0)
                         {
-                            auto result = forcesAnisotropicJKRLagrange<T, 3>(
-                                ni, half_li, nj, half_lj, dij, R, E0, gamma, si,
-                                sj, jkr_data.theta, jkr_data.half_l,
-                                jkr_data.centerline_coords,
-                                jkr_data.curvature_radii, jkr_data.Rx, 
-                                jkr_data.Ry, jkr_data.overlaps, jkr_data.gamma, 
-                                jkr_data.forces, include_constraint, max_overlap
-                            );
-                            forces = result.first;
-                            radius = result.second;
+                            // Assume a fixed surface adhesion energy density 
+                            // if desired 
+                            if (jkr_data.gamma_fixed)
+                            {
+                                auto result = forcesAnisotropicJKRLagrange<T, 3>(
+                                    ni, half_li, nj, half_lj, dij, R, E0, gamma, si,
+                                    sj, jkr_data.theta, jkr_data.half_l,
+                                    jkr_data.centerline_coords,
+                                    jkr_data.curvature_radii, jkr_data.Rx, 
+                                    jkr_data.Ry, jkr_data.overlaps, 
+                                    jkr_data.forces_reduced, include_constraint,
+                                    max_overlap
+                                );
+                                forces = result.first;
+                                radius = result.second;
+                            }
+                            else 
+                            {
+                                auto result = forcesAnisotropicJKRLagrange<T, 3>(
+                                    ni, half_li, nj, half_lj, dij, R, E0, gamma, si,
+                                    sj, jkr_data.theta, jkr_data.half_l,
+                                    jkr_data.centerline_coords,
+                                    jkr_data.curvature_radii, jkr_data.Rx, 
+                                    jkr_data.Ry, jkr_data.overlaps, jkr_data.gamma, 
+                                    jkr_data.forces, include_constraint, max_overlap
+                                );
+                                forces = result.first;
+                                radius = result.second;
+                            }
                         }
                         else    // Otherwise, compute forces from scratch 
                         {
@@ -1084,15 +1104,20 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                             bool calibrate_endpoint_radii = static_cast<bool>(
                                 adhesion_params["calibrate_endpoint_radii"]
                             );
-                            T min_aspect_ratio = adhesion_params["min_aspect_ratio"]; 
+                            T min_aspect_ratio = adhesion_params["min_aspect_ratio"];
+                            T max_aspect_ratio = adhesion_params["max_aspect_ratio"];  
                             T project_tol = adhesion_params["ellipsoid_project_tol"]; 
                             int project_max_iter = static_cast<int>(
                                 adhesion_params["ellipsoid_project_max_iter"]
                             );
-                            T newton_tol = adhesion_params["newton_tol"];
-                            int newton_max_iter = static_cast<int>(
-                                adhesion_params["newton_max_iter"]
+                            T brent_tol = adhesion_params["brent_tol"]; 
+                            int brent_max_iter = static_cast<int>(
+                                adhesion_params["brent_max_iter"]
                             );
+                            T init_bracket_dx = adhesion_params["init_bracket_dx"]; 
+                            int n_tries_bracket = static_cast<int>(
+                                adhesion_params["n_tries_bracket"]
+                            ); 
                             T imag_tol = adhesion_params["jkr_imag_tol"]; 
                             T aberth_tol = adhesion_params["jkr_aberth_tol"];  
 
@@ -1101,8 +1126,9 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                 ri, ni, half_li, rj, nj, half_lj, dij, R, E0,
                                 gamma, si, sj, include_constraint, max_overlap,
                                 calibrate_endpoint_radii, min_aspect_ratio,
-                                project_tol, project_max_iter, newton_tol,
-                                newton_max_iter, imag_tol, aberth_tol
+                                max_aspect_ratio, project_tol, project_max_iter,
+                                brent_tol, brent_max_iter, init_bracket_dx, 
+                                n_tries_bracket, imag_tol, aberth_tol
                             );
                             forces = result.first;
                             radius = result.second; 
