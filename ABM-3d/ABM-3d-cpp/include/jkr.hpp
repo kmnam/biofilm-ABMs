@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/16/2025
+ *     9/29/2025
  */
 
 #ifndef BIOFILM_JKR_HPP
@@ -16,12 +16,15 @@
 #include <algorithm>
 #include <Eigen/Dense>
 #include <boost/multiprecision/mpfr.hpp>
+#include "distances.hpp"
 #include "polynomials.hpp"
 #include "ellipsoid.hpp"
-#include "newton.hpp"
+#include "rootFinding.hpp"
 
 using namespace Eigen; 
 
+using std::min;
+using boost::multiprecision::min; 
 using std::cos; 
 using boost::multiprecision::cos; 
 using std::acos;
@@ -37,84 +40,6 @@ enum class JKRMode
     ISOTROPIC = 0,
     ANISOTROPIC = 1
 };
-
-/**
- * Solve for the Hertzian contact area between two contacting ellipsoidal
- * bodies.
- *
- * This calculation follows the approach prescribed in Barber (Eqs. 3.35 and
- * 3.36; see also Eqs. 3.19 and 3.29).
- *
- * TODO Retire this function 
- *
- * @param delta Overlap between the two contacting bodies. 
- * @param Rx1 Principal radius of curvature of body 1 along long axis. 
- * @param Ry1 Principal radius of curvature of body 1 along short axis.
- * @param Rx2 Principal radius of curvature of body 2 along long axis. 
- * @param Ry2 Principal radius of curvature of body 2 along short axis.
- * @param n1 Orientation vector of body 1.
- * @param n2 Orientation vector of body 2. 
- * @param ellip_table Pre-computed table containing values for the elliptic
- *                    integral function for various eccentricities between 0
- *                    and 1.
- */
-template <typename T>
-T hertzContactArea(const T delta, const T Rx1, const T Ry1, const T Rx2, 
-                   const T Ry2, const Ref<const Matrix<T, 3, 1> >& n1,
-                   const Ref<const Matrix<T, 3, 1> >& n2, 
-                   const Ref<const Matrix<T, Dynamic, 4> >& ellip_table)
-{
-    // First calculate B and A, with the added assumption that B > A 
-    T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
-    T theta = acosSafe<T>(n1.dot(n2));
-    T delta1 = (1.0 / Rx1 - 1.0 / Ry1); 
-    T delta2 = (1.0 / Rx2 - 1.0 / Ry2); 
-    T diff = 0.5 * sqrt(
-        delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * theta)
-    );
-    T B = 0.5 * (sum + diff);
-    T A = sum - B;
-    T ratio = B / A; 
-
-    // Column 0: eccentricity 
-    // Column 1: value of K(e), complete elliptic integral of first kind 
-    // Column 2: value of E(e), complete elliptic integral of second kind
-    // Column 3: value of LHS of Eqn. 3.29 in Barber, which is equal to B / A
-    int nearest_idx = 0; 
-    if (ratio < ellip_table(0, 3))
-    {
-        nearest_idx = 0; 
-    }
-    else if (ratio > ellip_table(ellip_table.rows() - 1, 3))
-    {
-        nearest_idx = ellip_table.rows() - 1; 
-    }
-    else 
-    {
-        for (int i = 1; i < ellip_table.rows(); ++i)
-        {
-            if (ratio >= ellip_table(i - 1, 3) && ratio < ellip_table(i, 3))
-            {
-                T d1 = abs(ratio - ellip_table(i - 1, 3)); 
-                T d2 = abs(ratio - ellip_table(i, 3));
-                if (d1 < d2)
-                    nearest_idx = i - 1; 
-                else
-                    nearest_idx = i; 
-            }
-        }
-    }
-    T eccentricity = ellip_table(nearest_idx, 0);
-    T Ke = ellip_table(nearest_idx, 1); 
-    T Ee = ellip_table(nearest_idx, 2);
-
-    // From here, get the contact area dimensions
-    T e2 = eccentricity * eccentricity;  
-    T a = sqrt(delta * (1 - Ee / Ke) / (A * e2)); 
-    T area = boost::math::constants::pi<T>() * a * a * sqrt(1 - e2);
-
-    return area; 
-}
 
 /**
  * Solve for the JKR contact radius for a circular contact area, given the 
@@ -212,87 +137,6 @@ std::pair<T, T> jkrContactRadius(const T delta, const T R, const T E,
 }
 
 /**
- * Solve for the estimated JKR contact area for an elliptical contact 
- * area.
- *
- * This function assumes that the two bodies are prolate ellipsoids whose
- * major semi-axis lengths are given by half_l1 + R and half_l2 + R, and
- * whose minor semi-axis lengths are given by R.
- *
- * TODO Retire this function  
- *
- * @param n1 Orientation of body 1 (long axis). 
- * @param half_l1 Half-length of body 1 centerline.
- * @param n2 Orientation of body 2 (long axis). 
- * @param half_l2 Half-length of body 2 centerline. 
- * @param R Body radius. 
- * @param d12 Overlap vector. 
- * @param s Centerline coordinate along body 1 determining tail of overlap vector.  
- * @param t Centerline coordinate along body 2 determining head of overlap vector. 
- * @param E0 Elastic modulus. 
- * @param gamma Surface energy density. 
- * @param ellip_table Pre-computed table containing values for the elliptic
- *                    integral function for various eccentricities between 0
- *                    and 1.
- * @param max_overlap If non-negative, cap the overlap distance at this 
- *                    maximum value. 
- * @param project_tol Tolerance for ellipsoid projection. 
- * @param project_max_iter Maximum number of iterations for ellipsoid projection. 
- * @param imag_tol Tolerance for determining whether a root for the the JKR
- *                 contact radius polynomial is real.
- * @param aberth_tol Tolerance for the Aberth-Ehrlich method.
- * @returns Estimated JKR contact area.  
- */
-template <typename T, int N = 100>
-T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1, 
-                          const Ref<const Matrix<T, 3, 1> >& n1, const T half_l1,  
-                          const Ref<const Matrix<T, 3, 1> >& r2, 
-                          const Ref<const Matrix<T, 3, 1> >& n2, const T half_l2,
-                          const T R, const Ref<const Matrix<T, 3, 1> >& d12,
-                          const T s, const T t, const T E0, const T gamma,
-                          const Ref<const Matrix<T, Dynamic, 4> >& ellip_table,
-                          const T max_overlap = -1, const T project_tol = 1e-6,
-                          const int project_max_iter = 100,
-                          const T imag_tol = 1e-20, const T aberth_tol = 1e-20)
-{
-    // Compute overlap between the two cells
-    T dist = d12.norm(); 
-    Matrix<T, 3, 1> d12n = d12 / dist; 
-    T delta = 2 * R - dist;
-
-    // Cap the overlap at the maximum value if given 
-    if (max_overlap >= 0 && delta > max_overlap)
-        delta = max_overlap;  
-
-    // Get the principal radii of curvature at the projected contact points
-    std::pair<T, T> radii1 = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r1, n1, half_l1, R, d12n, s, project_tol, project_max_iter
-    ); 
-    std::pair<T, T> radii2 = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r2, n2, half_l2, R, -d12n, t, project_tol, project_max_iter
-    );
-    T Rx1 = radii1.first; 
-    T Ry1 = radii1.second; 
-    T Rx2 = radii2.first; 
-    T Ry2 = radii2.second;
-     
-    // Compute the expected contact area for a Hertzian contact 
-    T area = hertzContactArea<T>(delta, Rx1, Ry1, Rx2, Ry2, n1, n2, ellip_table);
-
-    // Get the equivalent contact radius and overlap 
-    T equiv_radius = sqrt(area / boost::math::constants::pi<T>());
-    T equiv_overlap = equiv_radius * equiv_radius / R;  
-
-    // Compute the correction factor to account for JKR-based adhesion
-    std::pair<T, T> jkr_radius = jkrContactRadius<T, N>(
-        equiv_overlap, R, E0, gamma, imag_tol, aberth_tol
-    );
-    T jkr_radius_factor = jkr_radius.second / equiv_radius; 
-
-    return area * jkr_radius_factor * jkr_radius_factor;  
-}
-
-/**
  * Compute the overlap distance, \delta, corresponding to the aspect ratio,
  * g, of the JKR contact region, using the expressions given by Giudici 
  * et al. (2025).
@@ -301,18 +145,18 @@ T jkrContactAreaEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1,
  *
  * @param lambda Square root of the ratio of the equivalent radii of curvature
  *               from the two bodies. 
- * @param R_ Geometric mean of the equivalent radii of curvature from the two
- *           bodies. 
+ * @param R Geometric mean of the equivalent radii of curvature from the two
+ *          bodies. 
  * @param E0 Elastic modulus. 
  * @param gamma Surface adhesion energy density. 
  * @param g Contact region aspect ratio. Assumed to be less than 1.  
  * @returns Corresponding overlap distance. 
  */
 template <typename T>
-T jkrOverlapFromAspectRatio(const T lambda, const T R_, const T E0, const T gamma,
+T jkrOverlapFromAspectRatio(const T lambda, const T R, const T E0, const T gamma,
                             const T g)
 {
-    // Calculate the eccentricity 
+    // Calculate the eccentricity
     T e = sqrt(1 - g * g); 
 
     // Calculate the elliptic integrals (Eqns. 6, 7, 8) 
@@ -325,27 +169,26 @@ T jkrOverlapFromAspectRatio(const T lambda, const T R_, const T E0, const T gamm
 
     // Calculate the non-dimensional parameters alpha and beta (Eqns. 10
     // and 11)
-    T l2 = lambda * lambda; 
+    T l2 = lambda * lambda;
+    T sqrt_g = sqrt(g);
     T alpha_numer = l2 * (Be + g2Ce) + g2Ce; 
     T beta_numer = (l2 + 1) * Ce + De;
-    T denom = lambda * sqrt(g) * (Be * Ce + Be * De + g2Ce * De);
+    T denom = lambda * sqrt_g * (Be * Ce + Be * De + g2Ce * De);
     T alpha = alpha_numer / denom; 
     T beta = beta_numer / denom;
     T g2beta = g * g * beta;  
 
     // Calculate the equivalent contact radius (Eqns. 17 and 18)
-    T sqrt_g = sqrt(g);
     T term1 = (sqrt_g - 1) * (alpha * Be + g2beta * De); 
     T term2 = Ke * (g2beta - alpha * sqrt_g); 
     T f_numer = lambda * (term1 + term2);
     T term3 = g2beta * (2 * sqrt_g + 1);  
     T term4 = alpha * (sqrt_g + 2); 
-    T f_denom = 1.0 / (term3 - term4);
-    T f = f_numer / f_denom; 
+    T f = f_numer * (term3 - term4); 
     T c_numer = 12 * (sqrt_g - 1) * (sqrt_g - 1) * pow(g, 2.5) * lambda;
     T term5 = (g - sqrt_g) * (pow(g, 1.5) + l2) * (g2beta - alpha);
     T c_denom = f - term5;
-    T c = pow((c_numer / c_denom) * (gamma * R_ * R_ / E0), 1.0 / 3.0);  
+    T c = pow((c_numer / c_denom) * (gamma * R * R / E0), 1.0 / 3.0);  
 
     // Calculate the force magnitude (Eqn. 15), then multiply by
     // sqrt(g) * R / (pi * c * E0)
@@ -358,7 +201,129 @@ T jkrOverlapFromAspectRatio(const T lambda, const T R_, const T E0, const T gamm
     T p0 = c2 * (alpha + g2beta) / (3 * g) + force;  
 
     // Calculate the function (Eqn. 9) 
-    return p0 * Ke - 0.5 * c2 * (alpha * Be / g - g * beta * De) / R_;  
+    return (p0 * Ke - 0.5 * c2 * (alpha * Be / g + g * beta * De)) / R;
+}
+
+/**
+ * Solve for the JKR contact area aspect ratio that matches the given overlap
+ * distance and input parameters, according to the model given by Giudici
+ * et al., J. Phys. D (2025).
+ *
+ * @param Rx Larger equivalent principal radius of curvature at the contact
+ *           point.  
+ * @param Ry Smaller equivalent principal radius of curvature at the contact
+ *           point.
+ * @param E0 Elastic modulus. 
+ * @param gamma Surface adhesion energy density.
+ * @param delta Overlap distance. 
+ * @param min_aspect_ratio Minimum aspect ratio.
+ * @param max_aspect_ratio Maximum aspect ratio for anisotropic contacts.  
+ * @param brent_tol Tolerance for Brent's method. 
+ * @param brent_max_iter Maximum number of iterations for Brent's method.
+ * @param init_bracket_dx Increment for bracket initialization. 
+ * @param n_tries_bracket Number of attempts for bracket initialization. 
+ * @param verbose If true, print intermittent output to stdout.  
+ * @returns JKR contact area aspect ratio. 
+ */
+template <typename T>
+T jkrAspectRatioFromOverlap(const T Rx, const T Ry, const T E0, const T gamma,
+                            const T delta, const T min_aspect_ratio = 0.01, 
+                            const T max_aspect_ratio = 0.99,
+                            const T brent_tol = 1e-8,
+                            const int brent_max_iter = 1000,
+                            const T init_bracket_dx = 1e-3,
+                            const int n_tries_bracket = 5,
+                            const bool verbose = false)
+{
+    // Calculate the curvature parameters \lambda and R
+    T lambda = sqrt(Ry / Rx);
+    T R = sqrt(Rx * Ry);
+
+    // Compute the root of the overlap vs. aspect ratio function using the
+    // Newton-Raphson method
+    T g = 1.0; 
+    if (Rx > Ry)
+    {
+        // Here, the aspect ratio should be less than 1
+        //
+        // Initialize the function whose root is to be calculated
+        auto func = [&lambda, &R, &E0, &gamma, &delta](const T g) -> T
+        {
+            return delta - jkrOverlapFromAspectRatio<T>(lambda, R, E0, gamma, g); 
+        };
+
+        // Identify an initial bracket
+        std::pair<T, T> bracket;
+        int i = 0;
+        T bracket_dx = init_bracket_dx;
+        bool found_bracket = false;  
+        while (i < n_tries_bracket)
+        {
+            try
+            { 
+                bracket = findBracket<T>(
+                    func, min_aspect_ratio, max_aspect_ratio, bracket_dx
+                );
+                found_bracket = true; 
+            }
+            catch (const std::runtime_error& e)
+            {
+                bracket_dx /= 2.0;
+                i++;  
+            }
+            if (found_bracket)
+            {
+                break; 
+            }
+        }
+        // If a bracket could not be found ... 
+        if (!found_bracket)
+        {
+            // First calculate the function using the finest increment
+            int n = static_cast<int>((max_aspect_ratio - min_aspect_ratio) / bracket_dx);  
+            Array<T, Dynamic, 1> xmesh = Array<T, Dynamic, 1>::LinSpaced(
+                n, min_aspect_ratio, max_aspect_ratio
+            ); 
+            Array<T, Dynamic, 1> fmesh(n); 
+            for (int j = 0; j < n; ++j)
+                fmesh(j) = func(xmesh(j));
+
+            // If there are branches along the function due to infinities
+            // or NaN's, as expected, refine the range of x-values
+            if (fmesh.isNaN().any() || fmesh.isInf().any())
+            {
+                int max_idx = 0; 
+                for (int j = 0; j < n; ++j)
+                {
+                    if (isnan(fmesh(j)) || isinf(fmesh(j)))
+                    {
+                        max_idx = j; 
+                    }
+                }
+                T new_xmin = xmesh(max_idx + 1); 
+                xmesh = Array<T, Dynamic, 1>::LinSpaced(n, new_xmin, max_aspect_ratio); 
+                for (int j = 0; j < n; ++j)
+                    fmesh(j) = func(xmesh(j));
+            }
+
+            // Look for the root of the function
+            Index root_idx; 
+            fmesh.abs().minCoeff(&root_idx);
+            g = xmesh(root_idx);  
+        }
+        // Otherwise, use Brent's method 
+        else 
+        {
+            T xmin = bracket.first; 
+            T xmax = bracket.second; 
+            auto result = brent<T>(
+                func, xmin, xmax, brent_tol, brent_max_iter, verbose
+            ); 
+            g = (result.first + result.second) / 2;
+        }
+    }
+
+    return g;  
 }
 
 /**
@@ -388,9 +353,10 @@ T jkrOverlapFromAspectRatio(const T lambda, const T R_, const T E0, const T gamm
  * @param min_aspect_ratio Minimum aspect ratio of the contact area. 
  * @param project_tol Tolerance for ellipsoid projection. 
  * @param project_max_iter Maximum number of iterations for ellipsoid projection.
- * @param newton_tol Tolerance for the Newton-Raphson method.  
- * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
- *                        method.
+ * @param brent_tol Tolerance for Brent's method. 
+ * @param brent_max_iter Maximum number of iterations for Brent's method.
+ * @param init_bracket_dx Increment for bracket initialization. 
+ * @param n_tries_bracket Number of attempts for bracket initialization. 
  * @param imag_tol Tolerance for determining whether a root for the the JKR
  *                 contact radius polynomial is real.
  * @param aberth_tol Tolerance for Aberth-Ehrlich method.
@@ -410,10 +376,13 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
                                                     const T gamma, const T max_overlap = -1,
                                                     const bool calibrate_endpoint_radii = true, 
                                                     const T min_aspect_ratio = 0.01,
+                                                    const T max_aspect_ratio = 0.99, 
                                                     const T project_tol = 1e-6,
                                                     const int project_max_iter = 100,
-                                                    const T newton_tol = 1e-8,
-                                                    const int newton_max_iter = 1000,
+                                                    const T brent_tol = 1e-8, 
+                                                    const int brent_max_iter = 1000,
+                                                    const T init_bracket_dx = 1e-3,
+                                                    const int n_tries_bracket = 5,
                                                     const T imag_tol = 1e-20, 
                                                     const T aberth_tol = 1e-20, 
                                                     const bool verbose = false)
@@ -449,7 +418,7 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
         Ry1 *= factor1; 
         Rx2 *= factor2; 
         Ry2 *= factor2; 
-    } 
+    }
 
     // First calculate B and A, with the added assumption that B > A 
     T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
@@ -466,32 +435,18 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
     T Rx = 1.0 / (2 * A); 
     T Ry = 1.0 / (2 * B);
 
-    // Calculate the curvature parameters \lambda and R (which we denote
-    // here by R_)
-    T lambda = sqrt(Ry / Rx);
-    T R_ = sqrt(Rx * Ry);
-
-    // Compute the root of the overlap vs. aspect ratio function using the
-    // Newton-Raphson method
-    T g = 1.0; 
-    if (Rx > Ry)
-    {
-        // Here, the aspect ratio should be less than 1
-        auto result = newtonRaphson<T>(
-            [&lambda, &R_, &E0, &gamma, &delta](const T g)
-            {
-                return delta - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
-            },
-            1.0, 1e-8, min_aspect_ratio, 1.0, newton_tol, newton_max_iter, verbose  
-        ); 
-        g = result.first;
-    }
+    // Calculate the aspect ratio 
+    T g = jkrAspectRatioFromOverlap<T>(
+        Rx, Ry, E0, gamma, delta, min_aspect_ratio, max_aspect_ratio, 
+        brent_tol, brent_max_iter, init_bracket_dx, n_tries_bracket, verbose
+    );
 
     // If the aspect ratio is 1, use jkrContactRadius(), as the elliptic 
     // integrals are ill-defined
     T force, c;  
-    if (g == 1)
+    if (g == 1)    // Rx == Ry 
     {
+        T R = 2 * Rx; 
         auto result = jkrContactRadius<T, N>(delta, R, E0, gamma, imag_tol, aberth_tol);
         c = result.second;
         T c3 = c * c * c;
@@ -503,6 +458,8 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
     { 
         // Calculate the eccentricity
         T e = sqrt(1 - g * g);
+        T lambda = sqrt(Ry / Rx); 
+        T R = sqrt(Rx * Ry); 
 
         // Calculate the elliptic integrals (Eqns. 6, 7, 8) 
         T Ke = boost::math::ellint_1<T>(e); 
@@ -533,12 +490,12 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
         T c_numer = 12 * (sqrt_g - 1) * (sqrt_g - 1) * pow(g, 2.5) * lambda;
         T term5 = (g - sqrt_g) * (pow(g, 1.5) + l2) * (g2beta - alpha);
         T c_denom = f - term5;
-        c = pow((c_numer / c_denom) * (gamma * R_ * R_ / E0), 1.0 / 3.0);
+        c = pow((c_numer / c_denom) * (gamma * R * R / E0), 1.0 / 3.0);
 
         // Calculate the force magnitude (Eqn. 15)
         T c3 = c * c * c; 
         T force_numer = (2 * sqrt_g + 1) * g2beta - (sqrt_g + 2) * alpha;
-        T force_denom = (sqrt_g - 1) * pow(g, 1.5) * R_;
+        T force_denom = (sqrt_g - 1) * pow(g, 1.5) * R;
         force = boost::math::constants::third_pi<T>() * E0 * c3 * force_numer / (3 * force_denom);
     } 
 
@@ -561,10 +518,12 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
  * @param gamma Surface adhesion energy density.
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value.
- * @param min_aspect_ratio Minimum aspect ratio of the contact area. 
- * @param newton_tol Tolerance for the Newton-Raphson method.  
- * @param newton_max_iter Maximum number of iterations for the Newton-Raphson
- *                        method.
+ * @param min_aspect_ratio Minimum aspect ratio.
+ * @param max_aspect_ratio Maximum aspect ratio for anisotropic contacts.  
+ * @param brent_tol Tolerance for Brent's method. 
+ * @param brent_max_iter Maximum number of iterations for Brent's method.
+ * @param init_bracket_dx Increment for bracket initialization. 
+ * @param n_tries_bracket Number of attempts for bracket initialization. 
  * @param imag_tol Tolerance for determining whether a root for the the JKR
  *                 contact radius polynomial is real.
  * @param aberth_tol Tolerance for Aberth-Ehrlich method.
@@ -577,8 +536,11 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
                                                     const T delta, const T E0,
                                                     const T gamma, const T max_overlap = -1,
                                                     const T min_aspect_ratio = 0.01,
-                                                    const T newton_tol = 1e-8,
-                                                    const int newton_max_iter = 1000,
+                                                    const T max_aspect_ratio = 0.99,
+                                                    const T brent_tol = 1e-8,
+                                                    const int brent_max_iter = 1000,
+                                                    const T init_bracket_dx = 1e-3,
+                                                    const int n_tries_bracket = 5,
                                                     const T imag_tol = 1e-20, 
                                                     const T aberth_tol = 1e-20, 
                                                     const bool verbose = false)
@@ -586,44 +548,32 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
     // Cap the overlap at the maximum value if given
     T delta_ = delta;  
     if (max_overlap >= 0 && delta > max_overlap)
-        delta_ = max_overlap;  
+        delta_ = max_overlap;
 
-    // Calculate the curvature parameters \lambda and R (which we denote
-    // here by R_)
-    T lambda = sqrt(Ry / Rx);
-    T R_ = sqrt(Rx * Ry);  
-
-    // Compute the root of the overlap vs. aspect ratio function using the
-    // Newton-Raphson method
-    T g = 1.0; 
-    if (Rx > Ry)
-    {
-        // Here, the aspect ratio should be less than 1
-        auto result = newtonRaphson<T>(
-            [&lambda, &R_, &E0, &gamma, &delta_](const T g)
-            {
-                return delta_ - jkrOverlapFromAspectRatio<T>(lambda, R_, E0, gamma, g); 
-            },
-            1.0, 1e-8, min_aspect_ratio, 1.0, newton_tol, newton_max_iter, verbose  
-        ); 
-        g = result.first;
-    }
+    // Compute the aspect ratio
+    T g = jkrAspectRatioFromOverlap<T>(
+        Rx, Ry, E0, gamma, delta_, min_aspect_ratio, max_aspect_ratio, 
+        brent_tol, brent_max_iter, init_bracket_dx, n_tries_bracket, verbose
+    );   
 
     // If the aspect ratio is 1, use jkrContactRadius(), as the elliptic 
     // integrals are ill-defined
     T force, c;  
     if (g == 1)
     {
-        auto result = jkrContactRadius<T, N>(delta_, R_, E0, gamma, imag_tol, aberth_tol);
+        T R = 2 * Rx; 
+        auto result = jkrContactRadius<T, N>(delta_, R, E0, gamma, imag_tol, aberth_tol);
         c = result.second;
         T c3 = c * c * c;
-        T force1 = (4 * E0 * c3) / (3 * R_);
+        T force1 = (4 * E0 * c3) / (3 * R);
         T force2 = 4 * sqrt(boost::math::constants::pi<T>() * c3 * gamma * E0);
         force = force1 - force2;    // Repulsive force minus attractive force 
     }
     else    // Otherwise ... 
     { 
-        // Calculate the eccentricity 
+        // Calculate the eccentricity
+        T lambda = sqrt(Ry / Rx); 
+        T R = sqrt(Rx * Ry);  
         T e = sqrt(1 - g * g); 
 
         // Calculate the elliptic integrals (Eqns. 6, 7, 8) 
@@ -655,12 +605,12 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
         T c_numer = 12 * (sqrt_g - 1) * (sqrt_g - 1) * pow(g, 2.5) * lambda;
         T term5 = (g - sqrt_g) * (pow(g, 1.5) + l2) * (g2beta - alpha);
         T c_denom = f - term5;
-        c = pow((c_numer / c_denom) * (gamma * R_ * R_ / E0), 1.0 / 3.0);  
+        c = pow((c_numer / c_denom) * (gamma * R * R / E0), 1.0 / 3.0);  
 
         // Calculate the force magnitude (Eqn. 15)
         T c3 = c * c * c; 
         T force_numer = (2 * sqrt_g + 1) * g2beta - (sqrt_g + 2) * alpha;
-        T force_denom = (sqrt_g - 1) * pow(g, 1.5) * R_;
+        T force_denom = (sqrt_g - 1) * pow(g, 1.5) * R;
         force = boost::math::constants::third_pi<T>() * E0 * c3 * force_numer / (3 * force_denom);
     }
 
@@ -711,22 +661,21 @@ T jkrEquilibriumDistance(const T R, const T E0, const T gamma, const T dinit,
 
     // Find the equilibrium distance using the Newton-Raphson method
     auto result = newtonRaphson<T>(
-        func, overlap, increment_overlap, 0.0, max_overlap, newton_tol,
-        max_iter, verbose
-    ); 
+        func, overlap, increment_overlap, newton_tol, max_iter, verbose
+    );
+    T delta = min(result.first, max_overlap); 
 
-    return 2 * R - result.first; 
+    return 2 * R - delta; 
 }
 
 /**
- * Calculate the surface energy density for which the desired Hertz-JKR 
+ * Calculate the surface adhesion energy density for which the desired JKR
  * equilibrium cell-cell distance is achieved.
  *
  * @param R Cell radius (including the EPS). 
  * @param E0 Elastic modulus.
  * @param deq_target Target equilibrium cell-cell distance. 
- * @param min_gamma Minimum surface adhesion energy density.
- * @param max_gamma Maximum surface adhesion energy density.  
+ * @param init_gamma Initial value for the surface adhesion energy density.
  * @param log_increment_gamma Increment for finite differences approximation 
  *                            w.r.t log10(gamma) during gradient descent. 
  * @param increment_overlap Increment for finite differences approximation
@@ -748,8 +697,7 @@ T jkrEquilibriumDistance(const T R, const T E0, const T gamma, const T dinit,
  */
 template <typename T, int N = 100>
 T jkrOptimalSurfaceEnergyDensity(const T R, const T Rcell, const T E0,
-                                 const T deq_target, const T min_gamma,
-                                 const T max_gamma,
+                                 const T deq_target, const T init_gamma = 10.0,
                                  const T log_increment_gamma = 1e-6,
                                  const T increment_overlap = 1e-8,
                                  const T outer_newton_tol = 1e-8,
@@ -760,8 +708,7 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T Rcell, const T E0,
                                  const T aberth_tol = 1e-20,
                                  const bool verbose = false)
 {
-    // Get an initial value for gamma
-    T log_gamma = (log10(min_gamma) + log10(max_gamma)) / 2.0; 
+    T log_gamma = log10(init_gamma); 
 
     // Define a function that maps the log surface adhesion energy density 
     // to the JKR equilibrium distance minus the target distance  
@@ -782,8 +729,8 @@ T jkrOptimalSurfaceEnergyDensity(const T R, const T Rcell, const T E0,
 
     // Find the equilibrium distance using the Newton-Raphson method
     auto result = newtonRaphson<T>(
-        func, log_gamma, log_increment_gamma, log10(min_gamma), log10(max_gamma),
-        outer_newton_tol, outer_max_iter, verbose
+        func, log_gamma, log_increment_gamma, outer_newton_tol, outer_max_iter,
+        verbose
     ); 
 
     return pow(10.0, result.first);
