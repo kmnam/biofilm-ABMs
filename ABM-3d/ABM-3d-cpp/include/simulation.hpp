@@ -75,6 +75,7 @@ std::string floatToString(T x, const int precision = 10)
  * Tabulate the JKR contact radius at a given collection of overlap distances.
  *
  * @param delta Input mesh of overlap distances.
+ * @param gamma Surface adhesion energy density. 
  * @param R Cell radius (including the EPS). 
  * @param E0 Elastic modulus. 
  * @param imag_tol Tolerance for determining whether a root for the the JKR
@@ -376,7 +377,8 @@ R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
  * (3) the centerline coordinate at which the overlap vector is positioned.
  *
  * @param filename Input filename. 
- * @returns 
+ * @returns Parsed table of principal radii of curvature and their input 
+ *          parameters.  
  */
 template <typename T>
 std::tuple<Matrix<T, Dynamic, 1>,
@@ -490,7 +492,8 @@ std::tuple<Matrix<T, Dynamic, 1>,
  * The surface adhesion energy density is fixed.  
  *
  * @param filename Input filename. 
- * @returns 
+ * @returns Parsed table of JKR force magnitudes and contact radii, and their 
+ *          input parameters. 
  */
 template <typename T>
 std::tuple<Matrix<T, Dynamic, 1>,
@@ -610,7 +613,8 @@ std::tuple<Matrix<T, Dynamic, 1>,
  * (4) the surface adhesion energy density.  
  *
  * @param filename Input filename. 
- * @returns 
+ * @returns Parsed table of JKR force magnitudes and contact radii, and their 
+ *          input parameters. 
  */
 template <typename T>
 std::tuple<Matrix<T, Dynamic, 1>,
@@ -743,7 +747,8 @@ std::tuple<Matrix<T, Dynamic, 1>,
  *
  * @param cells_init Initial population of cells.
  * @param parents_init Initial vector of parent cell IDs for each cell generated
- *                     throughout the simulation. 
+ *                     throughout the simulation.
+ * @param integration_mode Integration method (Runge-Kutta or velocity Verlet).  
  * @param max_iter Maximum number of iterations. 
  * @param n_cells Maximum number of cells.
  * @param max_time Maximum simulation time.  
@@ -777,13 +782,15 @@ std::tuple<Matrix<T, Dynamic, 1>,
  * @param growth_means Mean growth rate for cells in each group.
  * @param growth_stds Standard deviation of growth rate for cells in each
  *                    group.
+ * @param attribute_values Matrix of attribute values for different groups. 
  * @param switch_mode Switching mode. Can by NONE (0), MARKOV (1), or INHERIT
  *                    (2).
  * @param switch_rates Array of between-group switching rates. In the Markovian
  *                     mode (`switch_mode` is MARKOV), this is the matrix of
  *                     transition rates; in the inheritance mode (`switch_mode`
  *                     is INHERIT), this is the matrix of transition probabilities
- *                     at each division event. 
+ *                     at each division event.
+ * @param switch_timescale Timescale of switching between groups.  
  * @param daughter_length_std Standard deviation of daughter length ratio 
  *                            distribution. 
  * @param daughter_angle_xy_bound Bound on daughter cell re-orientation angle
@@ -809,12 +816,21 @@ std::tuple<Matrix<T, Dynamic, 1>,
  * @param adhesion_curvature_filename File containing pre-computed values for
  *                                    principal radii of curvature. 
  * @param adhesion_jkr_forces_filename File containing pre-computed values for
- *                                     JKR forces. 
+ *                                     JKR forces.
+ * @param friction_mode Choice of model for cell-cell friction. Can be NONE (0)
+ *                      or KINETIC (1). 
  * @param no_surface If true, omit the surface from the simulations. 
  * @param n_cells_start_switch Number of cells at which to begin switching.
  *                             All switching is suppressed until this number
  *                             of cells is reached. 
  * @param track_poles If true, keep track of pole birth times.
+ * @param cell_cell_coulomb_coeff Limiting cell-cell friction coefficient
+ *                                due to Coulomb's law. Ignored if not positive. 
+ * @param cell_surface_coulomb_coeff Limiting cell-surface friction coefficient
+ *                                   due to Coulomb's law. Ignored if not
+ *                                   positive.
+ * @param n_start_multithread Minimum number of cells at which to start using
+ *                            multithreading. 
  * @returns Final population of cells.  
  */
 template <typename T>
