@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/22/2025
+ *     10/3/2025
  */
 
 #ifndef ADHESION_POTENTIAL_FORCES_HPP
@@ -196,8 +196,9 @@ std::pair<Array<T, 2, 2 * Dim>, T>
             delta = max_overlap;  
 
         // Get the corresponding JKR contact area
+        T Req = R / 2;
         std::pair<T, T> radii = jkrContactRadius<T, N>(
-            delta, R, E0, gamma, imag_tol, aberth_tol
+            delta, Req, E0, gamma, imag_tol, aberth_tol
         );
         radius = radii.second;    // Always choose the larger radius 
 
@@ -205,7 +206,7 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         //
         // Start with the repulsive force ...
         T a3 = radius * radius * radius;
-        T term1 = 4 * E0 * a3 / (3 * R);  
+        T term1 = 4 * E0 * a3 / (3 * Req);  
 
         // ... then calculate the adhesive force 
         T term2 = 4 * sqrt(boost::math::constants::pi<T>() * a3 * gamma * E0);
@@ -333,8 +334,9 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         // Calculate the generalized forces
         //
         // Start with the repulsive force ...
+        T Req = R / 2; 
         T a3 = radius * radius * radius;
-        T term1 = 4 * E0 * a3 / (3 * R);  
+        T term1 = 4 * E0 * a3 / (3 * Req);  
 
         // ... then calculate the adhesive force 
         T term2 = 4 * sqrt(boost::math::constants::pi<T>() * a3 * gamma * E0);
@@ -366,8 +368,6 @@ std::pair<Array<T, 2, 2 * Dim>, T>
     
     return std::make_pair(dEdq.array(), radius); 
 }
-
-
 
 /**
  * Compute the Lagrangian generalized forces between two neighboring cells
@@ -485,8 +485,9 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         // Calculate the generalized forces
         //
         // Start with the repulsive force ...
+        T Req = R / 2; 
         T a3 = radius * radius * radius;
-        T term1 = 4 * E0 * a3 / (3 * R);  
+        T term1 = 4 * E0 * a3 / (3 * Req);  
 
         // ... then calculate the adhesive force 
         T term2 = 4 * sqrt(boost::math::constants::pi<T>() * a3 * gamma * E0);
@@ -804,6 +805,12 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         // Calculate the composite radii of curvature (A < B, so Rx > Ry)
         T Rx = 1.0 / (2 * A); 
         T Ry = 1.0 / (2 * B);
+        if (Rx < Ry)
+        {
+            T tmp = Rx; 
+            Rx = Ry; 
+            Ry = tmp; 
+        }
 
         // Look up the corresponding JKR force and contact radius
         int idx_Rx = nearestValue<T>(force_table_Rx, Rx);
@@ -986,6 +993,12 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         // Calculate the composite radii of curvature (A < B, so Rx > Ry)
         T Rx = 1.0 / (2 * A); 
         T Ry = 1.0 / (2 * B);
+        if (Rx < Ry)
+        {
+            T tmp = Rx; 
+            Rx = Ry; 
+            Ry = tmp; 
+        }
 
         // Look up the corresponding JKR force and contact radius
         int idx_Rx = nearestValue<T>(force_table_Rx, Rx);
