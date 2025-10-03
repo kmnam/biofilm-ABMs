@@ -195,6 +195,8 @@ void pairLagrangianForcesSummary(const Ref<const Array<T, 3, 1> >& r1,
  *
  * @param r Cell center.
  * @param n Cell orientation.
+ * @param dr Cell translational velocity. 
+ * @param dn Cell orientational velocity. 
  * @param half_l Cell half-length.
  * @param force Force on input cell. 
  * @param torque Torque on input cell. 
@@ -773,7 +775,24 @@ Array<T, 6, 6> compositeViscosityForceMatrix(const T rz, const T nz,
 }
 
 /**
+ * Calculate the (negatives of the) tangential friction forces between
+ * contacting cells.
  *
+ * @param cells Existing population of cells.
+ * @param neighbors Array specifying pairs of neighboring cells in the
+ *                  population.
+ * @param R Cell radius, including the EPS.
+ * @param E0 Elastic modulus of EPS.
+ * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient.
+ * @param cell_cell_coulomb_coeff Limiting cell-cell friction coefficient
+ *                                due to Coulomb's law. Ignored if not positive. 
+ * @param no_surface If true, omit the surface from the simulation.
+ * @param dz_threshold If the z-orientation of the distance vector is smaller
+ *                     than this value, compute the friction force in 2-D. 
+ * @param include_constraint If true, add the contribution from the Lagrange 
+ *                           multiplier due to the orientation vector norm 
+ *                           constraint to the forces.
+ * @returns Array of forces and torques due to cell-cell friction. 
  */
 template <typename T>
 Array<T, Dynamic, 6> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
@@ -939,6 +958,8 @@ Array<T, Dynamic, 6> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
  * @param E0 Elastic modulus of EPS. 
  * @param repulsion_prefactors Array of three pre-computed prefactors for 
  *                             cell-cell repulsion; see below for values. 
+ * @param nz_threshold Threshold for judging whether each cell's z-orientation
+ *                     is zero. 
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), JKR_ISOTROPIC (1), or JKR_ANISOTROPIC
  *                      (2).
@@ -948,9 +969,12 @@ Array<T, Dynamic, 6> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
  * @param colidx_gamma Column index for cell-cell adhesion surface energy 
  *                     density.
  * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient.
+ * @param no_surface If true, omit the surface from the simulation.
  * @param include_constraint If true, add the contribution from the Lagrange 
  *                           multiplier due to the orientation vector norm 
- *                           constraint to the forces.  
+ *                           constraint to the forces. 
+ * @param cell_cell_coulomb_coeff Limiting cell-cell friction coefficient
+ *                                due to Coulomb's law. Ignored if not positive. 
  * @returns Derivatives of the cell-cell adhesion energies with respect to  
  *          cell positions and orientations.   
  */
@@ -1387,7 +1411,9 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
  * @param repulsion_prefactors Array of three pre-computed prefactors for
  *                             cell-cell repulsion forces.
  * @param assume_2d If the i-th entry is true, assume that the i-th cell's
- *                  z-orientation is zero. 
+ *                  z-orientation is zero.
+ * @param nz_threshold Threshold for judging whether each cell's z-orientation
+ *                     is zero. 
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), JKR_ISOTROPIC (1), or JKR_ANISOTROPIC
  *                      (2).
@@ -1403,7 +1429,9 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
  * @param multithread If true, use multithreading.
  * @param include_constraint If true, add the contribution from the Lagrange 
  *                           multiplier due to the orientation vector norm 
- *                           constraint to the forces.  
+ *                           constraint to the forces. 
+ * @param cell_cell_coulomb_coeff Limiting cell-cell friction coefficient
+ *                                due to Coulomb's law. Ignored if not positive. 
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -1468,7 +1496,13 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
 // -------------------------------------------------------------------- */ 
 
 /**
- * Compute the forces and torques due to ambient viscosity on each cell. 
+ * Compute the forces and torques due to ambient viscosity on each cell.
+ *
+ * @param cells Existing population of cells.
+ * @param dt Timestep. Only used for debugging output.
+ * @param iter Iteration number. Only used for debugging output.
+ * @param R Cell radius.
+ * @returns Array of forces and torques due to ambient viscosity. 
  */
 template <typename T>
 Array<T, Dynamic, 6> ambientViscosityForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells, 
@@ -1505,8 +1539,7 @@ Array<T, Dynamic, 6> ambientViscosityForces(const Ref<const Array<T, Dynamic, Dy
  * @param assume_2d If the i-th entry is true, assume that the i-th cell's
  *                  z-orientation is zero.
  * @param multithread If true, use multithreading. 
- * @returns A six-dimensional vector that contains the force and moment 
- *          vectors due to cell-surface friction.
+ * @returns Array of forces and torques due to cell-surface friction. 
  */
 template <typename T>
 Array<T, Dynamic, 6> cellSurfaceFrictionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
