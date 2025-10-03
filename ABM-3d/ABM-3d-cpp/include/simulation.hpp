@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/30/2025
+ *     10/3/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -94,8 +94,9 @@ std::unordered_map<int, T> calculateJKRContactRadii(const Ref<const Matrix<T, Dy
     // For each overlap distance ... 
     for (int i = 0; i < delta.size(); ++i)
     {
-        // Calculate the JKR contact radius 
-        radii[i] = jkrContactRadius<T, N>(delta(i), R, E0, gamma, imag_tol, aberth_tol).second; 
+        // Calculate the JKR contact radius
+        auto result = jkrContactRadius<T, N>(delta(i), R / 2, E0, gamma, imag_tol, aberth_tol); 
+        radii[i] = result.second; 
     }
 
     return radii;  
@@ -128,10 +129,11 @@ R2ToR1Table<T> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >&
     {
         for (int j = 0; j < gamma.size(); ++j)
         {
-            // Calculate the JKR contact radius 
-            radii[std::make_pair(i, j)] = jkrContactRadius<T, N>(
-                delta(i), R, E0, gamma(j), imag_tol, aberth_tol
-            ).second;
+            // Calculate the JKR contact radius
+            auto result = jkrContactRadius<T, N>(
+                delta(i), R / 2, E0, gamma(j), imag_tol, aberth_tol
+            ); 
+            radii[std::make_pair(i, j)] = result.second; 
         }
     }
 
@@ -264,19 +266,22 @@ R3ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
     {
         for (int j = 0; j < Ry.size(); ++j)
         {
-            std::cout << "... Calculating anisotropic JKR forces for Rx = "
-                      << Rx(i) << ", Ry = " << Ry(j) << std::endl; 
-            for (int k = 0; k < delta.size(); ++k)
+            if (Rx(i) >= Ry(j))
             {
-                // Store the JKR force magnitude and contact radius 
-                auto tuple = std::make_tuple(i, j, k); 
-                auto result = jkrContactAreaAndForceEllipsoid<T, N>(
-                    Rx(i), Ry(j), delta(k), E0, gamma, max_overlap, 
-                    min_aspect_ratio, max_aspect_ratio, brent_tol, 
-                    brent_max_iter, init_bracket_dx, n_tries_bracket, 
-                    imag_tol, aberth_tol, false
-                );
-                forces[tuple] = std::make_pair(std::get<0>(result), std::get<1>(result));
+                std::cout << "... Calculating anisotropic JKR forces for Rx = "
+                          << Rx(i) << ", Ry = " << Ry(j) << std::endl; 
+                for (int k = 0; k < delta.size(); ++k)
+                {
+                    // Store the JKR force magnitude and contact radius 
+                    auto tuple = std::make_tuple(i, j, k); 
+                    auto result = jkrContactAreaAndForceEllipsoid<T, N>(
+                        Rx(i), Ry(j), delta(k), E0, gamma, max_overlap, 
+                        min_aspect_ratio, max_aspect_ratio, brent_tol, 
+                        brent_max_iter, init_bracket_dx, n_tries_bracket, 
+                        imag_tol, aberth_tol, false
+                    );
+                    forces[tuple] = std::make_pair(std::get<0>(result), std::get<1>(result));
+                }
             }
         }
     } 
@@ -974,11 +979,10 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     }
 
     // Prefactors for cell-cell repulsion forces 
-    Array<T, 4, 1> repulsion_prefactors;
-    repulsion_prefactors << (4. / 3.) * E0 / R, 
-                            (4. / 3.) * E0 * sqrt(R),
-                            (4. / 3.) * Ecell * sqrt(Rcell), 
-                            (4. / 3.) * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5);
+    Array<T, 3, 1> repulsion_prefactors;
+    repulsion_prefactors << (4. / 3.) * E0 * sqrt(R / 2),
+                            (4. / 3.) * Ecell * sqrt(Rcell / 2), 
+                            (4. / 3.) * E0 * sqrt(R / 2) * pow(2 * (R - Rcell), 1.5);
 
     // Compute initial array of neighboring cells
     Array<T, Dynamic, 7> neighbors = getCellNeighbors<T>(cells, neighbor_threshold, R, Ldiv);
