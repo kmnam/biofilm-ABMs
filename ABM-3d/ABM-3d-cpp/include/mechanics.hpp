@@ -1432,7 +1432,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
  *                           constraint to the forces. 
  * @param cell_cell_coulomb_coeff Limiting cell-cell friction coefficient
  *                                due to Coulomb's law. Ignored if not positive. 
- * @returns Array of translational and orientational velocities.   
+ * @returns Array of forces due to cell-cell and cell-surface interactions. 
  */
 template <typename T>
 Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
@@ -1706,7 +1706,9 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  * @param repulsion_prefactors Array of three pre-computed prefactors for
  *                             cell-cell repulsion forces.
  * @param assume_2d If the i-th entry is true, assume that the i-th cell's
- *                  z-orientation is zero. 
+ *                  z-orientation is zero.
+ * @param nz_threshold Threshold for judging whether each cell's z-orientation
+ *                     is zero. 
  * @param noise Noise to be added to each generalized force used to compute
  *              the velocities.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
@@ -1717,9 +1719,16 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  * @param jkr_data Pre-computed values for calculating JKR forces. 
  * @param colidx_gamma Column index for cell-cell adhesion surface energy 
  *                     density.
- * @param friction_mode
+ * @param friction_mode Choice of model for cell-cell friction. Can be NONE (0)
+ *                      or KINETIC (1). 
+ * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient.
  * @param no_surface If true, omit the surface from the simulation. 
  * @param multithread If true, use multithreading.
+ * @param cell_cell_coulomb_coeff Limiting cell-cell friction coefficient
+ *                                due to Coulomb's law. Ignored if not positive.
+ * @param cell_surface_coulomb_coeff Limiting cell-surface friction coefficient
+ *                                   due to Coulomb's law. Ignored if not
+ *                                   positive. 
  * @returns Array of translational and orientational velocities.   
  */
 template <typename T>
@@ -2069,8 +2078,6 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * Since the differential equations are time-autonomous, the nodes of the 
  * Butcher tableau are not required.
  *
- * Cell-cell friction is not incorporated in this function. 
- *
  * @param A Runge-Kutta matrix of Butcher tableau. Should be lower triangular
  *          with zero diagonal. 
  * @param b Weights of Butcher tableau. Entries should sum to one. 
@@ -2104,7 +2111,15 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param jkr_data Pre-computed values for calculating JKR forces.  
  * @param colidx_gamma Column index for cell-cell adhesion surface energy 
  *                     density.
- * @param no_surface If true, omit the surface from the simulation. 
+ * @param friction_mode Choice of model for cell-cell friction. Can be NONE (0)
+ *                      or KINETIC (1). 
+ * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient.
+ * @param no_surface If true, omit the surface from the simulation.
+ * @param cell_cell_coulomb_coeff Limiting cell-cell friction coefficient
+ *                                due to Coulomb's law. Ignored if not positive.
+ * @param cell_surface_coulomb_coeff Limiting cell-surface friction coefficient
+ *                                   due to Coulomb's law. Ignored if not
+ *                                   positive. 
  * @param n_start_multithread Minimum number of cells at which to start using
  *                            multithreading. 
  * @returns Updated population of cells, along with the array of errors in
@@ -2323,9 +2338,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
 // -------------------------------------------------------------------- */
 
 /**
- * Given the current positions, orientations, lengths, viscosity coefficients,
- * and surface friction coefficients for the given population of cells, compute
- * their translational and orientational velocities.
+ * Run one step of the velocity Verlet method for the given timestep. 
  *
  * In this function, the pairs of neighboring cells in the population have 
  * been pre-computed.
@@ -2338,12 +2351,21 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param E0 Elastic modulus of EPS.
+ * @param rho Density of each cell. 
  * @param repulsion_prefactors Array of three pre-computed prefactors for
  *                             cell-cell repulsion forces.
- * @param assume_2d If the i-th entry is true, assume that the i-th cell's
- *                  z-orientation is zero. 
- * @param noise Noise to be added to each generalized force used to compute
- *              the velocities.
+ * @param nz_threshold Threshold for judging whether each cell's z-orientation
+ *                     is zero. 
+ * @param max_rxy_noise Maximum noise to be added to each generalized force in
+ *                      the x- and y-directions.
+ * @param max_rz_noise Maximum noise to be added to each generalized force in
+ *                     the z-direction.
+ * @param max_nxy_noise Maximum noise to be added to each generalized torque in
+ *                      the x- and y-directions.
+ * @param max_nz_noise Maximum noise to be added to each generalized torque in
+ *                     the z-direction.
+ * @param rng Random number generator.
+ * @param uniform_dist Pre-defined instance of standard uniform distribution.
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), JKR_ISOTROPIC (1), or JKR_ANISOTROPIC
  *                      (2).
@@ -2355,9 +2377,15 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
  * @param friction_mode Choice of model for cell-cell friction. Can be NONE (0)
  *                      or KINETIC (1). 
  * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient. 
- * @param no_surface If true, omit the surface from the simulation. 
- * @param multithread If true, use multithreading. 
- * @returns Array of translational and orientational velocities.   
+ * @param no_surface If true, omit the surface from the simulation.
+ * @param cell_cell_coulomb_coeff Limiting cell-cell friction coefficient
+ *                                due to Coulomb's law. Ignored if not positive.
+ * @param cell_surface_coulomb_coeff Limiting cell-surface friction coefficient
+ *                                   due to Coulomb's law. Ignored if not
+ *                                   positive. 
+ * @param n_start_multithread Minimum number of cells at which to start using
+ *                            multithreading. 
+ * @returns Updated population of cells. 
  */
 template <typename T>
 Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
