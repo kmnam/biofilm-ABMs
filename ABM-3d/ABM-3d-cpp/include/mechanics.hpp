@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/30/2025
+ *     10/3/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -786,7 +786,8 @@ Array<T, Dynamic, 6> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
                                             const bool include_constraint = false)
 {
     int n = cells.rows();       // Number of cells
-    int m = neighbors.rows();   // Number of cell-cell neighbors 
+    int m = neighbors.rows();   // Number of cell-cell neighbors
+    T Req = R / 2;              // Equivalent radius 
 
     // If there are no neighboring pairs of cells, return zero
     if (m == 0)
@@ -879,15 +880,15 @@ Array<T, Dynamic, 6> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
             // vijt
             //
             // Use the Hertzian contact radius for the friction force, 
-            // following Parteli et al. (2014) 
-            Matrix<T, 3, 1> force = -eta * sqrt(R * overlap) * vijt;
+            // following Parteli et al. (2014)
+            Matrix<T, 3, 1> force = -eta * sqrt(Req * overlap) * vijt;
 
             // Truncate the friction force according to Coulomb's law of 
             // friction, if desired
             if (cell_cell_coulomb_coeff > 0)
             {
                 T force_norm = force.norm(); 
-                T max_norm = cell_cell_coulomb_coeff * (4. / 3.) * E0 * sqrt(R) * pow(overlap, 1.5); 
+                T max_norm = cell_cell_coulomb_coeff * (4. / 3.) * E0 * sqrt(Req) * pow(overlap, 1.5); 
                 if (force_norm > max_norm)
                     force *= (max_norm / force_norm); 
             }
@@ -936,7 +937,7 @@ Array<T, Dynamic, 6> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param E0 Elastic modulus of EPS. 
- * @param repulsion_prefactors Array of four pre-computed prefactors for 
+ * @param repulsion_prefactors Array of three pre-computed prefactors for 
  *                             cell-cell repulsion; see below for values. 
  * @param adhesion_mode Choice of potential used to model cell-cell adhesion.
  *                      Can be NONE (0), JKR_ISOTROPIC (1), or JKR_ANISOTROPIC
@@ -958,7 +959,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                                const Ref<const Array<T, Dynamic, 7> >& neighbors,
                                                const T dt, const int iter,
                                                const T R, const T Rcell, const T E0, 
-                                               const Ref<const Array<T, 4, 1> >& repulsion_prefactors,
+                                               const Ref<const Array<T, 3, 1> >& repulsion_prefactors,
                                                const T nz_threshold, 
                                                const AdhesionMode adhesion_mode,
                                                std::unordered_map<std::string, T>& adhesion_params,
@@ -970,8 +971,9 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                                const bool include_constraint = false, 
                                                const T cell_cell_coulomb_coeff = 1.0)
 {
-    int n = cells.rows();       // Number of cells
-    int m = neighbors.rows();   // Number of cell-cell neighbors 
+    const int n = cells.rows();       // Number of cells
+    const int m = neighbors.rows();   // Number of cell-cell neighbors
+    const T Req = R / 2;              // Equivalent radius
 
     // If there are no neighboring pairs of cells, return zero
     if (m == 0)
@@ -1145,18 +1147,18 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                     // (i.e., it is limited to within the EPS coating)
                     if (overlaps(k) <= 2 * (R - Rcell))
                     {
-                        // The force magnitude is (4 / 3) * E0 * sqrt(R) * pow(overlap, 1.5)
-                        magnitude = repulsion_prefactors(1) * pow(overlaps(k), 1.5);
-                        radius = sqrt(R * overlaps(k)); 
+                        // The force magnitude is (4 / 3) * E0 * sqrt(R / 2) * pow(overlap, 1.5)
+                        magnitude = repulsion_prefactors(0) * pow(overlaps(k), 1.5);
+                        radius = sqrt(Req * overlaps(k)); 
                     }
                     // Case 2: the overlap is instead greater than 2 * R - 2 * Rcell
                     // (i.e., it encroaches into the bodies of the two cells)
                     else
                     {
                         // The (soft-shell) force magnitude is
-                        // (4 / 3) * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5)
-                        magnitude = repulsion_prefactors(3);
-                        radius = sqrt(R * 2 * (R - Rcell)); 
+                        // (4 / 3) * E0 * sqrt(R / 2) * pow(2 * (R - Rcell), 1.5)
+                        magnitude = repulsion_prefactors(2);
+                        radius = sqrt(Req * 2 * (R - Rcell)); 
                     }
                 
                     // Compute the derivatives of the cell-cell repulsion energy
@@ -1209,8 +1211,8 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                 if (overlaps(k) > 2 * (R - Rcell))
                 {
                     // The additional (hard-core) Hertzian force magnitude is
-                    // (4 / 3) * Ecell * sqrt(Rcell) * pow(2 * Rcell + overlap - 2 * R, 1.5)
-                    T magnitude = repulsion_prefactors(2) * pow(overlaps(k) - 2 * (R - Rcell), 1.5);
+                    // (4 / 3) * Ecell * sqrt(Rcell / 2) * pow(2 * Rcell + overlap - 2 * R, 1.5)
+                    T magnitude = repulsion_prefactors(1) * pow(overlaps(k) - 2 * (R - Rcell), 1.5);
                     
                     // Compute the derivatives of the cell-cell repulsion energy
                     // between cells i and j
@@ -1263,10 +1265,9 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
     else 
     { 
         // The prefactor values should be:
-        //     repulsion_prefactors(0) = (4 / 3) * E0 / R
-        //     repulsion_prefactors(1) = (4 / 3) * E0 * sqrt(R)
-        //     repulsion_prefactors(2) = (4 / 3) * Ecell * sqrt(Rcell)
-        //     repulsion_prefactors(3) = (4 / 3) * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5)
+        //     repulsion_prefactors(0) = (4 / 3) * E0 * sqrt(R / 2)
+        //     repulsion_prefactors(1) = (4 / 3) * Ecell * sqrt(Rcell / 2)
+        //     repulsion_prefactors(2) = (4 / 3) * E0 * sqrt(R / 2) * pow(2 * (R - Rcell), 1.5)
 
         // For each pair of neighboring cells ...
         for (int k = 0; k < m; ++k)
@@ -1287,20 +1288,20 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
             // (i.e., it is limited to within the EPS coating)
             if (overlap > 0 && overlap <= 2 * (R - Rcell))
             {
-                // The force magnitude is (4 / 3) * E0 * sqrt(R) * pow(overlap, 1.5)
-                magnitude = repulsion_prefactors(1) * pow(overlap, 1.5);
-                radius = sqrt(R * overlap);  
+                // The force magnitude is (4 / 3) * E0 * sqrt(R / 2) * pow(overlap, 1.5)
+                magnitude = repulsion_prefactors(0) * pow(overlap, 1.5);
+                radius = sqrt(Req * overlap);  
             }
             // Case 2: the overlap is instead greater than 2 * R - 2 * Rcell
             // (i.e., it encroaches into the bodies of the two cells)
             else if (overlap > 2 * (R - Rcell))
             {
-                // The force magnitude is (4 / 3) * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5)
-                // + (4 / 3) * Ecell * sqrt(Rcell) * pow(2 * Rcell + overlap - 2 * R, 1.5)
-                T term1 = repulsion_prefactors(3);  
-                T term2 = repulsion_prefactors(2) * pow(overlap - 2 * (R - Rcell), 1.5);
+                // The force magnitude is (4 / 3) * E0 * sqrt(R / 2) * pow(2 * (R - Rcell), 1.5)
+                // + (4 / 3) * Ecell * sqrt(Rcell / 2) * pow(2 * Rcell + overlap - 2 * R, 1.5)
+                T term1 = repulsion_prefactors(2);  
+                T term2 = repulsion_prefactors(1) * pow(overlap - 2 * (R - Rcell), 1.5);
                 magnitude = term1 + term2;
-                radius = sqrt(R * 2 * (R - Rcell));  
+                radius = sqrt(Req * 2 * (R - Rcell));  
             }
             
             if (overlap > 0)
@@ -1383,7 +1384,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param E0 Elastic modulus of EPS. 
- * @param repulsion_prefactors Array of four pre-computed prefactors for
+ * @param repulsion_prefactors Array of three pre-computed prefactors for
  *                             cell-cell repulsion forces.
  * @param assume_2d If the i-th entry is true, assume that the i-th cell's
  *                  z-orientation is zero. 
@@ -1410,7 +1411,7 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
                                            const Ref<const Array<T, Dynamic, 7> >& neighbors,
                                            const T dt, const int iter,
                                            const T R, const T Rcell, const T E0,
-                                           const Ref<const Array<T, 4, 1> >& repulsion_prefactors,
+                                           const Ref<const Array<T, 3, 1> >& repulsion_prefactors,
                                            const Ref<const Array<int, Dynamic, 1> >& assume_2d,
                                            const T nz_threshold, 
                                            const AdhesionMode adhesion_mode,
@@ -1669,7 +1670,7 @@ void normalizeOrientations(Ref<Array<T, Dynamic, Dynamic> > cells, const T dt,
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param E0 Elastic modulus of EPS.
- * @param repulsion_prefactors Array of four pre-computed prefactors for
+ * @param repulsion_prefactors Array of three pre-computed prefactors for
  *                             cell-cell repulsion forces.
  * @param assume_2d If the i-th entry is true, assume that the i-th cell's
  *                  z-orientation is zero. 
@@ -1693,7 +1694,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const Ref<const Array<T, Dynamic, 7> >& neighbors,
                                    const T dt, const int iter, const T R,
                                    const T Rcell, const T E0, 
-                                   const Ref<const Array<T, 4, 1> >& repulsion_prefactors,
+                                   const Ref<const Array<T, 3, 1> >& repulsion_prefactors,
                                    const Ref<const Array<int, Dynamic, 1> >& assume_2d,
                                    const T nz_threshold, 
                                    const Ref<const Array<T, Dynamic, 6> >& noise,
@@ -2048,7 +2049,7 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param E0 Elastic modulus of EPS. 
- * @param repulsion_prefactors Array of four pre-computed prefactors for
+ * @param repulsion_prefactors Array of three pre-computed prefactors for
  *                             cell-cell repulsion forces.
  * @param nz_threshold Threshold for judging whether each cell's z-orientation
  *                     is zero. 
@@ -2085,7 +2086,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            const Ref<const Array<T, Dynamic, 7> >& neighbors,
                            const T dt, const int iter, const T R,
                            const T Rcell, const T E0, 
-                           const Ref<const Array<T, 4, 1> >& repulsion_prefactors,
+                           const Ref<const Array<T, 3, 1> >& repulsion_prefactors,
                            const T nz_threshold, const T max_rxy_noise,
                            const T max_rz_noise, const T max_nxy_noise,
                            const T max_nz_noise, boost::random::mt19937& rng,
@@ -2304,7 +2305,7 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
  * @param R Cell radius, including the EPS.
  * @param Rcell Cell radius, excluding the EPS.
  * @param E0 Elastic modulus of EPS.
- * @param repulsion_prefactors Array of four pre-computed prefactors for
+ * @param repulsion_prefactors Array of three pre-computed prefactors for
  *                             cell-cell repulsion forces.
  * @param assume_2d If the i-th entry is true, assume that the i-th cell's
  *                  z-orientation is zero. 
@@ -2330,7 +2331,7 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
                                               const Ref<const Array<T, Dynamic, 7> >& neighbors,
                                               const T dt, const int iter, const T R,
                                               const T Rcell, const T E0, const T rho,
-                                              const Ref<const Array<T, 4, 1> >& repulsion_prefactors,
+                                              const Ref<const Array<T, 3, 1> >& repulsion_prefactors,
                                               const T nz_threshold, 
                                               const T max_rxy_noise, 
                                               const T max_rz_noise, 
