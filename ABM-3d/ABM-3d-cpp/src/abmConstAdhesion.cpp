@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/22/2025
+ *     9/30/2025
  */
 
 #include <Eigen/Dense>
@@ -147,11 +147,14 @@ int main(int argc, char** argv)
             T n_mesh_centerline_coords = 100;
             T n_mesh_curvature_radii = 100;
             T calibrate_endpoint_radii = 1;
-            T min_aspect_ratio = 0.01; 
+            T min_aspect_ratio = 0.01;
+            T max_aspect_ratio = 0.99;  
             T project_tol = 1e-8; 
             T project_max_iter = 100; 
-            T newton_tol = 1e-8; 
-            T newton_max_iter = 1000;
+            T brent_tol = 1e-8; 
+            T brent_max_iter = 1000;
+            T init_bracket_dx = 1e-3; 
+            T n_tries_bracket = 5; 
             try
             {
                 calibrate_endpoint_radii = static_cast<T>(
@@ -199,15 +202,29 @@ int main(int argc, char** argv)
             catch (boost::wrapexcept<boost::system::system_error>& e) { }
             try
             {
-                newton_tol = static_cast<T>(
-                    json_data["adhesion_newton_tol"].as_double()
+                brent_tol = static_cast<T>(
+                    json_data["adhesion_brent_tol"].as_double()
                 ); 
             }
             catch (boost::wrapexcept<boost::system::system_error>& e) { }
             try
             {
-                newton_max_iter = static_cast<T>(
-                    json_data["adhesion_newton_max_iter"].as_int64()
+                brent_max_iter = static_cast<T>(
+                    json_data["adhesion_brent_max_iter"].as_int64()
+                ); 
+            }
+            catch (boost::wrapexcept<boost::system::system_error>& e) { }
+            try
+            {
+                init_bracket_dx = static_cast<T>(
+                    json_data["adhesion_init_bracket_dx"].as_double()
+                ); 
+            }
+            catch (boost::wrapexcept<boost::system::system_error>& e) { }
+            try
+            {
+                n_tries_bracket = static_cast<T>(
+                    json_data["adhesion_n_tries_bracket"].as_int64()
                 ); 
             }
             catch (boost::wrapexcept<boost::system::system_error>& e) { }
@@ -219,8 +236,10 @@ int main(int argc, char** argv)
             adhesion_params["min_aspect_ratio"] = min_aspect_ratio; 
             adhesion_params["ellipsoid_project_tol"] = project_tol; 
             adhesion_params["ellipsoid_project_max_iter"] = project_max_iter;
-            adhesion_params["newton_tol"] = newton_tol;
-            adhesion_params["newton_max_iter"] = newton_max_iter;  
+            adhesion_params["brent_tol"] = brent_tol;
+            adhesion_params["brent_max_iter"] = brent_max_iter; 
+            adhesion_params["init_bracket_dx"] = init_bracket_dx; 
+            adhesion_params["n_tries_bracket"] = n_tries_bracket;  
         } 
     }
 
@@ -321,7 +340,16 @@ int main(int argc, char** argv)
     // Initialize simulation ...
     //
     // Check whether an initial file was specified
-    Array<T, Dynamic, Dynamic> cells; 
+    Array<T, Dynamic, Dynamic> cells;
+    int ncols; 
+    if (adhesion_mode != AdhesionMode::NONE && friction_mode != FrictionMode::NONE)
+        ncols = __ncols_required + 2; 
+    else if (adhesion_mode != AdhesionMode::NONE)
+        ncols = __ncols_required + 1; 
+    else if (friction_mode != FrictionMode::NONE)
+        ncols = __ncols_required + 1; 
+    else 
+        ncols = __ncols_required;  
     std::string init_filename = ""; 
     try
     {
@@ -332,7 +360,7 @@ int main(int argc, char** argv)
     {
         auto result = readCells<T>(init_filename); 
         cells = result.first; 
-        if (cells.cols() != __ncols_required + 2)
+        if (cells.cols() != ncols)
         {
             throw std::runtime_error(
                 "File specifying initial population contains incorrect number of "
@@ -346,10 +374,20 @@ int main(int argc, char** argv)
         // Define a founder cell at the origin at time zero, parallel to x-axis, 
         // with zero velocity, mean growth rate, and default viscosity and friction
         // coefficients
-        cells.resize(1, __ncols_required + 2); 
-        T rz = R - pow(sigma0 * sqrt(R) / (4 * E0), 2. / 3.); 
-        cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
-                 eta_ambient, eta_surface, sigma0, 1, 0, eta_cell_cell;
+        cells.resize(1, ncols); 
+        T rz = R - pow(sigma0 * sqrt(R) / (4 * E0), 2. / 3.);
+        if (adhesion_mode != AdhesionMode::NONE && friction_mode != FrictionMode::NONE)
+            cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
+                     eta_ambient, eta_surface, sigma0, 1, 0, eta_cell_cell;
+        else if (adhesion_mode != AdhesionMode::NONE)
+            cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
+                     eta_ambient, eta_surface, sigma0, 1, 0;
+        else if (friction_mode != FrictionMode::NONE)
+            cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
+                     eta_ambient, eta_surface, sigma0, 1, eta_cell_cell;
+        else
+            cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
+                     eta_ambient, eta_surface, sigma0, 1;
     }
 
     // Initialize parent IDs 
