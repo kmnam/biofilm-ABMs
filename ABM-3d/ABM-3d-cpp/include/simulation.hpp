@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/3/2025
+ *     10/6/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -215,22 +215,26 @@ R3ToR2Table<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1
 
 /**
  * Tabulate the JKR force magnitudes and contact radii at a given collection 
- * of cell-cell contact configurations, which are parametrized by the equivalent
+ * of cell-cell contact configurations, which are parametrized by the cells'
  * principal radii of curvature and overlap distance. 
  *
  * Each contact point is parametrized by:
  *
- * (1, 2) the equivalent principal radii of curvature at the contact point, and
- * (3) the overlap distance. 
+ * (1, 2) the *maximum* principal radii of curvature at the contact point, 
+ * (3) the angle between the long axes of the cells, and 
+ * (4) the overlap distance. 
  *
- * The surface adhesion energy density is fixed.  
+ * The surface adhesion energy density is fixed, and the minimum principal
+ * radii of curvature are also fixed to the spherocylinder radius.  
  *
- * @param Rx Input mesh of values for the larger equivalent principal radius
- *           of curvature at the contact point.  
- * @param Ry Input mesh of values for the smaller equivalent principal radius
- *           of curvature at the contact point. 
+ * @param Rx Input mesh of values for the larger principal radius of curvature
+ *           at the contact point.  
+ * @param phi Input mesh of values for the angle between the cells' orientation
+ *            vectors.  
  * @param delta Input mesh of overlap distances.
- * @param gamma Surface adhesion energy density. 
+ * @param gamma Surface adhesion energy density.
+ * @param R Cell radius (including the EPS), which is equal to the smaller 
+ *          principal radius of curvature.  
  * @param E0 Elastic modulus. 
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value.
@@ -246,10 +250,10 @@ R3ToR2Table<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1
  * @returns Table of calculated JKR force magnitudes and contact radii. 
  */
 template <typename T, int N = 100>
-R3ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& Rx,
-                                      const Ref<const Matrix<T, Dynamic, 1> >& Ry,
+R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& Rx,
+                                      const Ref<const Matrix<T, Dynamic, 1> >& phi,
                                       const Ref<const Matrix<T, Dynamic, 1> >& delta,
-                                      const T gamma, const T E0,
+                                      const T gamma, const T R, const T E0,
                                       const T max_overlap = -1, 
                                       const T min_aspect_ratio = 0.01,
                                       const T max_aspect_ratio = 0.99,  
@@ -260,28 +264,93 @@ R3ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
                                       const T imag_tol = 1e-20, 
                                       const T aberth_tol = 1e-20)
 {
-    R3ToR2Table<T> forces; 
+    R4ToR2Table<T> forces; 
 
     // For each cell-cell configuration ...
+    const T Ry = R; 
     for (int i = 0; i < Rx.size(); ++i)
     {
-        for (int j = 0; j < Ry.size(); ++j)
+        for (int j = i; j < Rx.size(); ++j)
         {
-            if (Rx(i) >= Ry(j))
+            // If Rx(i) == Ry or Rx(j) == Ry, then the equivalent radii of 
+            // curvature do not depend on the angle
+            if (abs(Rx(i) - Ry) < 1e-8 || abs(Rx(j) - Ry) < 1e-8)
             {
-                std::cout << "... Calculating anisotropic JKR forces for Rx = "
-                          << Rx(i) << ", Ry = " << Ry(j) << std::endl; 
-                for (int k = 0; k < delta.size(); ++k)
+                // Calculate the equivalent principal radii of curvature 
+                //
+                // First calculate B and A, with the added assumption that B > A 
+                T sum = 0.5 * (1.0 / Rx(i) + 1.0 / Ry + 1.0 / Rx(j) + 1.0 / Ry);
+                T delta1 = (1.0 / Rx(i) - 1.0 / Ry); 
+                T delta2 = (1.0 / Rx(j) - 1.0 / Ry); 
+                T diff = 0.5 * sqrt(delta1 * delta1 + delta2 * delta2); 
+                T B = 0.5 * (sum + diff);
+                T A = sum - B;
+
+                // Calculate the equivalent radii of curvature (A < B, so Ra > Rb)
+                T Ra = 1.0 / (2 * A); 
+                T Rb = 1.0 / (2 * B);
+                std::cout << "... Calculating anisotropic JKR forces for Rx1 = "
+                          << Rx(i) << ", Rx2 = " << Rx(j) << ", Ry = " << Ry
+                          << " (angle-independent)" << std::endl;
+                std::cout << "==> Equivalent radii of curvature: Ra = " << Ra
+                          << ", Rb = " << Rb << std::endl;
+
+                for (int m = 0; m < delta.size(); ++m)
                 {
                     // Store the JKR force magnitude and contact radius 
-                    auto tuple = std::make_tuple(i, j, k); 
                     auto result = jkrContactAreaAndForceEllipsoid<T, N>(
-                        Rx(i), Ry(j), delta(k), E0, gamma, max_overlap, 
+                        Ra, Rb, delta(m), E0, gamma, max_overlap, 
                         min_aspect_ratio, max_aspect_ratio, brent_tol, 
                         brent_max_iter, init_bracket_dx, n_tries_bracket, 
                         imag_tol, aberth_tol, false
                     );
-                    forces[tuple] = std::make_pair(std::get<0>(result), std::get<1>(result));
+                    for (int k = 0; k < phi.size(); ++k)
+                    {
+                        auto tuple = std::make_tuple(i, j, k, m); 
+                        forces[tuple] = std::make_pair(std::get<0>(result), std::get<1>(result));
+                    }
+                }
+
+            }
+            // Otherwise, the equivalent radii of curvature do depend on the
+            // angle
+            else
+            {
+                for (int k = 0; k < phi.size(); ++k)
+                {
+                    // Calculate the equivalent principal radii of curvature 
+                    //
+                    // First calculate B and A, with the added assumption that B > A 
+                    T sum = 0.5 * (1.0 / Rx(i) + 1.0 / Ry + 1.0 / Rx(j) + 1.0 / Ry);
+                    T delta1 = (1.0 / Rx(i) - 1.0 / Ry); 
+                    T delta2 = (1.0 / Rx(j) - 1.0 / Ry); 
+                    T diff = 0.5 * sqrt(
+                        delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * phi(k))
+                    );
+                    T B = 0.5 * (sum + diff);
+                    T A = sum - B;
+
+                    // Calculate the equivalent radii of curvature (A < B, so Ra > Rb)
+                    T Ra = 1.0 / (2 * A); 
+                    T Rb = 1.0 / (2 * B);
+                    std::cout << "... Calculating anisotropic JKR forces for Rx1 = "
+                              << Rx(i) << ", Rx2 = " << Rx(j) << ", Ry = " << Ry
+                              << ", angle = " << phi(k) << std::endl;
+                    std::cout << "==> Equivalent radii of curvature: Ra = " << Ra
+                              << ", Rb = " << Rb << std::endl;
+
+                    for (int m = 0; m < delta.size(); ++m)
+                    {
+                        // Store the JKR force magnitude and contact radius 
+                        auto result = jkrContactAreaAndForceEllipsoid<T, N>(
+                            Ra, Rb, delta(m), E0, gamma, max_overlap, 
+                            min_aspect_ratio, max_aspect_ratio, brent_tol, 
+                            brent_max_iter, init_bracket_dx, n_tries_bracket, 
+                            imag_tol, aberth_tol, false
+                        );
+                        auto tuple = std::make_tuple(i, j, k, m); 
+                        forces[tuple] = std::make_pair(std::get<0>(result), std::get<1>(result));
+                    }
                 }
             }
         }
