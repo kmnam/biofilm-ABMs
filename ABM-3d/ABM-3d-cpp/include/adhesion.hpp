@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/3/2025
+ *     10/6/2025
  */
 
 #ifndef ADHESION_POTENTIAL_FORCES_HPP
@@ -744,9 +744,9 @@ std::pair<Array<T, 2, 2 * Dim>, T>
                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_coords,
                                  R3ToR2Table<T>& curvature_radii_table,
                                  const Ref<const Matrix<T, Dynamic, 1> >& force_table_Rx, 
-                                 const Ref<const Matrix<T, Dynamic, 1> >& force_table_Ry, 
+                                 const Ref<const Matrix<T, Dynamic, 1> >& force_table_phi,
                                  const Ref<const Matrix<T, Dynamic, 1> >& force_table_delta,
-                                 R3ToR2Table<T>& force_table,  
+                                 R4ToR2Table<T>& force_table,  
                                  const bool include_constraint = true,
                                  const T max_overlap = -1)
 {
@@ -787,36 +787,29 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         std::pair<T, T> radii1 = curvature_radii_table[tuple1]; 
         std::pair<T, T> radii2 = curvature_radii_table[tuple2];
         T Rx1 = radii1.first; 
-        T Ry1 = radii1.second; 
+        T Ry1 = radii1.second;    // Should be R
         T Rx2 = radii2.first; 
-        T Ry2 = radii2.second;
+        T Ry2 = radii2.second;    // Should be R
 
-        // First calculate B and A, with the added assumption that B > A 
-        T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
-        T theta3 = acosSafe<T>(n1.dot(n2));
-        T delta1 = (1.0 / Rx1 - 1.0 / Ry1); 
-        T delta2 = (1.0 / Rx2 - 1.0 / Ry2); 
-        T diff = 0.5 * sqrt(
-            delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * theta3)
-        );
-        T B = 0.5 * (sum + diff);
-        T A = sum - B;
-
-        // Calculate the composite radii of curvature (A < B, so Rx > Ry)
-        T Rx = 1.0 / (2 * A); 
-        T Ry = 1.0 / (2 * B);
-        if (Rx < Ry)
+        // Ensure that Rx1 <= Rx2
+        if (Rx1 > Rx2)
         {
-            T tmp = Rx; 
-            Rx = Ry; 
-            Ry = tmp; 
+            T tmp = Rx1; 
+            Rx1 = Rx2; 
+            Rx2 = tmp; 
         }
+        
+        // Get the angle between the two cells 
+        T phi = acosSafe<T>(n1.dot(n2));
+        if (phi > boost::math::constants::half_pi<T>())
+            phi = boost::math::constants::pi<T>() - phi;
 
-        // Look up the corresponding JKR force and contact radius
-        int idx_Rx = nearestValue<T>(force_table_Rx, Rx);
-        int idx_Ry = nearestValue<T>(force_table_Ry, Ry);
+        // Look up the corresponding JKR force magnitude and contact area
+        int idx_Rx1 = nearestValue<T>(force_table_Rx, Rx1); 
+        int idx_Rx2 = nearestValue<T>(force_table_Rx, Rx2); 
+        int idx_phi = nearestValue<T>(force_table_phi, phi);
         int idx_delta = nearestValue<T>(force_table_delta, delta);
-        auto tuple3 = std::make_tuple(idx_Rx, idx_Ry, idx_delta);
+        auto tuple3 = std::make_tuple(idx_Rx1, idx_Rx2, idx_phi, idx_delta);
         std::pair<T, T> result = force_table[tuple3];
         T force = result.first; 
         radius = result.second;
