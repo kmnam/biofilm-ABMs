@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/3/2025
+ *     10/6/2025
  */
 
 #ifndef BIOFILM_JKR_HPP
@@ -551,16 +551,18 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
 
     // First calculate B and A, with the added assumption that B > A 
     T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
-    T theta = acosSafe<T>(n1.dot(n2));
+    T phi = acosSafe<T>(n1.dot(n2));
+    if (phi > boost::math::constants::half_pi<T>())
+        phi = boost::math::constants::pi<T>() - phi; 
     T delta1 = (1.0 / Rx1 - 1.0 / Ry1); 
     T delta2 = (1.0 / Rx2 - 1.0 / Ry2); 
     T diff = 0.5 * sqrt(
-        delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * theta)
+        delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * phi)
     );
     T B = 0.5 * (sum + diff);
     T A = sum - B;
 
-    // Calculate the composite radii of curvature (A < B, so Rx > Ry)
+    // Calculate the equivalent radii of curvature (A < B, so Rx > Ry)
     T Rx = 1.0 / (2 * A); 
     T Ry = 1.0 / (2 * B);
 
