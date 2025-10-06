@@ -137,12 +137,16 @@ int main(int argc, char** argv)
     Matrix<T, Dynamic, 1> phi;  
     try
     {
-        min_phi = static_cast<T>(json_data["adhesion_min_phi"].as_double()); 
+        // Interpret as multiple of pi / 2
+        min_phi = static_cast<T>(json_data["adhesion_min_phi"].as_double());
+        min_phi *= boost::math::constants::half_pi<T>();  
     }
     catch (boost::wrapexcept<boost::system::system_error>& e) { }
     try
     {
-        max_phi = static_cast<T>(json_data["adhesion_max_phi"].as_double()); 
+        // Interpret as multiple of pi / 2
+        max_phi = static_cast<T>(json_data["adhesion_max_phi"].as_double());
+        max_phi *= boost::math::constants::half_pi<T>();  
     }
     catch (boost::wrapexcept<boost::system::system_error>& e) { }
     if (abs(min_phi - max_phi) < 1e-8 && n_mesh_phi == 1)
