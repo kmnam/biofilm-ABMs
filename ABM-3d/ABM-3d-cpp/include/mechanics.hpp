@@ -83,12 +83,11 @@ struct JKRData
     Matrix<T, Dynamic, 1> half_l; 
     Matrix<T, Dynamic, 1> centerline_coords;
     Matrix<T, Dynamic, 1> Rx; 
-    Matrix<T, Dynamic, 1> Ry;
+    Matrix<T, Dynamic, 1> phi; 
     bool gamma_fixed; 
     std::unordered_map<int, T> contact_radii_reduced;  
     R2ToR1Table<T> contact_radii;
     R3ToR2Table<T> curvature_radii;
-    R3ToR2Table<T> forces_reduced; 
     R4ToR2Table<T> forces;  
 };
 
