@@ -624,6 +624,11 @@ std::tuple<Matrix<T, Dynamic, 1>,
         Ry_curr = Ry_next; 
     }
 
+    std::cout << "Parsed " << radii.size() << " curvature values" << std::endl
+              << "- Number of input values for theta: " << theta.size() << std::endl
+              << "- Number of input values for half_l: " << half_l.size() << std::endl
+              << "- Number of input values for centerline_coords: " << coords.size() << std::endl;  
+
     Matrix<T, Dynamic, 1> theta_(theta.size()); 
     for (int i = 0; i < theta.size(); ++i)
         theta_(i) = theta[i]; 
@@ -783,6 +788,12 @@ std::tuple<Matrix<T, Dynamic, 1>,
         force_curr = force_next; 
         radius_curr = radius_next; 
     }
+
+    std::cout << "Parsed " << forces.size() << " force/radius values" << std::endl
+              << "- Number of input values for Rx: " << Rx.size() << std::endl
+              << "- Number of input values for phi: " << phi.size() << std::endl
+              << "- Number of input values for delta: " << delta.size() << std::endl
+              << "- Fixed gamma = " << gamma << std::endl;  
 
     Matrix<T, Dynamic, 1> Rx_(Rx.size());
     for (int i = 0; i < Rx.size(); ++i)
