@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/6/2025
+ *     10/8/2025
  */
 
 #include <Eigen/Dense>
@@ -87,7 +87,7 @@ int main(int argc, char** argv)
     Matrix<T, Dynamic, 1> centerline_coords = Matrix<T, Dynamic, 1>::LinSpaced(
         n_mesh_centerline_coords, 0.0, 1.0
     );
-    R3ToR2Table<T> curvature_radii = calculateCurvatureRadiiTable<T>(
+    TupleToTupleTable<T, 3, 2> curvature_radii = calculateCurvatureRadiiTable<T>(
         theta, half_l, centerline_coords, R, calibrate_endpoint_radii,
         project_tol, project_max_iter
     );
@@ -101,10 +101,10 @@ int main(int argc, char** argv)
         {
             for (int k = 0; k < n_mesh_centerline_coords; ++k)
             {
-                auto tuple = std::make_tuple(i, j, k);
-                auto result = curvature_radii[tuple]; 
-                T Rx = result.first; 
-                T Ry = result.second;  
+                std::array<int, 3> key = {i, j, k}; 
+                auto result = curvature_radii[key];
+                T Rx = result[0];
+                T Ry = result[1];
                 outfile << theta(i) << '\t' << half_l(j) << '\t'
                         << centerline_coords(k) << '\t'
                         << Rx << '\t' << Ry << std::endl; 
