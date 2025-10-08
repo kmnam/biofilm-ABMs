@@ -11,7 +11,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/3/2025
+ *     10/8/2025
  */
 
 #ifndef BIOFILM_MECHANICS_3D_HPP
@@ -75,20 +75,252 @@ enum class FrictionMode
 template <typename T>
 struct JKRData
 {
-    T max_gamma; 
-    T gamma_switch_rate; 
+    T max_gamma;           // Maximum value of gamma (surface adhesion energy density) 
+    T gamma_switch_rate;   // Timescale for switching between zero and maximal adhsion
+    bool gamma_fixed;      // Whether or not gamma is fixed
+    bool initialized;      // Whether or not the struct is populated 
+
+    // Meshes of input variables
     Matrix<T, Dynamic, 1> overlaps; 
     Matrix<T, Dynamic, 1> gamma; 
     Matrix<T, Dynamic, 1> theta; 
     Matrix<T, Dynamic, 1> half_l; 
     Matrix<T, Dynamic, 1> centerline_coords;
     Matrix<T, Dynamic, 1> Rx; 
-    Matrix<T, Dynamic, 1> phi; 
-    bool gamma_fixed; 
-    std::unordered_map<int, T> contact_radii_reduced;  
-    R2ToR1Table<T> contact_radii;
-    R3ToR2Table<T> curvature_radii;
-    R4ToR2Table<T> forces;  
+    Matrix<T, Dynamic, 1> phi;
+
+    // Placeholder force evaluation methods in 3-D
+    virtual std::pair<Array<T, 2, 6>, T> getJKRForces(const Ref<const Matrix<T, 3, 1> >& r1, 
+                                                      const Ref<const Matrix<T, 3, 1> >& n1, 
+                                                      const T half_l1, 
+                                                      const Ref<const Matrix<T, 3, 1> >& r2, 
+                                                      const Ref<const Matrix<T, 3, 1> >& n2, 
+                                                      const T half_l2, 
+                                                      const Ref<const Matrix<T, 3, 1> >& d12, 
+                                                      const T R,
+                                                      const T E0,
+                                                      const T gamma,  
+                                                      const T s,
+                                                      const T t,
+                                                      const bool include_constraint = true, 
+                                                      const T max_overlap = -1, 
+                                                      const bool interpolate = true) = 0; 
+}; 
+
+template <typename T>
+struct IsotropicJKRDataFixedGamma : public JKRData<T>
+{
+    std::unordered_map<int, T> contact_radii;     // overlap -> radius
+    
+    // Constructor with input/output meshes  
+    IsotropicJKRDataFixedGamma(const T max_gamma,
+                               const Ref<const Matrix<T, Dynamic, 1> >& overlaps, 
+                               std::unordered_map<int, T>& contact_radii) : JKRData<T>() 
+    {
+        this->max_gamma = max_gamma; 
+        this->gamma_switch_rate = std::numeric_limits<T>::infinity(); 
+        this->gamma_fixed = true; 
+        this->initialized = true;
+        this->overlaps = overlaps; 
+        this->contact_radii = contact_radii; 
+    }
+
+    // Force evaluation method in 3-D 
+    std::pair<Array<T, 2, 6>, T> getJKRForces(const Ref<const Matrix<T, 3, 1> >& r1, 
+                                              const Ref<const Matrix<T, 3, 1> >& n1, 
+                                              const T half_l1, 
+                                              const Ref<const Matrix<T, 3, 1> >& r2, 
+                                              const Ref<const Matrix<T, 3, 1> >& n2, 
+                                              const T half_l2, 
+                                              const Ref<const Matrix<T, 3, 1> >& d12, 
+                                              const T R,
+                                              const T E0,
+                                              const T gamma,  
+                                              const T s,
+                                              const T t,
+                                              const bool include_constraint = true, 
+                                              const T max_overlap = -1, 
+                                              const bool interpolate = true)
+    {
+        return forcesIsotropicJKRLagrange<T, 3>(
+            n1, n2, d12, R, E0, gamma, s, t, this->overlaps, this->contact_radii,
+            include_constraint, max_overlap, interpolate
+        ); 
+    }  
+};
+
+template <typename T>
+struct IsotropicJKRDataVariableGamma : public JKRData<T>
+{
+    TupleToScalarTable<T, 2> contact_radii;     // (overlap, gamma) -> radius
+    
+    // Constructor with input/output meshes  
+    IsotropicJKRDataVariableGamma(const T max_gamma, const T gamma_switch_rate, 
+                                  const Ref<const Matrix<T, Dynamic, 1> >& overlaps,
+                                  const Ref<const Matrix<T, Dynamic, 1> >& gamma,  
+                                  TupleToScalarTable<T, 2>& contact_radii) : JKRData<T>() 
+    {
+        this->max_gamma = max_gamma; 
+        this->gamma_switch_rate = gamma_switch_rate; 
+        this->gamma_fixed = false; 
+        this->initialized = true;
+        this->overlaps = overlaps; 
+        this->gamma = gamma; 
+        this->contact_radii = contact_radii; 
+    }
+    
+    // Force evaluation method in 3-D 
+    std::pair<Array<T, 2, 6>, T> getJKRForces(const Ref<const Matrix<T, 3, 1> >& r1, 
+                                              const Ref<const Matrix<T, 3, 1> >& n1, 
+                                              const T half_l1, 
+                                              const Ref<const Matrix<T, 3, 1> >& r2, 
+                                              const Ref<const Matrix<T, 3, 1> >& n2, 
+                                              const T half_l2, 
+                                              const Ref<const Matrix<T, 3, 1> >& d12, 
+                                              const T R,
+                                              const T E0,
+                                              const T gamma,  
+                                              const T s,
+                                              const T t,
+                                              const bool include_constraint = true, 
+                                              const T max_overlap = -1, 
+                                              const bool interpolate = true)
+    {
+        return forcesIsotropicJKRLagrange<T, 3>(
+            n1, n2, d12, R, E0, gamma, s, t, this->overlaps, this->gamma, 
+            this->contact_radii, include_constraint, max_overlap, interpolate
+        ); 
+    }  
+};
+
+template <typename T>
+struct AnisotropicJKRDataFixedGamma : public JKRData<T>
+{
+    // (angle between contact point and orientation vector, cell half-length,
+    //  normalized centerline coordinate) -> (Rx, Ry) at contact point 
+    TupleToTupleTable<T, 3, 2> curvature_radii;
+
+    // (maximum principal radius of curvature for cell 1, 
+    //  maximum principal radius of curvature for cell 2, 
+    //  angle between cell orientations, 
+    //  overlap) -> (force, radius)
+    TupleToTupleTable<T, 4, 2> forces; 
+
+    // Constructor with input/output meshes  
+    AnisotropicJKRDataFixedGamma(const T max_gamma,
+                                 const Ref<const Matrix<T, Dynamic, 1> >& overlaps,
+                                 const Ref<const Matrix<T, Dynamic, 1> >& theta, 
+                                 const Ref<const Matrix<T, Dynamic, 1> >& half_l, 
+                                 const Ref<const Matrix<T, Dynamic, 1> >& centerline_coords, 
+                                 const Ref<const Matrix<T, Dynamic, 1> >& Rx, 
+                                 const Ref<const Matrix<T, Dynamic, 1> >& phi, 
+                                 TupleToTupleTable<T, 3, 2>& curvature_radii, 
+                                 TupleToTupleTable<T, 4, 2>& forces) : JKRData<T>() 
+    {
+        this->max_gamma = max_gamma; 
+        this->gamma_switch_rate = std::numeric_limits<T>::infinity(); 
+        this->gamma_fixed = true; 
+        this->initialized = true;
+        this->overlaps = overlaps; 
+        this->theta = theta; 
+        this->half_l = half_l; 
+        this->centerline_coords = centerline_coords; 
+        this->Rx = Rx; 
+        this->phi = phi; 
+        this->curvature_radii = curvature_radii; 
+        this->forces = forces; 
+    }
+
+    // Force evaluation method in 3-D 
+    std::pair<Array<T, 2, 6>, T> getJKRForces(const Ref<const Matrix<T, 3, 1> >& r1, 
+                                              const Ref<const Matrix<T, 3, 1> >& n1, 
+                                              const T half_l1, 
+                                              const Ref<const Matrix<T, 3, 1> >& r2, 
+                                              const Ref<const Matrix<T, 3, 1> >& n2, 
+                                              const T half_l2, 
+                                              const Ref<const Matrix<T, 3, 1> >& d12, 
+                                              const T R,
+                                              const T E0,
+                                              const T gamma,  
+                                              const T s,
+                                              const T t,
+                                              const bool include_constraint = true, 
+                                              const T max_overlap = -1, 
+                                              const bool interpolate = true)
+    {
+        return forcesAnisotropicJKRLagrange<T, 3>(
+            n1, half_l1, n2, half_l2, d12, R, E0, gamma, s, t, this->theta, 
+            this->half_l, this->centerline_coords, this->curvature_radii, 
+            this->Rx, this->phi, this->overlaps, this->forces, include_constraint,
+            max_overlap
+        ); 
+    }  
+}; 
+
+template <typename T>
+struct AnisotropicJKRDataVariableGamma : public JKRData<T>
+{
+    // (angle between contact point and orientation vector, cell half-length,
+    //  normalized centerline coordinate) -> (Rx, Ry) at contact point 
+    TupleToTupleTable<T, 3, 2> curvature_radii;
+
+    // (maximum principal radius of curvature for cell 1, 
+    //  maximum principal radius of curvature for cell 2, 
+    //  angle between cell orientations, 
+    //  overlap, gamma) -> (force, radius)
+    TupleToTupleTable<T, 5, 2> forces; 
+
+    // Constructor with input/output meshes  
+    AnisotropicJKRDataVariableGamma(const T max_gamma, const T gamma_switch_rate,
+                                    const Ref<const Matrix<T, Dynamic, 1> >& overlaps,
+                                    const Ref<const Matrix<T, Dynamic, 1> >& theta, 
+                                    const Ref<const Matrix<T, Dynamic, 1> >& half_l, 
+                                    const Ref<const Matrix<T, Dynamic, 1> >& centerline_coords, 
+                                    const Ref<const Matrix<T, Dynamic, 1> >& Rx, 
+                                    const Ref<const Matrix<T, Dynamic, 1> >& phi,
+                                    const Ref<const Matrix<T, Dynamic, 1> >& gamma, 
+                                    TupleToTupleTable<T, 3, 2>& curvature_radii, 
+                                    TupleToTupleTable<T, 5, 2>& forces) : JKRData<T>() 
+    {
+        this->max_gamma = max_gamma; 
+        this->gamma_switch_rate = gamma_switch_rate; 
+        this->gamma_fixed = false; 
+        this->initialized = true;
+        this->overlaps = overlaps;
+        this->gamma = gamma;  
+        this->theta = theta; 
+        this->half_l = half_l; 
+        this->centerline_coords = centerline_coords; 
+        this->Rx = Rx; 
+        this->phi = phi; 
+        this->curvature_radii = curvature_radii; 
+        this->forces = forces; 
+    }
+    
+    // Force evaluation method in 3-D 
+    std::pair<Array<T, 2, 6>, T> getJKRForces(const Ref<const Matrix<T, 3, 1> >& r1, 
+                                              const Ref<const Matrix<T, 3, 1> >& n1, 
+                                              const T half_l1, 
+                                              const Ref<const Matrix<T, 3, 1> >& r2, 
+                                              const Ref<const Matrix<T, 3, 1> >& n2, 
+                                              const T half_l2, 
+                                              const Ref<const Matrix<T, 3, 1> >& d12, 
+                                              const T R,
+                                              const T E0,
+                                              const T gamma,  
+                                              const T s,
+                                              const T t,
+                                              const bool include_constraint = true, 
+                                              const T max_overlap = -1, 
+                                              const bool interpolate = true)
+    {
+        return forcesAnisotropicJKRLagrange<T, 3>(
+            n1, half_l1, n2, half_l2, d12, R, E0, gamma, s, t, this->theta, 
+            this->half_l, this->centerline_coords, this->curvature_radii, 
+            this->Rx, this->phi, this->overlaps, this->gamma, this->forces,
+            include_constraint, max_overlap
+        ); 
+    }  
 };
 
 /**
@@ -942,6 +1174,181 @@ Array<T, Dynamic, 6> cellCellFrictionForces(const Ref<const Array<T, Dynamic, Dy
 /**
  * Compute the derivatives of the cell-cell interaction energy for each pair
  * of neighboring cells, with respect to each cell's position and orientation
+ * coordinates.
+ *
+ * This function assumes that cell-cell interactions are purely repulsive.  
+ *
+ * In this function, the pairs of neighboring cells in the population have
+ * been pre-computed. 
+ *
+ * @param cells Current population of cells.
+ * @param neighbors Array specifying pairs of neighboring cells in the
+ *                  population.
+ * @param dt Timestep. Only used for debugging output.
+ * @param iter Iteration number. Only used for debugging output. 
+ * @param R Cell radius, including the EPS.
+ * @param Rcell Cell radius, excluding the EPS.
+ * @param E0 Elastic modulus of EPS. 
+ * @param repulsion_prefactors Array of three pre-computed prefactors for 
+ *                             cell-cell repulsion; see below for values. 
+ * @param nz_threshold Threshold for judging whether each cell's z-orientation
+ *                     is zero. 
+ * @param colidx_eta_cell_cell Column index for cell-cell friction coefficient.
+ * @param no_surface If true, omit the surface from the simulation.
+ * @param include_constraint If true, add the contribution from the Lagrange 
+ *                           multiplier due to the orientation vector norm 
+ *                           constraint to the forces. 
+ * @param cell_cell_coulomb_coeff Limiting cell-cell friction coefficient
+ *                                due to Coulomb's law. Ignored if not positive. 
+ * @returns Derivatives of the cell-cell adhesion energies with respect to  
+ *          cell positions and orientations.   
+ */
+template <typename T>
+Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
+                                               const Ref<const Array<T, Dynamic, 7> >& neighbors,
+                                               const T dt, const int iter,
+                                               const T R, const T Rcell, const T E0, 
+                                               const Ref<const Array<T, 3, 1> >& repulsion_prefactors,
+                                               const T nz_threshold, 
+                                               const FrictionMode friction_mode, 
+                                               const int colidx_eta_cell_cell,
+                                               const bool no_surface,
+                                               const bool include_constraint = false, 
+                                               const T cell_cell_coulomb_coeff = 1.0)
+{
+    const int n = cells.rows();       // Number of cells
+    const int m = neighbors.rows();   // Number of cell-cell neighbors
+    const T Req = R / 2;              // Equivalent radius
+
+    // If there are no neighboring pairs of cells, return zero
+    if (m == 0)
+        return Array<T, Dynamic, 6>::Zero(n, 6);
+
+    // Maintain array of partial derivatives of the interaction energies 
+    // with respect to x-position, y-position, z-position, x-orientation,
+    // y-orientation, z-orientation
+    Array<T, Dynamic, 6> dEdq = Array<T, Dynamic, 6>::Zero(n, 6);
+
+    // Maintain array of contact radii for all pairs of neighboring cells 
+    Array<T, Dynamic, 1> radii = Array<T, Dynamic, 1>::Zero(m);  
+
+    // Compute cell-cell distance and overlap for each pair of neighboring cells 
+    Array<T, Dynamic, 1> distances = neighbors(Eigen::all, Eigen::seq(2, 4)).matrix().rowwise().norm().array();
+    Array<T, Dynamic, 1> overlaps = 2 * R - distances;
+
+    // For each pair of neighboring cells ...
+    for (int k = 0; k < m; ++k)
+    {
+        int i = static_cast<int>(neighbors(k, 0)); 
+        int j = static_cast<int>(neighbors(k, 1));
+
+        // Check that the two cells overlap 
+        if (overlaps(k) > 0)
+        {
+            // Extract the cell position and orientation vectors 
+            Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix();
+            Matrix<T, 3, 1> nj = cells(j, __colseq_n).matrix();
+            T half_li = cells(i, __colidx_half_l);
+            T half_lj = cells(j, __colidx_half_l);
+            Matrix<T, 3, 1> dij = neighbors(k, Eigen::seq(2, 4)).matrix();
+            T si = neighbors(k, 5);                      // Cell-body coordinate along cell i
+            T sj = neighbors(k, 6);                      // Cell-body coordinate along cell j
+            Array<T, 3, 1> dijn = dij / distances(k);    // Normalized distance vector
+            Array<T, 2, 6> forces = Array<T, 2, 6>::Zero();
+            T radius = 0; 
+                
+            // Cap overlap distance at 2 * (R - Rcell)
+            T max_overlap = 2 * (R - Rcell);
+
+            // Calculate the Hertzian repulsive force ...  
+            //
+            // Define the repulsive force magnitude and contact radius  
+            T magnitude = 0; 
+
+            // Case 1: the overlap is positive but less than 2 * (R - Rcell)
+            // (i.e., it is limited to within the EPS coating)
+            if (overlaps(k) <= max_overlap)
+            {
+                // The force magnitude is (4 / 3) * E0 * sqrt(R / 2) * pow(overlap, 1.5)
+                magnitude = repulsion_prefactors(0) * pow(overlaps(k), 1.5);
+                radius = sqrt(Req * overlaps(k)); 
+            }
+            // Case 2: the overlap is instead greater than 2 * R - 2 * Rcell
+            // (i.e., it encroaches into the bodies of the two cells)
+            else
+            {
+                // The (soft-shell) force magnitude is
+                // (4 / 3) * E0 * sqrt(R / 2) * pow(2 * (R - Rcell), 1.5)
+                magnitude = repulsion_prefactors(2);
+                radius = sqrt(Req * max_overlap); 
+
+                // The additional (hard-core) Hertzian force magnitude is
+                // (4 / 3) * Ecell * sqrt(Rcell / 2) * pow(2 * Rcell + overlap - 2 * R, 1.5)
+                magnitude += repulsion_prefactors(1) * pow(overlaps(k) - max_overlap, 1.5);
+            }
+        
+            // Compute the derivatives of the cell-cell repulsion energy
+            // between cells i and j
+            Array<T, 3, 1> vij = magnitude * dijn; 
+            forces(0, Eigen::seq(0, 2)) = vij; 
+            forces(1, Eigen::seq(0, 2)) = -vij;
+            if (!include_constraint)
+            {
+                forces(0, Eigen::seq(3, 5)) = si * vij;
+                forces(1, Eigen::seq(3, 5)) = -sj * vij;
+            }
+            else    // Correct torques to account for orientation norm constraint
+            {
+                //T wi = ni.dot(-vij.matrix()); 
+                //T wj = nj.dot(-vij.matrix()); 
+                //forces(0, Eigen::seq(3, 5)) = si * (wi * ni.array() + vij); 
+                //forces(1, Eigen::seq(3, 5)) = sj * (-wj * nj.array() - vij); 
+                forces(0, Eigen::seq(3, 5)) = (si * ni).cross(vij.matrix()).array(); 
+                forces(1, Eigen::seq(3, 5)) = (sj * nj).cross(-vij.matrix()).array();  
+            }
+
+            #ifdef DEBUG_CHECK_CELL_CELL_REPULSIVE_FORCES_NAN
+                if (forces.isNaN().any() || forces.isInf().any())
+                {
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in repulsive forces between cells " 
+                              << i << " and " << j << std::endl;
+                    std::cerr << "Timestep: " << dt << std::endl;
+                    pairLagrangianForcesSummary<T>(
+                        cells(i, __colseq_r), cells(i, __colseq_n),
+                        cells(i, __colseq_dr), cells(i, __colseq_dn), 
+                        cells(i, __colidx_half_l),
+                        cells(j, __colseq_r), cells(j, __colseq_n),
+                        cells(j, __colseq_dr), cells(j, __colseq_dn), 
+                        cells(j, __colidx_half_l),
+                        dij.array(), si, sj, forces
+                    );
+                    throw std::runtime_error("Found nan in repulsive forces"); 
+                }
+            #endif
+
+            // Update forces and store contact radius
+            dEdq.row(i) += forces.row(0); 
+            dEdq.row(j) += forces.row(1);
+            radii(k) = radius;  
+        }
+    }
+
+    // Compute cell-cell friction forces, if desired 
+    if (friction_mode != FrictionMode::NONE)
+    {
+        dEdq += cellCellFrictionForces<T>(
+            cells, neighbors, R, E0, colidx_eta_cell_cell, cell_cell_coulomb_coeff,
+            no_surface, 1e-3, include_constraint
+        ); 
+    }
+
+    return dEdq; 
+}
+
+/**
+ * Compute the derivatives of the cell-cell interaction energy for each pair
+ * of neighboring cells, with respect to each cell's position and orientation
  * coordinates. 
  *
  * In this function, the pairs of neighboring cells in the population have
@@ -986,7 +1393,7 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                                                const T nz_threshold, 
                                                const AdhesionMode adhesion_mode,
                                                std::unordered_map<std::string, T>& adhesion_params,
-                                               JKRData<T>& jkr_data,
+                                               std::unique_ptr<JKRData<T> >& jkr_data,
                                                const int colidx_gamma,
                                                const FrictionMode friction_mode, 
                                                const int colidx_eta_cell_cell,
@@ -1012,203 +1419,208 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
 
     // Compute cell-cell distance and overlap for each pair of neighboring cells 
     Array<T, Dynamic, 1> distances = neighbors(Eigen::all, Eigen::seq(2, 4)).matrix().rowwise().norm().array();
-    Array<T, Dynamic, 1> overlaps = 2 * R - distances; 
+    Array<T, Dynamic, 1> overlaps = 2 * R - distances;
 
-    // If there is cell-cell adhesion ... 
-    if (adhesion_mode != AdhesionMode::NONE)
-    {
-        // For each pair of neighboring cells ...
-        for (int k = 0; k < m; ++k)
+    #ifdef CHECK_ADHESION_MODE
+        if (adhesion_mode == AdhesionMode::NONE)
         {
-            int i = static_cast<int>(neighbors(k, 0)); 
-            int j = static_cast<int>(neighbors(k, 1));
+            throw std::runtime_error(
+                "Cell-cell adhesion forces cannot be calculated without JKR "
+                "adhesion mode"
+            ); 
+        }
+    #endif
 
-            // Check that the two cells overlap 
-            if (overlaps(k) > 0)
-            {
-                // Extract the cell position and orientation vectors 
-                Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix();
-                Matrix<T, 3, 1> nj = cells(j, __colseq_n).matrix();
-                T half_li = cells(i, __colidx_half_l);
-                T half_lj = cells(j, __colidx_half_l);
-                Matrix<T, 3, 1> dij = neighbors(k, Eigen::seq(2, 4)).matrix();
-                T si = neighbors(k, 5);                      // Cell-body coordinate along cell i
-                T sj = neighbors(k, 6);                      // Cell-body coordinate along cell j
-                Array<T, 3, 1> dijn = dij / distances(k);    // Normalized distance vector
-                Array<T, 2, 6> forces = Array<T, 2, 6>::Zero();
-                T radius = 0; 
+    // For each pair of neighboring cells ...
+    for (int k = 0; k < m; ++k)
+    {
+        int i = static_cast<int>(neighbors(k, 0)); 
+        int j = static_cast<int>(neighbors(k, 1));
+
+        // Check that the two cells overlap 
+        if (overlaps(k) > 0)
+        {
+            // Extract the cell position and orientation vectors
+            Matrix<T, 3, 1> ri = cells(i, __colseq_r).matrix();
+            Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix();
+            Matrix<T, 3, 1> rj = cells(j, __colseq_r).matrix();
+            Matrix<T, 3, 1> nj = cells(j, __colseq_n).matrix();
+            T half_li = cells(i, __colidx_half_l);
+            T half_lj = cells(j, __colidx_half_l);
+            Matrix<T, 3, 1> dij = neighbors(k, Eigen::seq(2, 4)).matrix();
+            T si = neighbors(k, 5);                      // Cell-body coordinate along cell i
+            T sj = neighbors(k, 6);                      // Cell-body coordinate along cell j
+            Array<T, 3, 1> dijn = dij / distances(k);    // Normalized distance vector
+            Array<T, 2, 6> forces = Array<T, 2, 6>::Zero();
+            T radius = 0; 
                 
-                // Cap overlap distance at 2 * (R - Rcell)
-                T max_overlap = 2 * (R - Rcell);
+            // Cap overlap distance at 2 * (R - Rcell)
+            T max_overlap = 2 * (R - Rcell);
 
-                // Get the surface adhesion energy density 
-                T gamma = min(cells(i, colidx_gamma), cells(j, colidx_gamma));
+            // Get the surface adhesion energy density 
+            T gamma = min(cells(i, colidx_gamma), cells(j, colidx_gamma));
 
-                // If the surface adhesion energy density is nonzero ... 
-                if (gamma > 0)
+            // If the surface adhesion energy density is nonzero ... 
+            if (gamma > 0)
+            {
+                // Use pre-computed values if desired
+                bool use_precomputed_values = jkr_data->initialized;  
+                if (use_precomputed_values)
                 {
-                    // Get the corresponding forces
+                    auto result = jkr_data->getJKRForces(
+                        ri, ni, half_li, rj, nj, half_lj, dij, R, E0, gamma, 
+                        si, sj, include_constraint, max_overlap   
+                    ); 
+                    forces = result.first;
+                    radius = result.second;
+                }
+                else    // Otherwise, compute forces from scratch  
+                {
                     if (adhesion_mode == AdhesionMode::JKR_ISOTROPIC)
                     {
-                        // Use pre-computed values if desired 
-                        if (jkr_data.contact_radii.size() > 0 || jkr_data.contact_radii_reduced.size() > 0)
-                        {
-                            // Assume a fixed surface adhesion energy density 
-                            // if desired 
-                            if (jkr_data.gamma_fixed)
-                            {
-                                auto result = forcesIsotropicJKRLagrange<T, 3>(
-                                    ni, nj, dij, R, E0, gamma, si, sj,
-                                    jkr_data.overlaps, jkr_data.contact_radii_reduced,
-                                    include_constraint, max_overlap 
-                                );
-                                forces = result.first;
-                                radius = result.second;
-                            }
-                            else 
-                            {
-                                auto result = forcesIsotropicJKRLagrange<T, 3>(
-                                    ni, nj, dij, R, E0, gamma, si, sj,
-                                    jkr_data.overlaps, jkr_data.gamma,
-                                    jkr_data.contact_radii, include_constraint,
-                                    max_overlap 
-                                );
-                                forces = result.first;
-                                radius = result.second;
-                            } 
-                        }
-                        else    // Otherwise, compute forces from scratch  
-                        {
-                            auto result = forcesIsotropicJKRLagrange<T, 3, 30>(
-                                ni, nj, dij, R, E0, gamma, si, sj,
-                                include_constraint, max_overlap
-                            );
-                            forces = result.first;
-                            radius = result.second; 
-                        } 
+                        auto result = forcesIsotropicJKRLagrange<T, 3, 30>(
+                            ni, nj, dij, R, E0, gamma, si, sj, include_constraint,
+                            max_overlap
+                        );
+                        forces = result.first;
+                        radius = result.second;
                     }
-                    else if (adhesion_mode == AdhesionMode::JKR_ANISOTROPIC)
-                    {
-                        // Use pre-computed values if desired 
-                        if (jkr_data.forces.size() > 0 || jkr_data.forces_reduced.size() > 0)
-                        {
-                            // Assume a fixed surface adhesion energy density 
-                            // if desired 
-                            if (jkr_data.gamma_fixed)
-                            {
-                                auto result = forcesAnisotropicJKRLagrange<T, 3>(
-                                    ni, half_li, nj, half_lj, dij, R, E0, gamma, si,
-                                    sj, jkr_data.theta, jkr_data.half_l,
-                                    jkr_data.centerline_coords,
-                                    jkr_data.curvature_radii, jkr_data.Rx, 
-                                    jkr_data.Ry, jkr_data.overlaps, 
-                                    jkr_data.forces_reduced, include_constraint,
-                                    max_overlap
-                                );
-                                forces = result.first;
-                                radius = result.second;
-                            }
-                            else 
-                            {
-                                auto result = forcesAnisotropicJKRLagrange<T, 3>(
-                                    ni, half_li, nj, half_lj, dij, R, E0, gamma, si,
-                                    sj, jkr_data.theta, jkr_data.half_l,
-                                    jkr_data.centerline_coords,
-                                    jkr_data.curvature_radii, jkr_data.Rx, 
-                                    jkr_data.Ry, jkr_data.overlaps, jkr_data.gamma, 
-                                    jkr_data.forces, include_constraint, max_overlap
-                                );
-                                forces = result.first;
-                                radius = result.second;
-                            }
-                        }
-                        else    // Otherwise, compute forces from scratch 
-                        {
-                            Matrix<T, 3, 1> ri = cells(i, __colseq_r).matrix();
-                            Matrix<T, 3, 1> rj = cells(j, __colseq_r).matrix();
-                            bool calibrate_endpoint_radii = static_cast<bool>(
-                                adhesion_params["calibrate_endpoint_radii"]
-                            );
-                            T min_aspect_ratio = adhesion_params["min_aspect_ratio"];
-                            T max_aspect_ratio = adhesion_params["max_aspect_ratio"];  
-                            T project_tol = adhesion_params["ellipsoid_project_tol"]; 
-                            int project_max_iter = static_cast<int>(
-                                adhesion_params["ellipsoid_project_max_iter"]
-                            );
-                            T brent_tol = adhesion_params["brent_tol"]; 
-                            int brent_max_iter = static_cast<int>(
-                                adhesion_params["brent_max_iter"]
-                            );
-                            T init_bracket_dx = adhesion_params["init_bracket_dx"]; 
-                            int n_tries_bracket = static_cast<int>(
-                                adhesion_params["n_tries_bracket"]
-                            ); 
-                            T imag_tol = adhesion_params["jkr_imag_tol"]; 
-                            T aberth_tol = adhesion_params["jkr_aberth_tol"];  
-
-                            // Enforce orientation vector norm constraint
-                            auto result = forcesAnisotropicJKRLagrange<T, 3, 30>(
-                                ri, ni, half_li, rj, nj, half_lj, dij, R, E0,
-                                gamma, si, sj, include_constraint, max_overlap,
-                                calibrate_endpoint_radii, min_aspect_ratio,
-                                max_aspect_ratio, project_tol, project_max_iter,
-                                brent_tol, brent_max_iter, init_bracket_dx, 
-                                n_tries_bracket, imag_tol, aberth_tol
-                            );
-                            forces = result.first;
-                            radius = result.second; 
-                        }
-                    }
-                }
-                // Otherwise, calculate the Hertzian repulsive force 
-                else 
-                {
-                    // Define the repulsive force magnitude and contact radius  
-                    T magnitude = 0; 
-
-                    // Case 1: the overlap is positive but less than 2 * (R - Rcell)
-                    // (i.e., it is limited to within the EPS coating)
-                    if (overlaps(k) <= 2 * (R - Rcell))
-                    {
-                        // The force magnitude is (4 / 3) * E0 * sqrt(R / 2) * pow(overlap, 1.5)
-                        magnitude = repulsion_prefactors(0) * pow(overlaps(k), 1.5);
-                        radius = sqrt(Req * overlaps(k)); 
-                    }
-                    // Case 2: the overlap is instead greater than 2 * R - 2 * Rcell
-                    // (i.e., it encroaches into the bodies of the two cells)
                     else
                     {
-                        // The (soft-shell) force magnitude is
-                        // (4 / 3) * E0 * sqrt(R / 2) * pow(2 * (R - Rcell), 1.5)
-                        magnitude = repulsion_prefactors(2);
-                        radius = sqrt(Req * 2 * (R - Rcell)); 
-                    }
-                
-                    // Compute the derivatives of the cell-cell repulsion energy
-                    // between cells i and j
-                    Array<T, 3, 1> vij = magnitude * dijn; 
-                    forces(0, Eigen::seq(0, 2)) = vij; 
-                    forces(1, Eigen::seq(0, 2)) = -vij;
-                    if (!include_constraint)
-                    {
-                        forces(0, Eigen::seq(3, 5)) = si * vij;
-                        forces(1, Eigen::seq(3, 5)) = -sj * vij;
-                    }
-                    else    // Correct torques to account for orientation norm constraint
-                    {
-                        //T wi = ni.dot(-vij.matrix()); 
-                        //T wj = nj.dot(-vij.matrix()); 
-                        //forces(0, Eigen::seq(3, 5)) = si * (wi * ni.array() + vij); 
-                        //forces(1, Eigen::seq(3, 5)) = sj * (-wj * nj.array() - vij); 
-                        forces(0, Eigen::seq(3, 5)) = (si * ni).cross(vij.matrix()).array(); 
-                        forces(1, Eigen::seq(3, 5)) = (sj * nj).cross(-vij.matrix()).array();  
-                    }
+                        bool calibrate_endpoint_radii = static_cast<bool>(
+                            adhesion_params["calibrate_endpoint_radii"]
+                        );
+                        T min_aspect_ratio = adhesion_params["min_aspect_ratio"];
+                        T max_aspect_ratio = adhesion_params["max_aspect_ratio"];  
+                        T project_tol = adhesion_params["ellipsoid_project_tol"]; 
+                        int project_max_iter = static_cast<int>(
+                            adhesion_params["ellipsoid_project_max_iter"]
+                        );
+                        T brent_tol = adhesion_params["brent_tol"]; 
+                        int brent_max_iter = static_cast<int>(
+                            adhesion_params["brent_max_iter"]
+                        );
+                        T init_bracket_dx = adhesion_params["init_bracket_dx"]; 
+                        int n_tries_bracket = static_cast<int>(
+                            adhesion_params["n_tries_bracket"]
+                        ); 
+                        T imag_tol = adhesion_params["jkr_imag_tol"]; 
+                        T aberth_tol = adhesion_params["jkr_aberth_tol"];  
+                        auto result = forcesAnisotropicJKRLagrange<T, 3, 30>(
+                            ri, ni, half_li, rj, nj, half_lj, dij, R, E0,
+                            gamma, si, sj, include_constraint, max_overlap,
+                            calibrate_endpoint_radii, min_aspect_ratio,
+                            max_aspect_ratio, project_tol, project_max_iter,
+                            brent_tol, brent_max_iter, init_bracket_dx, 
+                            n_tries_bracket, imag_tol, aberth_tol
+                        );
+                        forces = result.first;
+                        radius = result.second; 
+                    } 
                 }
-                #ifdef DEBUG_CHECK_CELL_CELL_ADHESIVE_FORCES_NAN
-                    if (forces.isNaN().any() || forces.isInf().any())
+            } 
+            // Otherwise, calculate the Hertzian repulsive force 
+            else 
+            {
+                // Define the repulsive force magnitude and contact radius  
+                T magnitude = 0; 
+
+                // Case 1: the overlap is positive but less than 2 * (R - Rcell)
+                // (i.e., it is limited to within the EPS coating)
+                if (overlaps(k) <= 2 * (R - Rcell))
+                {
+                    // The force magnitude is (4 / 3) * E0 * sqrt(R / 2) * pow(overlap, 1.5)
+                    magnitude = repulsion_prefactors(0) * pow(overlaps(k), 1.5);
+                    radius = sqrt(Req * overlaps(k)); 
+                }
+                // Case 2: the overlap is instead greater than 2 * R - 2 * Rcell
+                // (i.e., it encroaches into the bodies of the two cells)
+                else
+                {
+                    // The (soft-shell) force magnitude is
+                    // (4 / 3) * E0 * sqrt(R / 2) * pow(2 * (R - Rcell), 1.5)
+                    magnitude = repulsion_prefactors(2);
+                    radius = sqrt(Req * 2 * (R - Rcell)); 
+                }
+            
+                // Compute the derivatives of the cell-cell repulsion energy
+                // between cells i and j
+                Array<T, 3, 1> vij = magnitude * dijn; 
+                forces(0, Eigen::seq(0, 2)) = vij; 
+                forces(1, Eigen::seq(0, 2)) = -vij;
+                if (!include_constraint)
+                {
+                    forces(0, Eigen::seq(3, 5)) = si * vij;
+                    forces(1, Eigen::seq(3, 5)) = -sj * vij;
+                }
+                else    // Correct torques to account for orientation norm constraint
+                {
+                    //T wi = ni.dot(-vij.matrix()); 
+                    //T wj = nj.dot(-vij.matrix()); 
+                    //forces(0, Eigen::seq(3, 5)) = si * (wi * ni.array() + vij); 
+                    //forces(1, Eigen::seq(3, 5)) = sj * (-wj * nj.array() - vij); 
+                    forces(0, Eigen::seq(3, 5)) = (si * ni).cross(vij.matrix()).array(); 
+                    forces(1, Eigen::seq(3, 5)) = (sj * nj).cross(-vij.matrix()).array();  
+                }
+            }
+            #ifdef DEBUG_CHECK_CELL_CELL_ADHESIVE_FORCES_NAN
+                if (forces.isNaN().any() || forces.isInf().any())
+                {
+                    std::cerr << "Iteration " << iter
+                              << ": Found nan in adhesive forces between cells " 
+                              << i << " and " << j << std::endl;
+                    std::cerr << "Timestep: " << dt << std::endl;
+                    pairLagrangianForcesSummary<T>(
+                        cells(i, __colseq_r), cells(i, __colseq_n),
+                        cells(i, __colseq_dr), cells(i, __colseq_dn), 
+                        cells(i, __colidx_half_l),
+                        cells(j, __colseq_r), cells(j, __colseq_n),
+                        cells(j, __colseq_dr), cells(j, __colseq_dn), 
+                        cells(j, __colidx_half_l),
+                        dij.array(), si, sj, forces
+                    );
+                    throw std::runtime_error("Found nan in adhesive forces"); 
+                }
+            #endif
+
+            // Update forces and store contact radius
+            dEdq.row(i) += forces.row(0); 
+            dEdq.row(j) += forces.row(1);
+            radii(k) = radius;  
+
+            // If the overlap exceeds the maximum, add an additional 
+            // hard-core repulsive force 
+            if (overlaps(k) > 2 * (R - Rcell))
+            {
+                // The additional (hard-core) Hertzian force magnitude is
+                // (4 / 3) * Ecell * sqrt(Rcell / 2) * pow(2 * Rcell + overlap - 2 * R, 1.5)
+                T magnitude = repulsion_prefactors(1) * pow(overlaps(k) - 2 * (R - Rcell), 1.5);
+                
+                // Compute the derivatives of the cell-cell repulsion energy
+                // between cells i and j
+                Array<T, 3, 1> vij = magnitude * dijn; 
+                Array<T, 2, 6> forces_hard;
+                forces_hard(0, Eigen::seq(0, 2)) = vij; 
+                forces_hard(1, Eigen::seq(0, 2)) = -vij;
+                if (!include_constraint)
+                {
+                    forces_hard(0, Eigen::seq(3, 5)) = si * vij;
+                    forces_hard(1, Eigen::seq(3, 5)) = -sj * vij;
+                }
+                else    // Correct torques to account for orientation norm constraint
+                {
+                    //T wi = ni.dot(-vij.matrix()); 
+                    //T wj = nj.dot(-vij.matrix()); 
+                    //forces_hard(0, Eigen::seq(3, 5)) = si * (wi * ni.array() + vij); 
+                    //forces_hard(1, Eigen::seq(3, 5)) = sj * (-wj * nj.array() - vij);
+                    forces_hard(0, Eigen::seq(3, 5)) = (si * ni).cross(vij.matrix()).array(); 
+                    forces_hard(1, Eigen::seq(3, 5)) = (sj * nj).cross(-vij.matrix()).array();  
+                }
+                #ifdef DEBUG_CHECK_CELL_CELL_REPULSIVE_FORCES_NAN
+                    if (forces_hard.isNaN().any() || forces_hard.isInf().any())
                     {
                         std::cerr << "Iteration " << iter
-                                  << ": Found nan in adhesive forces between cells " 
+                                  << ": Found nan in repulsive forces between cells " 
                                   << i << " and " << j << std::endl;
                         std::cerr << "Timestep: " << dt << std::endl;
                         pairLagrangianForcesSummary<T>(
@@ -1218,164 +1630,15 @@ Array<T, Dynamic, 6> cellCellInteractionForces(const Ref<const Array<T, Dynamic,
                             cells(j, __colseq_r), cells(j, __colseq_n),
                             cells(j, __colseq_dr), cells(j, __colseq_dn), 
                             cells(j, __colidx_half_l),
-                            dij.array(), si, sj, forces
-                        );
-                        throw std::runtime_error("Found nan in adhesive forces"); 
-                    }
-                #endif
-
-                // Update forces and store contact radius
-                dEdq.row(i) += forces.row(0); 
-                dEdq.row(j) += forces.row(1);
-                radii(k) = radius;  
-
-                // If the overlap exceeds the maximum, add an additional 
-                // hard-core repulsive force 
-                if (overlaps(k) > 2 * (R - Rcell))
-                {
-                    // The additional (hard-core) Hertzian force magnitude is
-                    // (4 / 3) * Ecell * sqrt(Rcell / 2) * pow(2 * Rcell + overlap - 2 * R, 1.5)
-                    T magnitude = repulsion_prefactors(1) * pow(overlaps(k) - 2 * (R - Rcell), 1.5);
-                    
-                    // Compute the derivatives of the cell-cell repulsion energy
-                    // between cells i and j
-                    Array<T, 3, 1> vij = magnitude * dijn; 
-                    Array<T, 2, 6> forces_hard;
-                    forces_hard(0, Eigen::seq(0, 2)) = vij; 
-                    forces_hard(1, Eigen::seq(0, 2)) = -vij;
-                    if (!include_constraint)
-                    {
-                        forces_hard(0, Eigen::seq(3, 5)) = si * vij;
-                        forces_hard(1, Eigen::seq(3, 5)) = -sj * vij;
-                    }
-                    else    // Correct torques to account for orientation norm constraint
-                    {
-                        //T wi = ni.dot(-vij.matrix()); 
-                        //T wj = nj.dot(-vij.matrix()); 
-                        //forces_hard(0, Eigen::seq(3, 5)) = si * (wi * ni.array() + vij); 
-                        //forces_hard(1, Eigen::seq(3, 5)) = sj * (-wj * nj.array() - vij);
-                        forces_hard(0, Eigen::seq(3, 5)) = (si * ni).cross(vij.matrix()).array(); 
-                        forces_hard(1, Eigen::seq(3, 5)) = (sj * nj).cross(-vij.matrix()).array();  
-                    }
-                    #ifdef DEBUG_CHECK_CELL_CELL_REPULSIVE_FORCES_NAN
-                        if (forces_hard.isNaN().any() || forces_hard.isInf().any())
-                        {
-                            std::cerr << "Iteration " << iter
-                                      << ": Found nan in repulsive forces between cells " 
-                                      << i << " and " << j << std::endl;
-                            std::cerr << "Timestep: " << dt << std::endl;
-                            pairLagrangianForcesSummary<T>(
-                                cells(i, __colseq_r), cells(i, __colseq_n),
-                                cells(i, __colseq_dr), cells(i, __colseq_dn), 
-                                cells(i, __colidx_half_l),
-                                cells(j, __colseq_r), cells(j, __colseq_n),
-                                cells(j, __colseq_dr), cells(j, __colseq_dn), 
-                                cells(j, __colidx_half_l),
-                                dij.array(), si, sj, forces_hard
-                            );
-                            throw std::runtime_error("Found nan in repulsive forces"); 
-                        }
-                    #endif
-
-                    // Update forces 
-                    dEdq.row(i) += forces_hard.row(0); 
-                    dEdq.row(j) += forces_hard.row(1);
-                }
-            }
-        }
-    }
-    // Otherwise ... 
-    else 
-    { 
-        // The prefactor values should be:
-        //     repulsion_prefactors(0) = (4 / 3) * E0 * sqrt(R / 2)
-        //     repulsion_prefactors(1) = (4 / 3) * Ecell * sqrt(Rcell / 2)
-        //     repulsion_prefactors(2) = (4 / 3) * E0 * sqrt(R / 2) * pow(2 * (R - Rcell), 1.5)
-
-        // For each pair of neighboring cells ...
-        for (int k = 0; k < m; ++k)
-        {
-            int i = static_cast<int>(neighbors(k, 0)); 
-            int j = static_cast<int>(neighbors(k, 1));
-            Matrix<T, 3, 1> dij = neighbors(k, Eigen::seq(2, 4)).matrix();
-            T si = neighbors(k, 5);                       // Cell-body coordinate along cell i
-            T sj = neighbors(k, 6);                       // Cell-body coordinate along cell j
-            Array<T, 3, 1> dijn = dij / distances(k);     // Normalized distance vector 
-            T overlap = overlaps(k);                      // Cell-cell overlap
-
-            // Define the repulsive force magnitude and contact radius  
-            T magnitude = 0; 
-            T radius = 0; 
-
-            // Case 1: the overlap is positive but less than 2 * (R - Rcell)
-            // (i.e., it is limited to within the EPS coating)
-            if (overlap > 0 && overlap <= 2 * (R - Rcell))
-            {
-                // The force magnitude is (4 / 3) * E0 * sqrt(R / 2) * pow(overlap, 1.5)
-                magnitude = repulsion_prefactors(0) * pow(overlap, 1.5);
-                radius = sqrt(Req * overlap);  
-            }
-            // Case 2: the overlap is instead greater than 2 * R - 2 * Rcell
-            // (i.e., it encroaches into the bodies of the two cells)
-            else if (overlap > 2 * (R - Rcell))
-            {
-                // The force magnitude is (4 / 3) * E0 * sqrt(R / 2) * pow(2 * (R - Rcell), 1.5)
-                // + (4 / 3) * Ecell * sqrt(Rcell / 2) * pow(2 * Rcell + overlap - 2 * R, 1.5)
-                T term1 = repulsion_prefactors(2);  
-                T term2 = repulsion_prefactors(1) * pow(overlap - 2 * (R - Rcell), 1.5);
-                magnitude = term1 + term2;
-                radius = sqrt(Req * 2 * (R - Rcell));  
-            }
-            
-            if (overlap > 0)
-            {
-                // Compute the derivatives of the cell-cell repulsion energy
-                // between cells i and j
-                Array<T, 3, 1> vij = magnitude * dijn; 
-                Array<T, 2, 6> forces;
-                forces(0, Eigen::seq(0, 2)) = vij; 
-                forces(1, Eigen::seq(0, 2)) = -vij; 
-                if (!include_constraint)
-                {
-                    forces(0, Eigen::seq(3, 5)) = si * vij;
-                    forces(1, Eigen::seq(3, 5)) = -sj * vij;
-                }
-                else    // Correct torques to account for orientation norm constraint
-                {
-                    Matrix<T, 3, 1> ni = cells(i, __colseq_n).matrix(); 
-                    Matrix<T, 3, 1> nj = cells(j, __colseq_n).matrix(); 
-                    //T wi = ni.dot(-vij.matrix()); 
-                    //T wj = nj.dot(-vij.matrix()); 
-                    //forces(0, Eigen::seq(3, 5)) = si * (wi * ni.array() + vij); 
-                    //forces(1, Eigen::seq(3, 5)) = sj * (-wj * nj.array() - vij);
-                    forces(0, Eigen::seq(3, 5)) = (si * ni).cross(vij.matrix()).array();
-                    forces(1, Eigen::seq(3, 5)) = (sj * nj).cross(-vij.matrix()).array();  
-                }
-                #ifdef DEBUG_CHECK_CELL_CELL_REPULSIVE_FORCES_NAN
-                    if (forces.isNaN().any() || forces.isInf().any())
-                    {
-                        std::cerr << "Iteration " << iter
-                                  << ": Found nan in repulsive forces between cells " 
-                                  << i << " and " << j << std::endl;
-                        std::cerr << "Timestep: " << dt << std::endl; 
-                        pairLagrangianForcesSummary<T>(
-                            cells(i, __colseq_r), cells(i, __colseq_n),
-                            cells(i, __colseq_dr), cells(i, __colseq_dn), 
-                            cells(i, __colidx_half_l),
-                            cells(j, __colseq_r), cells(j, __colseq_n),
-                            cells(j, __colseq_dr), cells(j, __colseq_dn), 
-                            cells(j, __colidx_half_l),
-                            neighbors(k, Eigen::seq(2, 4)), si, sj, 
-                            forces
+                            dij.array(), si, sj, forces_hard
                         );
                         throw std::runtime_error("Found nan in repulsive forces"); 
                     }
                 #endif
 
-                // Update forces and store contact radius
-                dEdq.row(i) += forces.row(0); 
-                dEdq.row(j) += forces.row(1);
-                radii(k) = radius;  
+                // Update forces 
+                dEdq.row(i) += forces_hard.row(0); 
+                dEdq.row(j) += forces_hard.row(1);
             }
         }
     }
@@ -1443,7 +1706,7 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
                                            const T nz_threshold, 
                                            const AdhesionMode adhesion_mode,
                                            std::unordered_map<std::string, T>& adhesion_params,
-                                           JKRData<T>& jkr_data,
+                                           std::unique_ptr<JKRData<T> >& jkr_data,
                                            const int colidx_gamma,
                                            const FrictionMode friction_mode, 
                                            const int colidx_eta_cell_cell,  
@@ -1465,13 +1728,25 @@ Array<T, Dynamic, 6> getConservativeForces(const Ref<const Array<T, Dynamic, Dyn
             ss(i) = sstar(cells(i, __colidx_rz), cells(i, __colidx_nz), R); 
     }
 
-    // Compute the cell-cell interaction forces 
-    Array<T, Dynamic, 6> dEdq_cell_interaction = cellCellInteractionForces<T>(
-        cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors,
-        nz_threshold, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
-        friction_mode, colidx_eta_cell_cell, no_surface, include_constraint,
-        cell_cell_coulomb_coeff
-    ); 
+    // Compute the cell-cell interaction forces
+    Array<T, Dynamic, 6> dEdq_cell_interaction;
+    if (adhesion_mode == AdhesionMode::NONE)
+    {
+        dEdq_cell_interaction = cellCellInteractionForces<T>(
+            cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors,
+            nz_threshold, friction_mode, colidx_eta_cell_cell, no_surface,
+            include_constraint, cell_cell_coulomb_coeff
+        );
+    }
+    else
+    {
+        dEdq_cell_interaction = cellCellInteractionForces<T>(
+            cells, neighbors, dt, iter, R, Rcell, E0, repulsion_prefactors,
+            nz_threshold, adhesion_mode, adhesion_params, jkr_data, colidx_gamma,
+            friction_mode, colidx_eta_cell_cell, no_surface, include_constraint,
+            cell_cell_coulomb_coeff
+        );
+    }
     
     // Compute the cell-surface interaction forces (if present)
     Array<T, Dynamic, 6> dEdq_surface_repulsion = Array<T, Dynamic, 6>::Zero(n, 6);
@@ -1741,7 +2016,8 @@ Array<T, Dynamic, 6> getVelocities(const Ref<const Array<T, Dynamic, Dynamic> >&
                                    const Ref<const Array<T, Dynamic, 6> >& noise,
                                    const AdhesionMode adhesion_mode,
                                    std::unordered_map<std::string, T>& adhesion_params,
-                                   JKRData<T>& jkr_data, const int colidx_gamma,
+                                   std::unique_ptr<JKRData<T> >& jkr_data,
+                                   const int colidx_gamma,
                                    const FrictionMode friction_mode,
                                    const int colidx_eta_cell_cell,  
                                    const bool no_surface, const bool multithread,
@@ -2140,8 +2416,8 @@ std::pair<Array<T, Dynamic, Dynamic>, Array<T, Dynamic, 6> >
                            boost::random::uniform_01<>& uniform_dist,
                            const AdhesionMode adhesion_mode,
                            std::unordered_map<std::string, T>& adhesion_params,
-                           JKRData<T>& jkr_data, const int colidx_gamma,
-                           const FrictionMode friction_mode, 
+                           std::unique_ptr<JKRData<T> >& jkr_data,
+                           const int colidx_gamma, const FrictionMode friction_mode, 
                            const int colidx_eta_cell_cell, const bool no_surface,
                            const T cell_cell_coulomb_coeff = 1.0,
                            const T cell_surface_coulomb_coeff = 1.0,
@@ -2401,7 +2677,8 @@ Array<T, Dynamic, Dynamic> stepVelocityVerlet(const Ref<const Array<T, Dynamic, 
                                               boost::random::uniform_01<>& uniform_dist, 
                                               const AdhesionMode adhesion_mode,
                                               std::unordered_map<std::string, T>& adhesion_params,
-                                              JKRData<T>& jkr_data, const int colidx_gamma,
+                                              std::unique_ptr<JKRData<T> >& jkr_data,
+                                              const int colidx_gamma,
                                               const FrictionMode friction_mode, 
                                               const int colidx_eta_cell_cell, 
                                               const bool no_surface,
