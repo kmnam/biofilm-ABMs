@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/6/2025
+ *     10/8/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -117,13 +117,13 @@ std::unordered_map<int, T> calculateJKRContactRadii(const Ref<const Matrix<T, Dy
  * @returns Table of calculated JKR contact radii. 
  */
 template <typename T, int N = 100>
-R2ToR1Table<T> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >& delta,
-                                        const Ref<const Matrix<T, Dynamic, 1> >& gamma, 
-                                        const T R, const T E0,
-                                        const T imag_tol = 1e-20, 
-                                        const T aberth_tol = 1e-20)
+TupleToScalarTable<T, 2> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >& delta,
+                                                  const Ref<const Matrix<T, Dynamic, 1> >& gamma, 
+                                                  const T R, const T E0,
+                                                  const T imag_tol = 1e-20, 
+                                                  const T aberth_tol = 1e-20)
 {
-    R2ToR1Table<T> radii; 
+    TupleToScalarTable<T, 2> radii; 
 
     // For each overlap distance ... 
     for (int i = 0; i < delta.size(); ++i)
@@ -133,8 +133,9 @@ R2ToR1Table<T> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >&
             // Calculate the JKR contact radius
             auto result = jkrContactRadius<T, N>(
                 delta(i), R / 2, E0, gamma(j), imag_tol, aberth_tol
-            ); 
-            radii[std::make_pair(i, j)] = result.second; 
+            );
+            std::array<int, 2> key = {i, j};  
+            radii[key] = result.second; 
         }
     }
 
@@ -165,15 +166,15 @@ R2ToR1Table<T> calculateJKRContactRadii(const Ref<const Matrix<T, Dynamic, 1> >&
  * @returns Table of calculated principal radii of curvature. 
  */
 template <typename T>
-R3ToR2Table<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1> >& theta,
-                                            const Ref<const Matrix<T, Dynamic, 1> >& half_l,
-                                            const Ref<const Matrix<T, Dynamic, 1> >& coords,
-                                            const T R, 
-                                            const bool calibrate_endpoint_radii = true, 
-                                            const T project_tol = 1e-6,
-                                            const int project_max_iter = 100)
+TupleToTupleTable<T, 3, 2> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1> >& theta,
+                                                        const Ref<const Matrix<T, Dynamic, 1> >& half_l,
+                                                        const Ref<const Matrix<T, Dynamic, 1> >& coords,
+                                                        const T R, 
+                                                        const bool calibrate_endpoint_radii = true, 
+                                                        const T project_tol = 1e-6,
+                                                        const int project_max_iter = 100)
 {
-    R3ToR2Table<T> radii; 
+    TupleToTupleTable<T, 3, 2> radii; 
 
     // For each cell half-length ... 
     for (int j = 0; j < half_l.size(); ++j)
@@ -201,11 +202,13 @@ R3ToR2Table<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1
                 T rmin = radii_.second; 
 
                 // Calibrate if desired
-                std::tuple<int, int, int> tuple = std::make_tuple(i, j, k); 
-                if (!calibrate_endpoint_radii) 
-                    radii[tuple] = std::make_pair(rmax, rmin);
+                std::array<int, 3> key = {i, j, k};
+                std::array<T, 2> values; 
+                if (!calibrate_endpoint_radii)
+                    values = {rmax, rmin}; 
                 else
-                    radii[tuple] = std::make_pair(rmax_factor * rmax, R); 
+                    values = {rmax_factor * rmax, R}; 
+                radii[key] = values;
             }
         }
     }
@@ -250,21 +253,21 @@ R3ToR2Table<T> calculateCurvatureRadiiTable(const Ref<const Matrix<T, Dynamic, 1
  * @returns Table of calculated JKR force magnitudes and contact radii. 
  */
 template <typename T, int N = 100>
-R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& Rx,
-                                      const Ref<const Matrix<T, Dynamic, 1> >& phi,
-                                      const Ref<const Matrix<T, Dynamic, 1> >& delta,
-                                      const T gamma, const T R, const T E0,
-                                      const T max_overlap = -1, 
-                                      const T min_aspect_ratio = 0.01,
-                                      const T max_aspect_ratio = 0.99,  
-                                      const T brent_tol = 1e-8, 
-                                      const int brent_max_iter = 1000, 
-                                      const T init_bracket_dx = 1e-3, 
-                                      const int n_tries_bracket = 5,
-                                      const T imag_tol = 1e-20, 
-                                      const T aberth_tol = 1e-20)
+TupleToTupleTable<T, 4, 2> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& Rx,
+                                                  const Ref<const Matrix<T, Dynamic, 1> >& phi,
+                                                  const Ref<const Matrix<T, Dynamic, 1> >& delta,
+                                                  const T gamma, const T R, const T E0,
+                                                  const T max_overlap = -1, 
+                                                  const T min_aspect_ratio = 0.01,
+                                                  const T max_aspect_ratio = 0.99,  
+                                                  const T brent_tol = 1e-8, 
+                                                  const int brent_max_iter = 1000, 
+                                                  const T init_bracket_dx = 1e-3, 
+                                                  const int n_tries_bracket = 5,
+                                                  const T imag_tol = 1e-20, 
+                                                  const T aberth_tol = 1e-20)
 {
-    R4ToR2Table<T> forces; 
+    TupleToTupleTable<T, 4, 2> forces; 
 
     // For each cell-cell configuration ...
     const T Ry = R; 
@@ -306,11 +309,11 @@ R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
                     );
                     for (int k = 0; k < phi.size(); ++k)
                     {
-                        auto tuple = std::make_tuple(i, j, k, m); 
-                        forces[tuple] = std::make_pair(std::get<0>(result), std::get<1>(result));
+                        std::array<int, 4> key = {i, j, k, m};
+                        std::array<T, 2> values = {std::get<0>(result), std::get<1>(result)}; 
+                        forces[key] = values; 
                     }
                 }
-
             }
             // Otherwise, the equivalent radii of curvature do depend on the
             // angle
@@ -348,8 +351,9 @@ R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
                             brent_max_iter, init_bracket_dx, n_tries_bracket, 
                             imag_tol, aberth_tol, false
                         );
-                        auto tuple = std::make_tuple(i, j, k, m); 
-                        forces[tuple] = std::make_pair(std::get<0>(result), std::get<1>(result));
+                        std::array<int, 4> key = {i, j, k, m};
+                        std::array<T, 2> values = {std::get<0>(result), std::get<1>(result)};
+                        forces[key] = values;  
                     }
                 }
             }
@@ -361,19 +365,22 @@ R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
 
 /**
  * Tabulate the JKR force magnitudes and contact radii at a given collection 
- * of cell-cell contact configurations, which are parametrized by the equivalent
+ * of cell-cell contact configurations, which are parametrized by the cells'
  * principal radii of curvature and overlap distance. 
  *
  * Each contact point is parametrized by:
  *
- * (1, 2) the equivalent principal radii of curvature at the contact point, 
- * (3) the overlap distance, and 
- * (4) the surface adhesion energy density.  
+ * (1, 2) the *maximum* principal radii of curvature at the contact point, 
+ * (3) the angle between the long axes of the cells, 
+ * (4) the overlap distance, and 
+ * (5) the surface adhesion energy density. 
  *
- * @param Rx Input mesh of values for the larger equivalent principal radius
- *           of curvature at the contact point.  
- * @param Ry Input mesh of values for the smaller equivalent principal radius
- *           of curvature at the contact point. 
+ * The minimum principal radii of curvature are fixed to the spherocylinder radius.  
+ *
+ * @param Rx Input mesh of values for the larger principal radius of curvature
+ *           at the contact point.  
+ * @param phi Input mesh of values for the angle between the cells' orientation
+ *            vectors.  
  * @param delta Input mesh of overlap distances.
  * @param gamma Input mesh of surface adhesion energy densities. 
  * @param E0 Elastic modulus. 
@@ -391,43 +398,120 @@ R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& R
  * @returns Table of calculated JKR force magnitudes and contact radii. 
  */
 template <typename T, int N = 100>
-R4ToR2Table<T> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& Rx,
-                                      const Ref<const Matrix<T, Dynamic, 1> >& Ry,
-                                      const Ref<const Matrix<T, Dynamic, 1> >& delta,
-                                      const Ref<const Matrix<T, Dynamic, 1> >& gamma, 
-                                      const T E0, const T max_overlap = -1, 
-                                      const T min_aspect_ratio = 0.01, 
-                                      const T max_aspect_ratio = 0.99,  
-                                      const T brent_tol = 1e-8, 
-                                      const int brent_max_iter = 1000, 
-                                      const T init_bracket_dx = 1e-3, 
-                                      const int n_tries_bracket = 5,
-                                      const T imag_tol = 1e-20, 
-                                      const T aberth_tol = 1e-20)
+TupleToTupleTable<T, 5, 2> calculateJKRForceTable(const Ref<const Matrix<T, Dynamic, 1> >& Rx,
+                                                  const Ref<const Matrix<T, Dynamic, 1> >& phi,
+                                                  const Ref<const Matrix<T, Dynamic, 1> >& delta,
+                                                  const Ref<const Matrix<T, Dynamic, 1> >& gamma, 
+                                                  const T R, const T E0,
+                                                  const T max_overlap = -1, 
+                                                  const T min_aspect_ratio = 0.01, 
+                                                  const T max_aspect_ratio = 0.99,  
+                                                  const T brent_tol = 1e-8, 
+                                                  const int brent_max_iter = 1000, 
+                                                  const T init_bracket_dx = 1e-3, 
+                                                  const int n_tries_bracket = 5,
+                                                  const T imag_tol = 1e-20, 
+                                                  const T aberth_tol = 1e-20)
 {
-    R4ToR2Table<T> forces; 
+    TupleToTupleTable<T, 5, 2> forces; 
 
     // For each cell-cell configuration ...
+    const T Ry = R; 
     for (int i = 0; i < Rx.size(); ++i)
     {
-        for (int j = 0; j < Ry.size(); ++j)
+        for (int j = i; j < Rx.size(); ++j)
         {
-            std::cout << "... Calculating anisotropic JKR forces for Rx = "
-                      << Rx(i) << ", Ry = " << Ry(j) << std::endl; 
-            for (int k = 0; k < delta.size(); ++k)
+            // If Rx(i) == Ry or Rx(j) == Ry, then the equivalent radii of 
+            // curvature do not depend on the angle
+            if (abs(Rx(i) - Ry) < 1e-8 || abs(Rx(j) - Ry) < 1e-8)
             {
-                for (int m = 0; m < gamma.size(); ++m)
+                // Calculate the equivalent principal radii of curvature 
+                //
+                // First calculate B and A, with the added assumption that B > A 
+                T sum = 0.5 * (1.0 / Rx(i) + 1.0 / Ry + 1.0 / Rx(j) + 1.0 / Ry);
+                T delta1 = (1.0 / Rx(i) - 1.0 / Ry); 
+                T delta2 = (1.0 / Rx(j) - 1.0 / Ry); 
+                T diff = 0.5 * sqrt(delta1 * delta1 + delta2 * delta2); 
+                T B = 0.5 * (sum + diff);
+                T A = sum - B;
+
+                // Calculate the equivalent radii of curvature (A < B, so Ra > Rb)
+                T Ra = 1.0 / (2 * A); 
+                T Rb = 1.0 / (2 * B);
+                std::cout << "... Calculating anisotropic JKR forces for Rx1 = "
+                          << Rx(i) << ", Rx2 = " << Rx(j) << ", Ry = " << Ry
+                          << " (angle-independent)" << std::endl;
+                std::cout << "==> Equivalent radii of curvature: Ra = " << Ra
+                          << ", Rb = " << Rb << std::endl;
+
+                for (int m = 0; m < delta.size(); ++m)
                 {
-                    // Store the JKR force magnitude and contact radius 
-                    auto tuple = std::make_tuple(i, j, k, m); 
-                    auto result = jkrContactAreaAndForceEllipsoid<T, N>(
-                        Rx(i), Ry(j), delta(k), E0, gamma(m), max_overlap, 
-                        min_aspect_ratio, max_aspect_ratio, brent_tol, 
-                        brent_max_iter, init_bracket_dx, n_tries_bracket, 
-                        imag_tol, aberth_tol, false
+                    for (int p = 0; p < gamma.size(); ++p)
+                    {
+                        // Store the JKR force magnitude and contact radius 
+                        auto result = jkrContactAreaAndForceEllipsoid<T, N>(
+                            Ra, Rb, delta(m), E0, gamma(p), max_overlap, 
+                            min_aspect_ratio, max_aspect_ratio, brent_tol, 
+                            brent_max_iter, init_bracket_dx, n_tries_bracket, 
+                            imag_tol, aberth_tol, false
+                        );
+                        for (int k = 0; k < phi.size(); ++k)
+                        {
+                            std::array<int, 5> key = {i, j, k, m, p};
+                            std::array<T, 2> values = {
+                                std::get<0>(result), std::get<1>(result)
+                            }; 
+                            forces[key] = values; 
+                        }
+                    }
+                }
+            }
+            // Otherwise, the equivalent radii of curvature do depend on the
+            // angle
+            else
+            {
+                for (int k = 0; k < phi.size(); ++k)
+                {
+                    // Calculate the equivalent principal radii of curvature 
+                    //
+                    // First calculate B and A, with the added assumption that B > A 
+                    T sum = 0.5 * (1.0 / Rx(i) + 1.0 / Ry + 1.0 / Rx(j) + 1.0 / Ry);
+                    T delta1 = (1.0 / Rx(i) - 1.0 / Ry); 
+                    T delta2 = (1.0 / Rx(j) - 1.0 / Ry); 
+                    T diff = 0.5 * sqrt(
+                        delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * phi(k))
                     );
-                    forces[tuple] = std::make_pair(std::get<0>(result), std::get<1>(result));
-                } 
+                    T B = 0.5 * (sum + diff);
+                    T A = sum - B;
+
+                    // Calculate the equivalent radii of curvature (A < B, so Ra > Rb)
+                    T Ra = 1.0 / (2 * A); 
+                    T Rb = 1.0 / (2 * B);
+                    std::cout << "... Calculating anisotropic JKR forces for Rx1 = "
+                              << Rx(i) << ", Rx2 = " << Rx(j) << ", Ry = " << Ry
+                              << ", angle = " << phi(k) << std::endl;
+                    std::cout << "==> Equivalent radii of curvature: Ra = " << Ra
+                              << ", Rb = " << Rb << std::endl;
+
+                    for (int m = 0; m < delta.size(); ++m)
+                    {
+                        for (int p = 0; p < gamma.size(); ++p)
+                        {
+                            // Store the JKR force magnitude and contact radius 
+                            auto result = jkrContactAreaAndForceEllipsoid<T, N>(
+                                Ra, Rb, delta(m), E0, gamma(p), max_overlap, 
+                                min_aspect_ratio, max_aspect_ratio, brent_tol, 
+                                brent_max_iter, init_bracket_dx, n_tries_bracket, 
+                                imag_tol, aberth_tol, false
+                            );
+                            std::array<int, 5> key = {i, j, k, m, p};
+                            std::array<T, 2> values = {
+                                std::get<0>(result), std::get<1>(result)
+                            };
+                            forces[key] = values; 
+                        } 
+                    }
+                }
             }
         }
     } 
@@ -453,10 +537,10 @@ template <typename T>
 std::tuple<Matrix<T, Dynamic, 1>,
            Matrix<T, Dynamic, 1>, 
            Matrix<T, Dynamic, 1>, 
-           R3ToR2Table<T> > parseCurvatureRadiiTable(const std::string& filename)
+           TupleToTupleTable<T, 3, 2> > parseCurvatureRadiiTable(const std::string& filename)
 {
     std::vector<T> theta, half_l, coords; 
-    R3ToR2Table<T> radii; 
+    TupleToTupleTable<T, 3, 2> radii; 
 
     // Open the file 
     std::ifstream infile(filename);
@@ -483,8 +567,10 @@ std::tuple<Matrix<T, Dynamic, 1>,
     Ry_curr = static_cast<T>(std::stod(token)); 
     theta.push_back(theta_curr); 
     half_l.push_back(half_l_curr); 
-    coords.push_back(coord_curr); 
-    radii[std::make_tuple(0, 0, 0)] = std::make_pair(Rx_curr, Ry_curr); 
+    coords.push_back(coord_curr);
+    std::array<int, 3> key = {0, 0, 0}; 
+    std::array<T, 2> value = {Rx_curr, Ry_curr};  
+    radii[key] = value; 
 
     // For each subsequent line in the file ...
     while (std::getline(infile, line))
@@ -527,8 +613,9 @@ std::tuple<Matrix<T, Dynamic, 1>,
                 coords.push_back(coord_next); 
             coord_i++; 
         }
-        auto tuple = std::make_tuple(theta_i, half_l_i, coord_i); 
-        radii[tuple] = std::make_pair(Rx_next, Ry_next); 
+        key = {theta_i, half_l_i, coord_i};
+        value = {Rx_next, Ry_next}; 
+        radii[key] = value; 
 
         theta_curr = theta_next; 
         half_l_curr = half_l_next; 
@@ -567,13 +654,13 @@ std::tuple<Matrix<T, Dynamic, 1>,
 template <typename T>
 std::tuple<Matrix<T, Dynamic, 1>,
            Matrix<T, Dynamic, 1>, 
-           Matrix<T, Dynamic, 1>, 
+           Matrix<T, Dynamic, 1>,
            T,
-           R3ToR2Table<T> > parseReducedJKRForceTable(const std::string& filename)
+           TupleToTupleTable<T, 4, 2> > parseReducedJKRForceTable(const std::string& filename)
 {
-    std::vector<T> Rx, Ry, delta;
+    std::vector<T> Rx, phi, delta;
     T gamma; 
-    R3ToR2Table<T> forces;
+    TupleToTupleTable<T, 4, 2> forces;
 
     // Open the file 
     std::ifstream infile(filename);
@@ -582,31 +669,60 @@ std::tuple<Matrix<T, Dynamic, 1>,
     // energy density 
     std::string line, token; 
     std::getline(infile, line); 
-    gamma = static_cast<T>(std::stod(line)); 
+    gamma = static_cast<T>(std::stod(line));
 
-    // Parse the first line in the file 
-    T Rx_curr, Ry_curr, delta_curr, force_curr, radius_curr,
-      Rx_next, Ry_next, delta_next, force_next, radius_next;
-    int Rx_i = 0; 
-    int Ry_i = 0; 
+    // First parse the rest of the file to extract the principal radii of 
+    // curvature
+    std::unordered_map<std::string, int> Rx_idx;
+    std::stringstream ss;
+    int Rx_i = 0;  
+    while (std::getline(infile, line))
+    {
+        ss << line; 
+        std::getline(ss, token, '\t');
+        if (Rx_idx.find(token) == Rx_idx.end())
+        {
+            Rx.push_back(static_cast<T>(std::stod(token)));  
+            Rx_idx[token] = Rx_i; 
+            Rx_i++; 
+        }
+        ss.str(std::string()); 
+        ss.clear(); 
+    }
+
+    // Close the file, reopen, and parse past the first line 
+    infile.close(); 
+    infile.open(filename); 
+    std::getline(infile, line); 
+
+    // Parse the second line in the file 
+    T Rx1_curr, Rx2_curr, phi_curr, delta_curr, force_curr, radius_curr,
+      Rx1_next, Rx2_next, phi_next, delta_next, force_next, radius_next;
+    int Rx1_i = 0;
+    int Rx2_i = 0; 
+    int phi_i = 0; 
     int delta_i = 0; 
     std::getline(infile, line);
-    std::stringstream ss; 
     ss << line; 
     std::getline(ss, token, '\t');
-    Rx_curr = static_cast<T>(std::stod(token)); 
+    Rx1_curr = static_cast<T>(std::stod(token));
+    Rx1_i = Rx_idx[token];  
     std::getline(ss, token, '\t'); 
-    Ry_curr = static_cast<T>(std::stod(token)); 
-    std::getline(ss, token, '\t'); 
+    Rx2_curr = static_cast<T>(std::stod(token));
+    Rx2_i = Rx_idx[token];  
+    std::getline(ss, token, '\t');
+    phi_curr = static_cast<T>(std::stod(token)); 
+    std::getline(ss, token, '\t');
     delta_curr = static_cast<T>(std::stod(token)); 
     std::getline(ss, token, '\t'); 
     force_curr = static_cast<T>(std::stod(token)); 
     std::getline(ss, token, '\t'); 
     radius_curr = static_cast<T>(std::stod(token));
-    Rx.push_back(Rx_curr); 
-    Ry.push_back(Ry_curr); 
-    delta.push_back(delta_curr); 
-    forces[std::make_tuple(0, 0, 0)] = std::make_pair(force_curr, radius_curr); 
+    phi.push_back(phi_curr); 
+    delta.push_back(delta_curr);
+    std::array<int, 4> key = {Rx1_i, Rx2_i, 0, 0}; 
+    std::array<T, 2> values = {force_curr, radius_curr}; 
+    forces[key] = values; 
 
     // For each subsequent line in the file ...
     while (std::getline(infile, line))
@@ -616,9 +732,13 @@ std::tuple<Matrix<T, Dynamic, 1>,
         ss.clear(); 
         ss << line; 
         std::getline(ss, token, '\t');
-        Rx_next = static_cast<T>(std::stod(token)); 
+        Rx1_next = static_cast<T>(std::stod(token));
+        Rx1_i = Rx_idx[token];  
         std::getline(ss, token, '\t'); 
-        Ry_next = static_cast<T>(std::stod(token)); 
+        Rx2_next = static_cast<T>(std::stod(token));
+        Rx2_i = Rx_idx[token];
+        std::getline(ss, token, '\t'); 
+        phi_next = static_cast<T>(std::stod(token)); 
         std::getline(ss, token, '\t'); 
         delta_next = static_cast<T>(std::stod(token)); 
         std::getline(ss, token, '\t'); 
@@ -627,33 +747,38 @@ std::tuple<Matrix<T, Dynamic, 1>,
         radius_next = static_cast<T>(std::stod(token));
 
         // Check which of the four input values is new
-        if (Rx_next != Rx_curr)         // Encountered a new Rx value 
+        if (Rx1_next != Rx1_curr)         // Encountered a new Rx1 value 
         {
-            Rx.push_back(Rx_next); 
-            Rx_i++;
-            Ry_i = 0; 
+            phi_i = 0;
             delta_i = 0; 
         }
-        else if (Ry_next != Ry_curr)    // Encountered a new Ry value 
+        else if (Rx2_next != Rx2_curr)    // Encountered a new Rx2 value 
         {
-            // If still processing the zeroth Rx value, add to list 
-            if (Rx_i == 0)
-                Ry.push_back(Ry_next); 
-            Ry_i++; 
+            phi_i = 0;
             delta_i = 0; 
         } 
+        else if (phi_next != phi_curr)    // Encountered a new phi value 
+        {
+            // If still processing the zeroth Rx1 and Rx2 values, add to list
+            if (Rx1_i == 0 && Rx2_i == 0)
+                phi.push_back(phi_next);
+            phi_i++;  
+            delta_i = 0; 
+        }
         else     // Encountered a new delta value 
         {
-            // If still processing the zeroth Rx and Ry values, add to list
-            if (Rx_i == 0 && Ry_i == 0)
+            // If still processing the zeroth Rx1, Rx2, and phi values, add to list
+            if (Rx1_i == 0 && Rx2_i == 0 && phi_i == 0)
                 delta.push_back(delta_next); 
             delta_i++; 
         }
-        auto tuple = std::make_tuple(Rx_i, Ry_i, delta_i); 
-        forces[tuple] = std::make_pair(force_next, radius_next); 
+        std::array<int, 4> key = {Rx1_i, Rx2_i, phi_i, delta_i};
+        std::array<T, 2> values = {force_next, radius_next}; 
+        forces[key] = values; 
 
-        Rx_curr = Rx_next; 
-        Ry_curr = Ry_next; 
+        Rx1_curr = Rx1_next; 
+        Rx2_curr = Rx2_next;
+        phi_curr = phi_next;  
         delta_curr = delta_next; 
         force_curr = force_next; 
         radius_curr = radius_next; 
@@ -662,13 +787,13 @@ std::tuple<Matrix<T, Dynamic, 1>,
     Matrix<T, Dynamic, 1> Rx_(Rx.size());
     for (int i = 0; i < Rx.size(); ++i)
         Rx_(i) = Rx[i];  
-    Matrix<T, Dynamic, 1> Ry_(Ry.size());
-    for (int i = 0; i < Ry.size(); ++i)
-        Ry_(i) = Ry[i];  
+    Matrix<T, Dynamic, 1> phi_(phi.size());
+    for (int i = 0; i < phi.size(); ++i)
+        phi_(i) = phi[i];  
     Matrix<T, Dynamic, 1> delta_(delta.size());
     for (int i = 0; i < delta.size(); ++i)
         delta_(i) = delta[i]; 
-    return std::make_tuple(Rx_, Ry_, delta_, gamma, forces);  
+    return std::make_tuple(Rx_, phi_, delta_, gamma, forces);  
 }
 
 /**
@@ -690,29 +815,55 @@ std::tuple<Matrix<T, Dynamic, 1>,
            Matrix<T, Dynamic, 1>, 
            Matrix<T, Dynamic, 1>, 
            Matrix<T, Dynamic, 1>,
-           R4ToR2Table<T> > parseJKRForceTable(const std::string& filename)
+           TupleToTupleTable<T, 5, 2> > parseJKRForceTable(const std::string& filename)
 {
-    std::vector<T> Rx, Ry, delta, gamma; 
-    R4ToR2Table<T> forces;
+    std::vector<T> Rx, phi, delta, gamma; 
+    TupleToTupleTable<T, 5, 2> forces;
 
     // Open the file 
     std::ifstream infile(filename);
 
-    // Parse the first line in the file 
+    // First parse the file to extract the principal radii of curvature
+    std::unordered_map<std::string, int> Rx_idx;
+    std::stringstream ss; 
     std::string line, token; 
-    T Rx_curr, Ry_curr, delta_curr, gamma_curr, force_curr, radius_curr,
-      Rx_next, Ry_next, delta_next, gamma_next, force_next, radius_next;
-    int Rx_i = 0; 
-    int Ry_i = 0; 
+    int Rx_i = 0;  
+    while (std::getline(infile, line))
+    {
+        ss << line; 
+        std::getline(ss, token, '\t');
+        if (Rx_idx.find(token) == Rx_idx.end())
+        {
+            Rx.push_back(static_cast<T>(std::stod(token)));  
+            Rx_idx[token] = Rx_i; 
+            Rx_i++; 
+        }
+        ss.str(std::string()); 
+        ss.clear(); 
+    }
+
+    // Close and reopen the file
+    infile.close(); 
+    infile.open(filename); 
+
+    // Parse the first line in the file 
+    T Rx1_curr, Rx2_curr, phi_curr, delta_curr, gamma_curr, force_curr, radius_curr,
+      Rx1_next, Rx2_next, phi_next, delta_next, gamma_next, force_next, radius_next;
+    int Rx1_i = 0; 
+    int Rx2_i = 0;
+    int phi_i = 0;  
     int delta_i = 0; 
     int gamma_i = 0; 
-    std::stringstream ss; 
     std::getline(infile, line);
     ss << line; 
     std::getline(ss, token, '\t');
-    Rx_curr = static_cast<T>(std::stod(token)); 
+    Rx1_curr = static_cast<T>(std::stod(token));
+    Rx1_i = Rx_idx[token];  
     std::getline(ss, token, '\t'); 
-    Ry_curr = static_cast<T>(std::stod(token)); 
+    Rx2_curr = static_cast<T>(std::stod(token)); 
+    Rx2_i = Rx_idx[token]; 
+    std::getline(ss, token, '\t');
+    phi_curr = static_cast<T>(std::stod(token)); 
     std::getline(ss, token, '\t'); 
     delta_curr = static_cast<T>(std::stod(token)); 
     std::getline(ss, token, '\t'); 
@@ -721,11 +872,12 @@ std::tuple<Matrix<T, Dynamic, 1>,
     force_curr = static_cast<T>(std::stod(token)); 
     std::getline(ss, token, '\t'); 
     radius_curr = static_cast<T>(std::stod(token));
-    Rx.push_back(Rx_curr); 
-    Ry.push_back(Ry_curr); 
+    phi.push_back(phi_curr); 
     delta.push_back(delta_curr); 
     gamma.push_back(gamma_curr);
-    forces[std::make_tuple(0, 0, 0, 0)] = std::make_pair(force_curr, radius_curr); 
+    std::array<int, 5> key = {Rx1_i, Rx2_i, 0, 0, 0}; 
+    std::array<T, 2> values = {force_curr, radius_curr}; 
+    forces[key] = values; 
 
     // For each subsequent line in the file ...
     while (std::getline(infile, line))
@@ -735,9 +887,13 @@ std::tuple<Matrix<T, Dynamic, 1>,
         ss.clear(); 
         ss << line; 
         std::getline(ss, token, '\t');
-        Rx_next = static_cast<T>(std::stod(token)); 
+        Rx1_next = static_cast<T>(std::stod(token));
+        Rx1_i = Rx_idx[token];  
         std::getline(ss, token, '\t'); 
-        Ry_next = static_cast<T>(std::stod(token)); 
+        Rx2_next = static_cast<T>(std::stod(token));
+        Rx2_i = Rx_idx[token];
+        std::getline(ss, token, '\t'); 
+        phi_next = static_cast<T>(std::stod(token)); 
         std::getline(ss, token, '\t'); 
         delta_next = static_cast<T>(std::stod(token)); 
         std::getline(ss, token, '\t'); 
@@ -747,44 +903,50 @@ std::tuple<Matrix<T, Dynamic, 1>,
         std::getline(ss, token, '\t'); 
         radius_next = static_cast<T>(std::stod(token));
 
-        // Check which of the four input values is new
-        if (Rx_next != Rx_curr)         // Encountered a new Rx value 
+        // Check which of the five input values is new
+        if (Rx1_next != Rx1_curr)         // Encountered a new Rx1 value 
         {
-            Rx.push_back(Rx_next); 
-            Rx_i++;
-            Ry_i = 0; 
-            delta_i = 0; 
+            phi_i = 0;
+            delta_i = 0;
+            gamma_i = 0; 
+        }
+        else if (Rx2_next != Rx2_curr)    // Encountered a new Rx2 value 
+        {
+            phi_i = 0;
+            delta_i = 0;
+            gamma_i = 0; 
+        }
+        else if (phi_next != phi_curr)    // Encountered a new phi value 
+        {
+            // If still processing the zeroth Rx1 and Rx2 values, add to list
+            if (Rx1_i == 0 && Rx2_i == 0)
+                phi.push_back(phi_next);
+            phi_i++; 
+            delta_i = 0;
             gamma_i = 0;  
         }
-        else if (Ry_next != Ry_curr)    // Encountered a new Ry value 
-        {
-            // If still processing the zeroth Rx value, add to list 
-            if (Rx_i == 0)
-                Ry.push_back(Ry_next); 
-            Ry_i++; 
-            delta_i = 0; 
-            gamma_i = 0; 
-        } 
         else if (delta_next != delta_curr)    // Encountered a new delta value
         {
-            // If still processing the zeroth Rx and Ry values, add to list
-            if (Rx_i == 0 && Ry_i == 0)
+            // If still processing the zeroth Rx, Ry, and phi values, add to list
+            if (Rx1_i == 0 && Rx2_i == 0 && phi_i == 0)
                 delta.push_back(delta_next); 
             delta_i++; 
             gamma_i = 0; 
         }
         else     // Encountered a new gamma value 
         {
-            // If still processing the zeroth Rx, Ry, and delta values, add to list
-            if (Rx_i == 0 && Ry_i == 0 && delta_i == 0)
+            // If still processing the zeroth Rx, Ry, phi, and delta values, add to list
+            if (Rx1_i == 0 && Rx2_i == 0 && phi_i == 0 && delta_i == 0)
                 gamma.push_back(gamma_next); 
             gamma_i++; 
         }
-        auto tuple = std::make_tuple(Rx_i, Ry_i, delta_i, gamma_i); 
-        forces[tuple] = std::make_pair(force_next, radius_next); 
+        std::array<int, 5> key = {Rx1_i, Rx2_i, phi_i, delta_i, gamma_i};
+        std::array<T, 2> values = {force_next, radius_next}; 
+        forces[key] = values; 
 
-        Rx_curr = Rx_next; 
-        Ry_curr = Ry_next; 
+        Rx1_curr = Rx1_next; 
+        Rx2_curr = Rx2_next;
+        phi_curr = phi_next;  
         delta_curr = delta_next; 
         gamma_curr = gamma_next; 
         force_curr = force_next; 
@@ -794,16 +956,16 @@ std::tuple<Matrix<T, Dynamic, 1>,
     Matrix<T, Dynamic, 1> Rx_(Rx.size());
     for (int i = 0; i < Rx.size(); ++i)
         Rx_(i) = Rx[i];  
-    Matrix<T, Dynamic, 1> Ry_(Ry.size());
-    for (int i = 0; i < Ry.size(); ++i)
-        Ry_(i) = Ry[i];  
+    Matrix<T, Dynamic, 1> phi_(phi.size());
+    for (int i = 0; i < phi.size(); ++i)
+        phi_(i) = phi[i];  
     Matrix<T, Dynamic, 1> delta_(delta.size());
     for (int i = 0; i < delta.size(); ++i)
         delta_(i) = delta[i]; 
     Matrix<T, Dynamic, 1> gamma_(gamma.size());
     for (int i = 0; i < gamma.size(); ++i)
         gamma_(i) = gamma[i]; 
-    return std::make_tuple(Rx_, Ry_, delta_, gamma_, forces);  
+    return std::make_tuple(Rx_, phi_, delta_, gamma_, forces);  
 }
 
 /**
@@ -1134,8 +1296,155 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             return -daughter_angle_z_bound + 2 * daughter_angle_z_bound * r;
         };
 
-    JKRData<T> jkr_data;
-    jkr_data.max_gamma = 0;
+    std::unique_ptr<JKRData<T> > jkr_data;
+    if (adhesion_mode != AdhesionMode::NONE)
+    {
+        // First parse polynomial-solving parameters, if given 
+        T imag_tol = 1e-20; 
+        T aberth_tol = 1e-20;
+        if (adhesion_params.find("jkr_imag_tol") != adhesion_params.end())
+            imag_tol = adhesion_params["jkr_imag_tol"]; 
+        if (adhesion_params.find("jkr_aberth_tol") != adhesion_params.end())
+            aberth_tol = adhesion_params["jkr_aberth_tol"];
+
+        // Parse the desired equilibrium cell-cell distance and solve for 
+        // the corresponding surface energy density  
+        const T eqdist = adhesion_params["eqdist"];
+        const T max_gamma = jkrOptimalSurfaceEnergyDensity<T, 100>(
+            R, Rcell, E0, eqdist, 100.0, 1e-6, 1e-8, 1e-8, 1e-8, 1000, 1000,
+            imag_tol, aberth_tol, true
+        );
+        const bool gamma_fixed = (switch_mode == SwitchMode::NONE);
+        T gamma_switch_rate;  
+        if (gamma_fixed || switch_timescale == 0)
+            gamma_switch_rate = std::numeric_limits<T>::infinity(); 
+        else
+            gamma_switch_rate = max_gamma / switch_timescale; 
+
+        // Initialize the surface energy density for each cell to be 
+        // the maximum value for group 1 cells and zero for group 2 cells
+        for (int i = 0; i < n; ++i)
+        {
+            if (cells(i, __colidx_group) == 1)
+                cells(i, __colidx_gamma) = max_gamma; 
+            else 
+                cells(i, __colidx_gamma) = 0.0; 
+        }
+
+        if (adhesion_mode == AdhesionMode::JKR_ISOTROPIC)
+        {
+            // Pre-compute isotropic JKR forces
+            int n_overlap = static_cast<int>(adhesion_params["n_mesh_overlap"]);
+            Matrix<T, Dynamic, 1> overlaps = Matrix<T, Dynamic, 1>::LinSpaced(
+                n_overlap, 0, 2 * (R - Rcell)
+            );
+            if (!gamma_fixed)    // Variable gamma
+            {
+                int n_gamma = static_cast<int>(adhesion_params["n_mesh_gamma"]);
+                Matrix<T, Dynamic, 1> gamma = Matrix<T, Dynamic, 1>::LinSpaced(
+                    n_gamma, 0, max_gamma
+                );
+                TupleToScalarTable<T, 2> contact_radii = calculateJKRContactRadii<T, 100>(
+                    overlaps, gamma, R, E0, imag_tol, aberth_tol
+                );
+                //jkr_data->max_gamma = max_gamma;
+                //jkr_data->gamma_switch_rate = gamma_switch_rate; 
+                //jkr_data->gamma_fixed = gamma_fixed;  
+                //jkr_data->overlaps = overlaps; 
+                //jkr_data->gamma = gamma;
+                //jkr_data->contact_radii = contact_radii;
+                //jkr_data->initialized = true;  
+                jkr_data = std::make_unique<IsotropicJKRDataVariableGamma<T> >(
+                    max_gamma, gamma_switch_rate, overlaps, gamma, contact_radii
+                ); 
+            }
+            else                 // Fixed gamma
+            {
+                std::unordered_map<int, T> contact_radii = calculateJKRContactRadii<T, 100>(
+                    overlaps, max_gamma, R, E0, imag_tol, aberth_tol
+                );
+                //jkr_data->max_gamma = max_gamma;
+                //jkr_data->gamma_switch_rate = gamma_switch_rate; 
+                //jkr_data->gamma_fixed = gamma_fixed;  
+                //jkr_data->overlaps = overlaps; 
+                //jkr_data->contact_radii = contact_radii; 
+                //jkr_data->initialized = true;  
+                jkr_data = std::make_unique<IsotropicJKRDataFixedGamma<T> >(
+                    max_gamma, overlaps, contact_radii 
+                ); 
+            } 
+        }
+        else     // adhesion_mode == AdhesionMode::JKR_ANISOTROPIC
+        {
+            // Parse pre-computed principal radii of curvature ... 
+            auto result1 = parseCurvatureRadiiTable<T>(adhesion_curvature_filename);
+            Matrix<T, Dynamic, 1> theta = std::get<0>(result1); 
+            Matrix<T, Dynamic, 1> half_l = std::get<1>(result1); 
+            Matrix<T, Dynamic, 1> centerline_coords = std::get<2>(result1); 
+            TupleToTupleTable<T, 3, 2> curvature_radii = std::get<3>(result1); 
+
+            // ... and pre-computed anisotropic JKR forces 
+            if (!gamma_fixed)    // Variable gamma
+            { 
+                auto result2 = parseJKRForceTable<T>(adhesion_jkr_forces_filename); 
+                Matrix<T, Dynamic, 1> Rx = std::get<0>(result2); 
+                Matrix<T, Dynamic, 1> phi = std::get<1>(result2); 
+                Matrix<T, Dynamic, 1> overlaps = std::get<2>(result2); 
+                Matrix<T, Dynamic, 1> gamma = std::get<3>(result2); 
+                TupleToTupleTable<T, 5, 2> forces = std::get<4>(result2);
+                /*
+                AnisotropicJKRDataVariableGamma<T> jkr_data_;
+                jkr_data_.max_gamma = max_gamma; 
+                jkr_data_.gamma_switch_rate = gamma_switch_rate; 
+                jkr_data_.gamma_fixed = gamma_fixed;  
+                jkr_data_.theta = theta; 
+                jkr_data_.half_l = half_l; 
+                jkr_data_.centerline_coords = centerline_coords; 
+                jkr_data_.overlaps = overlaps;
+                jkr_data_.gamma = gamma; 
+                jkr_data_.Rx = Rx; 
+                jkr_data_.phi = phi;
+                jkr_data_.curvature_radii = curvature_radii; 
+                jkr_data_.forces = forces; 
+                jkr_data_.initialized = true;
+                */ 
+                jkr_data = std::make_unique<AnisotropicJKRDataVariableGamma<T> >(
+                    max_gamma, gamma_switch_rate, overlaps, theta, half_l, 
+                    centerline_coords, Rx, phi, gamma, curvature_radii, forces
+                ); 
+            }
+            else                 // Fixed gamma
+            { 
+                auto result2 = parseReducedJKRForceTable<T>(adhesion_jkr_forces_filename); 
+                Matrix<T, Dynamic, 1> Rx = std::get<0>(result2); 
+                Matrix<T, Dynamic, 1> phi = std::get<1>(result2); 
+                Matrix<T, Dynamic, 1> overlaps = std::get<2>(result2); 
+                T gamma = std::get<3>(result2); 
+                TupleToTupleTable<T, 4, 2> forces = std::get<4>(result2);
+                /*
+                AnisotropicJKRDataFixedGamma<T> jkr_data_;
+                jkr_data_.max_gamma = gamma; 
+                jkr_data_.gamma_switch_rate = gamma_switch_rate; 
+                jkr_data_.gamma_fixed = gamma_fixed;  
+                jkr_data_.theta = theta; 
+                jkr_data_.half_l = half_l; 
+                jkr_data_.centerline_coords = centerline_coords; 
+                jkr_data_.overlaps = overlaps;
+                jkr_data_.Rx = Rx; 
+                jkr_data_.phi = phi;
+                jkr_data_.curvature_radii = curvature_radii; 
+                jkr_data_.forces = forces; 
+                jkr_data_.initialized = true;
+                */ 
+                jkr_data = std::make_unique<AnisotropicJKRDataFixedGamma<T> >(
+                    gamma, overlaps, theta, half_l, centerline_coords, Rx, 
+                    phi, curvature_radii, forces
+                ); 
+            }
+        }
+    }
+    /*
+    jkr_data->max_gamma = 0;
     if (adhesion_mode != AdhesionMode::NONE)
     {
         // First parse polynomial-solving parameters, if given 
@@ -1298,6 +1607,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         }
     }
+    */
     
     // Write simulation parameters to a dictionary
     std::map<std::string, std::string> params;
@@ -1788,18 +2098,18 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 {
                     if (cells(i, __colidx_group) == 1)
                     {
-                        if (cells(i, __colidx_gamma) < jkr_data.max_gamma)
+                        if (cells(i, __colidx_gamma) < jkr_data->max_gamma)
                         {
-                            cells(i, __colidx_gamma) += jkr_data.gamma_switch_rate * dt; 
-                            if (cells(i, __colidx_gamma) > jkr_data.max_gamma)
-                                cells(i, __colidx_gamma) = jkr_data.max_gamma;
+                            cells(i, __colidx_gamma) += jkr_data->gamma_switch_rate * dt; 
+                            if (cells(i, __colidx_gamma) > jkr_data->max_gamma)
+                                cells(i, __colidx_gamma) = jkr_data->max_gamma;
                         } 
                     }
                     else    // cells(i, __colidx_group == 2)
                     {
                         if (cells(i, __colidx_gamma) > 0)
                         {
-                            cells(i, __colidx_gamma) -= jkr_data.gamma_switch_rate * dt; 
+                            cells(i, __colidx_gamma) -= jkr_data->gamma_switch_rate * dt; 
                             if (cells(i, __colidx_gamma) < 0)
                                 cells(i, __colidx_gamma) = 0; 
                         }                     
