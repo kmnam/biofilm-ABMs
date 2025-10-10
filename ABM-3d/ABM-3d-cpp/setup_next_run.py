@@ -11,12 +11,25 @@ Last updated:
 import sys
 import os
 import glob
+import re
 import json
 
 ######################################################################
 if __name__ == '__main__':
-    # Collect input directories and next run index  
-    indirs = glob.glob(sys.argv[1])
+    # Collect input directories and next run index ...
+    #
+    # If there is a trailing '#' in the signature, whatever precedes the 
+    # '#' (which may include wildcards) must be a number representing the 
+    # replicate number (random seed)
+    signature = sys.argv[1]
+    signature_prefix = signature.rstrip('#')
+    signature_modified = (
+        signature.replace('#', '*') if signature.endswith('#') else signature
+    )
+    indirs = [
+        d for d in glob.glob(signature_modified)
+        if re.match(r'{}[0-9]+'.format(signature_prefix), d) is not None
+    ]
     idx = int(sys.argv[2])
     runname = 'run{}'.format(idx)
     cmdfilename = sys.argv[3]
