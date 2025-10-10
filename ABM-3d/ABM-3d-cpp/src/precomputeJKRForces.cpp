@@ -7,7 +7,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/6/2025
+ *     10/8/2025
  */
 
 #include <Eigen/Dense>
@@ -188,7 +188,7 @@ int main(int argc, char** argv)
     Matrix<T, Dynamic, 1> centerline_coords = Matrix<T, Dynamic, 1>::LinSpaced(
         n_mesh_centerline_coords, 0.0, 1.0
     );
-    R3ToR2Table<T> curvature_radii = calculateCurvatureRadiiTable<T>(
+    TupleToTupleTable<T, 3, 2> curvature_radii = calculateCurvatureRadiiTable<T>(
         theta, half_l, centerline_coords, R, calibrate_endpoint_radii,
         project_tol, project_max_iter
     );
@@ -204,9 +204,9 @@ int main(int argc, char** argv)
         {
             for (int k = 0; k < n_mesh_centerline_coords; ++k)
             {
-                auto tuple = std::make_tuple(i, j, k); 
-                T Rx_ = curvature_radii[tuple].first;
-                T Ry_ = curvature_radii[tuple].second; 
+                std::array<int, 3> key = {i, j, k}; 
+                T Rx_ = curvature_radii[key][0];
+                T Ry_ = curvature_radii[key][1]; 
                 if (Rx_ < min_Rx)
                     min_Rx = Rx_; 
                 if (Rx_ > max_Rx)
@@ -229,7 +229,7 @@ int main(int argc, char** argv)
     Matrix<T, Dynamic, 1> overlaps = Matrix<T, Dynamic, 1>::LinSpaced(
         n_mesh_overlap, 0, max_overlap
     );
-    R4ToR2Table<T> forces = calculateJKRForceTable<T>(
+    TupleToTupleTable<T, 4, 2> forces = calculateJKRForceTable<T>(
         Rx, phi, overlaps, gamma, R, E0, max_overlap, min_aspect_ratio,
         max_aspect_ratio, brent_tol, brent_max_iter, init_bracket_dx,
         n_tries_bracket, imag_tol, aberth_tol
@@ -246,10 +246,10 @@ int main(int argc, char** argv)
             {
                 for (int m = 0; m < n_mesh_overlap; ++m)
                 {
-                    auto tuple = std::make_tuple(i, j, k, m);
-                    auto result = forces[tuple]; 
-                    T force = result.first; 
-                    T radius = result.second;  
+                    std::array<int, 4> key = {i, j, k, m}; 
+                    auto result = forces[key]; 
+                    T force = result[0];
+                    T radius = result[1];
                     outfile << Rx(i) << '\t'
                             << Rx(j) << '\t'
                             << phi(k) << '\t'

@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/6/2025
+ *     10/8/2025
  */
 
 #ifndef ADHESION_POTENTIAL_FORCES_HPP
@@ -409,9 +409,9 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * @returns Matrix of generalized forces arising from the isotropic JKR
  *          interaction, together with the JKR contact radius.  
  */
-template <typename T>
-using R2ToR1Table = std::unordered_map<std::pair<int, int>, T,
-                                       boost::hash<std::pair<int, int> > >;
+template <typename T, int Dim>
+using TupleToScalarTable = std::unordered_map<std::array<int, Dim>, T, 
+                                              boost::hash<std::array<int, Dim> > >; 
 template <typename T, int Dim>
 std::pair<Array<T, 2, 2 * Dim>, T>
     forcesIsotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
@@ -421,7 +421,7 @@ std::pair<Array<T, 2, 2 * Dim>, T>
                                const T s, const T t,
                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_delta, 
                                const Ref<const Matrix<T, Dynamic, 1> >& jkr_table_gamma,
-                               R2ToR1Table<T>& jkr_radius_table, 
+                               TupleToScalarTable<T, 2>& jkr_radius_table, 
                                const bool include_constraint = true,
                                const T max_overlap = -1,
                                const bool interpolate = true)
@@ -471,15 +471,20 @@ std::pair<Array<T, 2, 2 * Dim>, T>
             T w11 = (d2 - delta) * (g2 - gamma) / denom; 
             T w12 = (d2 - delta) * (gamma - g1) / denom; 
             T w21 = (delta - d1) * (g2 - gamma) / denom; 
-            T w22 = (delta - d1) * (gamma - g1) / denom; 
-            radius += w11 * jkr_radius_table[std::make_pair(idx_d1, idx_g1)]; 
-            radius += w12 * jkr_radius_table[std::make_pair(idx_d1, idx_g2)]; 
-            radius += w21 * jkr_radius_table[std::make_pair(idx_d2, idx_g1)]; 
-            radius += w22 * jkr_radius_table[std::make_pair(idx_d2, idx_g2)];
+            T w22 = (delta - d1) * (gamma - g1) / denom;
+            std::array<int, 2> idx11 = {idx_d1, idx_g1}; 
+            std::array<int, 2> idx12 = {idx_d1, idx_g2}; 
+            std::array<int, 2> idx21 = {idx_d2, idx_g1}; 
+            std::array<int, 2> idx22 = {idx_d2, idx_g2};  
+            radius += w11 * jkr_radius_table[idx11]; 
+            radius += w12 * jkr_radius_table[idx12]; 
+            radius += w21 * jkr_radius_table[idx21]; 
+            radius += w22 * jkr_radius_table[idx22]; 
         }
         else 
         {
-            radius = jkr_radius_table[std::make_pair(idx_d1, idx_g1)]; 
+            std::array<int, 2> idx11 = {idx_d1, idx_g1}; 
+            radius = jkr_radius_table[idx11]; 
         }
 
         // Calculate the generalized forces
@@ -692,26 +697,26 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
  *          achieved.
  * @param radii_table_theta Array of input values for the angle between the 
- *                          overlap vector and the orientation vector, at 
+ *                          overlap vector and the orientation vector, for 
  *                          which the principal radii of curvature were pre-
  *                          computed (see below). 
  * @param radii_table_half_l Array of input values for the cell half-lengths
- *                           at which the principal radii of curvature were
+ *                           for which the principal radii of curvature were
  *                           pre-computed (see below). 
  * @param radii_table_coords Array of input values for the centerline 
- *                           coordinates at which the principal radii of 
+ *                           coordinates for which the principal radii of 
  *                           curvature were pre-computed (see below). 
  * @param curvature_radii_table Pre-computed table of values for the principal
  *                              radii of curvature as a function of the contact
  *                              point.
- * @param force_table_Rx Array of input values for the larger equivalent
- *                       principal radius of curvature at which the JKR force
- *                       and contact radius were pre-computed (see below). 
- * @param force_table_Ry Array of input values for the smaller equivalent
- *                       principal radius of curvature at which the JKR force
- *                       and contact radius were pre-computed (see below). 
+ * @param force_table_Rx Array of input values for the larger principal radius
+ *                       of curvature for which the JKR force and contact
+ *                       radius were pre-computed (see below). 
+ * @param force_table_phi Array of input values for the cell-cell angle for
+ *                        which the JKR force and contact radius were pre-
+ *                        computed (see below). 
  * @param force_table_delta Array of input values for the overlap distance 
- *                          at which the JKR force and contact radius were 
+ *                          for which the JKR force and contact radius were 
  *                          pre-computed (see below). 
  * @param force_table Pre-computed table of values for the JKR force magnitude 
  *                    and contact radius as a function of the contact point.  
@@ -722,14 +727,10 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * @returns Matrix of generalized forces arising from the anisotropic JKR
  *          interaction, together with the JKR contact radius.  
  */
-template <typename T>
-using R3ToR2Table = std::unordered_map<std::tuple<int, int, int>,
-                                       std::pair<T, T>,
-                                       boost::hash<std::tuple<int, int, int> > >;
-template <typename T>
-using R4ToR2Table = std::unordered_map<std::tuple<int, int, int, int>,
-                                       std::pair<T, T>, 
-                                       boost::hash<std::tuple<int, int, int, int> > >;
+template <typename T, int Dim1, int Dim2>
+using TupleToTupleTable = std::unordered_map<std::array<int, Dim1>, 
+                                             std::array<T, Dim2>,
+                                             boost::hash<std::array<int, Dim1> > >; 
 template <typename T, int Dim>
 std::pair<Array<T, 2, 2 * Dim>, T>
     forcesAnisotropicJKRLagrange(const Ref<const Matrix<T, Dim, 1> >& n1,
@@ -742,11 +743,11 @@ std::pair<Array<T, 2, 2 * Dim>, T>
                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_theta, 
                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_half_l,
                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_coords,
-                                 R3ToR2Table<T>& curvature_radii_table,
+                                 TupleToTupleTable<T, 3, 2>& curvature_radii_table, 
                                  const Ref<const Matrix<T, Dynamic, 1> >& force_table_Rx, 
                                  const Ref<const Matrix<T, Dynamic, 1> >& force_table_phi,
                                  const Ref<const Matrix<T, Dynamic, 1> >& force_table_delta,
-                                 R4ToR2Table<T>& force_table,  
+                                 TupleToTupleTable<T, 4, 2>& force_table,  
                                  const bool include_constraint = true,
                                  const T max_overlap = -1)
 {
@@ -782,14 +783,14 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         int idx_half_l2 = nearestValue<T>(radii_table_half_l, half_l2); 
         int idx_s = nearestValue<T>(radii_table_coords, abs(s) / half_l1); 
         int idx_t = nearestValue<T>(radii_table_coords, abs(t) / half_l2);
-        auto tuple1 = std::make_tuple(idx_theta1, idx_half_l1, idx_s); 
-        auto tuple2 = std::make_tuple(idx_theta2, idx_half_l2, idx_t);  
-        std::pair<T, T> radii1 = curvature_radii_table[tuple1]; 
-        std::pair<T, T> radii2 = curvature_radii_table[tuple2];
-        T Rx1 = radii1.first; 
-        T Ry1 = radii1.second;    // Should be R
-        T Rx2 = radii2.first; 
-        T Ry2 = radii2.second;    // Should be R
+        std::array<int, 3> tuple1 = {idx_theta1, idx_half_l1, idx_s}; 
+        std::array<int, 3> tuple2 = {idx_theta2, idx_half_l2, idx_t}; 
+        std::array<T, 2> radii1 = curvature_radii_table[tuple1]; 
+        std::array<T, 2> radii2 = curvature_radii_table[tuple2];
+        T Rx1 = radii1[0];
+        T Ry1 = radii1[1];    // Should be R
+        T Rx2 = radii2[0]; 
+        T Ry2 = radii2[1];    // Should be R
 
         // Ensure that Rx1 <= Rx2
         if (Rx1 > Rx2)
@@ -804,15 +805,15 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         if (phi > boost::math::constants::half_pi<T>())
             phi = boost::math::constants::pi<T>() - phi;
 
-        // Look up the corresponding JKR force magnitude and contact area
+        // Look up the corresponding JKR force magnitude and contact radius 
         int idx_Rx1 = nearestValue<T>(force_table_Rx, Rx1); 
         int idx_Rx2 = nearestValue<T>(force_table_Rx, Rx2); 
         int idx_phi = nearestValue<T>(force_table_phi, phi);
         int idx_delta = nearestValue<T>(force_table_delta, delta);
-        auto tuple3 = std::make_tuple(idx_Rx1, idx_Rx2, idx_phi, idx_delta);
-        std::pair<T, T> result = force_table[tuple3];
-        T force = result.first; 
-        radius = result.second;
+        std::array<int, 4> tuple3 = {idx_Rx1, idx_Rx2, idx_phi, idx_delta}; 
+        std::array<T, 2> result = force_table[tuple3];
+        T force = result[0];
+        radius = result[1];
 
         // Calculate the generalized forces
         //
@@ -877,29 +878,29 @@ std::pair<Array<T, 2, 2 * Dim>, T>
  * @param t Cell-body coordinate along cell 2 at which shortest distance is
  *          achieved.
  * @param radii_table_theta Array of input values for the angle between the 
- *                          overlap vector and the orientation vector, at 
+ *                          overlap vector and the orientation vector, for 
  *                          which the principal radii of curvature were pre-
  *                          computed (see below). 
  * @param radii_table_half_l Array of input values for the cell half-lengths
- *                           at which the principal radii of curvature were
+ *                           for which the principal radii of curvature were
  *                           pre-computed (see below). 
  * @param radii_table_coords Array of input values for the centerline 
- *                           coordinates at which the principal radii of 
+ *                           coordinates for which the principal radii of 
  *                           curvature were pre-computed (see below). 
  * @param curvature_radii_table Pre-computed table of values for the principal
  *                              radii of curvature as a function of the contact
  *                              point.
- * @param force_table_Rx Array of input values for the larger equivalent
- *                       principal radius of curvature at which the JKR force
- *                       and contact radius were pre-computed (see below). 
- * @param force_table_Ry Array of input values for the smaller equivalent
- *                       principal radius of curvature at which the JKR force
- *                       and contact radius were pre-computed (see below). 
+ * @param force_table_Rx Array of input values for the larger principal radius
+ *                       of curvature for which the JKR force and contact
+ *                       radius were pre-computed (see below). 
+ * @param force_table_phi Array of input values for the cell-cell angle for
+ *                        which the JKR force and contact radius were pre-
+ *                        computed (see below). 
  * @param force_table_delta Array of input values for the overlap distance 
- *                          at which the JKR force and contact radius were 
+ *                          for which the JKR force and contact radius were 
  *                          pre-computed (see below). 
  * @param force_table_gamma Array of input values for the surface adhesion 
- *                          energy density at which the JKR force and contact 
+ *                          energy density for which the JKR force and contact 
  *                          radius were pre-computed (see below). 
  * @param force_table Pre-computed table of values for the JKR force magnitude 
  *                    and contact radius as a function of the contact point.  
@@ -922,12 +923,12 @@ std::pair<Array<T, 2, 2 * Dim>, T>
                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_theta, 
                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_half_l,
                                  const Ref<const Matrix<T, Dynamic, 1> >& radii_table_coords,
-                                 R3ToR2Table<T>& curvature_radii_table,
+                                 TupleToTupleTable<T, 3, 2>& curvature_radii_table,
                                  const Ref<const Matrix<T, Dynamic, 1> >& force_table_Rx, 
-                                 const Ref<const Matrix<T, Dynamic, 1> >& force_table_Ry, 
+                                 const Ref<const Matrix<T, Dynamic, 1> >& force_table_phi,  
                                  const Ref<const Matrix<T, Dynamic, 1> >& force_table_delta,
                                  const Ref<const Matrix<T, Dynamic, 1> >& force_table_gamma,  
-                                 R4ToR2Table<T>& force_table,  
+                                 TupleToTupleTable<T, 5, 2>& force_table,  
                                  const bool include_constraint = true,
                                  const T max_overlap = -1)
 {
@@ -963,45 +964,38 @@ std::pair<Array<T, 2, 2 * Dim>, T>
         int idx_half_l2 = nearestValue<T>(radii_table_half_l, half_l2); 
         int idx_s = nearestValue<T>(radii_table_coords, abs(s) / half_l1); 
         int idx_t = nearestValue<T>(radii_table_coords, abs(t) / half_l2);
-        auto tuple1 = std::make_tuple(idx_theta1, idx_half_l1, idx_s); 
-        auto tuple2 = std::make_tuple(idx_theta2, idx_half_l2, idx_t);  
-        std::pair<T, T> radii1 = curvature_radii_table[tuple1]; 
-        std::pair<T, T> radii2 = curvature_radii_table[tuple2];
-        T Rx1 = radii1.first; 
-        T Ry1 = radii1.second; 
-        T Rx2 = radii2.first; 
-        T Ry2 = radii2.second;
+        std::array<int, 3> tuple1 = {idx_theta1, idx_half_l1, idx_s}; 
+        std::array<int, 3> tuple2 = {idx_theta2, idx_half_l2, idx_t};  
+        std::array<T, 2> radii1 = curvature_radii_table[tuple1]; 
+        std::array<T, 2> radii2 = curvature_radii_table[tuple2];
+        T Rx1 = radii1[0]; 
+        T Ry1 = radii1[1];    // Should be R
+        T Rx2 = radii2[0]; 
+        T Ry2 = radii2[1];    // Should be R
 
-        // First calculate B and A, with the added assumption that B > A 
-        T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
-        T theta3 = acosSafe<T>(n1.dot(n2));
-        T delta1 = (1.0 / Rx1 - 1.0 / Ry1); 
-        T delta2 = (1.0 / Rx2 - 1.0 / Ry2); 
-        T diff = 0.5 * sqrt(
-            delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * theta3)
-        );
-        T B = 0.5 * (sum + diff);
-        T A = sum - B;
-
-        // Calculate the composite radii of curvature (A < B, so Rx > Ry)
-        T Rx = 1.0 / (2 * A); 
-        T Ry = 1.0 / (2 * B);
-        if (Rx < Ry)
+        // Ensure that Rx1 <= Rx2
+        if (Rx1 > Rx2)
         {
-            T tmp = Rx; 
-            Rx = Ry; 
-            Ry = tmp; 
+            T tmp = Rx1; 
+            Rx1 = Rx2; 
+            Rx2 = tmp; 
         }
 
-        // Look up the corresponding JKR force and contact radius
-        int idx_Rx = nearestValue<T>(force_table_Rx, Rx);
-        int idx_Ry = nearestValue<T>(force_table_Ry, Ry);
+        // Get the angle between the two cells 
+        T phi = acosSafe<T>(n1.dot(n2));
+        if (phi > boost::math::constants::half_pi<T>())
+            phi = boost::math::constants::pi<T>() - phi;
+
+        // Look up the corresponding JKR force magnitude and contact radius
+        int idx_Rx1 = nearestValue<T>(force_table_Rx, Rx1); 
+        int idx_Rx2 = nearestValue<T>(force_table_Rx, Rx2);
+        int idx_phi = nearestValue<T>(force_table_phi, phi);  
         int idx_delta = nearestValue<T>(force_table_delta, delta);
         int idx_gamma = nearestValue<T>(force_table_gamma, gamma);
-        auto tuple3 = std::make_tuple(idx_Rx, idx_Ry, idx_delta, idx_gamma);
-        std::pair<T, T> result = force_table[tuple3];
-        T force = result.first; 
-        radius = result.second;
+        std::array<int, 5> tuple3 = {idx_Rx1, idx_Rx2, idx_phi, idx_delta, idx_gamma}; 
+        std::array<T, 2> result = force_table[tuple3];
+        T force = result[0]; 
+        radius = result[1]; 
 
         // Calculate the generalized forces
         //

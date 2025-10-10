@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/6/2025
+ *     10/8/2025
  */
 
 #ifndef BIOFILM_JKR_HPP
@@ -365,7 +365,7 @@ T jkrAspectRatioFromOverlap(const T Rx, const T Ry, const T E0, const T gamma,
                             const bool verbose = false)
 {
     // If Rx == Ry, return g = 1
-    if (Rx == Ry)
+    if (abs(Rx - Ry) < 1e-8)
         return 1; 
 
     // Calculate the curvature parameters \lambda and R
@@ -669,7 +669,7 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
     T g = jkrAspectRatioFromOverlap<T>(
         Rx, Ry, E0, gamma, delta_, min_aspect_ratio, max_aspect_ratio, 
         brent_tol, brent_max_iter, init_bracket_dx, n_tries_bracket, verbose
-    );   
+    );
 
     // If the aspect ratio is 1, use jkrContactRadius(), as the elliptic 
     // integrals are ill-defined
@@ -685,7 +685,7 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const T Rx, const T Ry,
         force = force1 - force2;    // Repulsive force minus attractive force 
     }
     else    // Otherwise ...
-    { 
+    {
         // Calculate the eccentricity
         T e = sqrt(1 - g * g); 
         T lambda = sqrt(Ry / Rx); 
