@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/8/2025
+ *     10/11/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -2153,10 +2153,17 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                           << ", dt = " << dt << std::endl;
             }
             params["t_curr"] = floatToString<T>(t);
+
+            // Write current population to file 
             std::stringstream ss; 
             ss << outprefix << "_iter" << iter << ".txt"; 
             std::string filename = ss.str();
             writeCells<T>(cells, params, filename, write_other_cols);
+
+            // Write lineage to file 
+            std::stringstream ss_lineage; 
+            ss_lineage << outprefix << "_lineage.txt"; 
+            writeLineage<T>(parents, ss_lineage.str());
         }
     }
 
