@@ -94,6 +94,10 @@ if __name__ == '__main__':
                 # frame for the continuation 
                 json_data['init_filename'] = os.path.abspath(final_filename)
 
+                # Add in the lineage file to the .json file 
+                lineage_filename = '_'.join(final_filename.split('_')[:-1]) + '_lineage.txt'
+                json_data['lineage_filename'] = os.path.abspath(lineage_filename)
+
                 # Write the updated .json file to the output directory
                 with open(os.path.join(outdir, prefix + '.json'), 'w') as f:
                     json.dump(json_data, f, indent=4)
