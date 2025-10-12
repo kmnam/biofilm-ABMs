@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/25/2025
+ *     10/12/2025
  */
 
 #ifndef BIOFILM_UTILS_3D_HPP
@@ -293,7 +293,6 @@ std::unordered_map<int, int> readLineage(const std::string filename)
  *                simulation.
  * @param filename Output file. 
  */
-template <typename T>
 void writeLineage(const std::vector<int>& parents, const std::string filename)
 {
     // Open output file 
@@ -309,6 +308,49 @@ void writeLineage(const std::vector<int>& parents, const std::string filename)
     
     // Close output file 
     outfile.close();  
+}
+
+/**
+ * Get the ancestry of the given cell in the given lineage. 
+ *
+ * @param cell_id Input cell ID. 
+ * @param parents Input lineage, which stores the parent for each cell.  
+ * @returns Ancestry of the given cell, in chronological order.
+ */
+std::vector<int> getAncestry(const int cell_id, std::vector<int>& parents)
+{
+    int parent_id; 
+    try
+    {
+        parent_id = parents.at(cell_id);
+    }
+    catch (const std::out_of_range& e)
+    {
+        throw std::runtime_error(
+            "Specified cell ID does not exist in specified lineage"
+        ); 
+    }
+    std::vector<int> ancestors;
+    ancestors.push_back(cell_id);  
+    ancestors.push_back(parent_id);
+    
+    while (parent_id != -1)
+    {
+        try
+        {
+            parent_id = parents.at(parent_id); 
+        }
+        catch (const std::out_of_range& e)
+        {
+            throw std::runtime_error(
+                "Specified cell ID does not exist in specified lineage"
+            ); 
+        }
+        ancestors.push_back(parent_id); 
+    }
+
+    std::reverse(ancestors.begin(), ancestors.end()); 
+    return ancestors; 
 }
 
 /**
