@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/30/2025
+ *     10/13/2025
  */
 
 #include <Eigen/Dense>
@@ -339,7 +339,7 @@ int main(int argc, char** argv)
 
     // Initialize simulation ...
     //
-    // Check whether an initial file was specified
+    // Check whether an initial population was specified
     Array<T, Dynamic, Dynamic> cells;
     int ncols; 
     if (adhesion_mode != AdhesionMode::NONE && friction_mode != FrictionMode::NONE)
@@ -350,12 +350,21 @@ int main(int argc, char** argv)
         ncols = __ncols_required + 1; 
     else 
         ncols = __ncols_required;  
-    std::string init_filename = ""; 
+    std::string init_filename = "";
+    std::string lineage_filename = "";  
     try
     {
-        init_filename = json_data["init_filename"].as_string().c_str(); 
+        init_filename = json_data["init_filename"].as_string().c_str();
     }
     catch (boost::wrapexcept<boost::system::system_error>& e) { }
+    try
+    {
+        lineage_filename = json_data["lineage_filename"].as_string().c_str(); 
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e) { }
+
+    // If an initial population was specified ...
+    std::vector<int> parents; 
     if (init_filename.size() > 0)
     {
         auto result = readCells<T>(init_filename); 
@@ -365,6 +374,42 @@ int main(int argc, char** argv)
             throw std::runtime_error(
                 "File specifying initial population contains incorrect number of "
                 "columns"
+            ); 
+        }
+        
+        // In this case, check whether a lineage was specified
+        if (lineage_filename.size() > 0)
+        {
+            std::unordered_map<int, int> lineage = readLineage(lineage_filename);
+            
+            // In this case, check that the cells in the initial population
+            // are specified in the lineage 
+            for (int i = 0; i < cells.rows(); ++i)
+            {
+                int id = static_cast<int>(cells(i, __colidx_id)); 
+                if (lineage.find(id) == lineage.end())
+                {
+                    throw std::runtime_error(
+                        "Input lineage file does not specify parent of cell "
+                        "in initial population"
+                    ); 
+                } 
+            }
+
+            // Define the vector of parent IDs
+            parents.resize(lineage.size());  
+            for (const auto& pair : lineage)
+            {
+                int child_id = pair.first; 
+                int parent_id = pair.second; 
+                parents[child_id] = parent_id; 
+            } 
+        }
+        else 
+        {
+            throw std::runtime_error(
+                "File specifying initial population was specified, but without "
+                "accompanying lineage file"
             ); 
         }
     }
@@ -388,12 +433,9 @@ int main(int argc, char** argv)
         else
             cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
                      eta_ambient, eta_surface, sigma0, 1;
+        parents.push_back(-1); 
     }
-
-    // Initialize parent IDs 
-    std::vector<int> parents; 
-    parents.push_back(-1); 
-    
+   
     // Run the simulation
     runSimulation<T>(
         cells, parents, integration_mode, max_iter, n_cells, max_time, R, Rcell,
