@@ -82,13 +82,15 @@ int main(int argc, char** argv)
     std::string lineage_filename = filenames.second;
 
     // Parse each simulation file ... 
-    std::vector<Array<double, Dynamic, Dynamic> > simulation; 
+    std::vector<Array<double, Dynamic, Dynamic> > simulation;
+    std::map<std::string, std::string> params;  
     std::vector<double> times; 
     for (auto& filename : frame_filenames)
     {
         auto result = readCells<double>(filename);
         simulation.push_back(result.first);
-        times.push_back(std::stod(result.second["t_curr"]));  
+        params = result.second; 
+        times.push_back(std::stod(params["t_curr"])); 
     }
 
     // Parse the lineage file 
@@ -122,6 +124,14 @@ int main(int argc, char** argv)
         std::vector<int> idx = sampleWithoutReplacement(n_final, n_sample, rng);
         for (const int& i : idx)
             cell_ids.push_back(static_cast<int>(cells_final(i, __colidx_id))); 
+    }
+    else if (option == "-a")
+    {
+        // Track lineages of all cells in the final frame 
+        Array<double, Dynamic, Dynamic> cells_final = simulation[simulation.size() - 1];  
+        const int n_final = cells_final.rows(); 
+        for (int i = 0; i < n_final; ++i)
+            cell_ids.push_back(static_cast<int>(cells_final(i, __colidx_id))); 
     } 
     else 
     {
@@ -144,7 +154,11 @@ int main(int argc, char** argv)
         std::stringstream ss; 
         ss << outprefix << "_traj" << cell_ids[i] << ".txt";
         std::ofstream outfile(ss.str());
-        outfile << std::setprecision(10); 
+        outfile << std::setprecision(10);
+        for (const auto& pair : params)
+        {
+            outfile << "# " << pair.first << " = " << pair.second << std::endl; 
+        } 
         for (int j = 0; j < trajectories[i].rows(); ++j)
         {
             for (int k = 0; k < 9; ++k)
