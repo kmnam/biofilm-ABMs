@@ -2163,7 +2163,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             // Write lineage to file 
             std::stringstream ss_lineage; 
             ss_lineage << outprefix << "_lineage.txt"; 
-            writeLineage<T>(parents, ss_lineage.str());
+            writeLineage(parents, ss_lineage.str());
         }
     }
 
@@ -2182,7 +2182,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     {
         std::stringstream ss_lineage; 
         ss_lineage << outprefix << "_lineage.txt"; 
-        writeLineage<T>(parents, ss_lineage.str());
+        writeLineage(parents, ss_lineage.str());
     }
 
     return std::make_pair(cells, parents);
