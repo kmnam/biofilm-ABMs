@@ -15,11 +15,14 @@
 #include <cmath>
 #include <algorithm>
 #include <Eigen/Dense>
+#include <boost/math/special_functions/ellint_1.hpp>
+#include <boost/math/special_functions/ellint_2.hpp>
 #include <boost/multiprecision/mpfr.hpp>
 #include "distances.hpp"
 #include "polynomials.hpp"
 #include "ellipsoid.hpp"
 #include "rootFinding.hpp"
+#include "utils.hpp"
 
 using namespace Eigen; 
 
@@ -32,7 +35,9 @@ using boost::multiprecision::acos;
 using std::sqrt;
 using boost::multiprecision::sqrt;
 using std::cbrt; 
-using boost::multiprecision::cbrt; 
+using boost::multiprecision::cbrt;
+using std::pow;
+using boost::multiprecision::pow; 
 
 /**
  * An enum that enumerates the different JKR force types. 
@@ -538,10 +543,10 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoidToSurface(const T Rx,
         T beta = ab.second; 
 
         // Calculate the equivalent contact radius (Eqns. 17 and 18)
-        c = jkrContactRadiusElliptical<T>(g, lambda, R, gamma, E0, Ke, Be, De, alpha, beta); 
+        c = jkrContactRadiusElliptical<T>(g, lambda, R_, gamma, E0, Ke, Be, De, alpha, beta); 
 
         // Calculate the force magnitude (Eqn. 15)
-        force = jkrContactForceElliptical<T>(g, R, E0, alpha, beta, c); 
+        force = jkrContactForceElliptical<T>(g, R_, E0, alpha, beta, c); 
     }
 
     return std::make_tuple(force, c, g); 
@@ -578,9 +583,10 @@ std::pair<T, T> jkrContactAreaAndForceEllipsoidToSurfaceApprox(const T Rx,
     typedef boost::multiprecision::number<boost::multiprecision::mpc_complex_backend<N> > ComplexType;
 
     // Non-dimensionalize the overlap distance 
-    const T prefactor1 = 4 * E0 / (9 * boost::math::constants::pi<T>() * gamma);
+    T dgamma = 2 * gamma;    // Surface energy conversion  
+    const T prefactor = 4 * E0 / (9 * boost::math::constants::pi<T>() * dgamma);
     const T R = sqrt(Rx * Ry); 
-    T delta_nd = delta * pow(prefactor1 / sqrt(R), static_cast<T>(2) / static_cast<T>(3));
+    T delta_nd = delta * pow(prefactor / sqrt(R), static_cast<T>(2) / static_cast<T>(3));
 
     // Calculate the dimensionless contact radius
     //
@@ -614,26 +620,26 @@ std::pair<T, T> jkrContactAreaAndForceEllipsoidToSurfaceApprox(const T Rx,
             "from radius-overlap polynomial"
         );
     }
-    T c_nd = static_cast<T>(std::max_element(roots_real.begin(), roots_real.end()));
+    T c_nd = static_cast<T>(*std::max_element(roots_real.begin(), roots_real.end()));
 
     // Dimensionalize the contact radius 
     T c = c_nd * cbrt(R * R / prefactor);
 
     // Calculate the dimensionless force
-    T c1 = 0.1467 * pow(ratio, 0.4872) + 0.7893; 
-    T c2 = -0.1188 * pow(ratio, 0.474) - 1.23; 
-    T alpha = 0.1741 * pow(ratio, 0.2446) + 1.281;  
+    T c1 = static_cast<T>(0.7893) + static_cast<T>(0.1467) * pow(static_cast<T>(ratio), static_cast<T>(0.4872)); 
+    T c2 = static_cast<T>(-1.23) - static_cast<T>(0.1188) * pow(static_cast<T>(ratio), static_cast<T>(0.474));
+    T alpha = static_cast<T>(1.281) + static_cast<T>(0.1741) * pow(static_cast<T>(ratio), static_cast<T>(0.2446));  
     T force_nd = c1 * c_nd * c_nd * c_nd + c2 * pow(c_nd, alpha); 
 
     // Dimensionalize the force 
-    T force = 3 * boost::math::constants::pi<T>() * R * gamma * force_nd;
+    T force = 3 * boost::math::constants::pi<T>() * R * dgamma * force_nd;
 
     return std::make_pair(force, c); 
 }
 
 /**
- * Solve for the JKR contact area and force for an elliptical JKR contact, 
- * according to the model given by Giudici et al., J. Phys. D (2025). 
+ * Convert the given adhesive contact problem between two prolate ellipsoids
+ * to an adhesive contact problem between an ellipsoid and a surface. 
  *
  * This function assumes that the two bodies are prolate ellipsoids whose
  * major semi-axis lengths are given by half_l1 + R and half_l2 + R, and
@@ -645,52 +651,30 @@ std::pair<T, T> jkrContactAreaAndForceEllipsoidToSurfaceApprox(const T Rx,
  * @param r2 Center of body 2.
  * @param n2 Orientation of body 2 (long axis). 
  * @param half_l2 Half-length of body 2 centerline. 
- * @param R Body radius. 
+ * @param R Body radius.
  * @param d12 Overlap vector. 
  * @param s Centerline coordinate along body 1 determining tail of overlap vector.  
- * @param t Centerline coordinate along body 2 determining head of overlap vector. 
- * @param E0 Elastic modulus. 
- * @param gamma Surface adhesion energy density.
+ * @param t Centerline coordinate along body 2 determining head of overlap vector.
  * @param max_overlap If non-negative, cap the overlap distance at this 
  *                    maximum value.
  * @param calibrate_endpoint_radii If true, calibrate the principal radii of
  *                                 curvature so that its minimum value is R. 
- * @param min_aspect_ratio Minimum aspect ratio of the contact area. 
  * @param project_tol Tolerance for ellipsoid projection. 
  * @param project_max_iter Maximum number of iterations for ellipsoid projection.
- * @param brent_tol Tolerance for Brent's method. 
- * @param brent_max_iter Maximum number of iterations for Brent's method.
- * @param init_bracket_dx Increment for bracket initialization. 
- * @param n_tries_bracket Number of attempts for bracket initialization. 
- * @param imag_tol Tolerance for determining whether a root for the the JKR
- *                 contact radius polynomial is real.
- * @param aberth_tol Tolerance for Aberth-Ehrlich method.
- * @param verbose If true, print intermittent output to stdout.  
- * @returns Estimated JKR force, as well as the contact area dimensions, in
- *          terms of the equivalent radius and the aspect ratio.  
  */
-template <typename T, int N = 100>
-std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1, 
-                                                    const Ref<const Matrix<T, 3, 1> >& n1,
-                                                    const T half_l1,  
-                                                    const Ref<const Matrix<T, 3, 1> >& r2, 
-                                                    const Ref<const Matrix<T, 3, 1> >& n2,
-                                                    const T half_l2, const T R,
-                                                    const Ref<const Matrix<T, 3, 1> >& d12,
-                                                    const T s, const T t, const T E0,
-                                                    const T gamma, const T max_overlap = -1,
-                                                    const bool calibrate_endpoint_radii = true, 
-                                                    const T min_aspect_ratio = 0.01,
-                                                    const T max_aspect_ratio = 0.999, 
-                                                    const T project_tol = 1e-6,
-                                                    const int project_max_iter = 100,
-                                                    const T brent_tol = 1e-8, 
-                                                    const int brent_max_iter = 1000,
-                                                    const T init_bracket_dx = 1e-3,
-                                                    const int n_tries_bracket = 5,
-                                                    const T imag_tol = 1e-20, 
-                                                    const T aberth_tol = 1e-20, 
-                                                    const bool verbose = false)
+template <typename T>
+std::pair<T, T> jkrConvertToSurfaceContactProblem(const Ref<const Matrix<T, 3, 1> >& r1, 
+                                                  const Ref<const Matrix<T, 3, 1> >& n1,
+                                                  const T half_l1,  
+                                                  const Ref<const Matrix<T, 3, 1> >& r2, 
+                                                  const Ref<const Matrix<T, 3, 1> >& n2,
+                                                  const T half_l2, const T R,
+                                                  const Ref<const Matrix<T, 3, 1> >& d12,
+                                                  const T s, const T t,
+                                                  const T max_overlap = -1,
+                                                  const bool calibrate_endpoint_radii = true,
+                                                  const T project_tol = 1e-6, 
+                                                  const int project_max_iter = 100) 
 {
     // Compute overlap between the two cells
     T dist = d12.norm(); 
@@ -742,8 +726,84 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
     T Rx = 1.0 / (2 * A); 
     T Ry = 1.0 / (2 * B);
 
-    // Solve the equivalent surface contact problem 
-    return jkrContactAreaAndForceEllipsoidToSurface<T>(
+    return std::make_pair(Rx, Ry); 
+}
+
+/**
+ * Solve for the JKR contact area and force for an elliptical JKR contact, 
+ * according to the model given by Giudici et al., J. Phys. D (2025). 
+ *
+ * This function assumes that the two bodies are prolate ellipsoids whose
+ * major semi-axis lengths are given by half_l1 + R and half_l2 + R, and
+ * whose minor semi-axis lengths are given by R. 
+ *
+ * @param r1 Center of body 1. 
+ * @param n1 Orientation of body 1 (long axis). 
+ * @param half_l1 Half-length of body 1 centerline.
+ * @param r2 Center of body 2.
+ * @param n2 Orientation of body 2 (long axis). 
+ * @param half_l2 Half-length of body 2 centerline. 
+ * @param R Body radius. 
+ * @param d12 Overlap vector. 
+ * @param s Centerline coordinate along body 1 determining tail of overlap vector.  
+ * @param t Centerline coordinate along body 2 determining head of overlap vector. 
+ * @param E0 Elastic modulus. 
+ * @param gamma Surface adhesion energy density.
+ * @param max_overlap If non-negative, cap the overlap distance at this 
+ *                    maximum value.
+ * @param calibrate_endpoint_radii If true, calibrate the principal radii of
+ *                                 curvature so that its minimum value is R. 
+ * @param min_aspect_ratio Minimum aspect ratio of the contact area.
+ * @param max_aspect_ratio Maximum aspect ratio of the contact area. 
+ * @param project_tol Tolerance for ellipsoid projection. 
+ * @param project_max_iter Maximum number of iterations for ellipsoid projection.
+ * @param brent_tol Tolerance for Brent's method. 
+ * @param brent_max_iter Maximum number of iterations for Brent's method.
+ * @param init_bracket_dx Increment for bracket initialization. 
+ * @param n_tries_bracket Number of attempts for bracket initialization. 
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method.
+ * @param verbose If true, print intermittent output to stdout.  
+ * @returns Estimated JKR force, as well as the contact area dimensions, in
+ *          terms of the equivalent radius and the aspect ratio.  
+ */
+template <typename T, int N = 100>
+std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3, 1> >& r1, 
+                                                    const Ref<const Matrix<T, 3, 1> >& n1,
+                                                    const T half_l1,  
+                                                    const Ref<const Matrix<T, 3, 1> >& r2, 
+                                                    const Ref<const Matrix<T, 3, 1> >& n2,
+                                                    const T half_l2, const T R,
+                                                    const Ref<const Matrix<T, 3, 1> >& d12,
+                                                    const T s, const T t, const T E0,
+                                                    const T gamma, const T max_overlap = -1,
+                                                    const bool calibrate_endpoint_radii = true, 
+                                                    const T min_aspect_ratio = 0.01,
+                                                    const T max_aspect_ratio = 0.999, 
+                                                    const T project_tol = 1e-6,
+                                                    const int project_max_iter = 100,
+                                                    const T brent_tol = 1e-8, 
+                                                    const int brent_max_iter = 1000,
+                                                    const T init_bracket_dx = 1e-3,
+                                                    const int n_tries_bracket = 5,
+                                                    const T imag_tol = 1e-20, 
+                                                    const T aberth_tol = 1e-20, 
+                                                    const bool verbose = false)
+{
+    // Formulate the equivalent surface contact problem 
+    auto radii = jkrConvertToSurfaceContactProblem<T>(
+        r1, n1, half_l1, r2, n2, half_l2, R, d12, s, t, max_overlap, 
+        calibrate_endpoint_radii, project_tol, project_max_iter
+    );
+    T Rx = radii.first; 
+    T Ry = radii.second;  
+
+    // Solve the equivalent surface contact problem
+    T dist = d12.norm(); 
+    Matrix<T, 3, 1> d12n = d12 / dist; 
+    T delta = 2 * R - dist;
+    return jkrContactAreaAndForceEllipsoidToSurface<T, N>(
         Rx, Ry, E0, gamma, delta, min_aspect_ratio, max_aspect_ratio, 
         brent_tol, brent_max_iter, init_bracket_dx, n_tries_bracket, imag_tol,
         aberth_tol, verbose
