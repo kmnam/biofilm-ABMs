@@ -89,6 +89,9 @@ struct JKRData
     Matrix<T, Dynamic, 1> Rx; 
     Matrix<T, Dynamic, 1> phi;
 
+    // Destructor 
+    virtual ~JKRData() = default; 
+
     // Placeholder force evaluation methods in 3-D
     virtual std::pair<Array<T, 2, 6>, T> getJKRForces(const Ref<const Matrix<T, 3, 1> >& r1, 
                                                       const Ref<const Matrix<T, 3, 1> >& n1, 
@@ -676,7 +679,7 @@ Array<T, Dynamic, 6> cellSurfaceRepulsionForces(const Ref<const Array<T, Dynamic
                                                 const bool multithread,
                                                 const bool include_constraint = false) 
 {
-    Array<T, Dynamic, 6> dEdq = Array<T, Dynamic, 6>::Zero(cells.rows(), 6); 
+    Array<T, Dynamic, 6> dEdq = Array<T, Dynamic, 6>::Zero(cells.rows(), 6);
 
     // For each cell ...
     const T prefactor0 = 2 * E0;
