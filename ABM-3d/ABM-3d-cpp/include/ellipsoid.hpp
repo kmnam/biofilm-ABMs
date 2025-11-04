@@ -359,7 +359,6 @@ std::pair<T, T> projectAndGetPrincipalRadiiOfCurvature(const T half_l, const T R
  *
  * This function assumes that the spherocylinder is centered at the origin.
  *
- * @param r Spherocylinder center. 
  * @param n Spherocylinder orientation. 
  * @param R Spherocylinder radius. 
  * @param dnorm Normalized overlap vector along which the point on the 
