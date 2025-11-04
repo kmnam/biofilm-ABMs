@@ -12,7 +12,6 @@
 #define POLYNOMIALS_HPP
 
 #include <cmath>
-#include <complex>
 #include <limits>
 #include <vector>
 #include <array>
@@ -149,9 +148,9 @@ class HighPrecisionPolynomial
          * @param real If true, the coefficients are assumed to be real.
          * @returns Vector of polynomial roots.  
          */
-        Matrix<ComplexType, Dynamic, 1> solveCompanion(const bool real = false)
+        Matrix<ComplexType, Dynamic, 1> solveCompanion(const bool is_real = false)
         {
-            if (real)
+            if (is_real)
             {
                 // Define the companion matrix
                 Matrix<RealType, Dynamic, Dynamic> companion
