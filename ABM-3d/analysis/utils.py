@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    4/22/2025
+    10/22/2025
 """
 import os
 import glob
@@ -14,9 +14,29 @@ import numpy as np
 import gudhi
 
 #######################################################################
-# In what follows, a population of N cells is represented as a 2-D array of 
-# size (N, 13+), where each row represents a cell and the columns are 
-# specified as defined in `include/indices.hpp`.
+_colidx_id = 0
+_colidx_rx = 1
+_colidx_ry = 2
+_colidx_rz = 3
+_colidx_nx = 4
+_colidx_ny = 5
+_colidx_nz = 6
+_colidx_drx = 7
+_colidx_dry = 8
+_colidx_drz = 9
+_colidx_dnx = 10
+_colidx_dny = 11
+_colidx_dnz = 12
+_colidx_l = 13
+_colidx_half_l = 14
+_colidx_t0 = 15
+_colidx_growth = 16
+_colidx_eta0 = 17
+_colidx_eta1 = 18
+_colidx_sigma0 = 19
+_colidx_group = 20
+_ncols_required = 21
+
 #######################################################################
 def read_cells(path):
     """
@@ -150,9 +170,14 @@ def write_cells(cells, path, fmt=None, params={}):
 
         # ... then write each cell as a separate row 
         for i in range(cells.shape[0]):
-            line = '{:d}\t'.format(cells[i, 0])       # Cell ID is an integer
-            line += '\t'.join([fmt.format(cells[i, j]) for j in range(1, 21)])
-            line += '\t{:d}\n'.format(cells[i, 21])   # Group is an integer 
+            line = '{:d}\t'.format(int(cells[i, _colidx_id]))       # Cell ID is an integer
+            line += '\t'.join([fmt.format(cells[i, j]) for j in range(1, _colidx_group)])
+            line += '\t{:d}'.format(int(cells[i, _colidx_group]))   # Group is an integer
+            if cells.shape[1] > _ncols_required:
+                line += '\t'.join([
+                    fmt.format(cells[i, j]) for j in range(_colidx_group + 1, cells.shape[1])
+                ])
+            line += '\n'
             f.write(line)
 
 #######################################################################

@@ -22,19 +22,24 @@ if __name__ == '__main__':
     # '#' (which may include wildcards) must be a number representing the 
     # replicate number (random seed)
     signature = sys.argv[1]
+    idx = int(sys.argv[2])
+    runname = 'run{}'.format(idx)
     if signature.endswith('#'):
         signature_prefix = signature.rstrip('#')
         signature_modified = (
             signature.replace('#', '*') if signature.endswith('#') else signature
         )
+        if idx > 1:
+            signature_modified = os.path.join(signature_modified, 'run{}'.format(idx - 1))
         indirs = [
             d for d in glob.glob(signature_modified)
-            if re.match(r'{}[0-9]+'.format(signature_prefix), d) is not None
+            if re.search(r'{}[0-9]+'.format(signature_prefix), d) is not None
         ]
     else:
-        indirs = glob.glob(signature)
-    idx = int(sys.argv[2])
-    runname = 'run{}'.format(idx)
+        if idx > 1:
+            indirs = glob.glob(os.path.join(signature, 'run{}'.format(idx - 1)))
+        else:
+            indirs = glob.glob(signature)
     cmdfilename = sys.argv[3]
 
     with open(cmdfilename, 'w') as cmdf:
