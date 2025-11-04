@@ -91,7 +91,7 @@ def read_simplicial_complex(filename):
                 tree.insert([int(v), int(w)])
             elif line.startswith('TRIANGLE'):
                 tree.insert([int(x) for x in line.split()[1:]])
-            elif line.startswith('TETRAHEDRA'):
+            elif line.startswith('TETRAHEDRON'):
                 tree.insert([int(x) for x in line.split()[1:]])
    
     return tree
