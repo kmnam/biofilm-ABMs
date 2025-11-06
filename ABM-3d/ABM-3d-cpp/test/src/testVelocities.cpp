@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/25/2025
+ *     10/25/2025
  */
 #include <iostream>
 #include <cmath>
@@ -94,8 +94,8 @@ TEST_CASE("Tests for velocity calculations", "[getVelocities()]")
 
         // Compute the conservative force vector
         Matrix<T, Dynamic, 6> cforces = getConservativeForces<T>(
-            cells, neighbors, to_adhere, 1e-7, 0, R, Rcell, cell_cell_prefactors,
-            E0, assume_2d, AdhesionMode::NONE, adhesion_params, false, false
+            cells, neighbors, 1e-7, 0, R, Rcell, E0, repulsive_prefactors, 
+            assume_2d, AdhesionMode::NONE, adhesion_params, false, false
         ).matrix();
 
         // Check that the velocity vector solves the desired linear equation
