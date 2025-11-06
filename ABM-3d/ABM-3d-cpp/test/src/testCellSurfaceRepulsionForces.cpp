@@ -109,26 +109,42 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceRepulsionForce
 
         // Prepare input arrays and compute forces via cellSurfaceRepulsionForces()
         Array<T, Dynamic, Dynamic> cells(1, __ncols_required);
-        cells << 0, 0, 0, rz, cos(angles(j)), 0, nz, 0, 0, 0, 0, 0, 0,
-                 half_l * 2, half_l, 0, 0, 0, 0, 0, 0, 0;
+        cells << 0, 0, 0, rz, cos(angles(j)), 0, nz, 0, 0, 0, 0, 0, 0,   // Coordinates
+                 half_l * 2, half_l,     // Length and half-length
+                 0, 0,                   // Birth time and growth rate
+                 0, 0,                   // Ambient viscosity and friction coefficient 
+                 0,                      // Cell-surface adhesion energy density
+                 0;                      // Group ID
         Array<T, Dynamic, 1> ss(1);  
         ss << (R - rz) / nz;
         Array<int, Dynamic, 1> assume_2d = Array<int, Dynamic, 1>::Zero(1); 
         assume_2d(0) = (nz < nz_threshold); 
-        Array<T, Dynamic, 2> forces1 = cellSurfaceRepulsionForces<T>(
+        Array<T, Dynamic, 6> forces1 = cellSurfaceRepulsionForces<T>(
             cells, 1e-6, 0, ss, R, E0, assume_2d, false
         );
 
         // Compute forces via finite differences 
         Array<T, 2, 1> forces2 = cellSurfaceRepulsionForcesFiniteDiff(
             rz, nz, half_l, R, E0, delta 
+        );
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 0)), Catch::Matchers::WithinAbs(0.0, tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 1)), Catch::Matchers::WithinAbs(0.0, tol)
         ); 
         REQUIRE_THAT(
-            static_cast<double>(forces1(0, 0)),
+            static_cast<double>(forces1(0, 2)),
             Catch::Matchers::WithinAbs(static_cast<double>(forces2(0)), tol)
         );
         REQUIRE_THAT(
-            static_cast<double>(forces1(0, 1)),
+            static_cast<double>(forces1(0, 3)), Catch::Matchers::WithinAbs(0.0, tol)
+        ); 
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 4)), Catch::Matchers::WithinAbs(0.0, tol)
+        ); 
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 5)),
             Catch::Matchers::WithinAbs(static_cast<double>(forces2(1)), tol)
         ); 
 
@@ -137,27 +153,43 @@ TEST_CASE("Tests for cell-surface repulsion forces", "[cellSurfaceRepulsionForce
         rz = R + half_l * nz - max_overlap;
 
         // Prepare input arrays and compute forces via cellSurfaceRepulsionForces()
-        cells << 0, 0, 0, rz, cos(angles(j)), 0, nz, 0, 0, 0, 0, 0, 0,
-                 half_l * 2, half_l, 0, 0, 0, 0, 0, 0, 0;
+        cells << 0, 0, 0, rz, cos(angles(j)), 0, nz, 0, 0, 0, 0, 0, 0,   // Coordinates
+                 half_l * 2, half_l,     // Length and half-length
+                 0, 0,                   // Birth time and growth rate
+                 0, 0,                   // Ambient viscosity and friction coefficient 
+                 0,                      // Cell-surface adhesion energy density
+                 0;                      // Group ID
         ss << (R - rz) / nz;
         assume_2d(0) = (nz < nz_threshold); 
         forces1 = cellSurfaceRepulsionForces<T>(cells, 1e-6, 0, ss, R, E0, assume_2d, false);
 
         // Compute forces via finite differences 
-        forces2 = cellSurfaceRepulsionForcesFiniteDiff(rz, nz, half_l, R, E0, delta); 
+        forces2 = cellSurfaceRepulsionForcesFiniteDiff(rz, nz, half_l, R, E0, delta);
         REQUIRE_THAT(
-            static_cast<double>(forces1(0, 0)),
+            static_cast<double>(forces1(0, 0)), Catch::Matchers::WithinAbs(0.0, tol)
+        );
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 1)), Catch::Matchers::WithinAbs(0.0, tol)
+        ); 
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 2)),
             Catch::Matchers::WithinAbs(static_cast<double>(forces2(0)), tol)
         );
         REQUIRE_THAT(
-            static_cast<double>(forces1(0, 1)),
+            static_cast<double>(forces1(0, 3)), Catch::Matchers::WithinAbs(0.0, tol)
+        ); 
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 4)), Catch::Matchers::WithinAbs(0.0, tol)
+        ); 
+        REQUIRE_THAT(
+            static_cast<double>(forces1(0, 5)),
             Catch::Matchers::WithinAbs(static_cast<double>(forces2(1)), tol)
         );
         REQUIRE_THAT(
-            static_cast<double>(forces1(0, 0)), Catch::Matchers::WithinAbs(0.0, tol)
+            static_cast<double>(forces1(0, 2)), Catch::Matchers::WithinAbs(0.0, tol)
         ); 
         REQUIRE_THAT(
-            static_cast<double>(forces1(0, 1)), Catch::Matchers::WithinAbs(0.0, tol)
+            static_cast<double>(forces1(0, 5)), Catch::Matchers::WithinAbs(0.0, tol)
         );  
     }
 }
