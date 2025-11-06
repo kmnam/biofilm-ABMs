@@ -1,15 +1,14 @@
 /**
- * Test module for the `Polynomial` class. 
+ * Test module for the `HighPrecisionPolynomial` class. 
  *
  * Authors:
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/3/2025
+ *     10/24/2025
  */
 
 #include <iostream>
-#include <complex>
 #include <algorithm>
 #include <Eigen/Dense>
 #include <boost/random.hpp>
@@ -19,38 +18,34 @@
 
 using namespace Eigen;
 
-using std::abs;
-using std::real; 
-using std::imag; 
+using boost::multiprecision::abs;
+using boost::multiprecision::real; 
+using boost::multiprecision::imag;
+
+typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<50> >  RealType; 
+typedef boost::multiprecision::number<boost::multiprecision::mpc_complex_backend<50> > ComplexType;
 
 /**
  * A series of tests for the various solution methods. 
  */
 TEST_CASE("Tests for solution methods", "[solveCompanion(), solveDurandKerner(), solveAberth()]")
 {
-    const double tol = 1e-8;
+    const RealType tol = 1e-8;
     boost::random::mt19937 rng(1234567890);
     boost::random::uniform_01<> dist;
-    const double minroot = -10; 
-    const double maxroot = 10;  
+    const RealType minroot = -10; 
+    const RealType maxroot = 10;
 
     // Case 1: Quadratic polynomials (x - a) * (x - b) = x^2 - (a + b)*x + a*b
-    Matrix<double, Dynamic, 1> coefs(3);
+    Matrix<RealType, Dynamic, 1> coefs(3);
     for (int i = 0; i < 10; ++i)
     {
-        double a = minroot + (maxroot - minroot) * dist(rng); 
-        double b = minroot + (maxroot - minroot) * dist(rng);  
+        RealType a = minroot + (maxroot - minroot) * dist(rng); 
+        RealType b = minroot + (maxroot - minroot) * dist(rng);  
         coefs << a * b, -a - b, 1;
-        Polynomial<double> p(coefs);
-
-        // Solve via the companion matrix 
-        Matrix<std::complex<double>, Dynamic, 1> roots = p.solveCompanion();
-        REQUIRE(roots.size() == 2); 
-        REQUIRE(abs(imag(roots(0))) < tol);
-        REQUIRE(abs(imag(roots(1))) < tol);  
-        double err1 = abs(roots(0) - a) + abs(roots(1) - b); 
-        double err2 = abs(roots(0) - b) + abs(roots(1) - a);
-        REQUIRE((err1 < tol || err2 < tol)); 
+        HighPrecisionPolynomial<50> p(coefs);
+        Matrix<ComplexType, Dynamic, 1> roots; 
+        RealType err1, err2; 
 
         // Solve using the Durand-Kerner method 
         roots = p.solveDurandKerner(1e-8);
@@ -76,26 +71,15 @@ TEST_CASE("Tests for solution methods", "[solveCompanion(), solveDurandKerner(),
     coefs.resize(4); 
     for (int i = 0; i < 10; ++i)
     {
-        double a = minroot + (maxroot - minroot) * dist(rng); 
-        double b = minroot + (maxroot - minroot) * dist(rng);
-        double c = minroot + (maxroot - minroot) * dist(rng);
-        std::vector<double> targets {a, b, c}; 
+        RealType a = minroot + (maxroot - minroot) * static_cast<RealType>(dist(rng)); 
+        RealType b = minroot + (maxroot - minroot) * static_cast<RealType>(dist(rng));
+        RealType c = minroot + (maxroot - minroot) * static_cast<RealType>(dist(rng));
+        std::vector<RealType> targets {a, b, c}; 
         std::sort(targets.begin(), targets.end());  
         coefs << -a * b * c, a * b + a * c + b * c, -a - b - c, 1; 
-        Polynomial<double> p(coefs);
-
-        // Solve via the companion matrix 
-        Matrix<std::complex<double>, Dynamic, 1> roots = p.solveCompanion();
-        REQUIRE(roots.size() == 3); 
-        REQUIRE(abs(imag(roots(0))) < tol);
-        REQUIRE(abs(imag(roots(1))) < tol);
-        REQUIRE(abs(imag(roots(2))) < tol);
-        std::vector<double> roots1 {real(roots(0)), real(roots(1)), real(roots(2))};
-        std::sort(roots1.begin(), roots1.end()); 
-        double err = 0.0; 
-        for (int j = 0; j < 3; ++j)
-            err += abs(roots1[j] - targets[j]); 
-        REQUIRE(err < tol);
+        HighPrecisionPolynomial<50> p(coefs);
+        Matrix<ComplexType, Dynamic, 1> roots; 
+        RealType err; 
 
         // Solve using the Durand-Kerner method 
         roots = p.solveDurandKerner(1e-8);
@@ -103,7 +87,7 @@ TEST_CASE("Tests for solution methods", "[solveCompanion(), solveDurandKerner(),
         REQUIRE(abs(imag(roots(0))) < tol);
         REQUIRE(abs(imag(roots(1))) < tol);
         REQUIRE(abs(imag(roots(2))) < tol);
-        std::vector<double> roots2 {real(roots(0)), real(roots(1)), real(roots(2))};
+        std::vector<RealType> roots2 {real(roots(0)), real(roots(1)), real(roots(2))};
         std::sort(roots2.begin(), roots2.end()); 
         err = 0.0; 
         for (int j = 0; j < 3; ++j)
@@ -116,7 +100,7 @@ TEST_CASE("Tests for solution methods", "[solveCompanion(), solveDurandKerner(),
         REQUIRE(abs(imag(roots(0))) < tol);
         REQUIRE(abs(imag(roots(1))) < tol);
         REQUIRE(abs(imag(roots(2))) < tol);
-        std::vector<double> roots3 {real(roots(0)), real(roots(1)), real(roots(2))};
+        std::vector<RealType> roots3 {real(roots(0)), real(roots(1)), real(roots(2))};
         std::sort(roots3.begin(), roots3.end()); 
         err = 0.0; 
         for (int j = 0; j < 3; ++j)
