@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/24/2025
+ *     11/6/2025
  */
 #include <iostream>
 #include <cmath>
@@ -850,7 +850,7 @@ TEST_CASE(
     dnorm = x; 
     s = half_l;   
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r, n, half_l, R, dnorm, s, project_tol, max_iter
+        n, half_l, R, dnorm, s, project_tol, max_iter
     );
     radii_true = getPrincipalRadiiOfCurvature<T>(n, R, half_l, (R + half_l) * x); 
     REQUIRE_THAT(
@@ -883,7 +883,7 @@ TEST_CASE(
     dnorm = -x; 
     s = -half_l; 
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r, n, half_l, R, dnorm, s, project_tol, max_iter
+        n, half_l, R, dnorm, s, project_tol, max_iter
     ); 
     REQUIRE_THAT(
         static_cast<double>(radii.first),
@@ -916,7 +916,7 @@ TEST_CASE(
     dnorm = y;
     s = 0;  
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r, n, half_l, R, dnorm, s, project_tol, max_iter
+        n, half_l, R, dnorm, s, project_tol, max_iter
     );
     radii_true = getPrincipalRadiiOfCurvature<T>(n, R, half_l, R * y); 
     REQUIRE_THAT(
@@ -947,7 +947,7 @@ TEST_CASE(
     dnorm = -y; 
     s = 0;  
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r, n, half_l, R, dnorm, s, project_tol, max_iter
+        n, half_l, R, dnorm, s, project_tol, max_iter
     );
     REQUIRE_THAT(
         static_cast<double>(radii.first),
@@ -977,7 +977,7 @@ TEST_CASE(
     dnorm = z;
     s = 0;  
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r, n, half_l, R, dnorm, s, project_tol, max_iter
+        n, half_l, R, dnorm, s, project_tol, max_iter
     );
     REQUIRE_THAT(
         static_cast<double>(radii.first),
@@ -1007,7 +1007,7 @@ TEST_CASE(
     dnorm = -z; 
     s = 0;  
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r, n, half_l, R, dnorm, s, project_tol, max_iter
+        n, half_l, R, dnorm, s, project_tol, max_iter
     );
     REQUIRE_THAT(
         static_cast<double>(radii.first),
@@ -1033,7 +1033,7 @@ TEST_CASE(
     dnorm = n; 
     s = half_l;   
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r, n, half_l, R, dnorm, s, project_tol, max_iter
+        n, half_l, R, dnorm, s, project_tol, max_iter
     );
     radii_true = getPrincipalRadiiOfCurvature<T>(n, R, half_l, (R + half_l) * n);
     REQUIRE_THAT(
@@ -1067,7 +1067,7 @@ TEST_CASE(
     dnorm = -n; 
     s = -half_l;
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r, n, half_l, R, dnorm, s, project_tol, max_iter
+        n, half_l, R, dnorm, s, project_tol, max_iter
     ); 
     REQUIRE_THAT(
         static_cast<double>(radii.first),
@@ -1102,7 +1102,7 @@ TEST_CASE(
               0;
     s = 0;
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r, n, half_l, R, dnorm, s, project_tol, max_iter
+        n, half_l, R, dnorm, s, project_tol, max_iter
     );
     radii_true = getPrincipalRadiiOfCurvature<T>(n, R, half_l, R * dnorm);
     REQUIRE_THAT(
@@ -1134,7 +1134,7 @@ TEST_CASE(
     dnorm *= -1; 
     s = 0;
     radii = projectAndGetPrincipalRadiiOfCurvature<T>(
-        r, n, half_l, R, dnorm, s, project_tol, max_iter
+        n, half_l, R, dnorm, s, project_tol, max_iter
     );
     REQUIRE_THAT(
         static_cast<double>(radii.first),
