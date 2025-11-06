@@ -75,27 +75,31 @@ Array<T, 2, 1> getTotalCellSurfaceForcesFiniteDiff(const T rz, const T nz,
  *                             TEST MODULES                            //
  * ------------------------------------------------------------------- */
 /**
- * A series of tests for getConservativeForces(). 
+ * A series of tests for `getConservativeForces()`, for one cell. 
  */
 TEST_CASE("Tests for conservative forces for a single cell", "[getConservativeForces()]")
 {
     const T R = 0.8;
+    const T Req = 0.4; 
     const T Rcell = 0.5; 
     const T E0 = 3900.0;
     const T Ecell = 3900000.0; 
     const T sigma0 = 100.0;
     const T nz_threshold = 1e-8;
-    Array<T, 3, 1> cell_cell_prefactors;  
-    cell_cell_prefactors << 2.5 * E0 * sqrt(R),
-                            2.5 * E0 * sqrt(R) * pow(2 * R - 2 * Rcell, 1.5),
-                            2.5 * Ecell * sqrt(Rcell);
-    std::unordered_map<std::string, T> adhesion_params;  
+    Array<T, 3, 1> repulsion_prefactors; 
+    repulsion_prefactors << (4. / 3.) * E0 * sqrt(Req),
+                            (4. / 3.) * Ecell * sqrt(Rcell / 2), 
+                            (4. / 3.) * E0 * sqrt(Req) * pow(2 * (R - Rcell), 1.5);
+    std::unordered_map<std::string, T> adhesion_params; 
+    std::unique_ptr<JKRData<T> > jkr_data;  
     const T delta = 1e-50;
     const double tol = 1e-12;   // Subtraction leads to precision loss  
     T rz, nz; 
-    Array<T, 10, 1> angles = Array<T, 10, 1>::Zero();
-    for (int i = 0; i < angles.size(); ++i)
-        angles(i) = boost::math::constants::half_pi<T>() * (i + 1) / 10.0; 
+    
+    // Generate 11 possible orientations for the second cell, so that the 
+    // angle between the two orientation vectors ranges between 0 and pi/2 
+    Array<T, Dynamic, 1> angles = Array<T, Dynamic, 1>::LinSpaced(11, 0.0, 1.0);
+    angles *= boost::math::constants::half_pi<T>(); 
 
     // For each angle ... 
     for (int j = 0; j < angles.size(); ++j)
@@ -110,15 +114,19 @@ TEST_CASE("Tests for conservative forces for a single cell", "[getConservativeFo
 
         // Prepare input arrays and compute forces via getConservativeForces()
         Array<T, Dynamic, Dynamic> cells(1, __ncols_required);
-        cells << 0, 0, 0, rz, cos(angles(j)), 0, nz, 0, 0, 0, 0, 0, 0,
-                 half_l * 2, half_l, 0, 0, 0, 0, 0, sigma0, 0;
+        cells << 0, 0, 0, rz, cos(angles(j)), 0, nz, 0, 0, 0, 0, 0, 0,     // Coordinates
+                 half_l * 2, half_l,     // Length and half-length
+                 0, 0,                   // Birth time and growth rate
+                 0, 0,                   // Ambient viscosity and friction coefficient 
+                 sigma0,                 // Cell-surface adhesion energy density
+                 0;                      // Group ID
         Array<T, Dynamic, 7> neighbors(0, 7); 
-        Array<int, Dynamic, 1> to_adhere(0);
         Array<int, Dynamic, 1> assume_2d = Array<int, Dynamic, 1>::Zero(1);
         assume_2d(0) = (nz < nz_threshold);  
         Array<T, Dynamic, 6> forces = getConservativeForces<T>(
-            cells, neighbors, to_adhere, 1e-6, 0, R, Rcell, cell_cell_prefactors, 
-            E0, assume_2d, AdhesionMode::NONE, adhesion_params, false, false
+            cells, neighbors, 5e-7, 0, R, Rcell, E0, repulsion_prefactors, 
+            assume_2d, nz_threshold, AdhesionMode::NONE, adhesion_params,
+            jkr_data, -1, FrictionMode::NONE, -1, false, false
         );
 
         // Check that the forces in the x- and y-directions are zero 
@@ -131,9 +139,19 @@ TEST_CASE("Tests for conservative forces for a single cell", "[getConservativeFo
 
         // Check that the forces and torques in the z-direction match the 
         // target values obtained via finite differences
-        Array<T, 2, 1> targets = getTotalCellSurfaceForcesFiniteDiff(
-            rz, nz, half_l, R, E0, sigma0, delta
-        );
+        Array<T, 2, 1> targets; 
+        if (nz > 0)
+        {
+            targets = getTotalCellSurfaceForcesFiniteDiff(
+                rz, nz, half_l, R, E0, sigma0, delta
+            );
+        }
+        else 
+        {
+            targets(0) = 2 * E0 * (R - rz) * 2 * half_l;
+            targets(0) -= 0.5 * sigma0 * sqrt(R) * 2 * half_l / sqrt(R - rz);
+            targets(1) = 0.0;
+        }
         REQUIRE_THAT(
             static_cast<double>(forces(2)),
             Catch::Matchers::WithinAbs(static_cast<double>(targets(0)), tol)
