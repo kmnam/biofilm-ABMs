@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/11/2025
+ *     11/15/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -282,6 +282,7 @@ TupleToTupleTable<T, 4, 2> calculateJKRForceTable(const Ref<const Matrix<T, Dyna
                 // Calculate the equivalent principal radii of curvature 
                 //
                 // First calculate B and A, with the added assumption that B > A 
+                /*
                 T sum = 0.5 * (1.0 / Rx(i) + 1.0 / Ry + 1.0 / Rx(j) + 1.0 / Ry);
                 T delta1 = (1.0 / Rx(i) - 1.0 / Ry); 
                 T delta2 = (1.0 / Rx(j) - 1.0 / Ry); 
@@ -292,6 +293,12 @@ TupleToTupleTable<T, 4, 2> calculateJKRForceTable(const Ref<const Matrix<T, Dyna
                 // Calculate the equivalent radii of curvature (A < B, so Ra > Rb)
                 T Ra = 1.0 / (2 * A); 
                 T Rb = 1.0 / (2 * B);
+                */
+                auto radii = jkrConvertToSurfaceContactProblem<T>(
+                    Rx(i), Ry, Rx(j), Ry, 0.0
+                );
+                T Ra = radii.first; 
+                T Rb = radii.second; 
                 std::cout << "... Calculating anisotropic JKR forces for Rx1 = "
                           << Rx(i) << ", Rx2 = " << Rx(j) << ", Ry = " << Ry
                           << " (angle-independent)" << std::endl;
@@ -323,7 +330,8 @@ TupleToTupleTable<T, 4, 2> calculateJKRForceTable(const Ref<const Matrix<T, Dyna
                 {
                     // Calculate the equivalent principal radii of curvature 
                     //
-                    // First calculate B and A, with the added assumption that B > A 
+                    // First calculate B and A, with the added assumption that B > A
+                    /* 
                     T sum = 0.5 * (1.0 / Rx(i) + 1.0 / Ry + 1.0 / Rx(j) + 1.0 / Ry);
                     T delta1 = (1.0 / Rx(i) - 1.0 / Ry); 
                     T delta2 = (1.0 / Rx(j) - 1.0 / Ry); 
@@ -336,6 +344,12 @@ TupleToTupleTable<T, 4, 2> calculateJKRForceTable(const Ref<const Matrix<T, Dyna
                     // Calculate the equivalent radii of curvature (A < B, so Ra > Rb)
                     T Ra = 1.0 / (2 * A); 
                     T Rb = 1.0 / (2 * B);
+                    */
+                    auto radii = jkrConvertToSurfaceContactProblem<T>(
+                        Rx(i), Ry, Rx(j), Ry, phi(k)
+                    );
+                    T Ra = radii.first; 
+                    T Rb = radii.second; 
                     std::cout << "... Calculating anisotropic JKR forces for Rx1 = "
                               << Rx(i) << ", Rx2 = " << Rx(j) << ", Ry = " << Ry
                               << ", angle = " << phi(k) << std::endl;
@@ -428,6 +442,7 @@ TupleToTupleTable<T, 5, 2> calculateJKRForceTable(const Ref<const Matrix<T, Dyna
                 // Calculate the equivalent principal radii of curvature 
                 //
                 // First calculate B and A, with the added assumption that B > A 
+                /*
                 T sum = 0.5 * (1.0 / Rx(i) + 1.0 / Ry + 1.0 / Rx(j) + 1.0 / Ry);
                 T delta1 = (1.0 / Rx(i) - 1.0 / Ry); 
                 T delta2 = (1.0 / Rx(j) - 1.0 / Ry); 
@@ -438,6 +453,12 @@ TupleToTupleTable<T, 5, 2> calculateJKRForceTable(const Ref<const Matrix<T, Dyna
                 // Calculate the equivalent radii of curvature (A < B, so Ra > Rb)
                 T Ra = 1.0 / (2 * A); 
                 T Rb = 1.0 / (2 * B);
+                */
+                auto radii = jkrConvertToSurfaceContactProblem<T>(
+                    Rx(i), Ry, Rx(j), Ry, 0.0
+                );
+                T Ra = radii.first; 
+                T Rb = radii.second; 
                 std::cout << "... Calculating anisotropic JKR forces for Rx1 = "
                           << Rx(i) << ", Rx2 = " << Rx(j) << ", Ry = " << Ry
                           << " (angle-independent)" << std::endl;
@@ -474,7 +495,8 @@ TupleToTupleTable<T, 5, 2> calculateJKRForceTable(const Ref<const Matrix<T, Dyna
                 {
                     // Calculate the equivalent principal radii of curvature 
                     //
-                    // First calculate B and A, with the added assumption that B > A 
+                    // First calculate B and A, with the added assumption that B > A
+                    /* 
                     T sum = 0.5 * (1.0 / Rx(i) + 1.0 / Ry + 1.0 / Rx(j) + 1.0 / Ry);
                     T delta1 = (1.0 / Rx(i) - 1.0 / Ry); 
                     T delta2 = (1.0 / Rx(j) - 1.0 / Ry); 
@@ -487,6 +509,12 @@ TupleToTupleTable<T, 5, 2> calculateJKRForceTable(const Ref<const Matrix<T, Dyna
                     // Calculate the equivalent radii of curvature (A < B, so Ra > Rb)
                     T Ra = 1.0 / (2 * A); 
                     T Rb = 1.0 / (2 * B);
+                    */
+                    auto radii = jkrConvertToSurfaceContactProblem<T>(
+                        Rx(i), Ry, Rx(j), Ry, phi(k)
+                    );
+                    T Ra = radii.first; 
+                    T Rb = radii.second; 
                     std::cout << "... Calculating anisotropic JKR forces for Rx1 = "
                               << Rx(i) << ", Rx2 = " << Rx(j) << ", Ry = " << Ry
                               << ", angle = " << phi(k) << std::endl;
