@@ -1104,6 +1104,53 @@ std::pair<T, T> jkrConvertToSurfaceContactProblem(const Ref<const Matrix<T, 3, 1
 }
 
 /**
+ * Convert the given adhesive contact problem between two prolate ellipsoids
+ * to an adhesive contact problem between an ellipsoid and a surface. 
+ *
+ * This function assumes that the two bodies are prolate ellipsoids whose
+ * major semi-axis lengths are given by half_l1 + R and half_l2 + R, and
+ * whose minor semi-axis lengths are given by R. 
+ *
+ * @param r1 Center of body 1. 
+ * @param n1 Orientation of body 1 (long axis). 
+ * @param half_l1 Half-length of body 1 centerline.
+ * @param r2 Center of body 2.
+ * @param n2 Orientation of body 2 (long axis). 
+ * @param half_l2 Half-length of body 2 centerline. 
+ * @param R Body radius.
+ * @param d12 Overlap vector. 
+ * @param s Centerline coordinate along body 1 determining tail of overlap vector.  
+ * @param t Centerline coordinate along body 2 determining head of overlap vector.
+ * @param max_overlap If non-negative, cap the overlap distance at this 
+ *                    maximum value.
+ * @param calibrate_endpoint_radii If true, calibrate the principal radii of
+ *                                 curvature so that its minimum value is R. 
+ * @param project_tol Tolerance for ellipsoid projection. 
+ * @param project_max_iter Maximum number of iterations for ellipsoid projection.
+ */
+template <typename T>
+std::pair<T, T> jkrConvertToSurfaceContactProblem(const T Rx1, const T Ry1, 
+                                                  const T Rx2, const T Ry2, 
+                                                  const T phi)
+{
+    // First calculate B and A, with the added assumption that B > A 
+    T sum = 0.5 * (1.0 / Rx1 + 1.0 / Ry1 + 1.0 / Rx2 + 1.0 / Ry2);
+    T delta1 = (1.0 / Rx1 - 1.0 / Ry1); 
+    T delta2 = (1.0 / Rx2 - 1.0 / Ry2); 
+    T diff = 0.5 * sqrt(
+        delta1 * delta1 + delta2 * delta2 + 2 * delta1 * delta2 * cos(2 * phi)
+    );
+    T B = 0.5 * (sum + diff);
+    T A = sum - B;
+
+    // Calculate the equivalent radii of curvature (A < B, so Rx > Ry)
+    T Rx = 1.0 / (2 * A); 
+    T Ry = 1.0 / (2 * B);
+
+    return std::make_pair(Rx, Ry); 
+}
+
+/**
  * Solve for the JKR contact area and force for an elliptical JKR contact, 
  * according to the model given by Giudici et al., J. Phys. D (2025). 
  *
