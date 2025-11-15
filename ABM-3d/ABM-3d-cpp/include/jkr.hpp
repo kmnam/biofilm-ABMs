@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/4/2025
+ *     11/15/2025
  */
 
 #ifndef BIOFILM_JKR_HPP
@@ -205,7 +205,7 @@ std::pair<T, T> jkrAlphaBeta(const T g, const T lambda, const T Be, const T Ce,
 
 /**
  * Compute the JKR contact radius, c, as defined by Giudici et al. J. Phys. D
- * (2025) (see Eqns. 17 and 18).
+ * (2025) [see Eqns. 17 and 18].
  *
  * @param g Slenderness of the contact area, b / a. 
  * @param lambda Square root of the ratio of the principal radii of curvature.
@@ -226,24 +226,62 @@ T jkrContactRadiusElliptical(const T g, const T lambda, const T R, const T gamma
                              const T alpha, const T beta)
 {
     T g2beta = g * g * beta;
-    T l2 = lambda * lambda; 
+    T l2 = lambda * lambda;
+    T g2 = g * g;  
     T g12 = sqrt(g); 
     T g32 = g12 * g; 
-    T g52 = g32 * g; 
+    T g52 = g32 * g;
+    T dgamma = 2 * gamma;    // Surface energy conversion
+
     T f_numer = lambda * ((g12 - 1) * (alpha * Be + g2beta * De) + Ke * (g2beta - alpha * g12)); 
     T f_denom = g2beta * (2 * g12 + 1) - alpha * (g12 + 2); 
     T f = f_numer * f_denom;
-    T dgamma = 2 * gamma;    // Surface energy conversion  
     T c_numer = 12 * dgamma * R * R * pow(g12 - 1, 2) * g52 * lambda; 
     T c_denom = E * (f - (g - g12) * (g32 + l2) * (g2beta - alpha));
-    T c = pow(c_numer / c_denom, 1. / 3.);
+    T c = pow(c_numer / c_denom, static_cast<T>(1) / static_cast<T>(3));
+    /*
+    T term1 = (2 * g12 + 1) * g2beta - (2 + g12) * alpha;
+    T term2 = Ke * (alpha - g12 * g2beta) / (g12 - 1); 
+    T term3 = Be * alpha / 2; 
+    T term4 = De * g2beta / 2;
+    T term5 = (g2 + l2) / (6 * lambda);
+    T term6 = (g12 - 1) * (alpha * g2 - 2 * alpha * l2 - 2 * g2beta * g2 + g2beta * l2) / (15 * lambda);
+    T F = -term1 * (term2 + term3 + term4 + term5) - term6;
+    T c_numer = 12 * dgamma * g52 * R * R * (g12 - 1); 
+    T c_denom = 5 * E * F; 
+    T c = pow(c_numer / c_denom, static_cast<T>(1) / static_cast<T>(3));
+    */
 
     return c;   
 }
 
 /**
+ * Compute the semi-major axis of the JKR contact, a, as defined by Johnson 
+ * & Greenwood, J. Phys. D (2005) [see Eqn. 13].  
+ *
+ * @param g Slenderness of the contact area, b / a. 
+ * @param R Geometric mean of the principal radii of curvature. 
+ * @param gamma Surface adhesion energy density. 
+ * @param E Elastic modulus. 
+ * @param alpha, beta Dimensionless pressure coefficients, as defined in 
+ *                    Johnson & Greenwood (2005); see also Giudici et al. (2025).
+ * @returns Corresponding JKR contact semi-major axis. 
+ */
+template <typename T>
+T jkrContactSemiMajorAxisJohnsonGreenwood(const T g, const T R, const T gamma,
+                                          const T E, const T alpha, const T beta)
+{
+    T a = sqrt(g) * (1 - sqrt(g)); 
+    a /= (g * g * beta - alpha); 
+    a *= sqrt(4 * gamma / (boost::math::constants::pi<T>() * E)); 
+    a *= 2 * R; 
+
+    return pow(a, 2. / 3.); 
+}
+
+/**
  * Compute the JKR force, W, as defined by Giudici et al. J. Phys. D (2025)
- * (see Eqn. 15).
+ * [see Eqn. 15].
  *
  * @param g Slenderness of the contact area, b / a. 
  * @param R Geometric mean of the principal radii of curvature. 
@@ -263,6 +301,32 @@ T jkrContactForceElliptical(const T g, const T R, const T E, const T alpha,
     T numer = (2 * g12 + 1) * g * g * beta - (g12 + 2) * alpha; 
     T denom = (g12 - 1) * g32 * R; 
     T force = boost::math::constants::third_pi<T>() * E * c3 * numer / denom;
+
+    return force;  
+}
+
+/**
+ * Compute the JKR force, W, as defined by Johnson & Greenwood, J. Phys. D
+ * (2005) [see Eqn. 14].
+ *
+ * @param g Slenderness of the contact area, b / a. 
+ * @param R Geometric mean of the principal radii of curvature. 
+ * @param E Elastic modulus. 
+ * @param alpha, beta Dimensionless pressure coefficients, as defined in 
+ *                    Johnson & Greenwood (2005); see also Giudici et al. (2025).
+ * @param p1 Pressure coefficient. 
+ * @param a, b Semi-major and semi-minor axes of the JKR contact region. 
+ * @returns Corresponding JKR contact force magnitude. 
+ */
+template <typename T>
+T jkrContactForceEllipticalJohnsonGreenwood(const T g, const T R, const T E,
+                                            const T alpha, const T beta,
+                                            const T p1, const T a, const T b)
+{
+    T alpha2 = alpha * E / (2 * b * R); 
+    T beta2 = beta * E / (2 * b * R); 
+    T force = p1 - (alpha2 * a * a + beta2 * b * b) / 3; 
+    force *= boost::math::constants::two_pi<T>() * a * b; 
 
     return force;  
 } 
@@ -292,9 +356,32 @@ T jkrPressure(const T g, const T R, const T E, const T alpha, const T beta,
 }
 
 /**
+ * Compute the pressure, p_1, as defined by Johnson & Greenwood, J. Phys. D
+ * (2005) [see Eqn. 11]. 
+ *
+ * @param g Slenderness of the contact area, b / a. 
+ * @param R Geometric mean of the principal radii of curvature. 
+ * @param E Elastic modulus. 
+ * @param alpha, beta Dimensionless pressure coefficients, as defined in 
+ *                    Johnson & Greenwood (2005); see also Giudici et al. (2025).
+ * @param a, b Semi-major and semi-minor axes of the JKR contact region. 
+ * @returns Corresponding pressure coefficient p_1. 
+ */
+template <typename T>
+T jkrPressureJohnsonGreenwood(const T g, const T R, const T E, const T alpha,
+                              const T beta, const T a, const T b)
+{
+    T p1 = alpha - beta * pow(g, 2.5);
+    p1 /= (1 - sqrt(g)); 
+    p1 *= (E * a * a / (2 * b * R)); 
+
+    return p1; 
+}
+
+/**
  * Compute the overlap distance, \delta, corresponding to the aspect ratio,
  * g, of the JKR contact region, using the expressions given by Giudici 
- * et al. (2025).
+ * et al. J. Phys. D (2025).
  *
  * The aspect ratio is assumed to be less than 1. 
  *
@@ -338,7 +425,63 @@ T jkrOverlapFromAspectRatio(const T lambda, const T R, const T E0, const T gamma
     T p0 = jkrPressure<T>(g, R, E0, alpha, beta, c, force);
 
     // Calculate the function (Eqn. 9) 
-    return (p0 * Ke - 0.5 * c * c * ((alpha * Be / g) + (g * beta * De))) / R;
+    return (p0 * Ke - c * c * ((alpha * Be / g) + (g * beta * De)) / 2) / R;
+}
+
+/**
+ * Compute the overlap distance, \delta, corresponding to the aspect ratio,
+ * g, of the JKR contact region, using the expressions given by Johnson &
+ * Greenwood, J. Phys. D (2005).
+ *
+ * The aspect ratio is assumed to be less than 1. 
+ *
+ * @param lambda Square root of the ratio of the equivalent radii of curvature
+ *               from the two bodies. 
+ * @param R Geometric mean of the equivalent radii of curvature from the two
+ *          bodies. 
+ * @param E0 Elastic modulus. 
+ * @param gamma Surface adhesion energy density. 
+ * @param g Contact region aspect ratio. Assumed to be less than 1.  
+ * @returns Corresponding overlap distance. 
+ */
+template <typename T>
+T jkrOverlapFromAspectRatioJohnsonGreenwood(const T lambda, const T R,
+                                            const T E0, const T gamma,
+                                            const T g)
+{
+    // Calculate the eccentricity
+    T e = sqrt(1 - g * g); 
+
+    // Calculate the elliptic integrals (Eqns. 6, 7, 8 in Giudici et al. 2025) 
+    auto ell = jkrEllipticIntegrals<T>(e); 
+    T Ke = std::get<0>(ell); 
+    T Ee = std::get<1>(ell); 
+    T De = std::get<2>(ell);
+    T Be = std::get<3>(ell); 
+    T Ce = std::get<4>(ell); 
+
+    // Calculate the non-dimensional parameters alpha and beta (Eqn. 10; see 
+    // also Eqns. 10 and 11 in Giudici et al. 2025)
+    auto ab = jkrAlphaBeta<T>(g, lambda, Be, Ce, De);
+    T alpha = ab.first;  
+    T beta = ab.second;
+
+    // Calculate the semi-major axis of the contact (Eqn. 13)
+    T a = jkrContactSemiMajorAxisJohnsonGreenwood<T>(
+        g, R, gamma, E0, alpha, beta
+    );
+    T b = g * a;    // ... from which we can get the semi-minor axis
+
+    // Calculate the pressure coefficient (Eqn. 11) 
+    T p1 = jkrPressureJohnsonGreenwood<T>(g, R, E0, alpha, beta, a, b);
+
+    // Calculate the force magnitude (Eqn. 14)
+    T force = jkrContactForceEllipticalJohnsonGreenwood<T>(g, R, E0, alpha, beta, p1, a, b); 
+
+    // Calculate the overlap distance (Eqn. 15) 
+    T alpha2 = alpha * E0 / (2 * b * R); 
+    T beta2 = beta * E0 / (2 * b * R); 
+    return (b / E0) * (2 * p1 * Ke - alpha2 * a * a * Be - beta2 * b * b * De); 
 }
 
 /**
@@ -388,6 +531,131 @@ T jkrAspectRatioFromOverlap(const T Rx, const T Ry, const T E0, const T gamma,
     auto func = [&lambda, &R, &E0, &gamma, &delta](const T g) -> T
     {
         return delta - jkrOverlapFromAspectRatio<T>(lambda, R, E0, gamma, g); 
+    };
+
+    // Identify an initial bracket
+    std::pair<T, T> bracket;
+    int i = 0;
+    T bracket_dx = init_bracket_dx;
+    bool found_bracket = false;  
+    while (i < n_tries_bracket)
+    {
+        try
+        { 
+            bracket = findBracket<T>(
+                func, min_aspect_ratio, max_aspect_ratio, bracket_dx
+            );
+            found_bracket = true; 
+        }
+        catch (const std::runtime_error& e)
+        {
+            bracket_dx /= 2.0;
+            i++;  
+        }
+        if (found_bracket)
+        {
+            break; 
+        }
+    }
+    // If a bracket could not be found ... 
+    if (!found_bracket)
+    {
+        // First calculate the function using the finest increment
+        int n = static_cast<int>((max_aspect_ratio - min_aspect_ratio) / bracket_dx);  
+        Array<T, Dynamic, 1> xmesh = Array<T, Dynamic, 1>::LinSpaced(
+            n, min_aspect_ratio, max_aspect_ratio
+        ); 
+        Array<T, Dynamic, 1> fmesh(n); 
+        for (int j = 0; j < n; ++j)
+            fmesh(j) = func(xmesh(j));
+
+        // If there are branches along the function due to infinities
+        // or NaN's, as expected, refine the range of x-values
+        if (fmesh.isNaN().any() || fmesh.isInf().any())
+        {
+            int max_idx = 0; 
+            for (int j = 0; j < n; ++j)
+            {
+                if (isnan(fmesh(j)) || isinf(fmesh(j)))
+                {
+                    max_idx = j; 
+                }
+            }
+            T new_xmin = xmesh(max_idx + 1); 
+            xmesh = Array<T, Dynamic, 1>::LinSpaced(n, new_xmin, max_aspect_ratio); 
+            for (int j = 0; j < n; ++j)
+                fmesh(j) = func(xmesh(j));
+        }
+
+        // Look for the root of the function
+        Index root_idx; 
+        fmesh.abs().minCoeff(&root_idx);
+        g = xmesh(root_idx);  
+    }
+    // Otherwise, use Brent's method 
+    else 
+    {
+        T xmin = bracket.first; 
+        T xmax = bracket.second; 
+        auto result = brent<T>(
+            func, xmin, xmax, brent_tol, brent_max_iter, verbose
+        ); 
+        g = (result.first + result.second) / 2;
+    }
+
+    return g;  
+}
+
+/**
+ * Solve for the JKR contact area aspect ratio that matches the given overlap
+ * distance and input parameters, according to the model given by Johnson &
+ * Greenwood, J. Phys. D (2005). 
+ *
+ * @param Rx Larger equivalent principal radius of curvature at the contact
+ *           point.  
+ * @param Ry Smaller equivalent principal radius of curvature at the contact
+ *           point.
+ * @param E0 Elastic modulus. 
+ * @param gamma Surface adhesion energy density.
+ * @param delta Overlap distance. 
+ * @param min_aspect_ratio Minimum aspect ratio.
+ * @param max_aspect_ratio Maximum aspect ratio for anisotropic contacts.  
+ * @param brent_tol Tolerance for Brent's method. 
+ * @param brent_max_iter Maximum number of iterations for Brent's method.
+ * @param init_bracket_dx Increment for bracket initialization. 
+ * @param n_tries_bracket Number of attempts for bracket initialization. 
+ * @param verbose If true, print intermittent output to stdout.  
+ * @returns JKR contact area aspect ratio. 
+ */
+template <typename T>
+T jkrAspectRatioFromOverlapJohnsonGreenwood(const T Rx, const T Ry, const T E0,
+                                            const T gamma, const T delta,
+                                            const T min_aspect_ratio = 0.001, 
+                                            const T max_aspect_ratio = 0.999,
+                                            const T brent_tol = 1e-8,
+                                            const int brent_max_iter = 1000,
+                                            const T init_bracket_dx = 1e-3,
+                                            const int n_tries_bracket = 5,
+                                            const bool verbose = false)
+{
+    // If Rx == Ry, return g = 1
+    if (abs(Rx - Ry) < 1e-8)
+        return 1; 
+
+    // Calculate the curvature parameters \lambda and R
+    T lambda = sqrt(Ry / Rx); 
+    T R = sqrt(Rx * Ry); 
+
+    // Compute the root of the overlap vs. aspect ratio function using 
+    // Brent's method
+    //
+    // Initialize the function whose root is to be calculated
+    T g = max_aspect_ratio; 
+    auto func = [&lambda, &R, &E0, &gamma, &delta](const T g) -> T
+    {
+        return delta - jkrOverlapFromAspectRatioJohnsonGreenwood<T>(
+            lambda, R, E0, gamma, g
+        ); 
     };
 
     // Identify an initial bracket
@@ -554,7 +822,7 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoidToSurface(const T Rx,
 
 /**
  * Solve for the JKR contact area and force for an ellipsoidal surface JKR
- * contact, according to the approximate relations given by Li and Popov, 
+ * contact, according to the approximate relations given by Li & Popov, 
  * J. Phys. D (2020).
  *
  * @param Rx Larger equivalent principal radius of curvature at the contact
@@ -570,14 +838,14 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoidToSurface(const T Rx,
  * @param verbose If true, print intermittent output to stdout.  
  */
 template <typename T, int N = 100>
-std::pair<T, T> jkrContactAreaAndForceEllipsoidToSurfaceApprox(const T Rx,
-                                                               const T Ry, 
-                                                               const T E0, 
-                                                               const T gamma, 
-                                                               const T delta, 
-                                                               const T imag_tol = 1e-20, 
-                                                               const T aberth_tol = 1e-20, 
-                                                               const bool verbose = false)
+std::pair<T, T> jkrContactAreaAndForceEllipsoidToSurfaceLiPopov(const T Rx,
+                                                                const T Ry, 
+                                                                const T E0, 
+                                                                const T gamma, 
+                                                                const T delta, 
+                                                                const T imag_tol = 1e-20, 
+                                                                const T aberth_tol = 1e-20, 
+                                                                const bool verbose = false)
 {
     typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<N> >  RealType;
     typedef boost::multiprecision::number<boost::multiprecision::mpc_complex_backend<N> > ComplexType;
@@ -590,7 +858,13 @@ std::pair<T, T> jkrContactAreaAndForceEllipsoidToSurfaceApprox(const T Rx,
 
     // Calculate the dimensionless contact radius
     //
-    // Set up the quartic equation ... 
+    // Set up the quartic equation, which reads (all variables being 
+    // dimensionless):
+    //
+    // delta = A * c^2 + B * sqrt(c),
+    // => delta - A * c^2 = B * sqrt(c), 
+    // => delta^2 - 2 * delta * A * c^2 + A^2 * c^4 = B^2 * c
+    // => A^2 * c^4 - 2 * delta * A * c^2 - B^2 * c + delta^2 = 0 
     Matrix<RealType, Dynamic, 1> coefs(5);
     RealType delta_nd_ = static_cast<RealType>(delta_nd);
     RealType ratio = static_cast<RealType>(Rx / Ry);    // Should be >= 1
@@ -635,6 +909,106 @@ std::pair<T, T> jkrContactAreaAndForceEllipsoidToSurfaceApprox(const T Rx,
     T force = 3 * boost::math::constants::pi<T>() * R * dgamma * force_nd;
 
     return std::make_pair(force, c); 
+}
+
+/**
+ * Solve for the JKR contact area and force for an ellipsoidal surface JKR
+ * contact, according to the approximate relations given by Johnson &
+ * Greenwood, J. Phys. D (2005). 
+ *
+ * @param Rx Larger equivalent principal radius of curvature at the contact
+ *           point.  
+ * @param Ry Smaller equivalent principal radius of curvature at the contact
+ *           point.
+ * @param E0 Elastic modulus. 
+ * @param gamma Surface adhesion energy density.
+ * @param delta Overlap distance.
+ * @param min_aspect_ratio Minimum aspect ratio.
+ * @param max_aspect_ratio Maximum aspect ratio for anisotropic contacts.  
+ * @param brent_tol Tolerance for Brent's method. 
+ * @param brent_max_iter Maximum number of iterations for Brent's method.
+ * @param init_bracket_dx Increment for bracket initialization. 
+ * @param n_tries_bracket Number of attempts for bracket initialization.
+ * @param imag_tol Tolerance for determining whether a root for the the JKR
+ *                 contact radius polynomial is real.
+ * @param aberth_tol Tolerance for Aberth-Ehrlich method.
+ * @param verbose If true, print intermittent output to stdout.  
+ */
+template <typename T, int N = 100>
+std::tuple<T, T, T> jkrContactAreaAndForceEllipsoidToSurfaceJohnsonGreenwood(const T Rx,
+                                                                             const T Ry, 
+                                                                             const T E0, 
+                                                                             const T gamma, 
+                                                                             const T delta, 
+                                                                             const T min_aspect_ratio = 0.001, 
+                                                                             const T max_aspect_ratio = 0.999,
+                                                                             const T brent_tol = 1e-8,
+                                                                             const int brent_max_iter = 1000,
+                                                                             const T init_bracket_dx = 1e-3,
+                                                                             const int n_tries_bracket = 5,
+                                                                             const T imag_tol = 1e-20, 
+                                                                             const T aberth_tol = 1e-20, 
+                                                                             const bool verbose = false)
+{
+    // Calculate the aspect ratio 
+    T g = jkrAspectRatioFromOverlapJohnsonGreenwood<T>(
+        Rx, Ry, E0, gamma, delta, min_aspect_ratio, max_aspect_ratio, 
+        brent_tol, brent_max_iter, init_bracket_dx, n_tries_bracket, verbose
+    );
+
+    // If the aspect ratio is 1, use jkrContactRadius(), as the elliptic 
+    // integrals are ill-defined
+    T force, c;
+    if (g == 1)     // Rx == Ry
+    {
+        // Use the equivalent radii of curvature (which are roughly equal)
+        auto result = jkrContactRadius<T, N>(
+            delta, Rx, E0, gamma, imag_tol, aberth_tol
+        );
+        c = result.second;
+        T c3 = c * c * c;
+        T force1 = (4 * E0 * c3) / (3 * Rx); 
+        T force2 = 4 * sqrt(boost::math::constants::pi<T>() * c3 * gamma * E0);
+        force = force1 - force2;    // Repulsive force minus attractive force  
+    }
+    else    // Otherwise ... 
+    {
+        // Calculate the eccentricity
+        T e = sqrt(1 - g * g); 
+        T lambda = sqrt(Ry / Rx); 
+        T Re = sqrt(Rx * Ry); 
+
+        // Calculate the elliptic integrals (Eqns. 6, 7, 8 in Giudici et al. 2025) 
+        auto ell = jkrEllipticIntegrals<T>(e); 
+        T Ke = std::get<0>(ell); 
+        T Ee = std::get<1>(ell); 
+        T De = std::get<2>(ell);
+        T Be = std::get<3>(ell); 
+        T Ce = std::get<4>(ell); 
+
+        // Calculate the non-dimensional parameters alpha and beta (Eqn. 10; see 
+        // also Eqns. 10 and 11 in Giudici et al. 2025)
+        auto ab = jkrAlphaBeta<T>(g, lambda, Be, Ce, De);
+        T alpha = ab.first;  
+        T beta = ab.second; 
+
+        // Calculate the semi-major axis of the contact (Eqn. 13)
+        T a = jkrContactSemiMajorAxisJohnsonGreenwood<T>(
+            g, Re, gamma, E0, alpha, beta
+        );
+        T b = g * a;    // ... from which we can get the semi-minor axis
+        c = sqrt(a * b); 
+
+        // Calculate the pressure coefficient (Eqn. 11) 
+        T p1 = jkrPressureJohnsonGreenwood<T>(g, Re, E0, alpha, beta, a, b);
+
+        // Calculate the force magnitude (Eqn. 14)
+        force = jkrContactForceEllipticalJohnsonGreenwood<T>(
+            g, Re, E0, alpha, beta, p1, a, b
+        ); 
+    }
+
+    return std::make_tuple(force, c, g); 
 }
 
 /**
@@ -797,7 +1171,7 @@ std::tuple<T, T, T> jkrContactAreaAndForceEllipsoid(const Ref<const Matrix<T, 3,
         calibrate_endpoint_radii, project_tol, project_max_iter
     );
     T Rx = radii.first; 
-    T Ry = radii.second;  
+    T Ry = radii.second;
 
     // Solve the equivalent surface contact problem
     T dist = d12.norm(); 
