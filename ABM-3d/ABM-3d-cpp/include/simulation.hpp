@@ -1980,21 +1980,21 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                         T dist = neighbors(k, Eigen::seq(2, 4)).matrix().norm(); 
                         if (dist < 2 * R)    // If the cells are contacting ... 
                         {
-                            n_total_neighbors(i)++; 
-                            n_total_neighbors(j)++; 
+                            n_total_neighbors(i) += 1;
+                            n_total_neighbors(j) += 1; 
                             // Is cell i a group 1 neighbor of cell j? 
                             if (cells(i, __colidx_group) == 1)
-                                n_group1_neighbors(j)++;
+                                n_group1_neighbors(j) += 1; 
                             // Is cell j a group 1 neighbor of cell i? 
                             if (cells(j, __colidx_group) == 1)
-                                n_group1_neighbors(i)++;  
+                                n_group1_neighbors(i) += 1;
                         }
                     }
 
                     // Calculate the ambient viscosity for each cell 
                     for (int i = 0; i < n; ++i)
                     {
-                        int group = static_cast<int>(cells(i, __colidx_group));
+                        int group = static_cast<int>(cells(i, __colidx_group)) - 1;
                         T vmin = viscosity_lims(group, 0); 
                         T vmax = viscosity_lims(group, 1); 
                         T delta = vmax - vmin; 
