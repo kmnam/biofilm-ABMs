@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     11/15/2025
+ *     11/21/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_3D_HPP
@@ -1153,6 +1153,9 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                   const std::string adhesion_curvature_filename, 
                   const std::string adhesion_jkr_forces_filename, 
                   const FrictionMode friction_mode,
+                  const bool modulate_local_viscosity, 
+                  const Ref<const Array<T, Dynamic, 2> >& viscosity_lims,
+                  const int max_coordination_number,  
                   const bool no_surface = false,
                   const int n_cells_start_switch = 0,
                   const bool track_poles = false,
@@ -1386,13 +1389,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 TupleToScalarTable<T, 2> contact_radii = calculateJKRContactRadii<T, 100>(
                     overlaps, gamma, R, E0, imag_tol, aberth_tol
                 );
-                //jkr_data->max_gamma = max_gamma;
-                //jkr_data->gamma_switch_rate = gamma_switch_rate; 
-                //jkr_data->gamma_fixed = gamma_fixed;  
-                //jkr_data->overlaps = overlaps; 
-                //jkr_data->gamma = gamma;
-                //jkr_data->contact_radii = contact_radii;
-                //jkr_data->initialized = true;  
                 jkr_data = std::make_unique<IsotropicJKRDataVariableGamma<T> >(
                     max_gamma, gamma_switch_rate, overlaps, gamma, contact_radii
                 ); 
@@ -1402,12 +1398,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 std::unordered_map<int, T> contact_radii = calculateJKRContactRadii<T, 100>(
                     overlaps, max_gamma, R, E0, imag_tol, aberth_tol
                 );
-                //jkr_data->max_gamma = max_gamma;
-                //jkr_data->gamma_switch_rate = gamma_switch_rate; 
-                //jkr_data->gamma_fixed = gamma_fixed;  
-                //jkr_data->overlaps = overlaps; 
-                //jkr_data->contact_radii = contact_radii; 
-                //jkr_data->initialized = true;  
                 jkr_data = std::make_unique<IsotropicJKRDataFixedGamma<T> >(
                     max_gamma, overlaps, contact_radii 
                 ); 
@@ -1431,22 +1421,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 Matrix<T, Dynamic, 1> overlaps = std::get<2>(result2); 
                 Matrix<T, Dynamic, 1> gamma = std::get<3>(result2); 
                 TupleToTupleTable<T, 5, 2> forces = std::get<4>(result2);
-                /*
-                AnisotropicJKRDataVariableGamma<T> jkr_data_;
-                jkr_data_.max_gamma = max_gamma; 
-                jkr_data_.gamma_switch_rate = gamma_switch_rate; 
-                jkr_data_.gamma_fixed = gamma_fixed;  
-                jkr_data_.theta = theta; 
-                jkr_data_.half_l = half_l; 
-                jkr_data_.centerline_coords = centerline_coords; 
-                jkr_data_.overlaps = overlaps;
-                jkr_data_.gamma = gamma; 
-                jkr_data_.Rx = Rx; 
-                jkr_data_.phi = phi;
-                jkr_data_.curvature_radii = curvature_radii; 
-                jkr_data_.forces = forces; 
-                jkr_data_.initialized = true;
-                */ 
                 jkr_data = std::make_unique<AnisotropicJKRDataVariableGamma<T> >(
                     max_gamma, gamma_switch_rate, overlaps, theta, half_l, 
                     centerline_coords, Rx, phi, gamma, curvature_radii, forces
@@ -1460,21 +1434,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 Matrix<T, Dynamic, 1> overlaps = std::get<2>(result2); 
                 T gamma = std::get<3>(result2); 
                 TupleToTupleTable<T, 4, 2> forces = std::get<4>(result2);
-                /*
-                AnisotropicJKRDataFixedGamma<T> jkr_data_;
-                jkr_data_.max_gamma = gamma; 
-                jkr_data_.gamma_switch_rate = gamma_switch_rate; 
-                jkr_data_.gamma_fixed = gamma_fixed;  
-                jkr_data_.theta = theta; 
-                jkr_data_.half_l = half_l; 
-                jkr_data_.centerline_coords = centerline_coords; 
-                jkr_data_.overlaps = overlaps;
-                jkr_data_.Rx = Rx; 
-                jkr_data_.phi = phi;
-                jkr_data_.curvature_radii = curvature_radii; 
-                jkr_data_.forces = forces; 
-                jkr_data_.initialized = true;
-                */ 
                 jkr_data = std::make_unique<AnisotropicJKRDataFixedGamma<T> >(
                     gamma, overlaps, theta, half_l, centerline_coords, Rx, 
                     phi, curvature_radii, forces
@@ -1482,171 +1441,6 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             }
         }
     }
-    /*
-    jkr_data->max_gamma = 0;
-    if (adhesion_mode != AdhesionMode::NONE)
-    {
-        // First parse polynomial-solving parameters, if given 
-        T imag_tol = 1e-20; 
-        T aberth_tol = 1e-20;
-        if (adhesion_params.find("jkr_imag_tol") != adhesion_params.end())
-            imag_tol = adhesion_params["jkr_imag_tol"]; 
-        if (adhesion_params.find("jkr_aberth_tol") != adhesion_params.end())
-            aberth_tol = adhesion_params["jkr_aberth_tol"];
-
-        // Parse the desired equilibrium cell-cell distance and solve for 
-        // the corresponding surface energy density  
-        const T eqdist = adhesion_params["eqdist"];
-        jkr_data.max_gamma = jkrOptimalSurfaceEnergyDensity<T, 100>(
-            R, Rcell, E0, eqdist, 100.0, 1e-6, 1e-8, 1e-8, 1e-8, 1000, 1000,
-            imag_tol, aberth_tol, true
-        );
-        jkr_data.gamma_fixed = (switch_mode == SwitchMode::NONE);
-        if (switch_mode == SwitchMode::NONE || switch_timescale == 0)
-            jkr_data.gamma_switch_rate = std::numeric_limits<T>::infinity(); 
-        else
-            jkr_data.gamma_switch_rate = jkr_data.max_gamma / switch_timescale;  
-
-        // Initialize the surface energy density for each cell to be 
-        // the maximum value for group 1 cells and zero for group 2 cells
-        for (int i = 0; i < n; ++i)
-        {
-            if (cells(i, __colidx_group) == 1)
-                cells(i, __colidx_gamma) = jkr_data.max_gamma; 
-            else 
-                cells(i, __colidx_gamma) = 0.0; 
-        }
-
-        // If isotropic JKR adhesion is desired, calculate JKR contact radii
-        // for a range of overlap distances and surface energy densities
-        if (adhesion_mode == AdhesionMode::JKR_ISOTROPIC)
-        {
-            int n_overlap = static_cast<int>(adhesion_params["n_mesh_overlap"]);
-            int n_gamma = static_cast<int>(adhesion_params["n_mesh_gamma"]);
-            jkr_data.overlaps = Matrix<T, Dynamic, 1>::LinSpaced(
-                n_overlap, 0, 2 * (R - Rcell)
-            );
-            if (!jkr_data.gamma_fixed)
-            {
-                jkr_data.gamma = Matrix<T, Dynamic, 1>::LinSpaced(
-                    n_gamma, 0, jkr_data.max_gamma
-                );
-                jkr_data.contact_radii = calculateJKRContactRadii<T, 100>(
-                    jkr_data.overlaps, jkr_data.gamma, R, E0, imag_tol, aberth_tol
-                );
-            }
-            else 
-            {
-                jkr_data.contact_radii_reduced = calculateJKRContactRadii<T, 100>(
-                    jkr_data.overlaps, jkr_data.max_gamma, R, E0, imag_tol,
-                    aberth_tol
-                );
-            } 
-        }
-        else     // Otherwise, if anisotropic JKR adhesion is desired ... 
-        {
-            // Determine whether the principal radii of curvature should be
-            // computed 
-            const bool precompute_jkr_forces = static_cast<bool>(
-                adhesion_params["precompute_jkr_forces"]
-            );
-
-            // Calculate the principal radii of curvature and JKR contact
-            // forces, if desired 
-            if (precompute_jkr_forces)
-            {
-                bool calibrate_endpoint_radii = static_cast<bool>(
-                    adhesion_params["calibrate_endpoint_radii"]
-                ); 
-                int n_theta = static_cast<int>(adhesion_params["n_mesh_theta"]);
-                int n_half_l = static_cast<int>(adhesion_params["n_mesh_half_l"]);
-                int n_coords = static_cast<int>(
-                    adhesion_params["n_mesh_centerline_coords"]
-                );
-                int n_Rx = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
-                int n_Ry = static_cast<int>(adhesion_params["n_mesh_curvature_radii"]); 
-                T max_overlap = 2 * (R - Rcell);
-                T min_aspect_ratio = adhesion_params["min_aspect_ratio"];
-                T max_aspect_ratio = adhesion_params["max_aspect_ratio"]; 
-                T project_tol = adhesion_params["ellipsoid_project_tol"]; 
-                int project_max_iter = static_cast<int>(
-                    adhesion_params["ellipsoid_project_max_iter"]
-                ); 
-                T brent_tol = adhesion_params["brent_tol"];
-                int brent_max_iter = static_cast<int>(
-                    adhesion_params["brent_max_iter"]
-                );
-                T init_bracket_dx = adhesion_params["init_bracket_dx"]; 
-                int n_tries_bracket = static_cast<int>(
-                    adhesion_params["n_tries_bracket"]
-                ); 
-                jkr_data.theta = Matrix<T, Dynamic, 1>::LinSpaced(
-                    n_theta, 0.0, boost::math::constants::half_pi<T>()
-                ); 
-                jkr_data.half_l = Matrix<T, Dynamic, 1>::LinSpaced(
-                    n_half_l, 0.5 * L0, 0.5 * Ldiv
-                );  
-                jkr_data.centerline_coords = Matrix<T, Dynamic, 1>::LinSpaced(
-                    n_coords, 0.0, 1.0
-                );
-                jkr_data.curvature_radii = calculateCurvatureRadiiTable<T>(
-                    jkr_data.theta, jkr_data.half_l, jkr_data.centerline_coords, 
-                    R, calibrate_endpoint_radii, project_tol, project_max_iter
-                );
-                jkr_data.Rx = Matrix<T, Dynamic, 1>::LinSpaced(
-                    n_Rx, 0.5 * R, R
-                ); 
-                jkr_data.Ry = Matrix<T, Dynamic, 1>::LinSpaced(
-                    n_Ry, 0.5 * R, R
-                );
-                if (!jkr_data.gamma_fixed)
-                {
-                    jkr_data.forces = calculateJKRForceTable<T>(
-                        jkr_data.Rx, jkr_data.Ry, jkr_data.overlaps,
-                        jkr_data.gamma, E0, max_overlap, min_aspect_ratio,
-                        max_aspect_ratio, brent_tol, brent_max_iter, 
-                        init_bracket_dx, n_tries_bracket, imag_tol, aberth_tol
-                    );
-                }
-                else 
-                {
-                    jkr_data.forces_reduced = calculateJKRForceTable<T>(
-                        jkr_data.Rx, jkr_data.Ry, jkr_data.overlaps,
-                        jkr_data.max_gamma, E0, max_overlap, min_aspect_ratio,
-                        max_aspect_ratio, brent_tol, brent_max_iter, 
-                        init_bracket_dx, n_tries_bracket, imag_tol, aberth_tol
-                    );
-                } 
-            }
-            else    // Otherwise, parse pre-computed values 
-            {
-                auto result1 = parseCurvatureRadiiTable<T>(adhesion_curvature_filename); 
-                jkr_data.theta = std::get<0>(result1); 
-                jkr_data.half_l = std::get<1>(result1); 
-                jkr_data.centerline_coords = std::get<2>(result1); 
-                jkr_data.curvature_radii = std::get<3>(result1);
-                if (!jkr_data.gamma_fixed)
-                { 
-                    auto result2 = parseJKRForceTable<T>(adhesion_jkr_forces_filename); 
-                    jkr_data.Rx = std::get<0>(result2); 
-                    jkr_data.Ry = std::get<1>(result2); 
-                    jkr_data.overlaps = std::get<2>(result2); 
-                    jkr_data.gamma = std::get<3>(result2); 
-                    jkr_data.forces = std::get<4>(result2);
-                }
-                else
-                { 
-                    auto result2 = parseReducedJKRForceTable<T>(adhesion_jkr_forces_filename); 
-                    jkr_data.Rx = std::get<0>(result2); 
-                    jkr_data.Ry = std::get<1>(result2); 
-                    jkr_data.overlaps = std::get<2>(result2); 
-                    jkr_data.max_gamma = std::get<3>(result2); 
-                    jkr_data.forces_reduced = std::get<4>(result2);
-                }
-            }
-        }
-    }
-    */
     
     // Write simulation parameters to a dictionary
     std::map<std::string, std::string> params;
@@ -1729,6 +1523,22 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
             T value = item.second;
             ss << "adhesion_" << key; 
             params[ss.str()] = floatToString<T>(value); 
+        }
+    }
+    if (switch_mode != SwitchMode::NONE)
+    {
+        params["modulate_local_viscosity"] = (modulate_local_viscosity ? "1" : "0");
+        if (modulate_local_viscosity)
+        {
+            for (int i = 0; i < n_groups; ++i)
+            {
+                std::stringstream ss1, ss2;
+                ss1 << "eta_ambient_min_" << i + 1;
+                params[ss1.str()] = floatToString<T>(viscosity_lims(i, 0), precision); 
+                ss2 << "eta_ambient_max_" << i + 1;
+                params[ss2.str()] = floatToString<T>(viscosity_lims(i, 1), precision); 
+            }
+            params["max_coordination_number"] = std::to_string(max_coordination_number); 
         }
     }
     params["cell_cell_friction_mode"] = std::to_string(static_cast<int>(friction_mode));
@@ -2129,10 +1939,12 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                 }
             } 
 
-            // ... as well as the surface adhesion energy density, if there
-            // is cell-cell adhesion 
+            // ... as well as the surface adhesion energy density and/or 
+            // ambient viscosity, if there is also cell-cell adhesion 
             if (adhesion_mode != AdhesionMode::NONE)
             {
+                // Increase or decrease the surface adhesion energy density
+                // according to the switching timescale 
                 for (int i = 0; i < n; ++i)
                 {
                     if (cells(i, __colidx_group) == 1)
@@ -2153,6 +1965,58 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
                                 cells(i, __colidx_gamma) = 0; 
                         }                     
                     } 
+                }
+
+                // If ambient viscosity is to be modulated ... 
+                if (modulate_local_viscosity)
+                {
+                    // Get the number of group 1 neighbors per cell
+                    Array<int, Dynamic, 1> n_total_neighbors = Array<int, Dynamic, 1>::Zero(n); 
+                    Array<int, Dynamic, 1> n_group1_neighbors = Array<int, Dynamic, 1>::Zero(n); 
+                    for (int k = 0; k < neighbors.rows(); ++k)
+                    {
+                        int i = static_cast<int>(neighbors(k, 0));  
+                        int j = static_cast<int>(neighbors(k, 1)); 
+                        T dist = neighbors(k, Eigen::seq(2, 4)).matrix().norm(); 
+                        if (dist < 2 * R)    // If the cells are contacting ... 
+                        {
+                            n_total_neighbors(i)++; 
+                            n_total_neighbors(j)++; 
+                            // Is cell i a group 1 neighbor of cell j? 
+                            if (cells(i, __colidx_group) == 1)
+                                n_group1_neighbors(j)++;
+                            // Is cell j a group 1 neighbor of cell i? 
+                            if (cells(j, __colidx_group) == 1)
+                                n_group1_neighbors(i)++;  
+                        }
+                    }
+
+                    // Calculate the ambient viscosity for each cell 
+                    for (int i = 0; i < n; ++i)
+                    {
+                        int group = static_cast<int>(cells(i, __colidx_group));
+                        T vmin = viscosity_lims(group, 0); 
+                        T vmax = viscosity_lims(group, 1); 
+                        T delta = vmax - vmin; 
+
+                        // If the number of group 1 neighbors for cell i 
+                        // exceeds the coordination number, simply set to 
+                        // maximum value 
+                        if (n_group1_neighbors(i) >= max_coordination_number)
+                        {
+                            cells(i, __colidx_eta0) = vmax; 
+                        }
+                        else   // Otherwise, linearly interpolate 
+                        {
+                            T ratio = (
+                                static_cast<T>(n_group1_neighbors(i)) /
+                                static_cast<T>(
+                                    std::max(n_total_neighbors(i), max_coordination_number)
+                                )
+                            );
+                            cells(i, __colidx_eta0) = vmin + ratio * delta; 
+                        } 
+                    }
                 }
             }
         }
