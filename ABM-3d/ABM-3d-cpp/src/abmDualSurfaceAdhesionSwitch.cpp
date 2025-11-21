@@ -114,6 +114,13 @@ int main(int argc, char** argv)
     const AdhesionMode adhesion_mode = AdhesionMode::NONE;
     std::unordered_map<std::string, T> adhesion_params;
 
+    // No modulation of ambient viscosity 
+    const bool modulate_local_viscosity = false; 
+    Array<T, Dynamic, 2> viscosity_lims(2, 2); 
+    viscosity_lims << eta_ambient, eta_ambient, 
+                      eta_ambient, eta_ambient; 
+    const int max_coordination_number = 1; 
+
     // Parse cell-cell friction parameters
     FrictionMode friction_mode; 
     const int token = json_data["cell_cell_friction_mode"].as_int64(); 
@@ -323,7 +330,8 @@ int main(int argc, char** argv)
         SwitchMode::MARKOV, switch_rates, switch_timescale, daughter_length_std,
         daughter_angle_xy_bound, daughter_angle_z_bound, max_rxy_noise,
         max_rz_noise, max_nxy_noise, max_nz_noise, basal_only, basal_min_overlap,
-        adhesion_mode, adhesion_params, "", "", friction_mode, false,
+        adhesion_mode, adhesion_params, "", "", friction_mode,
+        modulate_local_viscosity, viscosity_lims, max_coordination_number, false,
         n_cells_start_switch, false, cell_cell_coulomb_coeff,
         cell_surface_coulomb_coeff, 50 
     ); 

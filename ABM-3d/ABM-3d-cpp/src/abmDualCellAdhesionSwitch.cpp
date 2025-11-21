@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     8/16/2025
+ *     11/20/2025
  */
 
 #include <Eigen/Dense>
@@ -41,8 +41,7 @@ int main(int argc, char** argv)
     const T Ldiv = 2 * L0 + 2 * R;
     const T E0 = static_cast<T>(json_data["E0"].as_double());
     const T Ecell = static_cast<T>(json_data["Ecell"].as_double()); 
-    const T sigma0 = static_cast<T>(json_data["sigma0"].as_double()); 
-    const T eta_ambient = static_cast<T>(json_data["eta_ambient"].as_double());
+    const T sigma0 = static_cast<T>(json_data["sigma0"].as_double());
     const T eta_surface = static_cast<T>(json_data["eta_surface"].as_double()); 
     const T max_stepsize = static_cast<T>(json_data["max_stepsize"].as_double());
     const T min_stepsize = static_cast<T>(json_data["min_stepsize"].as_double()); 
@@ -68,14 +67,30 @@ int main(int argc, char** argv)
     const T max_nxy_noise = static_cast<T>(json_data["max_nxy_noise"].as_double()); 
     const T max_nz_noise = static_cast<T>(json_data["max_nz_noise"].as_double()); 
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
-    const bool truncate_surface_friction = json_data["truncate_surface_friction"].as_int64();
-    const T surface_coulomb_coeff = (
-        truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double()) : 0.0
-    );
     const bool basal_only = json_data["basal_only"].as_int64(); 
     const T basal_min_overlap = (
         basal_only ? static_cast<T>(json_data["basal_min_overlap"].as_double()) : 0.0
     );
+
+    // Parse ambient viscosity 
+    const bool modulate_local_viscosity = json_data["modulate_local_viscosity"].as_int64();
+    T eta_ambient_max, eta_ambient_min;
+    int max_coordination_number;  
+    if (modulate_local_viscosity)
+    { 
+        eta_ambient_max = static_cast<T>(json_data["eta_ambient_max"].as_double());
+        eta_ambient_min = static_cast<T>(json_data["eta_ambient_min"].as_double());
+        max_coordination_number = json_data["max_coordination_number"].as_int64(); 
+    }
+    else 
+    {
+        eta_ambient_max = static_cast<T>(json_data["eta_ambient"].as_double());
+        eta_ambient_min = eta_ambient_max; 
+        max_coordination_number = 1;  
+    }
+    Array<T, Dynamic, 2> viscosity_lims(2, 2); 
+    viscosity_lims << eta_ambient_min, eta_ambient_max, 
+                      eta_ambient_min, eta_ambient_min; 
     
     // Parse cell-cell adhesion and friction parameters
     AdhesionMode adhesion_mode;
@@ -239,25 +254,51 @@ int main(int argc, char** argv)
     if (friction_mode == FrictionMode::KINETIC)
         eta_cell_cell = static_cast<T>(json_data["eta_cell_cell"].as_double());
 
-    // Decide between Runge-Kutta and velocity Verlet 
-    bool use_verlet = false; 
-    if (friction_mode == FrictionMode::KINETIC)
+    // Set the Coulomb coefficient for cell-cell and cell-surface friction 
+    T cell_cell_coulomb_coeff = 1.0;
+    T cell_surface_coulomb_coeff = 1.0;
+    try 
     {
-        use_verlet = true;
+        cell_surface_coulomb_coeff = static_cast<T>(
+            json_data["cell_surface_coulomb_coeff"].as_double()
+        ); 
     }
-    else 
+    catch (boost::wrapexcept<boost::system::system_error>& e) { }
+    if (friction_mode == FrictionMode::KINETIC)
     {
         try
         {
-            use_verlet = json_data["use_verlet"].as_int64(); 
+            cell_cell_coulomb_coeff = static_cast<T>(
+                json_data["cell_cell_coulomb_coeff"].as_double()
+            ); 
         }
         catch (boost::wrapexcept<boost::system::system_error>& e) { } 
     }
 
-    // If velocity Verlet is desired, parse the initial cell mass
+    // Use Verlet integration, if desired 
+    IntegrationMode integration_mode = IntegrationMode::HEUN_EULER; 
     T M0 = 0.0; 
-    if (use_verlet)
-        M0 = static_cast<T>(json_data["M0"].as_double()); 
+    try
+    {
+        const int token2 = json_data["integration_mode"].as_int64(); 
+        if (token2 == 0)
+            integration_mode = IntegrationMode::VELOCITY_VERLET; 
+        else if (token2 == 1)
+            integration_mode = IntegrationMode::HEUN_EULER;
+        else if (token2 == 2)
+            integration_mode = IntegrationMode::BOGACKI_SHAMPINE; 
+        else if (token2 == 3)
+            integration_mode = IntegrationMode::RUNGE_KUTTA_FEHLBERG; 
+        else if (token2 == 4) 
+            integration_mode = IntegrationMode::DORMAND_PRINCE; 
+        else 
+            throw std::runtime_error("Invalid integration mode specified");
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e) { }
+    if (integration_mode == IntegrationMode::VELOCITY_VERLET)
+    {
+        M0 = static_cast<T>(json_data["M0"].as_double());
+    } 
 
     // Omit the surface, if desired 
     bool no_surface = false; 
@@ -284,10 +325,10 @@ int main(int argc, char** argv)
 
     // Vectors of friction coefficient means and standard deviations (identical
     // for both groups)
-    const int __colidx_eta_cell_cell = __ncols_required + 1; 
-    std::vector<int> group_attributes { __colidx_eta_cell_cell }; 
+    std::vector<int> group_attributes { __colidx_eta1 }; 
     Array<T, Dynamic, Dynamic> attribute_values(2, 1);
-    attribute_values << eta_cell_cell, eta_cell_cell;  
+    attribute_values << eta_surface,
+                        eta_surface; 
 
     // Switching rates between groups 1 and 2
     Array<T, Dynamic, Dynamic> switch_rates(2, 2); 
@@ -302,30 +343,117 @@ int main(int argc, char** argv)
 
     // Initialize simulation ...
     //
-    // Define a founder cell at the origin at time zero, parallel to x-axis, 
-    // with zero velocity, mean growth rate, and default viscosity and friction
-    // coefficients
-    Array<T, Dynamic, Dynamic> cells(1, __ncols_required + 2);
-    T rz = R - pow(sigma0 * sqrt(R) / (4 * E0), 2. / 3.); 
-    cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
-             eta_ambient, eta_surface, eta_surface, sigma0, 1, 0, eta_cell_cell;
+    // Check whether an initial population was specified
+    Array<T, Dynamic, Dynamic> cells;
+    int ncols; 
+    if (adhesion_mode != AdhesionMode::NONE && friction_mode != FrictionMode::NONE)
+        ncols = __ncols_required + 2; 
+    else if (adhesion_mode != AdhesionMode::NONE)
+        ncols = __ncols_required + 1; 
+    else if (friction_mode != FrictionMode::NONE)
+        ncols = __ncols_required + 1; 
+    else 
+        ncols = __ncols_required;  
+    std::string init_filename = "";
+    std::string lineage_filename = "";  
+    try
+    {
+        init_filename = json_data["init_filename"].as_string().c_str();
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e) { }
+    try
+    {
+        lineage_filename = json_data["lineage_filename"].as_string().c_str(); 
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e) { }
 
-    // Initialize parent IDs 
+    // If an initial population was specified ...
     std::vector<int> parents; 
-    parents.push_back(-1); 
+    if (init_filename.size() > 0)
+    {
+        auto result = readCells<T>(init_filename); 
+        cells = result.first; 
+        if (cells.cols() != ncols)
+        {
+            throw std::runtime_error(
+                "File specifying initial population contains incorrect number of "
+                "columns"
+            ); 
+        }
+        
+        // In this case, check whether a lineage was specified
+        if (lineage_filename.size() > 0)
+        {
+            std::unordered_map<int, int> lineage = readLineage(lineage_filename);
+            
+            // In this case, check that the cells in the initial population
+            // are specified in the lineage 
+            for (int i = 0; i < cells.rows(); ++i)
+            {
+                int id = static_cast<int>(cells(i, __colidx_id)); 
+                if (lineage.find(id) == lineage.end())
+                {
+                    throw std::runtime_error(
+                        "Input lineage file does not specify parent of cell "
+                        "in initial population"
+                    ); 
+                } 
+            }
+
+            // Define the vector of parent IDs
+            parents.resize(lineage.size());  
+            for (const auto& pair : lineage)
+            {
+                int child_id = pair.first; 
+                int parent_id = pair.second; 
+                parents[child_id] = parent_id; 
+            } 
+        }
+        else 
+        {
+            throw std::runtime_error(
+                "File specifying initial population was specified, but without "
+                "accompanying lineage file"
+            ); 
+        }
+    }
+    // Otherwise ... 
+    else
+    { 
+        // Define a founder cell at the origin at time zero, parallel to x-axis, 
+        // with zero velocity, mean growth rate, and default viscosity and friction
+        // coefficients
+        cells.resize(1, ncols); 
+        T rz = R - pow(sigma0 * sqrt(R) / (4 * E0), 2. / 3.);
+        if (adhesion_mode != AdhesionMode::NONE && friction_mode != FrictionMode::NONE)
+            cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
+                     eta_ambient_max, eta_surface, sigma0, 1, 0, eta_cell_cell;
+        else if (adhesion_mode != AdhesionMode::NONE)
+            cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
+                     eta_ambient_max, eta_surface, sigma0, 1, 0;
+        else if (friction_mode != FrictionMode::NONE)
+            cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
+                     eta_ambient_max, eta_surface, sigma0, 1, eta_cell_cell;
+        else
+            cells << 0, 0, 0, rz, 1, 0, 0, 0, 0, 0, 0, 0, 0, L0, L0 / 2, 0, growth_mean,
+                     eta_ambient_max, eta_surface, sigma0, 1;
+        parents.push_back(-1); 
+    }
     
     // Run the simulation
     runSimulation<T>(
-        cells, parents, max_iter, n_cells, max_time, R, Rcell, L0, Ldiv, E0, Ecell, 
-        M0, max_stepsize, min_stepsize, true, outprefix, dt_write, iter_update_neighbors,
-        iter_update_stepsize, max_error_allowed, min_error, max_tries_update_stepsize,
-        neighbor_threshold, nz_threshold, rng_seed, 2, group_attributes, growth_means,
-        growth_stds, attribute_values, SwitchMode::MARKOV, switch_rates, switch_timescale,
-        daughter_length_std, daughter_angle_xy_bound, daughter_angle_z_bound,
-        truncate_surface_friction, surface_coulomb_coeff, max_rxy_noise, max_rz_noise,
-        max_nxy_noise, max_nz_noise, basal_only, basal_min_overlap, adhesion_mode,
-        adhesion_params, adhesion_curvature_filename, adhesion_jkr_forces_filename,
-        friction_mode, use_verlet, no_surface, n_cells_start_switch
+        cells, parents, integration_mode, max_iter, n_cells, max_time, R, Rcell,
+        L0, Ldiv, E0, Ecell, M0, max_stepsize, min_stepsize, true, outprefix,
+        dt_write, iter_update_neighbors, iter_update_stepsize, max_error_allowed,
+        min_error, max_tries_update_stepsize, neighbor_threshold, nz_threshold,
+        rng_seed, 2, group_attributes, growth_means, growth_stds, attribute_values,
+        SwitchMode::MARKOV, switch_rates, switch_timescale, daughter_length_std,
+        daughter_angle_xy_bound, daughter_angle_z_bound, max_rxy_noise,
+        max_rz_noise, max_nxy_noise, max_nz_noise, basal_only, basal_min_overlap,
+        adhesion_mode, adhesion_params, adhesion_curvature_filename,
+        adhesion_jkr_forces_filename, friction_mode, modulate_local_viscosity,
+        viscosity_lims, max_coordination_number, no_surface, n_cells_start_switch,
+        false, cell_cell_coulomb_coeff, cell_surface_coulomb_coeff, 50
     ); 
     
     return 0; 
