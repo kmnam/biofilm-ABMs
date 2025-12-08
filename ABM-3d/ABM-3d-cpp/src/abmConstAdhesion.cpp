@@ -9,7 +9,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/13/2025
+ *     12/7/2025
  */
 
 #include <Eigen/Dense>
@@ -65,10 +65,6 @@ int main(int argc, char** argv)
     const T max_nxy_noise = static_cast<T>(json_data["max_nxy_noise"].as_double()); 
     const T max_nz_noise = static_cast<T>(json_data["max_nz_noise"].as_double()); 
     const T max_error_allowed = static_cast<T>(json_data["max_error_allowed"].as_double());
-    const bool truncate_surface_friction = json_data["truncate_surface_friction"].as_int64();
-    const T surface_coulomb_coeff = (
-        truncate_surface_friction ? static_cast<T>(json_data["surface_coulomb_coeff"].as_double()) : 0.0
-    );
     const bool basal_only = json_data["basal_only"].as_int64(); 
     const T basal_min_overlap = (
         basal_only ? static_cast<T>(json_data["basal_min_overlap"].as_double()) : 0.0
@@ -311,13 +307,12 @@ int main(int argc, char** argv)
     }
     catch (boost::wrapexcept<boost::system::system_error>& e) { }
 
-    // Parse minimum number of cells at which to start switching, if given
-    int n_cells_start_switch = 0; 
-    try
-    {
-        n_cells_start_switch = json_data["n_cells_start_switch"].as_int64(); 
-    }
-    catch (boost::wrapexcept<boost::system::system_error>& e) { }
+    // No switching
+    const int n_cells_start_switch = 0;
+    const bool modulate_local_viscosity = false; 
+    Array<T, Dynamic, 2> viscosity_lims(1, 2);
+    viscosity_lims << eta_surface, eta_surface; 
+    const int max_coordination_number = 1;
 
     // Vectors of growth rate means and standard deviations 
     Array<T, Dynamic, 1> growth_means(1);
@@ -447,9 +442,9 @@ int main(int argc, char** argv)
         daughter_angle_xy_bound, daughter_angle_z_bound, max_rxy_noise,
         max_rz_noise, max_nxy_noise, max_nz_noise, basal_only, basal_min_overlap,
         adhesion_mode, adhesion_params, adhesion_curvature_filename,
-        adhesion_jkr_forces_filename, friction_mode, no_surface,
-        n_cells_start_switch, false, cell_cell_coulomb_coeff,
-        cell_surface_coulomb_coeff, 50
+        adhesion_jkr_forces_filename, friction_mode, modulate_local_viscosity, 
+        viscosity_lims, max_coordination_number, no_surface, n_cells_start_switch,
+        false, cell_cell_coulomb_coeff, cell_surface_coulomb_coeff, 50
     ); 
     
     return 0; 
