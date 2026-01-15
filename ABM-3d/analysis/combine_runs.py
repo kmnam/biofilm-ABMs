@@ -69,7 +69,8 @@ if __name__ == '__main__':
         # final files) ... 
         filenames = parse_dir(os.path.join(rundir, '*'))
         for filename in filenames[1:]:
-            # Get the iteration number and timepoint for the corresponding frame
+            # Get the iteration number and timepoint for the corresponding
+            # frame
             m = re.search(r'_iter([0-9]+)', os.path.basename(filename))
             if m is None:
                 idx_curr = -1   # In this case, this file should be a final file
