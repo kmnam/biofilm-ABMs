@@ -34,8 +34,6 @@ using std::sin;
 using boost::multiprecision::sin; 
 using std::cos; 
 using boost::multiprecision::cos;
-using std::acos;
-using boost::multiprecision::acos;
 using std::sqrt; 
 using boost::multiprecision::sqrt;
 using std::ceil; 
