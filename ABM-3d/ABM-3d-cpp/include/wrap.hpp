@@ -237,7 +237,6 @@ Mesh alphaWrap(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
 {
     // Sample a selection of points along the surface and interior of each cell 
     Array<T, Dynamic, 3> points = getSurfacePoints<T>(cells, R, L0, n_points_L0);
-    std::cout << "Sampled " << points.rows() << " points" << std::endl; 
 
     // Prepare the points to be processed by CGAL::alpha_wrap_3()
     std::vector<Point_3> points_vec; 
@@ -254,9 +253,6 @@ Mesh alphaWrap(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
     // Wrap the points 
     Mesh wrap; 
     CGAL::alpha_wrap_3(points_vec, alpha, offset, wrap);
-    std::cout << "Done with alpha-wrapping: " 
-              << CGAL::num_vertices(wrap) << " vertices, " 
-              << CGAL::num_faces(wrap) << " faces\n";
 
     return wrap;  
 }
