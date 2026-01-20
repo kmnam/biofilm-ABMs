@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     6/4/2025
+ *     1/20/2026
  */
 
 #ifndef POLYNOMIALS_HPP
@@ -28,25 +28,28 @@ using namespace Eigen;
 using boost::multiprecision::abs; 
 using boost::multiprecision::sin;
 using boost::multiprecision::cos;
-using boost::multiprecision::real; 
+using boost::multiprecision::real;
+
+template <size_t N>
+using RealType = boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<N> >; 
+
+template <size_t N>
+using ComplexType = boost::multiprecision::number<boost::multiprecision::mpc_complex_backend<N> >; 
 
 /**
  * A simple univariate polynomial class with complex-valued coefficients.
  *
  * This class assumes Boost.Multiprecision coefficient types. 
  */
-template <int N>
+template <size_t N>
 class HighPrecisionPolynomial
 {
-    typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<N> >  RealType; 
-    typedef boost::multiprecision::number<boost::multiprecision::mpc_complex_backend<N> > ComplexType;
-
     private:
         // Degree of the polynomial
         int degree;
 
         // Vector of coefficients in increasing order of degree
-        Matrix<ComplexType, Dynamic, 1> coefs; 
+        Matrix<ComplexType<N>, Dynamic, 1> coefs; 
 
     public:
         /**
@@ -55,7 +58,7 @@ class HighPrecisionPolynomial
         HighPrecisionPolynomial()
         {
             this->degree = 0;
-            this->coefs = Matrix<ComplexType, Dynamic, 1>::Zero(1);
+            this->coefs = Matrix<ComplexType<N>, Dynamic, 1>::Zero(1);
         }
 
         /**
@@ -63,14 +66,14 @@ class HighPrecisionPolynomial
          *
          * @param coefs Input coefficients. 
          */
-        HighPrecisionPolynomial(const Ref<const Matrix<RealType, Dynamic, 1> >& coefs)
+        HighPrecisionPolynomial(const Ref<const Matrix<RealType<N>, Dynamic, 1> >& coefs)
         {
             // Identify the degree from the highest-degree nonzero coefficient
             this->degree = coefs.size() - 1;
-            while (coefs(this->degree) == static_cast<RealType>(0) && this->degree > 0)
+            while (coefs(this->degree) == static_cast<RealType<N> >(0) && this->degree > 0)
                 this->degree--;
             
-            this->coefs = coefs.head(this->degree + 1).template cast<ComplexType>();
+            this->coefs = coefs.head(this->degree + 1).template cast<ComplexType<N> >();
         }
 
         /**
@@ -78,11 +81,11 @@ class HighPrecisionPolynomial
          *
          * @param coefs Input coefficients.
          */
-        HighPrecisionPolynomial(const Ref<const Matrix<ComplexType, Dynamic, 1> >& coefs)
+        HighPrecisionPolynomial(const Ref<const Matrix<ComplexType<N>, Dynamic, 1> >& coefs)
         {
             // Identify the degree from the highest-degree nonzero coefficient
             this->degree = coefs.size() - 1;
-            while (coefs(this->degree) == static_cast<RealType>(0) && this->degree > 0)
+            while (coefs(this->degree) == static_cast<RealType<N> >(0) && this->degree > 0)
                 this->degree--;
             
             this->coefs = coefs.head(this->degree + 1);
@@ -98,9 +101,17 @@ class HighPrecisionPolynomial
         /**
          * Return the coefficients of the polynomial.
          */
-        Matrix<ComplexType, Dynamic, 1> getCoefs()
+        Matrix<ComplexType<N>, Dynamic, 1> getCoefs() const
         {
             return this->coefs;
+        }
+
+        /**
+         * Return the degree of the polynomial. 
+         */
+        int getDegree() const
+        {
+            return this->degree; 
         }
 
         /**
@@ -110,9 +121,9 @@ class HighPrecisionPolynomial
          * @param x Input value for variable. 
          * @returns Polynomial value. 
          */
-        ComplexType eval(const ComplexType x)
+        ComplexType<N> eval(const ComplexType<N> x) const
         {
-            ComplexType y = this->coefs(this->degree);
+            ComplexType<N> y = this->coefs(this->degree);
             for (int i = this->degree - 1; i >= 0; i--)
                 y = this->coefs(i) + x * y;
 
@@ -124,7 +135,7 @@ class HighPrecisionPolynomial
          *
          * @returns Derivative polynomial. 
          */
-        HighPrecisionPolynomial<N> deriv()
+        HighPrecisionPolynomial<N> deriv() const
         {
             // If the polynomial has degree zero, return the zero polynomial
             if (this->degree == 0)
@@ -134,9 +145,9 @@ class HighPrecisionPolynomial
             // Otherwise, differentiate the polynomial term-by-term
             else
             {
-                Matrix<ComplexType, Dynamic, 1> dcoefs(this->degree);
+                Matrix<ComplexType<N>, Dynamic, 1> dcoefs(this->degree);
                 for (int i = 1; i <= this->degree; ++i)
-                    dcoefs(i - 1) = this->coefs(i) * static_cast<RealType>(i);
+                    dcoefs(i - 1) = this->coefs(i) * static_cast<RealType<N> >(i);
                 return HighPrecisionPolynomial<N>(dcoefs);
             }
         }
@@ -148,21 +159,21 @@ class HighPrecisionPolynomial
          * @param real If true, the coefficients are assumed to be real.
          * @returns Vector of polynomial roots.  
          */
-        Matrix<ComplexType, Dynamic, 1> solveCompanion(const bool is_real = false)
+        Matrix<ComplexType<N>, Dynamic, 1> solveCompanion(const bool is_real = false) const
         {
             if (is_real)
             {
                 // Define the companion matrix
-                Matrix<RealType, Dynamic, Dynamic> companion
-                    = Matrix<RealType, Dynamic, Dynamic>::Zero(this->degree, this->degree);
+                Matrix<RealType<N>, Dynamic, Dynamic> companion
+                    = Matrix<RealType<N>, Dynamic, Dynamic>::Zero(this->degree, this->degree);
                 companion(Eigen::seq(1, this->degree - 1), Eigen::seq(0, this->degree - 2))
-                    = Matrix<RealType, Dynamic, Dynamic>::Identity(this->degree - 1, this->degree - 1);
-                RealType lead = real(this->coefs(this->degree));
+                    = Matrix<RealType<N>, Dynamic, Dynamic>::Identity(this->degree - 1, this->degree - 1);
+                RealType<N> lead = real(this->coefs(this->degree));
                 for (int i = 0; i < this->degree; ++i)
                     companion(i, this->degree - 1) = real(-this->coefs(i)) / lead;
 
                 // Get the eigenvalues of the companion matrix
-                EigenSolver<Matrix<RealType, Dynamic, Dynamic> > es; 
+                EigenSolver<Matrix<RealType<N>, Dynamic, Dynamic> > es; 
                 es.compute(companion, false);
 
                 return es.eigenvalues();
@@ -170,15 +181,15 @@ class HighPrecisionPolynomial
             else
             {
                 // Define the companion matrix
-                Matrix<ComplexType, Dynamic, Dynamic> companion
-                    = Matrix<ComplexType, Dynamic, Dynamic>::Zero(this->degree, this->degree);
+                Matrix<ComplexType<N>, Dynamic, Dynamic> companion
+                    = Matrix<ComplexType<N>, Dynamic, Dynamic>::Zero(this->degree, this->degree);
                 companion(Eigen::seq(1, this->degree - 1), Eigen::seq(0, this->degree - 2))
-                    = Matrix<ComplexType, Dynamic, Dynamic>::Identity(this->degree - 1, this->degree - 1);
-                ComplexType lead = this->coefs(this->degree);
+                    = Matrix<ComplexType<N>, Dynamic, Dynamic>::Identity(this->degree - 1, this->degree - 1);
+                ComplexType<N> lead = this->coefs(this->degree);
                 companion(Eigen::all, this->degree - 1) = -this->coefs.head(this->degree) / lead;
 
                 // Get the eigenvalues of the companion matrix
-                ComplexEigenSolver<Matrix<ComplexType, Dynamic, Dynamic> > es; 
+                ComplexEigenSolver<Matrix<ComplexType<N>, Dynamic, Dynamic> > es; 
                 es.compute(companion, false);
 
                 return es.eigenvalues();
@@ -192,21 +203,25 @@ class HighPrecisionPolynomial
          *            consecutive root approximations is zero.
          * @returns Vector of polynomial roots. 
          */
-        Matrix<ComplexType, Dynamic, 1> solveDurandKerner(const RealType tol)
+        Matrix<ComplexType<N>, Dynamic, 1> solveDurandKerner(const RealType<N> tol) const
         {
             // Initialize the roots as the n-th roots of unity, where 
             // n is the degree of the polynomial 
-            Matrix<ComplexType, Dynamic, 1> roots(this->degree);
+            Matrix<ComplexType<N>, Dynamic, 1> roots(this->degree);
             for (int i = 0; i < this->degree; ++i)
             {
-                RealType a = cos(i * boost::math::constants::two_pi<RealType>() / this->degree);
-                RealType b = sin(i * boost::math::constants::two_pi<RealType>() / this->degree);
-                roots(i) = ComplexType(a, b);
+                RealType<N> a = cos(
+                    i * boost::math::constants::two_pi<RealType<N> >() / this->degree
+                );
+                RealType<N> b = sin(
+                    i * boost::math::constants::two_pi<RealType<N> >() / this->degree
+                );
+                roots(i) = ComplexType<N>(a, b);
             }
 
             // Store the differences between the roots in a matrix
-            Matrix<ComplexType, Dynamic, Dynamic> diffs
-                = Matrix<ComplexType, Dynamic, Dynamic>::Zero(this->degree, this->degree);
+            Matrix<ComplexType<N>, Dynamic, Dynamic> diffs
+                = Matrix<ComplexType<N>, Dynamic, Dynamic>::Zero(this->degree, this->degree);
             for (int i = 0; i < this->degree; ++i)
             {
                 for (int j = i + 1; j < this->degree; ++j)
@@ -217,21 +232,21 @@ class HighPrecisionPolynomial
             }
 
             // Iteratively apply the Durand-Kerner method
-            RealType max_update = std::numeric_limits<RealType>::infinity();
+            RealType<N> max_update = std::numeric_limits<RealType<N> >::infinity();
             while (max_update > tol)
             {
-                Matrix<ComplexType, Dynamic, 1> updates(this->degree);
+                Matrix<ComplexType<N>, Dynamic, 1> updates(this->degree);
 
                 // Compute the Durand-Kerner update for each root
                 for (int i = 0; i < this->degree; ++i)
                 {
                     // Evaluate the polynomial at the current value of the
                     // i-th root
-                    ComplexType val_i = this->eval(roots(i)); 
+                    ComplexType<N> val_i = this->eval(roots(i)); 
 
                     // Get the product of the differences between the i-th
                     // root and every other root
-                    ComplexType dprod = 1.0;
+                    ComplexType<N> dprod = 1.0;
                     for (int j = 0; j < this->degree; ++j)
                     {
                         if (j != i)
@@ -274,24 +289,28 @@ class HighPrecisionPolynomial
          *            consecutive root approximations is zero.
          * @returns Vector of polynomial roots. 
          */
-        Matrix<ComplexType, Dynamic, 1> solveAberth(const RealType tol)
+        Matrix<ComplexType<N>, Dynamic, 1> solveAberth(const RealType<N> tol) const
         {
             // Get the derivative of the polynomial 
             HighPrecisionPolynomial<N> deriv = this->deriv();
 
             // Initialize the roots as the n-th roots of unity, where 
             // n is the degree of the polynomial 
-            Matrix<ComplexType, Dynamic, 1> roots(this->degree);
+            Matrix<ComplexType<N>, Dynamic, 1> roots(this->degree);
             for (int i = 0; i < this->degree; ++i)
             {
-                RealType a = cos(i * boost::math::constants::two_pi<RealType>() / this->degree);
-                RealType b = sin(i * boost::math::constants::two_pi<RealType>() / this->degree);
-                roots(i) = ComplexType(a, b);
+                RealType<N> a = cos(
+                    i * boost::math::constants::two_pi<RealType<N> >() / this->degree
+                );
+                RealType<N> b = sin(
+                    i * boost::math::constants::two_pi<RealType<N> >() / this->degree
+                );
+                roots(i) = ComplexType<N>(a, b);
             }
 
             // Store the differences between the roots in a matrix
-            Matrix<ComplexType, Dynamic, Dynamic> diffs
-                = Matrix<ComplexType, Dynamic, Dynamic>::Zero(this->degree, this->degree);
+            Matrix<ComplexType<N>, Dynamic, Dynamic> diffs
+                = Matrix<ComplexType<N>, Dynamic, Dynamic>::Zero(this->degree, this->degree);
             for (int i = 0; i < this->degree; ++i)
             {
                 for (int j = i + 1; j < this->degree; ++j)
@@ -302,23 +321,23 @@ class HighPrecisionPolynomial
             }
 
             // Iteratively apply Aberth's method
-            RealType max_update = std::numeric_limits<RealType>::infinity();
+            RealType<N> max_update = std::numeric_limits<RealType<N> >::infinity();
             while (max_update > tol)
             {
-                Matrix<ComplexType, Dynamic, 1> updates(this->degree);
+                Matrix<ComplexType<N>, Dynamic, 1> updates(this->degree);
 
                 // Compute the Aberth update for each root 
                 for (int i = 0; i < this->degree; ++i)
                 {
                     // Evaluate the polynomial and its derivative at the 
                     // current value of the i-th root
-                    ComplexType val_i = this->eval(roots(i)); 
-                    ComplexType dval_i = deriv.eval(roots(i));
-                    ComplexType ratio_i = val_i / dval_i;
+                    ComplexType<N> val_i = this->eval(roots(i)); 
+                    ComplexType<N> dval_i = deriv.eval(roots(i));
+                    ComplexType<N> ratio_i = val_i / dval_i;
 
                     // Get the sum of one over the difference between the i-th
                     // root and every other root
-                    ComplexType dsum = 0;
+                    ComplexType<N> dsum = 0;
                     for (int j = 0; j < this->degree; ++j)
                     {
                         if (j != i)
@@ -354,5 +373,74 @@ class HighPrecisionPolynomial
             return roots;
         }
 };
+
+/**
+ * Get the resultant of two univariate polynomials, via the Sylvester matrix.
+ *
+ * The coefficients of the two polynomials are assumed to be real. 
+ *
+ * @param f First polynomial. 
+ * @param g Second polynomial.
+ * @returns Resultant of f and g.  
+ */
+template <size_t N>
+RealType<N> resultant(HighPrecisionPolynomial<N>& f, HighPrecisionPolynomial<N>& g)
+{
+    // Define the Sylvester matrix
+    const int deg_f = f.getDegree(); 
+    const int deg_g = g.getDegree();
+    Matrix<ComplexType<N>, Dynamic, 1> coefs_f = f.getCoefs(); 
+    Matrix<ComplexType<N>, Dynamic, 1> coefs_g = g.getCoefs();  
+    Matrix<RealType<N>, Dynamic, Dynamic> sylvester
+        = Matrix<RealType<N>, Dynamic, Dynamic>::Zero(deg_f + deg_g, deg_f + deg_g);
+    for (int i = 0; i < deg_f; ++i)
+    {
+        for (int j = 0; j < deg_g; ++j)
+        {
+            sylvester(i + j, j) = real(coefs_f(i));
+        }
+    }
+    for (int i = 0; i < deg_g; ++i)
+    {
+        for (int j = 0; j < deg_f; ++j)
+        {
+            sylvester(i + j, deg_g + j) = real(coefs_g(i));  
+        }
+    }
+   
+    // Evaluate the determinant
+    return sylvester.determinant();  
+}
+
+/**
+ * Given a set of points, obtain the unique minimum-degree polynomial that 
+ * interpolates these points, via the Vandermonde matrix. 
+ *
+ * @param points Array of points. 
+ * @returns Interpolating polynomial. 
+ */
+template <size_t N>
+HighPrecisionPolynomial<N> interpolant(const Ref<const Array<RealType<N>, Dynamic, 2> >& points)
+{
+    // Define the Vandermonde matrix 
+    const int n = points.rows() - 1;
+    Matrix<RealType<N>, Dynamic, Dynamic> A(n + 1, n + 1); 
+    A.col(0) = Matrix<RealType<N>, Dynamic, 1>::Ones(n + 1);  
+    for (int i = 0; i < n + 1; ++i)
+    {
+        for (int j = 1; j < n + 1; ++j)
+        {
+            A(i, j) = pow(points(i, 0), j); 
+        }
+    }
+
+    // Solve for the interpolating polynomial's coefficients 
+    Matrix<RealType<N>, Dynamic, 1> b(n + 1); 
+    for (int i = 0; i < n + 1; ++i)
+        b(i) = points(i, 1);
+    Matrix<RealType<N>, Dynamic, 1> coefs = A.fullPivLu().solve(b);
+
+    return HighPrecisionPolynomial<N>(coefs);  
+}
 
 #endif
