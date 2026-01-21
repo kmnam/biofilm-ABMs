@@ -107,7 +107,7 @@ TEST_CASE("Tests for solution methods", "[solveCompanion(), solveDurandKerner(),
 }
 
 /**
- * Test interpolation. 
+ * Test module for interpolation. 
  */
 TEST_CASE("Tests for interpolation methods", "[interpolate()]")
 {
@@ -149,3 +149,17 @@ TEST_CASE("Tests for interpolation methods", "[interpolate()]")
         ); 
 }
 
+/**
+ * Test module for resultant calculation.  
+ */
+TEST_CASE("Tests for resultant calculation", "[resultant()]")
+{
+    // Example taken from page 164 in Cox, Little, O'Shea
+    Array<RealType<50>, Dynamic, 1> f_coefs(3), g_coefs(3); 
+    f_coefs << 1, 3, 2; 
+    g_coefs << 3, 1, 7; 
+    HighPrecisionPolynomial<50> f(f_coefs); 
+    HighPrecisionPolynomial<50> g(g_coefs);
+    RealType<50> res = resultant<50>(f, g); 
+    REQUIRE_THAT(static_cast<double>(res), Catch::Matchers::WithinAbs(153, 0));  
+}
