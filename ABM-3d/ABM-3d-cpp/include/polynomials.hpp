@@ -393,18 +393,21 @@ RealType<N> resultant(HighPrecisionPolynomial<N>& f, HighPrecisionPolynomial<N>&
     Matrix<ComplexType<N>, Dynamic, 1> coefs_g = g.getCoefs();  
     Matrix<RealType<N>, Dynamic, Dynamic> sylvester
         = Matrix<RealType<N>, Dynamic, Dynamic>::Zero(deg_f + deg_g, deg_f + deg_g);
-    for (int i = 0; i < deg_f; ++i)
+
+    // Fill in the first m = deg(g) columns with coefficients of f 
+    for (int i = 0; i < deg_f + 1; ++i)
     {
         for (int j = 0; j < deg_g; ++j)
         {
-            sylvester(i + j, j) = real(coefs_f(i));
+            sylvester(i + j, j) = real(coefs_f(deg_f - i));
         }
     }
-    for (int i = 0; i < deg_g; ++i)
+    // Fill in the last l = deg(f) columns with coefficients of g
+    for (int i = 0; i < deg_g + 1; ++i)
     {
         for (int j = 0; j < deg_f; ++j)
         {
-            sylvester(i + j, deg_g + j) = real(coefs_g(i));  
+            sylvester(i + j, deg_g + j) = real(coefs_g(deg_g - i));  
         }
     }
    
