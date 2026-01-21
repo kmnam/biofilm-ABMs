@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/24/2025
+ *     1/21/2026
  */
 
 #include <iostream>
@@ -22,30 +22,27 @@ using boost::multiprecision::abs;
 using boost::multiprecision::real; 
 using boost::multiprecision::imag;
 
-typedef boost::multiprecision::number<boost::multiprecision::mpfr_float_backend<50> >  RealType; 
-typedef boost::multiprecision::number<boost::multiprecision::mpc_complex_backend<50> > ComplexType;
-
 /**
  * A series of tests for the various solution methods. 
  */
 TEST_CASE("Tests for solution methods", "[solveCompanion(), solveDurandKerner(), solveAberth()]")
 {
-    const RealType tol = 1e-8;
+    const RealType<50> tol = 1e-8;
     boost::random::mt19937 rng(1234567890);
     boost::random::uniform_01<> dist;
-    const RealType minroot = -10; 
-    const RealType maxroot = 10;
+    const RealType<50> minroot = -10; 
+    const RealType<50> maxroot = 10;
 
     // Case 1: Quadratic polynomials (x - a) * (x - b) = x^2 - (a + b)*x + a*b
-    Matrix<RealType, Dynamic, 1> coefs(3);
+    Matrix<RealType<50>, Dynamic, 1> coefs(3);
     for (int i = 0; i < 10; ++i)
     {
-        RealType a = minroot + (maxroot - minroot) * dist(rng); 
-        RealType b = minroot + (maxroot - minroot) * dist(rng);  
+        RealType<50> a = minroot + (maxroot - minroot) * dist(rng); 
+        RealType<50> b = minroot + (maxroot - minroot) * dist(rng);  
         coefs << a * b, -a - b, 1;
         HighPrecisionPolynomial<50> p(coefs);
-        Matrix<ComplexType, Dynamic, 1> roots; 
-        RealType err1, err2; 
+        Matrix<ComplexType<50>, Dynamic, 1> roots; 
+        RealType<50> err1, err2; 
 
         // Solve using the Durand-Kerner method 
         roots = p.solveDurandKerner(1e-8);
@@ -71,15 +68,15 @@ TEST_CASE("Tests for solution methods", "[solveCompanion(), solveDurandKerner(),
     coefs.resize(4); 
     for (int i = 0; i < 10; ++i)
     {
-        RealType a = minroot + (maxroot - minroot) * static_cast<RealType>(dist(rng)); 
-        RealType b = minroot + (maxroot - minroot) * static_cast<RealType>(dist(rng));
-        RealType c = minroot + (maxroot - minroot) * static_cast<RealType>(dist(rng));
-        std::vector<RealType> targets {a, b, c}; 
+        RealType<50> a = minroot + (maxroot - minroot) * static_cast<RealType<50> >(dist(rng)); 
+        RealType<50> b = minroot + (maxroot - minroot) * static_cast<RealType<50> >(dist(rng));
+        RealType<50> c = minroot + (maxroot - minroot) * static_cast<RealType<50> >(dist(rng));
+        std::vector<RealType<50> > targets {a, b, c}; 
         std::sort(targets.begin(), targets.end());  
         coefs << -a * b * c, a * b + a * c + b * c, -a - b - c, 1; 
         HighPrecisionPolynomial<50> p(coefs);
-        Matrix<ComplexType, Dynamic, 1> roots; 
-        RealType err; 
+        Matrix<ComplexType<50>, Dynamic, 1> roots; 
+        RealType<50> err; 
 
         // Solve using the Durand-Kerner method 
         roots = p.solveDurandKerner(1e-8);
@@ -87,7 +84,7 @@ TEST_CASE("Tests for solution methods", "[solveCompanion(), solveDurandKerner(),
         REQUIRE(abs(imag(roots(0))) < tol);
         REQUIRE(abs(imag(roots(1))) < tol);
         REQUIRE(abs(imag(roots(2))) < tol);
-        std::vector<RealType> roots2 {real(roots(0)), real(roots(1)), real(roots(2))};
+        std::vector<RealType<50> > roots2 {real(roots(0)), real(roots(1)), real(roots(2))};
         std::sort(roots2.begin(), roots2.end()); 
         err = 0.0; 
         for (int j = 0; j < 3; ++j)
@@ -100,12 +97,55 @@ TEST_CASE("Tests for solution methods", "[solveCompanion(), solveDurandKerner(),
         REQUIRE(abs(imag(roots(0))) < tol);
         REQUIRE(abs(imag(roots(1))) < tol);
         REQUIRE(abs(imag(roots(2))) < tol);
-        std::vector<RealType> roots3 {real(roots(0)), real(roots(1)), real(roots(2))};
+        std::vector<RealType<50> > roots3 {real(roots(0)), real(roots(1)), real(roots(2))};
         std::sort(roots3.begin(), roots3.end()); 
         err = 0.0; 
         for (int j = 0; j < 3; ++j)
             err += abs(roots3[j] - targets[j]); 
         REQUIRE(err < tol);
     }
+}
+
+/**
+ * Test interpolation. 
+ */
+TEST_CASE("Tests for interpolation methods", "[interpolate()]")
+{
+    // Example taken from: https://ubcmath.github.io/MATH307/systems/interpolation.html
+    Array<RealType<50>, Dynamic, 1> x(4), y(4);
+    x << 0, 1, 2, 3; 
+    y << -1, -1, 1, -1;
+    HighPrecisionPolynomial<50> f1 = interpolate<50>(x, y); 
+    REQUIRE(f1.getDegree() == 3);
+    Matrix<ComplexType<50>, Dynamic, 1> f1_coefs = f1.getCoefs(); 
+    REQUIRE_THAT(
+        static_cast<double>(real(f1_coefs(0))), Catch::Matchers::WithinAbs(-1, 1e-8)
+    ); 
+    REQUIRE_THAT(
+        static_cast<double>(real(f1_coefs(1))), Catch::Matchers::WithinAbs(-3, 1e-8)
+    ); 
+    REQUIRE_THAT(
+        static_cast<double>(real(f1_coefs(2))), Catch::Matchers::WithinAbs(4, 1e-8)
+    ); 
+    REQUIRE_THAT(
+        static_cast<double>(real(f1_coefs(3))), Catch::Matchers::WithinAbs(-1, 1e-8)
+    );
+
+    // Cubic example 
+    Array<RealType<50>, Dynamic, 1> g2_coefs(4); 
+    g2_coefs << 4, 3, 2, 1; 
+    HighPrecisionPolynomial<50> g2(g2_coefs); 
+    REQUIRE(g2.getDegree() == 3); 
+    x << -2, -1, 5, 17;
+    for (int i = 0; i < 4; ++i) 
+        y(i) = real(g2.eval(x(i)));
+    HighPrecisionPolynomial<50> f2 = interpolate<50>(x, y);
+    REQUIRE(f2.getDegree() == 3); 
+    Matrix<ComplexType<50>, Dynamic, 1> f2_coefs = f2.getCoefs();
+    for (int i = 0; i < 4; ++i) 
+        REQUIRE_THAT( 
+            static_cast<double>(real(f2_coefs(i))),
+            Catch::Matchers::WithinAbs(static_cast<double>(g2_coefs(i)), 1e-8)
+        ); 
 }
 
