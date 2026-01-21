@@ -420,25 +420,23 @@ RealType<N> resultant(HighPrecisionPolynomial<N>& f, HighPrecisionPolynomial<N>&
  * @returns Interpolating polynomial. 
  */
 template <size_t N>
-HighPrecisionPolynomial<N> interpolant(const Ref<const Array<RealType<N>, Dynamic, 2> >& points)
+HighPrecisionPolynomial<N> interpolate(const Ref<const Array<RealType<N>, Dynamic, 1> >& x, 
+                                       const Ref<const Array<RealType<N>, Dynamic, 1> >& y)
 {
     // Define the Vandermonde matrix 
-    const int n = points.rows() - 1;
+    const int n = y.size() - 1; 
     Matrix<RealType<N>, Dynamic, Dynamic> A(n + 1, n + 1); 
     A.col(0) = Matrix<RealType<N>, Dynamic, 1>::Ones(n + 1);  
     for (int i = 0; i < n + 1; ++i)
     {
         for (int j = 1; j < n + 1; ++j)
         {
-            A(i, j) = pow(points(i, 0), j); 
+            A(i, j) = pow(x(i), j); 
         }
     }
 
     // Solve for the interpolating polynomial's coefficients 
-    Matrix<RealType<N>, Dynamic, 1> b(n + 1); 
-    for (int i = 0; i < n + 1; ++i)
-        b(i) = points(i, 1);
-    Matrix<RealType<N>, Dynamic, 1> coefs = A.fullPivLu().solve(b);
+    Matrix<RealType<N>, Dynamic, 1> coefs = A.fullPivLu().solve(y.matrix());
 
     return HighPrecisionPolynomial<N>(coefs);  
 }
