@@ -3338,9 +3338,15 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
     // vertices in each simplex, to the simplex's ID
     int curr_simplex_id = 0;
     std::unordered_map<int, int> point_ids; 
-    std::unordered_map<std::pair<int, int>, int> edge_ids; 
-    std::unordered_map<std::tuple<int, int, int>, int> triangle_ids; 
-    std::unordered_map<std::tuple<int, int, int, int>, int> tetrahedron_ids;
+    std::unordered_map<std::pair<int, int>,
+                       int,
+                       boost::hash<std::pair<int, int> > > edge_ids; 
+    std::unordered_map<std::tuple<int, int, int>,
+                       int,
+                       boost::hash<std::tuple<int, int, int> > > triangle_ids; 
+    std::unordered_map<std::tuple<int, int, int, int>,
+                       int,
+                       boost::hash<std::tuple<int, int, int, int> > > tetrahedron_ids;
 
     // For each 0-simplex in the first complex ... 
     int np = cplex1.getNumPoints(); 
