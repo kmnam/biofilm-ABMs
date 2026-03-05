@@ -3447,11 +3447,26 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
     if (verbose)
     {
         std::cout << "- Parsed: " << cells_filenames[0] << " (t = "
-                  << t1 << ")" << std::endl; 
-        std::cout << "... " << cplex1.getNumPoints() << " points, "
-                  << cplex1.getNumSimplices(1) << " edges, "
-                  << cplex1.getNumSimplices(2) << " triangles, "
-                  << cplex1.getNumSimplices(3) << " tetrahedra" << std::endl; 
+                  << t1 << ")" << std::endl;
+        int n0 = 0, n1 = 0, n2 = 0, n3 = 0;
+        n0 = cplex1.getNumPoints();
+        try 
+        {
+            n1 = cplex1.getNumSimplices(1); 
+        }
+        catch (const std::runtime_error& e) { }
+        try
+        {
+            n2 = cplex1.getNumSimplices(2); 
+        } 
+        catch (const std::runtime_error& e) { }
+        try
+        {
+            n3 = cplex1.getNumSimplices(3); 
+        }
+        catch (const std::runtime_error& e) { }
+        std::cout << "... " << n0 << " points, " << n1 << " edges, "
+                  << n2 << " triangles, " << n3 << " tetrahedra" << std::endl; 
     }
 
     // For each subsequent pair of files ... 
@@ -3481,11 +3496,26 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         if (verbose)
         {
             std::cout << "- Parsed: " << cells_filenames[i] << " (t = "
-                      << t2 << ")" << std::endl; 
-            std::cout << "... " << cplex2.getNumPoints() << " points, "
-                      << cplex2.getNumSimplices(1) << " edges, "
-                      << cplex2.getNumSimplices(2) << " triangles, "
-                      << cplex2.getNumSimplices(3) << " tetrahedra" << std::endl;
+                      << t2 << ")" << std::endl;
+            int n0 = 0, n1 = 0, n2 = 0, n3 = 0;
+            n0 = cplex2.getNumPoints();
+            try 
+            {
+                n1 = cplex2.getNumSimplices(1); 
+            }
+            catch (const std::runtime_error& e) { }
+            try
+            {
+                n2 = cplex2.getNumSimplices(2); 
+            } 
+            catch (const std::runtime_error& e) { }
+            try
+            {
+                n3 = cplex2.getNumSimplices(3); 
+            }
+            catch (const std::runtime_error& e) { }
+            std::cout << "... " << n0 << " points, " << n1 << " edges, "
+                      << n2 << " triangles, " << n3 << " tetrahedra" << std::endl; 
             std::cout << "... birth simplices: "
                       << birth_points.rows() << " points, "
                       << birth_edges.rows() << " edges, "
