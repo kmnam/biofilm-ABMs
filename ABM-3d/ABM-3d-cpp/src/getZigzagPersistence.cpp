@@ -81,7 +81,7 @@ int main(int argc, char** argv)
     }
 
     // Compute zigzag persistence
-    std::vector<Bar> zigzag = computeZigzagPersistence<T>(
+    std::vector<Bar> zigzag = computeZigzagPersistence<double>(
         cells_filenames, complex_filenames
     );  
 
