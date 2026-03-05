@@ -3036,7 +3036,8 @@ std::pair<SimplexCollection, SimplexCollection> getBirthDeathSimplices(const Sim
     const int ne1 = edges1.rows(); 
     const int ne2 = edges2.rows(); 
 
-    // Construct sets of edges, stored in terms of point IDs
+    // Construct dictionaries of edges, stored in terms of point IDs and their
+    // indices in the complex 
     std::unordered_set<std::pair<int, int>,
                        boost::hash<std::pair<int, int> > > edge_set1, edge_set2; 
     for (int i = 0; i < ne1; ++i)
@@ -3279,11 +3280,505 @@ std::pair<SimplexCollection, SimplexCollection> getBirthDeathSimplices(const Sim
 /**
  * Generate a zigzag persistence object for the given simplicial filtration.
  */
+typedef std::tuple<int, double, double> Bar;    // Simplex dimension, birth time, death time 
 template <typename T>
-Zigzag_persistence computeZigzagPersistence(const std::vector<std::string>& filenames,
-                                            const Ref<const Array<T, Dynamic, 1> >& times)
+std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_filenames,
+                                          const std::vector<std::string>& complex_filenames) 
 {
-    // TODO
+    // Check that there are at least two files
+    if (cells_filenames.size() < 2)
+        throw std::runtime_error(
+            "Zigzag persistence can only be computed for a filtration of >= 2 "
+            "simplicial complexes"
+        ); 
+
+    // Check that there are the same number for the two types of files
+    if (cells_filenames.size() != complex_filenames.size())
+        throw std::runtime_error(
+            "Mismatching number of simulation frames and simplicial complex "
+            "files specified"
+        );  
+
+    // Parse the first frame
+    Array<T, Dynamic, Dynamic> cells1, cells2; 
+    T t1, t2;
+    Array<int, Dynamic, 1> cell_ids1, cell_ids2; 
+    auto result = readCells<T>(cells_filenames[0]);
+    cells1 = result.first; 
+    t1 = static_cast<T>(std::stod(result.second["t_curr"]));
+    cell_ids1 = cells1(Eigen::all, __colidx_id).cast<int>();  
+
+    // Parse the corresponding simplicial complex 
+    SimplicialComplex3D<T> cplex1, cplex2;
+    cplex1.read(complex_filenames[0], cells1(Eigen::all, __colseq_r));
+
+    // Add in the simplices in this complex ... 
+    //
+    // Store the birth/death intervals in a vector 
+    std::vector<Bar> bars; 
+    Zigzag_persistence zp(
+        [&bars](Dimension dim, Zigzag_filtration_value birth, Zigzag_filtration_value death)
+        {
+            auto tuple = std::make_tuple(
+                static_cast<int>(dim), static_cast<double>(birth), 
+                static_cast<double>(death)
+            ); 
+            bars.push_back(tuple); 
+        }
+    );
+
+    // Introduce an integer ID for each simplex and store the IDs used for 
+    // each simplex of each dimension
+    //
+    // The dictionaries below map the tuples of cell IDs corresponding to the
+    // vertices in each simplex, to the simplex's ID
+    int curr_simplex_id = 0;
+    std::unordered_map<int, int> point_ids; 
+    std::unordered_map<std::pair<int, int>, int> edge_ids; 
+    std::unordered_map<std::tuple<int, int, int>, int> triangle_ids; 
+    std::unordered_map<std::tuple<int, int, int, int>, int> tetrahedron_ids;
+
+    // For each 0-simplex in the first complex ... 
+    int np = cplex1.getNumPoints(); 
+    for (int i = 0; i < np; ++i)
+    {
+        // Get the ID of the corresponding cell, and map to the simplex ID 
+        int cell_id = cell_ids1(i); 
+        point_ids[cell_id] = curr_simplex_id;
+
+        // Add the point to the zigzag persistence object 
+        zp.insert_cell(curr_simplex_id, {}, 0, t1); 
+
+        // Update simplex ID 
+        curr_simplex_id++; 
+    } 
+
+    // For each 1-simplex in the first complex ... 
+    Array<int, Dynamic, 2> edges = cplex1.getSimplices<1>();
+    int ne = edges.rows();  
+    for (int i = 0; i < ne; ++i)
+    {
+        // Get the IDs of the two endpoint cells, and map to the edge simplex ID 
+        int cell1_id = cell_ids1(edges(i, 0)); 
+        int cell2_id = cell_ids1(edges(i, 1)); 
+        auto pair = std::make_pair(cell1_id, cell2_id);  
+        edge_ids[pair] = curr_simplex_id;
+
+        // Get the simplex IDs of the two endpoint cells 
+        int cell1_sid = point_ids[cell1_id]; 
+        int cell2_sid = point_ids[cell2_id];  
+
+        // Add the edge to the zigzag persistence object 
+        zp.insert_cell(curr_simplex_id, {cell1_sid, cell2_sid}, 1, t1); 
+
+        // Update simplex ID 
+        curr_simplex_id++;  
+    }
+
+    // For each 2-simplex in the first complex ... 
+    Array<int, Dynamic, 3> triangles = cplex1.getSimplices<2>(); 
+    int nt = triangles.rows(); 
+    for (int i = 0; i < nt; ++i)
+    {
+        // Get the IDs of the three cells, and map to the triangle simplex ID 
+        int cell1_id = cell_ids1(triangles(i, 0));
+        int cell2_id = cell_ids2(triangles(i, 1)); 
+        int cell3_id = cell_ids3(triangles(i, 2)); 
+        auto tuple = std::make_tuple(cell1_id, cell2_id, cell3_id); 
+        triangle_ids[tuple] = curr_simplex_id; 
+
+        // Get the simplex IDs of the three cells 
+        int cell1_sid = point_ids[cell1_id]; 
+        int cell2_sid = point_ids[cell2_id]; 
+        int cell3_sid = point_ids[cell3_id];  
+
+        // Add the triangle to the zigzag persistence object 
+        zp.insert_cell(curr_simplex_id, {cell1_sid, cell2_sid, cell3_sid}, 2, t1); 
+
+        // Update simplex ID 
+        curr_simplex_id++;  
+    }
+
+    // For each 3-simplex in the first complex ... 
+    Array<int, Dynamic, 4> tetrahedra = cplex1.getSimplices<3>(); 
+    int nte = tetrahedra.rows(); 
+    for (int i = 0; i < nte; ++i)
+    {
+        // Get the IDs of the four cells, and map to the tetrahedron simplex ID 
+        int cell1_id = cell_ids1(tetrahedra(i, 0));
+        int cell2_id = cell_ids1(tetrahedra(i, 1));
+        int cell3_id = cell_ids1(tetrahedra(i, 2));
+        int cell4_id = cell_ids1(tetrahedra(i, 3));
+        auto tuple = std::make_tuple(cell1_id, cell2_id, cell3_id, cell4_id); 
+        tetrahedron_ids[tuple] = curr_simplex_id; 
+
+        // Get the simplex IDs of the four cells 
+        int cell1_sid = point_ids[cell1_id]; 
+        int cell2_sid = point_ids[cell2_id]; 
+        int cell3_sid = point_ids[cell3_id]; 
+        int cell4_sid = point_ids[cell4_id];  
+
+        // Add the tetrahedron to the zigzag persistence object 
+        zp.insert_cell(
+            curr_simplex_id, {cell1_sid, cell2_sid, cell3_sid, cell4_sid}, 3, t1
+        ); 
+
+        // Update simplex ID 
+        curr_simplex_id++;  
+    }
+
+    // For each subsequent pair of files ... 
+    for (int i = 1; i < cells_filenames.size(); ++i)
+    {
+        // Parse the new (i-th) file 
+        result = readCells<T>(cells_filenames[i]);  
+        cells2 = result.first; 
+        t2 = static_cast<T>(std::stod(result.second["t_curr"]));
+        cell_ids2 = cells2(Eigen::all, __colidx_id).cast<int>(); 
+        cplex2.read(complex_filenames[i], cells2(Eigen::all, __colseq_r));
+
+        // Get the simplices that were born and died in between the (i-1)-th
+        // and i-th complexes
+        auto birth_death = getBirthDeathSimplices<T>(cplex1, cell_ids1, cplex2, cell_ids2);
+        SimplexCollection birth_simplices = birth_death.first; 
+        SimplexCollection death_simplices = birth_death.second;
+
+        // The simplices must be removed from highest dimension to lowest
+        //
+        // Run through the 3-simplices that died ...
+        Array<int, Dynamic, 4> death_tetrahedra = std::get<3>(death_simplices);
+        for (int j = 0; j < death_tetrahedra.rows(); ++j)
+        {
+            // Find the cell IDs of the vertices of the tetrahedron (which are 
+            // in complex 1)
+            int cell1_id = cell_ids1(death_tetrahedra(j, 0)); 
+            int cell2_id = cell_ids1(death_tetrahedra(j, 1)); 
+            int cell3_id = cell_ids1(death_tetrahedra(j, 2)); 
+            int cell4_id = cell_ids1(death_tetrahedra(j, 3)); 
+
+            // Find the simplex ID of the tetrahedron
+            auto tuple = std::make_tuple(cell1_id, cell2_id, cell3_id, cell4_id); 
+            int tetrahedron_id; 
+            try
+            {
+                tetrahedron_id = tetrahedron_ids.at(tuple); 
+            }
+            catch (const std::out_of_range& e)   // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered death tetrahedron with no pre-existing simplex ID" 
+                ); 
+            }
+
+            // Remove the simplex from the zigzag persistence object 
+            zp.remove_cell(tetrahedron_id, t2); 
+        }
+
+        // Run through the 2-simplices that died ... 
+        Array<int, Dynamic, 3> death_triangles = std::get<2>(death_simplices); 
+        for (int j = 0; j < death_triangles.rows(); ++j)
+        {
+            // Find the cell IDs of the vertices of the triangle (which are
+            // in complex 1)
+            int cell1_id = cell_ids1(death_triangles(j, 0)); 
+            int cell2_id = cell_ids1(death_triangles(j, 1)); 
+            int cell3_id = cell_ids1(death_triangles(j, 2)); 
+
+            // Find the simplex ID of the triangle
+            auto tuple = std::make_tuple(cell1_id, cell2_id, cell3_id); 
+            int triangle_id; 
+            try
+            {
+                triangle_id = triangle_ids.at(tuple); 
+            } 
+            catch (const std::out_of_range& e)   // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered death triangle with no pre-existing simplex ID" 
+                ); 
+            }
+
+            // Remove the simplex from the zigzag persistence object 
+            zp.remove_cell(triangle_id, t2); 
+        }
+
+        // Run through the 1-simplices that died ... 
+        Array<int, Dynamic, 2> death_edges = std::get<1>(death_simplices); 
+        for (int j = 0; j < death_edges.rows(); ++j)
+        {
+            // Find the cell IDs of the endpoints (which are in complex 1)
+            int cell1_id = cell_ids1(death_edges(j, 0));
+            int cell2_id = cell_ids1(death_edges(j, 1));
+
+            // Find the simplex ID of the edge
+            auto pair = std::make_pair(cell1_id, cell2_id); 
+            int edge_id; 
+            try
+            {
+                edge_id = edge_ids.at(pair); 
+            } 
+            catch (const std::out_of_range& e)   // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered death edge with no pre-existing simplex ID" 
+                ); 
+            }
+
+            // Remove the simplex from the zigzag persistence object 
+            zp.remove_cell(edge_id, t2); 
+        }
+
+        // Run through the 0-simplices that died ...
+        Array<int, Dynamic, 1> death_points = std::get<0>(death_simplices);  
+        for (int j = 0; j < death_points.size(); ++j)
+        {
+            // Find the cell ID of the point in complex 1 
+            int cell1_id = cell_ids1(death_points(j));
+
+            // Find the simplex ID of the point 
+            int point_id; 
+            try
+            {
+                point_id = point_ids.at(cell1_id); 
+            } 
+            catch (const std::out_of_range& e)    // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered death point with no pre-existing simplex ID" 
+                ); 
+            }
+
+            // Remove the simplex from the zigzag persistence object 
+            zp.remove_cell(point_id, t2); 
+        }
+
+        // Now run through the 0-simplices that were born ... 
+        Array<int, Dynamic, 1> birth_points = std::get<0>(birth_simplices); 
+        for (int j = 0; j < birth_points.size(); ++j)
+        {
+            // Find the cell ID of the point in complex 2, and store a new 
+            // simplex ID for the point  
+            int cell1_id = cell_ids2(birth_points(j)); 
+            point_ids[cell_id] = curr_simplex_id;
+
+            // Add the point to the zigzag persistence object 
+            zp.insert_cell(curr_simplex_id, {}, 0, t2); 
+
+            // Update simplex ID 
+            curr_simplex_id++; 
+        }
+
+        // Run through the 1-simplices that were born ... 
+        Array<int, Dynamic, 2> birth_edges = std::get<1>(birth_simplices); 
+        for (int j = 0; j < birth_edges.rows(); ++j)
+        {
+            // Find the cell IDs of the endpoints (which are in complex 2)
+            int cell1_id = cell_ids2(birth_edges(j, 0)); 
+            int cell2_id = cell_ids2(birth_edges(j, 1)); 
+
+            // Store a new simplex ID for the edge 
+            auto pair = std::make_pair(cell1_id, cell2_id); 
+            if (edge_ids.find(pair) != edge_ids.end())
+            {
+                throw std::runtime_error(
+                    "Encountered birth edge with pre-existing simplex ID"
+                ); 
+            } 
+            edge_ids[pair] = curr_simplex_id;
+
+            // Find the simplex IDs of the two endpoints as well 
+            int cell1_sid, cell2_sid; 
+            try
+            {
+                cell1_sid = point_ids.at(cell1_id); 
+            }
+            catch (const std::out_of_range& e)    // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered birth edge with endpoint without pre-existing "
+                    "simplex ID"
+                ); 
+            }
+            try
+            {
+                cell2_sid = point_ids.at(cell2_id); 
+            }
+            catch (const std::out_of_range& e)    // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered birth edge with endpoint without pre-existing "
+                    "simplex ID"
+                ); 
+            } 
+
+            // Add the edge to the zigzag persistence object 
+            zp.insert_cell(curr_simplex_id, {cell1_sid, cell2_sid}, 1, t2);
+
+            // Update simplex ID
+            curr_simplex_id++;  
+        }
+
+        // Run through the 2-simplices that were born ... 
+        Array<int, Dynamic, 3> birth_triangles = std::get<2>(birth_simplices); 
+        for (int j = 0; j < birth_triangles.rows(); ++j)
+        {
+            // Find the cell IDs of the vertices of the triangle (which are
+            // in complex 2)
+            int cell1_id = cell_ids2(birth_triangles(j, 0)); 
+            int cell2_id = cell_ids2(birth_triangles(j, 1)); 
+            int cell3_id = cell_ids2(birth_triangles(j, 2)); 
+
+            // Store a new simplex ID for the triangle 
+            auto tuple = std::make_tuple(cell1_id, cell2_id, cell3_id); 
+            if (triangle_ids.find(tuple) != triangle_ids.end())
+            {
+                throw std::runtime_error(
+                    "Encountered birth triangle with pre-existing simplex ID"
+                ); 
+            } 
+            triangle_ids[tuple] = curr_simplex_id;
+
+            // Find the simplex IDs of the three vertices as well 
+            int cell1_sid, cell2_sid, cell3_sid;  
+            try
+            {
+                cell1_sid = point_ids.at(cell1_id); 
+            }
+            catch (const std::out_of_range& e)    // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered birth triangle with vertex without pre-existing "
+                    "simplex ID"
+                ); 
+            }
+            try
+            {
+                cell2_sid = point_ids.at(cell2_id); 
+            }
+            catch (const std::out_of_range& e)    // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered birth triangle with vertex without pre-existing "
+                    "simplex ID"
+                ); 
+            }
+            try
+            {
+                cell3_sid = point_ids.at(cell3_id); 
+            }
+            catch (const std::out_of_range& e)    // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered birth triangle with vertex without pre-existing "
+                    "simplex ID"
+                ); 
+            } 
+
+            // Add the triangle to the zigzag persistence object 
+            zp.insert_cell(curr_simplex_id, {cell1_sid, cell2_sid, cell3_sid}, 2, t2);
+
+            // Update simplex ID
+            curr_simplex_id++;  
+        }
+
+        // Run through the 3-simplices that were born ... 
+        Array<int, Dynamic, 4> birth_tetrahedra = std::get<3>(birth_simplices); 
+        for (int j = 0; j < birth_tetrahedra.rows(); ++j)
+        {
+            // Find the cell IDs of the vertices of the tetrahedron (which are
+            // in complex 2)
+            int cell1_id = cell_ids2(birth_tetrahedra(j, 0)); 
+            int cell2_id = cell_ids2(birth_tetrahedra(j, 1)); 
+            int cell3_id = cell_ids2(birth_tetrahedra(j, 2)); 
+            int cell4_id = cell_ids2(birth_tetrahedra(j, 3)); 
+
+            // Store a new simplex ID for the tetrahedron 
+            auto tuple = std::make_tuple(cell1_id, cell2_id, cell3_id, cell4_id); 
+            if (tetrahedron_ids.find(tuple) != tetrahedron_ids.end())
+            {
+                throw std::runtime_error(
+                    "Encountered birth tetrahedron with pre-existing simplex ID"
+                ); 
+            } 
+            tetrahedron_ids[tuple] = curr_simplex_id;
+
+            // Find the simplex IDs of the four vertices as well 
+            int cell1_sid, cell2_sid, cell3_sid, cell4_sid;  
+            try
+            {
+                cell1_sid = point_ids.at(cell1_id); 
+            }
+            catch (const std::out_of_range& e)    // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered birth tetrahedron with vertex without "
+                    "pre-existing simplex ID"
+                ); 
+            }
+            try
+            {
+                cell2_sid = point_ids.at(cell2_id); 
+            }
+            catch (const std::out_of_range& e)    // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered birth tetrahedron with vertex without "
+                    "pre-existing simplex ID"
+                ); 
+            }
+            try
+            {
+                cell3_sid = point_ids.at(cell3_id); 
+            }
+            catch (const std::out_of_range& e)    // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered birth tetrahedron with vertex without "
+                    "pre-existing simplex ID"
+                ); 
+            }
+            try
+            {
+                cell4_sid = point_ids.at(cell4_id); 
+            }
+            catch (const std::out_of_range& e)    // This should not happen
+            {
+                throw std::runtime_error(
+                    "Encountered birth tetrahedron with vertex without "
+                    "pre-existing simplex ID"
+                ); 
+            }
+
+            // Add the tetrahedron to the zigzag persistence object 
+            zp.insert_cell(
+                curr_simplex_id, {cell1_sid, cell2_sid, cell3_sid, cell4_sid},
+                3, t2
+            );
+
+            // Update simplex ID
+            curr_simplex_id++;  
+        }
+
+        // Prepare for the next iteration 
+        cells1 = cells2;
+        cell_ids1 = cell_ids2; 
+        cplex1 = cplex2;  
+        t1 = t2;
+    }
+
+    // Collect the open intervals at the end of the filtration 
+    zp.get_current_infinite_intervals(
+        [&bars](Dimension dim, Zigzag_filtration_value birth)
+        {
+            auto tuple = std::make_tuple(
+                static_cast<int>(dim), static_cast<double>(birth), 
+                std::numeric_limits<double>::infinity()
+            ); 
+            bars.push_back(tuple); 
+        }
+    );
+
+    return bars; 
 }
 
 #endif
