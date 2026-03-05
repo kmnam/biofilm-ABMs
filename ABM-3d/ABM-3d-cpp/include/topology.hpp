@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/24/2025
+ *     3/4/2026
  */
 
 #ifndef SIMPLICIAL_COMPLEXES_3D_HPP
@@ -2890,43 +2890,400 @@ class SimplicialComplex3D
         }
 };
 
+/** ----------------------------------------------------------------- //
+ *                     GUDHI-RELATED FUNCTIONALITY                    //
+ *  ----------------------------------------------------------------- */ 
+#include <gudhi/Simplex_tree.h>
+#include <gudhi/filtered_zigzag_persistence.h>
+
+using Simplex_tree = Gudhi::Simplex_tree<>;
+using Vertex_handle = Simplex_tree::Vertex_handle; 
+using Simplex_handle = Simplex_tree::Simplex_handle; 
+using Filtration_value = Simplex_tree::Filtration_value;
+using Zigzag_persistence = Gudhi::zigzag_persistence::Filtered_zigzag_persistence<>;
+using Dimension = Zigzag_persistence::Dimension; 
+using Zigzag_filtration_value = Zigzag_persistence::Filtration_value;
+
 /**
- * Alpha-wrapping. 
+ * Generate a Gudhi::Simplex_tree from the given simplicial complex.
+ *
+ * @param cplex Input SimplicialComplex3D object. 
+ * @param filtration_value Input filtration value; zero by default. 
+ * @returns Corresponding Gudhi::Simplex_tree object.  
  */
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Surface_mesh.h>
-#include <CGAL/alpha_wrap_3.h>
-
-using K = CGAL::Exact_predicates_inexact_constructions_kernel; 
-using Point_3 = K::Point_3; 
-using Mesh = CGAL::Surface_mesh<Point_3>; 
-
 template <typename T>
-Mesh getAlphaWrapping(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
-                      const T R)
+Simplex_tree makeSimplexTree(const SimplicialComplex3D<T>& cplex,
+                             const double filtration_value = 0.0)
 {
-    // Get the center and endpoints of every cell 
-    Array<double, Dynamic, 3> points(3 * cells.rows(), 3);
-    for (int i = 0; i < cells.rows(); ++i)
+    Simplex_tree tree;
+    Filtration_value alpha = filtration_value; 
+
+    // Add the 0-simplices
+    const int np = cplex.getNumPoints();  
+    for (int i = 0; i < np; ++i)
     {
-        Array<T, 3, 1> r = cells(i, __colseq_r); 
-        Array<T, 3, 1> p = r - cells(i, __colidx_half_l) * cells(i, __colseq_n);
-        Array<T, 3, 1> q = r + cells(i, __colidx_half_l) * cells(i, __colseq_n); 
-        points.row(3 * i) = p.template cast<double>();
-        points.row(3 * i + 1) = r.template cast<double>(); 
-        points.row(3 * i + 2) = q.template cast<double>();  
+        std::vector<Vertex_handle> v {i}; 
+        tree.insert_simplex(v, alpha); 
     }
 
-    // Get the alpha-wrapping
-    const double offset = R; 
-    const double alpha = R / 2; 
-    Mesh wrap; 
-    CGAL::alpha_wrap_3(points, alpha, offset, wrap);
-    std::cout << "Done with alpha-wrapping: " 
-              << CGAL::num_vertices(wrap) << " vertices, " 
-              << CGAL::num_faces(wrap) << " faces\n";
+    // Add the 1-simplices
+    Array<int, Dynamic, 2> edges = cplex.template getSimplices<1>();
+    for (int i = 0; i < edges.rows(); ++i)
+    {
+        std::vector<Vertex_handle> v {edges(i, 0), edges(i, 1)}; 
+        tree.insert_simplex(v, alpha); 
+    } 
 
-    return wrap;  
+    // Add the 2-simplices
+    Array<int, Dynamic, 3> triangles = cplex.template getSimplices<2>(); 
+    for (int i = 0; i < triangles.rows(); ++i)
+    {
+        std::vector<Vertex_handle> v {triangles(i, 0), triangles(i, 1), triangles(i, 2)}; 
+        tree.insert_simplex(v, alpha); 
+    }
+
+    // Add the 3-simplices 
+    Array<int, Dynamic, 4> tetrahedra = cplex.template getSimplices<3>(); 
+    for (int i = 0; i < tetrahedra.rows(); ++i)
+    {
+        std::vector<Vertex_handle> v {
+            tetrahedra(i, 0), tetrahedra(i, 1), tetrahedra(i, 2), tetrahedra(i, 3)
+        }; 
+        tree.insert_simplex(v, alpha); 
+    }
+
+    return tree; 
+}
+
+/**
+ * Given two consecutive simplicial complexes in a filtration, return the 
+ * simplices that are born and die between the first and second. 
+ *
+ * The points in the simplicial complex, which may well have different 
+ * positions in the two complexes, are identified with IDs that are the 
+ * same for any two points that are shared between the two complexes.
+ * 
+ * @param cplex1 First simplicial complex. 
+ * @param point_ids1 Point IDs in the first simplicial complex. 
+ * @param cplex2 Second simplicial complex. 
+ * @param point_ids2 Point IDs in the second simplicial complex. 
+ */
+typedef std::tuple<Array<int, Dynamic, 1>,
+                   Array<int, Dynamic, 2>,
+                   Array<int, Dynamic, 3>,
+                   Array<int, Dynamic, 4> > SimplexCollection; 
+template <typename T>
+std::pair<SimplexCollection, SimplexCollection> getBirthDeathSimplices(const SimplicialComplex3D<T>& cplex1,
+                                                                       const Ref<const Array<int, Dynamic, 1> >& point_ids1,
+                                                                       const SimplicialComplex3D<T>& cplex2,
+                                                                       const Ref<const Array<int, Dynamic, 1> >& point_ids2)
+{
+    // Start with 0-simplices ...
+    //
+    // Store:
+    // - the indices of points in complex 2 that are not in complex 1 (births)
+    // - the indices of points in complex 1 that are not in complex 2 (deaths) 
+    Array<int, Dynamic, 1> birth_points(0), death_points(0);
+    int nb = 0; 
+    int nd = 0;
+
+    // Store the points in dictionaries that map each ID to the index of the 
+    // point in the complex  
+    const int np1 = point_ids1.size(); 
+    const int np2 = point_ids2.size();
+    std::unordered_map<int, int> cplex1_id_to_idx, cplex2_id_to_idx;
+    for (int i = 0; i < np1; ++i)
+        cplex1_id_to_idx[point_ids1(i)] = i;
+    for (int i = 0; i < np2; ++i)
+        cplex2_id_to_idx[point_ids2(i)] = i;
+
+    // Which points are in complex 2 that are not in complex 1?
+    for (int i = 0; i < np2; ++i)
+    {
+        int id2 = point_ids2(i); 
+        if (cplex1_id_to_idx.find(id2) == cplex1_id_to_idx.end())
+        {
+            // Store the index (in complex 2) of the point 
+            nb++; 
+            birth_points.conservativeResize(nb); 
+            birth_points(nb - 1) = cplex2_id_to_idx[id2];
+        }
+    }
+
+    // Which points are in complex 1 that are not in complex 2?
+    for (int i = 0; i < np1; ++i)
+    {
+        int id1 = point_ids1(i); 
+        if (cplex2_id_to_idx.find(id1) == cplex2_id_to_idx.end())
+        {
+            // Store the index (in complex 1) of the point 
+            nd++;
+            death_points.conservativeResize(nd); 
+            death_points(nd - 1) = cplex1_id_to_idx[id1]; 
+        }
+    }
+
+    // Move onto 1-simplices ... 
+    //
+    // Store:
+    // - the indices of edges in complex 2 that are not in complex 1 (births)
+    // - the indices of edges in complex 1 that are not in complex 2 (deaths)
+    Array<int, Dynamic, 2> birth_edges(0, 2), death_edges(0, 2);
+    nb = 0; 
+    nd = 0; 
+    Array<int, Dynamic, 2> edges1 = cplex1.getSimplices<1>();
+    Array<int, Dynamic, 2> edges2 = cplex2.getSimplices<1>();
+    const int ne1 = edges1.rows(); 
+    const int ne2 = edges2.rows(); 
+
+    // Construct sets of edges, stored in terms of point IDs
+    std::unordered_set<std::pair<int, int>,
+                       boost::hash<std::pair<int, int> > > edge_set1, edge_set2; 
+    for (int i = 0; i < ne1; ++i)
+    {
+        int u = edges1(i, 0); 
+        int v = edges1(i, 1);
+        int u_id = point_ids1(u); 
+        int v_id = point_ids1(v);  
+        auto pair = std::make_pair(u_id, v_id); 
+        edge_set1.insert(pair); 
+    }
+    for (int i = 0; i < ne2; ++i)
+    {
+        int u = edges2(i, 0); 
+        int v = edges2(i, 1); 
+        int u_id = point_ids2(u); 
+        int v_id = point_ids2(v); 
+        auto pair = std::make_pair(u_id, v_id); 
+        edge_set2.insert(pair); 
+    } 
+
+    // Get all edges in complex 2 that are not in complex 1
+    for (auto it = edge_set2.begin(); it != edge_set2.end(); ++it)
+    {
+        if (edge_set1.find(*it) == edge_set1.end())
+        {
+            // For each such edge, store the indices (in complex 2) of the
+            // two endpoints 
+            int u_id = it->first; 
+            int v_id = it->second; 
+            int u = cplex2_id_to_idx[u_id]; 
+            int v = cplex2_id_to_idx[v_id];
+            nb++; 
+            birth_edges.conservativeResize(nb, 2); 
+            birth_edges(nb - 1, 0) = u;    // Note that u < v by construction  
+            birth_edges(nb - 1, 1) = v; 
+        } 
+    }
+
+    // Get all edges in complex 1 that are not in complex 2 
+    for (auto it = edge_set1.begin(); it != edge_set1.end(); ++it)
+    {
+        if (edge_set2.find(*it) == edge_set2.end())
+        {
+            // For each such edge, store the indices (in complex 1) of the 
+            // two endpoints 
+            int u_id = it->first; 
+            int v_id = it->second; 
+            int u = cplex1_id_to_idx[u_id];
+            int v = cplex1_id_to_idx[v_id]; 
+            nd++; 
+            death_edges.conservativeResize(nd, 2); 
+            death_edges(nd - 1, 0) = u;    // Note that u < v by construction 
+            death_edges(nd - 1, 1) = v; 
+        }
+    }
+
+    // Move onto 2-simplices ... 
+    //
+    // Store:
+    // - the indices of triangles in complex 2 that are not in complex 1 (births)
+    // - the indices of triangles in complex 1 that are not in complex 2 (deaths)
+    Array<int, Dynamic, 3> birth_triangles(0, 3), death_triangles(0, 3);
+    nb = 0; 
+    nd = 0; 
+    Array<int, Dynamic, 3> triangles1 = cplex1.getSimplices<2>();
+    Array<int, Dynamic, 3> triangles2 = cplex2.getSimplices<2>();
+    const int nt1 = triangles1.rows(); 
+    const int nt2 = triangles2.rows(); 
+
+    // Construct sets of triangles, stored in terms of point IDs
+    std::unordered_set<std::tuple<int, int, int>,
+                       boost::hash<std::tuple<int, int, int> > > triangle_set1, triangle_set2; 
+    for (int i = 0; i < nt1; ++i)
+    {
+        int u = triangles1(i, 0); 
+        int v = triangles1(i, 1);
+        int w = triangles1(i, 2); 
+        int u_id = point_ids1(u); 
+        int v_id = point_ids1(v); 
+        int w_id = point_ids1(w);  
+        auto tuple = std::make_tuple(u_id, v_id, w_id); 
+        triangle_set1.insert(tuple); 
+    }
+    for (int i = 0; i < nt2; ++i)
+    {
+        int u = triangles2(i, 0); 
+        int v = triangles2(i, 1);
+        int w = triangles2(i, 2);  
+        int u_id = point_ids2(u); 
+        int v_id = point_ids2(v);
+        int w_id = point_ids2(w);  
+        auto tuple = std::make_tuple(u_id, v_id, w_id); 
+        triangle_set2.insert(tuple); 
+    } 
+
+    // Get all triangles in complex 2 that are not in complex 1
+    for (auto it = triangle_set2.begin(); it != triangle_set2.end(); ++it)
+    {
+        if (triangle_set1.find(*it) == triangle_set1.end())
+        {
+            // For each such triangle, store the indices (in complex 2) of the
+            // three vertices 
+            int u_id = std::get<0>(*it); 
+            int v_id = std::get<1>(*it); 
+            int w_id = std::get<2>(*it);  
+            int u = cplex2_id_to_idx[u_id]; 
+            int v = cplex2_id_to_idx[v_id];
+            int w = cplex2_id_to_idx[w_id]; 
+            nb++; 
+            birth_triangles.conservativeResize(nb, 3); 
+            birth_triangles(nb - 1, 0) = u;    // Note that u < v < w by construction  
+            birth_triangles(nb - 1, 1) = v;
+            birth_triangles(nb - 1, 2) = w;  
+        } 
+    }
+
+    // Get all triangles in complex 1 that are not in complex 2 
+    for (auto it = triangle_set1.begin(); it != triangle_set1.end(); ++it)
+    {
+        if (triangle_set2.find(*it) == triangle_set2.end())
+        {
+            // For each such triangle, store the indices (in complex 1) of the 
+            // three vertices 
+            int u_id = std::get<0>(*it); 
+            int v_id = std::get<1>(*it); 
+            int w_id = std::get<2>(*it);  
+            int u = cplex1_id_to_idx[u_id];
+            int v = cplex1_id_to_idx[v_id];
+            int w = cplex1_id_to_idx[w_id];  
+            nd++; 
+            death_triangles.conservativeResize(nd, 3); 
+            death_triangles(nd - 1, 0) = u;    // Note that u < v < w by construction 
+            death_triangles(nd - 1, 1) = v;
+            death_triangles(nd - 1, 2) = w;  
+        }
+    }
+
+    // Move onto 3-simplices ... 
+    //
+    // Store:
+    // - the indices of tetrahedra in complex 2 that are not in complex 1 (births)
+    // - the indices of tetrahedra in complex 1 that are not in complex 2 (deaths)
+    Array<int, Dynamic, 4> birth_tetrahedra(0, 4), death_tetrahedra(0, 4);
+    nb = 0; 
+    nd = 0; 
+    Array<int, Dynamic, 4> tetrahedra1 = cplex1.getSimplices<3>();
+    Array<int, Dynamic, 4> tetrahedra2 = cplex2.getSimplices<3>();
+    const int nte1 = tetrahedra1.rows(); 
+    const int nte2 = tetrahedra2.rows(); 
+
+    // Construct sets of tetrahedra, stored in terms of point IDs
+    std::unordered_set<std::tuple<int, int, int>,
+                       boost::hash<std::tuple<int, int, int> > > tetrahedron_set1, tetrahedron_set2; 
+    for (int i = 0; i < nte1; ++i)
+    {
+        int u = tetrahedra1(i, 0); 
+        int v = tetrahedra1(i, 1);
+        int w = tetrahedra1(i, 2);
+        int x = tetrahedra1(i, 3);  
+        int u_id = point_ids1(u); 
+        int v_id = point_ids1(v); 
+        int w_id = point_ids1(w); 
+        int x_id = point_ids1(x);  
+        auto tuple = std::make_tuple(u_id, v_id, w_id, x_id); 
+        tetrahedron_set1.insert(tuple); 
+    }
+    for (int i = 0; i < nte2; ++i)
+    {
+        int u = tetrahedra2(i, 0); 
+        int v = tetrahedra2(i, 1);
+        int w = tetrahedra2(i, 2); 
+        int x = tetrahedra2(i, 3);  
+        int u_id = point_ids2(u); 
+        int v_id = point_ids2(v);
+        int w_id = point_ids2(w); 
+        int x_id = point_ids2(x);  
+        auto tuple = std::make_tuple(u_id, v_id, w_id, x_id); 
+        tetrahedron_set2.insert(tuple); 
+    } 
+
+    // Get all tetrahedra in complex 2 that are not in complex 1
+    for (auto it = tetrahedron_set2.begin(); it != tetrahedron_set2.end(); ++it)
+    {
+        if (tetrahedron_set1.find(*it) == tetrahedron_set1.end())
+        {
+            // For each such tetrahedron, store the indices (in complex 2) of
+            // the four vertices 
+            int u_id = std::get<0>(*it); 
+            int v_id = std::get<1>(*it); 
+            int w_id = std::get<2>(*it); 
+            int x_id = std::get<3>(*it);  
+            int u = cplex2_id_to_idx[u_id]; 
+            int v = cplex2_id_to_idx[v_id];
+            int w = cplex2_id_to_idx[w_id];
+            int x = cplex2_id_to_idx[x_id];  
+            nb++; 
+            birth_tetrahedra.conservativeResize(nb, 4); 
+            birth_tetrahedra(nb - 1, 0) = u;    // Note that u < v < w < x by construction  
+            birth_tetrahedra(nb - 1, 1) = v;
+            birth_tetrahedra(nb - 1, 2) = w; 
+            birth_tetrahedra(nb - 1, 3) = x;  
+        } 
+    }
+
+    // Get all tetrahedra in complex 1 that are not in complex 2 
+    for (auto it = tetrahedron_set1.begin(); it != tetrahedron_set1.end(); ++it)
+    {
+        if (tetrahedron_set2.find(*it) == tetrahedron_set2.end())
+        {
+            // For each such tetrahedron, store the indices (in complex 1) of
+            // the four vertices 
+            int u_id = std::get<0>(*it); 
+            int v_id = std::get<1>(*it); 
+            int w_id = std::get<2>(*it); 
+            int x_id = std::get<3>(*it);  
+            int u = cplex1_id_to_idx[u_id];
+            int v = cplex1_id_to_idx[v_id];
+            int w = cplex1_id_to_idx[w_id]; 
+            int x = cplex1_id_to_idx[x_id];  
+            nd++; 
+            death_tetrahedra.conservativeResize(nd, 4); 
+            death_tetrahedra(nd - 1, 0) = u;    // Note that u < v < w < x by construction 
+            death_tetrahedra(nd - 1, 1) = v;
+            death_tetrahedra(nd - 1, 2) = w;  
+            death_tetrahedra(nd - 1, 3) = x; 
+        }
+    }
+
+    // Return the collected simplices 
+    SimplexCollection birth_simplices = std::make_tuple(
+        birth_points, birth_edges, birth_triangles, birth_tetrahedra
+    ); 
+    SimplexCollection death_simplices = std::make_tuple(
+        death_points, death_edges, death_triangles, death_tetrahedra
+    );
+    return std::make_pair(birth_simplices, death_simplices); 
+}
+
+/**
+ * Generate a zigzag persistence object for the given simplicial filtration.
+ */
+template <typename T>
+Zigzag_persistence computeZigzagPersistence(const std::vector<std::string>& filenames,
+                                            const Ref<const Array<T, Dynamic, 1> >& times)
+{
+    // TODO
 }
 
 #endif
