@@ -3555,7 +3555,10 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
             }
 
             // Remove the simplex from the zigzag persistence object 
-            zp.remove_cell(tetrahedron_id, t2); 
+            zp.remove_cell(tetrahedron_id, t2);
+
+            // Remove its simplex ID 
+            tetrahedron_ids.erase(tuple);  
         }
 
         // Run through the 2-simplices that died ... 
@@ -3582,7 +3585,10 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
             }
 
             // Remove the simplex from the zigzag persistence object 
-            zp.remove_cell(triangle_id, t2); 
+            zp.remove_cell(triangle_id, t2);
+
+            // Remove its simplex ID 
+            triangle_ids.erase(tuple); 
         }
 
         // Run through the 1-simplices that died ... 
@@ -3607,7 +3613,10 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
             }
 
             // Remove the simplex from the zigzag persistence object 
-            zp.remove_cell(edge_id, t2); 
+            zp.remove_cell(edge_id, t2);
+
+            // Remove its simplex ID 
+            edge_ids.erase(pair);  
         }
 
         // Run through the 0-simplices that died ...
@@ -3630,7 +3639,10 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
             }
 
             // Remove the simplex from the zigzag persistence object 
-            zp.remove_cell(point_id, t2); 
+            zp.remove_cell(point_id, t2);
+
+            // Remove its simplex ID 
+            point_ids.erase(cell1_id);  
         }
 
         // Now run through the 0-simplices that were born ... 
@@ -3659,9 +3671,6 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
             auto pair = std::make_pair(cell1_id, cell2_id); 
             if (edge_ids.find(pair) != edge_ids.end())
             {
-                std::cout << "indices in complex: " << birth_edges(j, 0) << " " 
-                          << birth_edges(j, 1) << std::endl; 
-                std::cout << "cell IDs: " << cell1_id << " " << cell2_id << std::endl; 
                 throw std::runtime_error(
                     "Encountered birth edge with pre-existing simplex ID"
                 ); 
