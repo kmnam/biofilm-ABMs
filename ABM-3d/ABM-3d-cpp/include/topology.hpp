@@ -3659,6 +3659,9 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
             auto pair = std::make_pair(cell1_id, cell2_id); 
             if (edge_ids.find(pair) != edge_ids.end())
             {
+                std::cout << "indices in complex: " << birth_edges(j, 0) << " " 
+                          << birth_edges(j, 1) << std::endl; 
+                std::cout << "cell IDs: " << cell1_id << " " << cell2_id << std::endl; 
                 throw std::runtime_error(
                     "Encountered birth edge with pre-existing simplex ID"
                 ); 
