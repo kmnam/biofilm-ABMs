@@ -3279,6 +3279,10 @@ std::pair<SimplexCollection, SimplexCollection> getBirthDeathSimplices(const Sim
 
 /**
  * Generate a zigzag persistence object for the given simplicial filtration.
+ *
+ * @param cells_filename Paths to simulation frame files. 
+ * @param complex_filename Paths to simplicial complex files.
+ * @returns Vector of zigzag persistence intervals. 
  */
 typedef std::tuple<int, double, double> Bar;    // Simplex dimension, birth time, death time 
 template <typename T>
