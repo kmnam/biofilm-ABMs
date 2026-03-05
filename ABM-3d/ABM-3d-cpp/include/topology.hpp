@@ -3031,8 +3031,8 @@ std::pair<SimplexCollection, SimplexCollection> getBirthDeathSimplices(const Sim
     Array<int, Dynamic, 2> birth_edges(0, 2), death_edges(0, 2);
     nb = 0; 
     nd = 0; 
-    Array<int, Dynamic, 2> edges1 = cplex1.getSimplices<1>();
-    Array<int, Dynamic, 2> edges2 = cplex2.getSimplices<1>();
+    Array<int, Dynamic, 2> edges1 = cplex1.template getSimplices<1>();
+    Array<int, Dynamic, 2> edges2 = cplex2.template getSimplices<1>();
     const int ne1 = edges1.rows(); 
     const int ne2 = edges2.rows(); 
 
@@ -3103,8 +3103,8 @@ std::pair<SimplexCollection, SimplexCollection> getBirthDeathSimplices(const Sim
     Array<int, Dynamic, 3> birth_triangles(0, 3), death_triangles(0, 3);
     nb = 0; 
     nd = 0; 
-    Array<int, Dynamic, 3> triangles1 = cplex1.getSimplices<2>();
-    Array<int, Dynamic, 3> triangles2 = cplex2.getSimplices<2>();
+    Array<int, Dynamic, 3> triangles1 = cplex1.template getSimplices<2>();
+    Array<int, Dynamic, 3> triangles2 = cplex2.template getSimplices<2>();
     const int nt1 = triangles1.rows(); 
     const int nt2 = triangles2.rows(); 
 
@@ -3184,8 +3184,8 @@ std::pair<SimplexCollection, SimplexCollection> getBirthDeathSimplices(const Sim
     Array<int, Dynamic, 4> birth_tetrahedra(0, 4), death_tetrahedra(0, 4);
     nb = 0; 
     nd = 0; 
-    Array<int, Dynamic, 4> tetrahedra1 = cplex1.getSimplices<3>();
-    Array<int, Dynamic, 4> tetrahedra2 = cplex2.getSimplices<3>();
+    Array<int, Dynamic, 4> tetrahedra1 = cplex1.template getSimplices<3>();
+    Array<int, Dynamic, 4> tetrahedra2 = cplex2.template getSimplices<3>();
     const int nte1 = tetrahedra1.rows(); 
     const int nte2 = tetrahedra2.rows(); 
 
@@ -3310,7 +3310,7 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
     auto result = readCells<T>(cells_filenames[0]);
     cells1 = result.first; 
     t1 = static_cast<T>(std::stod(result.second["t_curr"]));
-    cell_ids1 = cells1(Eigen::all, __colidx_id).cast<int>();  
+    cell_ids1 = cells1(Eigen::all, __colidx_id).template cast<int>();  
 
     // Parse the corresponding simplicial complex 
     SimplicialComplex3D<T> cplex1, cplex2;
@@ -3358,7 +3358,7 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
     } 
 
     // For each 1-simplex in the first complex ... 
-    Array<int, Dynamic, 2> edges = cplex1.getSimplices<1>();
+    Array<int, Dynamic, 2> edges = cplex1.template getSimplices<1>();
     int ne = edges.rows();  
     for (int i = 0; i < ne; ++i)
     {
@@ -3380,14 +3380,14 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
     }
 
     // For each 2-simplex in the first complex ... 
-    Array<int, Dynamic, 3> triangles = cplex1.getSimplices<2>(); 
+    Array<int, Dynamic, 3> triangles = cplex1.template getSimplices<2>(); 
     int nt = triangles.rows(); 
     for (int i = 0; i < nt; ++i)
     {
         // Get the IDs of the three cells, and map to the triangle simplex ID 
         int cell1_id = cell_ids1(triangles(i, 0));
-        int cell2_id = cell_ids2(triangles(i, 1)); 
-        int cell3_id = cell_ids3(triangles(i, 2)); 
+        int cell2_id = cell_ids1(triangles(i, 1)); 
+        int cell3_id = cell_ids1(triangles(i, 2)); 
         auto tuple = std::make_tuple(cell1_id, cell2_id, cell3_id); 
         triangle_ids[tuple] = curr_simplex_id; 
 
@@ -3404,7 +3404,7 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
     }
 
     // For each 3-simplex in the first complex ... 
-    Array<int, Dynamic, 4> tetrahedra = cplex1.getSimplices<3>(); 
+    Array<int, Dynamic, 4> tetrahedra = cplex1.template getSimplices<3>(); 
     int nte = tetrahedra.rows(); 
     for (int i = 0; i < nte; ++i)
     {
@@ -3438,7 +3438,7 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         result = readCells<T>(cells_filenames[i]);  
         cells2 = result.first; 
         t2 = static_cast<T>(std::stod(result.second["t_curr"]));
-        cell_ids2 = cells2(Eigen::all, __colidx_id).cast<int>(); 
+        cell_ids2 = cells2(Eigen::all, __colidx_id).template cast<int>(); 
         cplex2.read(complex_filenames[i], cells2(Eigen::all, __colseq_r));
 
         // Get the simplices that were born and died in between the (i-1)-th
@@ -3563,7 +3563,7 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
             // Find the cell ID of the point in complex 2, and store a new 
             // simplex ID for the point  
             int cell1_id = cell_ids2(birth_points(j)); 
-            point_ids[cell_id] = curr_simplex_id;
+            point_ids[cell1_id] = curr_simplex_id;
 
             // Add the point to the zigzag persistence object 
             zp.insert_cell(curr_simplex_id, {}, 0, t2); 
