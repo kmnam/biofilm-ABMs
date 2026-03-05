@@ -3190,8 +3190,8 @@ std::pair<SimplexCollection, SimplexCollection> getBirthDeathSimplices(const Sim
     const int nte2 = tetrahedra2.rows(); 
 
     // Construct sets of tetrahedra, stored in terms of point IDs
-    std::unordered_set<std::tuple<int, int, int>,
-                       boost::hash<std::tuple<int, int, int> > > tetrahedron_set1, tetrahedron_set2; 
+    std::unordered_set<std::tuple<int, int, int, int>,
+                       boost::hash<std::tuple<int, int, int, int> > > tetrahedron_set1, tetrahedron_set2; 
     for (int i = 0; i < nte1; ++i)
     {
         int u = tetrahedra1(i, 0); 
