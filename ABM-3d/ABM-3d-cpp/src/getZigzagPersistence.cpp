@@ -26,10 +26,10 @@ int main(int argc, char** argv)
     bool verbose = false; 
 
     // Parse additional arguments
-    if (argc > 4)
+    if (argc > 5)
     {
         std::vector<std::string> args; 
-        for (int i = 4; i < argc; ++i)
+        for (int i = 5; i < argc; ++i)
             args.push_back(argv[i]);
 
         // -n: Number of frames 
@@ -83,7 +83,20 @@ int main(int argc, char** argv)
     // Compute zigzag persistence
     std::vector<Bar> zigzag = computeZigzagPersistence<double>(
         cells_filenames, complex_filenames, verbose
-    );  
+    ); 
+
+    // Write each zigzag persistence interval to file
+    std::string outfilename = argv[3]; 
+    std::ofstream outfile(outfilename);
+    outfile << std::setprecision(10);  
+    for (auto it = zigzag.begin(); it != zigzag.end(); ++it)
+    {
+        int dim = std::get<0>(*it); 
+        double birth = std::get<1>(*it); 
+        double death = std::get<2>(*it); 
+        outfile << dim << '\t' << birth << '\t' << death << std::endl; 
+    }
+    outfile.close();  
 
     return 0;  
 }
