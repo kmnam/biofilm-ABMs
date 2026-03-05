@@ -82,7 +82,7 @@ int main(int argc, char** argv)
 
     // Compute zigzag persistence
     std::vector<Bar> zigzag = computeZigzagPersistence<double>(
-        cells_filenames, complex_filenames
+        cells_filenames, complex_filenames, verbose
     );  
 
     return 0;  
