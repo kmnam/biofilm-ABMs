@@ -3287,7 +3287,8 @@ std::pair<SimplexCollection, SimplexCollection> getBirthDeathSimplices(const Sim
 typedef std::tuple<int, double, double> Bar;    // Simplex dimension, birth time, death time 
 template <typename T>
 std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_filenames,
-                                          const std::vector<std::string>& complex_filenames) 
+                                          const std::vector<std::string>& complex_filenames,
+                                          const bool verbose = false) 
 {
     // Check that there are at least two files
     if (cells_filenames.size() < 2)
@@ -3301,12 +3302,18 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         throw std::runtime_error(
             "Mismatching number of simulation frames and simplicial complex "
             "files specified"
-        );  
+        );
+
+    if (verbose)
+    {
+        std::cout << "Parsing " << cells_filenames.size() << " simulation frames "
+                  << "and simplicial complexes ...\n"; 
+    } 
 
     // Parse the first frame
     Array<T, Dynamic, Dynamic> cells1, cells2; 
     T t1, t2;
-    Array<int, Dynamic, 1> cell_ids1, cell_ids2; 
+    Array<int, Dynamic, 1> cell_ids1, cell_ids2;
     auto result = readCells<T>(cells_filenames[0]);
     cells1 = result.first; 
     t1 = static_cast<T>(std::stod(result.second["t_curr"]));
@@ -3437,6 +3444,16 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         curr_simplex_id++;  
     }
 
+    if (verbose)
+    {
+        std::cout << "- Parsed: " << cells_filenames[0] << " (t = "
+                  << t1 << ")" << std::endl; 
+        std::cout << "... " << cplex1.getNumPoints() << " points, "
+                  << cplex1.getNumSimplices(1) << " edges, "
+                  << cplex1.getNumSimplices(2) << " triangles, "
+                  << cplex1.getNumSimplices(3) << " tetrahedra" << std::endl; 
+    }
+
     // For each subsequent pair of files ... 
     for (int i = 1; i < cells_filenames.size(); ++i)
     {
@@ -3452,11 +3469,38 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         auto birth_death = getBirthDeathSimplices<T>(cplex1, cell_ids1, cplex2, cell_ids2);
         SimplexCollection birth_simplices = birth_death.first; 
         SimplexCollection death_simplices = birth_death.second;
+        Array<int, Dynamic, 1> birth_points = std::get<0>(birth_simplices); 
+        Array<int, Dynamic, 2> birth_edges = std::get<1>(birth_simplices);
+        Array<int, Dynamic, 3> birth_triangles = std::get<2>(birth_simplices);
+        Array<int, Dynamic, 4> birth_tetrahedra = std::get<3>(birth_simplices); 
+        Array<int, Dynamic, 1> death_points = std::get<0>(death_simplices);  
+        Array<int, Dynamic, 2> death_edges = std::get<1>(death_simplices); 
+        Array<int, Dynamic, 3> death_triangles = std::get<2>(death_simplices); 
+        Array<int, Dynamic, 4> death_tetrahedra = std::get<3>(death_simplices);
+
+        if (verbose)
+        {
+            std::cout << "- Parsed: " << cells_filenames[i] << " (t = "
+                      << t2 << ")" << std::endl; 
+            std::cout << "... " << cplex2.getNumPoints() << " points, "
+                      << cplex2.getNumSimplices(1) << " edges, "
+                      << cplex2.getNumSimplices(2) << " triangles, "
+                      << cplex2.getNumSimplices(3) << " tetrahedra" << std::endl;
+            std::cout << "... birth simplices: "
+                      << birth_points.rows() << " points, "
+                      << birth_edges.rows() << " edges, "
+                      << birth_triangles.rows() << " triangles, "
+                      << birth_tetrahedra.rows() << " tetrahedra" << std::endl; 
+            std::cout << "... death simplices: "
+                      << death_points.rows() << " points, "
+                      << death_edges.rows() << " edges, "
+                      << death_triangles.rows() << " triangles, "
+                      << death_tetrahedra.rows() << " tetrahedra" << std::endl; 
+        }
 
         // The simplices must be removed from highest dimension to lowest
         //
         // Run through the 3-simplices that died ...
-        Array<int, Dynamic, 4> death_tetrahedra = std::get<3>(death_simplices);
         for (int j = 0; j < death_tetrahedra.rows(); ++j)
         {
             // Find the cell IDs of the vertices of the tetrahedron (which are 
@@ -3485,7 +3529,6 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         }
 
         // Run through the 2-simplices that died ... 
-        Array<int, Dynamic, 3> death_triangles = std::get<2>(death_simplices); 
         for (int j = 0; j < death_triangles.rows(); ++j)
         {
             // Find the cell IDs of the vertices of the triangle (which are
@@ -3513,7 +3556,6 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         }
 
         // Run through the 1-simplices that died ... 
-        Array<int, Dynamic, 2> death_edges = std::get<1>(death_simplices); 
         for (int j = 0; j < death_edges.rows(); ++j)
         {
             // Find the cell IDs of the endpoints (which are in complex 1)
@@ -3539,7 +3581,6 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         }
 
         // Run through the 0-simplices that died ...
-        Array<int, Dynamic, 1> death_points = std::get<0>(death_simplices);  
         for (int j = 0; j < death_points.size(); ++j)
         {
             // Find the cell ID of the point in complex 1 
@@ -3563,7 +3604,6 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         }
 
         // Now run through the 0-simplices that were born ... 
-        Array<int, Dynamic, 1> birth_points = std::get<0>(birth_simplices); 
         for (int j = 0; j < birth_points.size(); ++j)
         {
             // Find the cell ID of the point in complex 2, and store a new 
@@ -3579,7 +3619,6 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         }
 
         // Run through the 1-simplices that were born ... 
-        Array<int, Dynamic, 2> birth_edges = std::get<1>(birth_simplices); 
         for (int j = 0; j < birth_edges.rows(); ++j)
         {
             // Find the cell IDs of the endpoints (which are in complex 2)
@@ -3629,7 +3668,6 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         }
 
         // Run through the 2-simplices that were born ... 
-        Array<int, Dynamic, 3> birth_triangles = std::get<2>(birth_simplices); 
         for (int j = 0; j < birth_triangles.rows(); ++j)
         {
             // Find the cell IDs of the vertices of the triangle (which are
@@ -3692,7 +3730,6 @@ std::vector<Bar> computeZigzagPersistence(const std::vector<std::string>& cells_
         }
 
         // Run through the 3-simplices that were born ... 
-        Array<int, Dynamic, 4> birth_tetrahedra = std::get<3>(birth_simplices); 
         for (int j = 0; j < birth_tetrahedra.rows(); ++j)
         {
             // Find the cell IDs of the vertices of the tetrahedron (which are
