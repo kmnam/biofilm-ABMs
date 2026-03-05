@@ -262,7 +262,7 @@ void writeCells(const Ref<const Array<T, Dynamic, Dynamic> >& cells,
  * @param filename Input lineage filename. 
  * @returns A dictionary containing the parent cell ID for each cell. 
  */
-std::unordered_map<int, int> readLineage(const std::string filename)
+std::unordered_map<int, int> readLineage(const std::string& filename)
 {
     // Parse the lineage file 
     std::unordered_map<int, int> parents; 
@@ -362,14 +362,17 @@ std::vector<int> getAncestry(const int cell_id, std::vector<int>& parents)
  *             given number of filenames that are equally spaced in time. 
  * @param tmin Filter out all files with timepoints earlier than this time.
  * @param tmax Filter out all files with timepoints later than this time. 
- * @returns List of simulation filenames, in order of iteration number.
+ * @returns List of simulation filenames, in order of iteration number, 
+ *          together with the lineage filename.
  */
-std::vector<std::string> parseDir(const std::string dir, const int nmax = 0, 
-                                  const double tmin = 0,
-                                  const double tmax = std::numeric_limits<double>::max())
+std::pair<std::vector<std::string>, std::string> parseDir(const std::string dir,
+                                                          const int nmax = 0, 
+                                                          const double tmin = 0,
+                                                          const double tmax = std::numeric_limits<double>::max())
 {
     // Store a vector of filenames and their timepoints 
     std::vector<std::pair<std::string, double> > filenames;
+    std::string lineage_filename; 
 
     // For each file in the input directory ... 
     for (const auto& entry : std::filesystem::directory_iterator(dir))
@@ -380,9 +383,12 @@ std::vector<std::string> parseDir(const std::string dir, const int nmax = 0,
         const int fsize = filename.size(); 
         if (fsize >= 4 && filename.compare(fsize - 4, fsize, ".txt") == 0)
         {
-            // Skip over the lineage file 
+            // Separately store the lineage filename 
             if (filename.compare(fsize - 12, fsize, "_lineage.txt") == 0)
-                continue;
+            {
+                lineage_filename = filename; 
+                continue; 
+            }
 
             const std::regex re(R"(iter(\d+)\.txt$)");
             std::smatch m;  
@@ -466,7 +472,7 @@ std::vector<std::string> parseDir(const std::string dir, const int nmax = 0,
             filenames_sorted.push_back(it->first);
     }
 
-    return filenames_sorted;  
+    return std::make_pair(filenames_sorted, lineage_filename);  
 }
 
 /**
