@@ -1191,7 +1191,7 @@ class SimplicialComplex3D
          * Return arrays that indicate the connected component that contains
          * each vertex in the simplicial complex.
          *
-         * @returns  
+         * @returns Vector of component indices for each vertex in the complex.  
          */
         Matrix<int, Dynamic, 1> getConnectedComponents() const 
         {
@@ -1236,6 +1236,31 @@ class SimplicialComplex3D
         std::unordered_map<std::pair<int, int>, int, boost::hash<std::pair<int, int> > > getEdgeOrdering() const 
         {
             return ::getEdgeOrdering(this->one_skeleton); 
+        }
+
+        /**
+         * Return the cofaces of a simplex in the simplicial complex.
+         *
+         * All cofaces, regardless of codimension, are returned 
+         *
+         * @returns Input simplex. 
+         * @returns Array of cofaces. 
+         */
+        std::vector<std::vector<int> > getCofaces(const std::vector<int>& simplex)
+        {
+            // For each dimension greater than that of the input simplex ...  
+            std::vector<std::vector<int> > cofaces; 
+            for (int dim = simplex.size(); dim <= 3; ++dim)
+            { 
+                // Get all the simplices with that dimension that have this 
+                // the input simplex as a face
+                std::vector<std::vector<int> > cofaces_dim
+                    = this->tree.getSuperstrings(simplex, dim + 1);
+                for (auto&& coface : cofaces_dim)
+                    cofaces.push_back(coface);  
+            }
+
+            return cofaces;
         }
 
         /**
