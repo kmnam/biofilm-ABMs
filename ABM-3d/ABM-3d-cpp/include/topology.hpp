@@ -1241,9 +1241,9 @@ class SimplicialComplex3D
         /**
          * Return the cofaces of a simplex in the simplicial complex.
          *
-         * All cofaces, regardless of codimension, are returned 
+         * All cofaces, regardless of codimension, are returned. 
          *
-         * @returns Input simplex. 
+         * @param simplex Input simplex. 
          * @returns Array of cofaces. 
          */
         std::vector<std::vector<int> > getCofaces(const std::vector<int>& simplex)
