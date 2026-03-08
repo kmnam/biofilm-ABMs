@@ -1264,6 +1264,103 @@ class SimplicialComplex3D
         }
 
         /**
+         * Return the closed star of a simplex in the simplicial complex. 
+         *
+         * The closed star consists of all the cofaces, plus the faces of 
+         * the cofaces. 
+         *
+         * @param simplex Input simplex. 
+         * @returns Array of faces within the closed star of the input
+         *          simplex.
+         */
+        std::vector<std::vector<int> > getClosedStar(const std::vector<int>& simplex)
+        {
+            // Get the cofaces of the simplex 
+            std::vector<std::vector<int> > cofaces = this->getCofaces(simplex);
+
+            // Maintain sets of the faces of the cofaces  
+            std::unordered_set<int> point_set;
+            std::unordered_set<std::pair<int, int>,
+                               boost::hash<std::pair<int, int> > > edge_set; 
+            std::unordered_set<std::tuple<int, int, int>,
+                               boost::hash<std::tuple<int, int, int> > > triangle_set; 
+            std::unordered_set<std::tuple<int, int, int, int>, 
+                               boost::hash<std::tuple<int, int, int, int> > > tetrahedron_set; 
+
+            // For each coface ...  
+            for (auto&& coface : cofaces)
+            {
+                // Collect all the faces of the coface 
+                std::vector<std::vector<int> > faces = getPowerset(coface, true);  
+                for (auto&& face : faces)
+                {
+                    // If the face is a point ... 
+                    if (face.size() == 1)
+                    {
+                        // Collect it if it has not yet been encountered
+                        int point = face[0];
+                        if (point_set.find(point) == point_set.end())
+                            point_set.insert(point); 
+                    }
+                    // If the face is an edge ... 
+                    else if (face.size() == 2)
+                    {
+                        // Collect it if it has not yet been encountered
+                        std::pair<int, int> edge = std::make_pair(face[0], face[1]); 
+                        if (edge_set.find(edge) == edge_set.end())
+                            edge_set.insert(edge); 
+                    }
+                    // If the face is a triangle ... 
+                    else if (face.size() == 3)
+                    {
+                        // Collect it if it has not yet been encountered
+                        auto triangle = std::make_tuple(face[0], face[1], face[2]); 
+                        if (triangle_set.find(triangle) == triangle_set.end())
+                            triangle_set.insert(triangle); 
+                    }
+                    // If the face is a tetrahedron ... 
+                    else    // face.size() == 4
+                    {
+                        // Collect it if it has not yet been encountered
+                        auto tetrahedron = std::make_tuple(face[0], face[1], face[2], face[3]); 
+                        if (tetrahedron_set.find(tetrahedron) == tetrahedron_set.end())
+                            tetrahedron_set.insert(tetrahedron); 
+                    }
+                }
+            }
+
+            // Collect the faces of the cofaces in a single vector of vectors 
+            std::vector<std::vector<int> > closed_star; 
+            for (const int point : point_set)
+            {
+                std::vector<int> face {point}; 
+                closed_star.push_back(face); 
+            }
+            for (auto&& edge : edge_set)
+            {
+                std::vector<int> face {edge.first, edge.second}; 
+                closed_star.push_back(face); 
+            }
+            for (auto&& triangle : triangle_set)
+            {
+                std::vector<int> face {
+                    std::get<0>(triangle), std::get<1>(triangle), std::get<2>(triangle)
+                }; 
+                closed_star.push_back(face);
+            }
+            for (auto&& tetrahedron : tetrahedron_set)
+            {
+                std::vector<int> face {
+                    std::get<0>(tetrahedron), std::get<1>(tetrahedron), 
+                    std::get<2>(tetrahedron), std::get<3>(tetrahedron)
+                }; 
+                closed_star.push_back(face); 
+            }
+
+            return closed_star; 
+        }
+
+        /**
          * Return the topological boundary of the simplicial complex.
          *
          * This is the subcomplex of faces that do not feature as a subface
