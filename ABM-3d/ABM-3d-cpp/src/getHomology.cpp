@@ -321,7 +321,8 @@ int main(int argc, char** argv)
         // Write the cycles to file
         std::ofstream outfile(outfilename);
         outfile << "# cells_filename = " << cells_filename << std::endl; 
-        outfile << "# complex_filename = " << complex_filename << std::endl; 
+        outfile << "# complex_filename = " << complex_filename << std::endl;
+        Matrix<double, Dynamic, 3> points = subcomplex.getPoints().matrix();  
         for (int j = 0; j < ncycles; ++j)
         {
             std::stringstream ss_line; 
@@ -331,9 +332,18 @@ int main(int argc, char** argv)
                 {
                     // Output each edge in terms of the cell IDs
                     int u = edges(k, 0); 
-                    int v = edges(k, 1); 
-                    int u_id = static_cast<int>(cells(u, __colidx_id)); 
-                    int v_id = static_cast<int>(cells(v, __colidx_id));  
+                    int v = edges(k, 1);
+                    Matrix<double, 3, 1> point_u = points.row(u); 
+                    Matrix<double, 3, 1> point_v = points.row(v);  
+
+                    // Since the subcomplex of group 1 cells was extracted
+                    // prior to computing the cycles, we must identify the 
+                    // cell corresponding to each point in the subcomplex
+                    Index u_idx, v_idx;
+                    (coords.matrix().rowwise() - point_u.transpose()).rowwise().squaredNorm().minCoeff(&u_idx);
+                    (coords.matrix().rowwise() - point_v.transpose()).rowwise().squaredNorm().minCoeff(&v_idx);  
+                    int u_id = static_cast<int>(cells(u_idx, __colidx_id)); 
+                    int v_id = static_cast<int>(cells(v_idx, __colidx_id));  
                     ss_line << u_id << "," << v_id << ";"; 
                 } 
             }
