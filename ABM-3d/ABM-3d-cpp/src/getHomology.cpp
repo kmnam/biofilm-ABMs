@@ -328,7 +328,14 @@ int main(int argc, char** argv)
             for (int k = 0; k < ne; ++k)
             {
                 if (final_cycles(k, j) == 1)
-                    ss_line << edges(k, 0) << "," << edges(k, 1) << ";"; 
+                {
+                    // Output each edge in terms of the cell IDs
+                    int u = edges(k, 0); 
+                    int v = edges(k, 1); 
+                    int u_id = static_cast<int>(cells(u, __colidx_id)); 
+                    int v_id = static_cast<int>(cells(v, __colidx_id));  
+                    ss_line << u_id << "," << v_id << ";"; 
+                } 
             }
             std::string line = ss_line.str(); 
             line.pop_back(); 
