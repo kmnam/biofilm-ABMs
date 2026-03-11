@@ -5,7 +5,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     10/12/2025
+ *     3/11/2026
  */
 
 #ifndef BIOFILM_UTILS_3D_HPP
@@ -473,6 +473,150 @@ std::pair<std::vector<std::string>, std::string> parseDir(const std::string dir,
     }
 
     return std::make_pair(filenames_sorted, lineage_filename);  
+}
+
+/**
+ * Find the simulation frame in the given directory that is closest to the 
+ * given timepoint. 
+ *
+ * @param dir Input directory.
+ * @param t_query Input timepoint. 
+ * @returns Simulation filename corresponding to the frame that is closest 
+ *          to the given timepoint. 
+ */
+std::string findFileNearestToTimepoint(const std::string dir, const double t_query)
+{
+    // Store a vector of filenames and their timepoints 
+    std::vector<std::pair<std::string, double> > filenames;
+
+    // For each file in the input directory ... 
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        std::string filename = entry.path(); 
+
+        // Check that the filename ends with '.txt'
+        const int fsize = filename.size(); 
+        if (fsize >= 4 && filename.compare(fsize - 4, fsize, ".txt") == 0)
+        {
+            // Skip over the lineage file 
+            if (filename.compare(fsize - 12, fsize, "_lineage.txt") == 0)
+                continue; 
+
+            const std::regex re(R"(iter(\d+)\.txt$)");
+            std::smatch m;  
+
+            // If the file contains the initial simulation frame, collect
+            // it with time 0
+            if (filename.compare(fsize - 9, fsize, "_init.txt") == 0)
+            {
+                filenames.push_back(std::make_pair(filename, 0));
+            }
+            // If the file contains the final simulation frame, collect it 
+            // with its timepoint 
+            else if (filename.compare(fsize - 10, fsize, "_final.txt") == 0)
+            {
+                auto result = readCells<double>(filename);
+                double time = std::stod(result.second["t_curr"]);
+                filenames.push_back(std::make_pair(filename, time)); 
+            }
+            // If the file contains an intermediate simulation frame, collect
+            // it with its timepoint 
+            else if (std::regex_search(filename, m, re))
+            {
+                auto result = readCells<double>(filename); 
+                double time = std::stod(result.second["t_curr"]);
+                filenames.push_back(std::make_pair(filename, time));
+            } 
+        }
+    }
+
+    // Raise an exception if there were no files 
+    if (filenames.size() == 0)
+        throw std::runtime_error("No simulation frames found in given directory");
+
+    // Find the filename that is closest to the given timepoint 
+    auto min_it = std::min_element(
+        filenames.begin(), filenames.end(),
+        [&t_query](const std::pair<std::string, double>& x, const std::pair<std::string, double>& y)
+        {
+            return abs(x.second - t_query) < abs(y.second - t_query); 
+        }
+    ); 
+
+    return min_it->first; 
+}
+
+/**
+ * Find the simulation frame in the given directory that is closest to the 
+ * given population size. 
+ *
+ * @param dir Input directory.
+ * @param size Input population size. 
+ * @returns Simulation filename corresponding to the frame that is closest 
+ *          to the given population size. 
+ */
+std::string findFileNearestToSize(const std::string dir, const int size)
+{
+    // Store a vector of filenames and their population sizes 
+    std::vector<std::pair<std::string, int> > filenames;
+
+    // For each file in the input directory ... 
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        std::string filename = entry.path(); 
+
+        // Check that the filename ends with '.txt'
+        const int fsize = filename.size(); 
+        if (fsize >= 4 && filename.compare(fsize - 4, fsize, ".txt") == 0)
+        {
+            // Skip over the lineage file 
+            if (filename.compare(fsize - 12, fsize, "_lineage.txt") == 0)
+                continue; 
+
+            const std::regex re(R"(iter(\d+)\.txt$)");
+            std::smatch m;  
+
+            // If the file contains the initial simulation frame, collect
+            // it with its population size (which should be 1)
+            if (filename.compare(fsize - 9, fsize, "_init.txt") == 0)
+            {
+                auto result = readCells<double>(filename); 
+                int n = result.first.rows(); 
+                filenames.push_back(std::make_pair(filename, n));
+            }
+            // If the file contains the final simulation frame, collect it 
+            // with its population size 
+            else if (filename.compare(fsize - 10, fsize, "_final.txt") == 0)
+            {
+                auto result = readCells<double>(filename);
+                int n = result.first.rows(); 
+                filenames.push_back(std::make_pair(filename, n)); 
+            }
+            // If the file contains an intermediate simulation frame, collect
+            // it with its population size 
+            else if (std::regex_search(filename, m, re))
+            {
+                auto result = readCells<double>(filename); 
+                int n = result.first.rows(); 
+                filenames.push_back(std::make_pair(filename, n));
+            } 
+        }
+    }
+
+    // Raise an exception if there were no files 
+    if (filenames.size() == 0)
+        throw std::runtime_error("No simulation frames found in given directory");
+
+    // Find the filename that is closest to the given population size
+    auto min_it = std::min_element(
+        filenames.begin(), filenames.end(),
+        [&size](const std::pair<std::string, int>& x, const std::pair<std::string, int>& y)
+        {
+            return abs(x.second - size) < abs(y.second - size); 
+        }
+    ); 
+
+    return min_it->first; 
 }
 
 /**
