@@ -35,6 +35,7 @@ int main(int argc, char** argv)
 
     // Parse input arguments
     std::vector<std::string> cells_filenames, complex_filenames;
+    std::string outdir; 
 
     InputMode mode = InputMode::FILENAME_MODE;
     if (std::string(argv[1]) == "-d")
@@ -52,10 +53,10 @@ int main(int argc, char** argv)
     // Get the homology generators for frames across a simulation  
     if (mode == InputMode::DIRECTORY_MODE)
     {
-        if (argc > 4)   // Parse additional arguments 
+        if (argc > 5)   // Parse additional arguments 
         {
             std::vector<std::string> args; 
-            for (int i = 4; i < argc; ++i)
+            for (int i = 5; i < argc; ++i)
                 args.push_back(argv[i]);
 
             // --skip-min: Skip cycle minimization 
@@ -100,6 +101,7 @@ int main(int argc, char** argv)
         // Gather the filenames in the given directories 
         std::string cells_dir = argv[2]; 
         std::string complex_dir = argv[3];
+        outdir = argv[4]; 
         cells_filenames = parseDir(cells_dir, nframes, tmin, tmax).first;
         for (const std::string& filename : cells_filenames)
         {
@@ -114,10 +116,10 @@ int main(int argc, char** argv)
     // closest to the given timepoint 
     else if (mode == InputMode::TIMEPOINT_MODE)
     {
-        if (argc > 5)   // Parse additional arguments
+        if (argc > 6)   // Parse additional arguments
         {
             std::vector<std::string> args; 
-            for (int i = 5; i < argc; ++i)
+            for (int i = 6; i < argc; ++i)
                 args.push_back(argv[i]);
 
             // --skip-min: Skip cycle minimization 
@@ -131,8 +133,9 @@ int main(int argc, char** argv)
 
         // Get the simulation frame closest to the given timepoint
         std::string cells_dir = argv[2]; 
-        std::string complex_dir = argv[3];  
-        double t_query = std::stod(argv[4]);
+        std::string complex_dir = argv[3];
+        outdir = argv[4];  
+        double t_query = std::stod(argv[5]);
         std::string cells_filename = findFileNearestToTimepoint(cells_dir, t_query);
         cells_filenames.push_back(cells_filename); 
 
@@ -147,10 +150,10 @@ int main(int argc, char** argv)
     // closest to the given population size 
     else if (mode == InputMode::SIZE_MODE)
     {
-        if (argc > 5)   // Parse additional arguments
+        if (argc > 6)   // Parse additional arguments
         {
             std::vector<std::string> args; 
-            for (int i = 5; i < argc; ++i)
+            for (int i = 6; i < argc; ++i)
                 args.push_back(argv[i]);
 
             // --skip-min: Skip cycle minimization 
@@ -164,8 +167,9 @@ int main(int argc, char** argv)
 
         // Get the simulation frame closest to the given timepoint
         std::string cells_dir = argv[2]; 
-        std::string complex_dir = argv[3];  
-        int size = std::stoi(argv[4]);
+        std::string complex_dir = argv[3]; 
+        outdir = argv[4];  
+        int size = std::stoi(argv[5]);
         std::string cells_filename = findFileNearestToSize(cells_dir, size);  
         cells_filenames.push_back(cells_filename); 
 
@@ -178,10 +182,10 @@ int main(int argc, char** argv)
     }
     else    // Or get the homology generators for the specified simulation frame 
     {
-        if (argc > 3)   // Parse additional arguments
+        if (argc > 4)   // Parse additional arguments
         {
             std::vector<std::string> args; 
-            for (int i = 3; i < argc; ++i)
+            for (int i = 4; i < argc; ++i)
                 args.push_back(argv[i]);
 
             // --skip-min: Skip cycle minimization 
@@ -194,6 +198,7 @@ int main(int argc, char** argv)
         }
         cells_filenames.push_back(argv[1]); 
         complex_filenames.push_back(argv[2]);
+        outdir = argv[3]; 
     } 
 
     // Parse the cells and the simplicial complex at each frame ... 
@@ -205,6 +210,13 @@ int main(int argc, char** argv)
         std::cout << "Parsing frame #" << i << ":\n"
                   << "- Frame filename: " << cells_filename << std::endl
                   << "- Complex filename: " << complex_filename << std::endl;
+
+        // Determine output filename 
+        std::string basename = std::filesystem::path(complex_filename).stem();
+        std::stringstream ss;
+        ss << basename << "_cycles.txt";  
+        std::string outfilename = std::filesystem::path(outdir) / ss.str();
+        std::cout << "- Output filename: " << outfilename << std::endl; 
 
         // Parse simulation frame and simplicial complex 
         auto result = readCells<double>(cells_filename); 
@@ -305,20 +317,23 @@ int main(int argc, char** argv)
         {
             final_cycles = min_basis; 
         }
+
+        // Write the cycles to file
+        std::ofstream outfile(outfilename);
+        outfile << "# cells_filename = " << cells_filename << std::endl; 
+        outfile << "# complex_filename = " << complex_filename << std::endl; 
         for (int j = 0; j < ncycles; ++j)
         {
-            std::cout << "Cycle " << j << ": "; 
+            std::stringstream ss_line; 
             for (int k = 0; k < ne; ++k)
             {
                 if (final_cycles(k, j) == 1)
-                    std::cout << "(" << edges(k, 0) << ", " << edges(k, 1) << ") "; 
+                    ss_line << edges(k, 0) << "," << edges(k, 1) << ";"; 
             }
-            std::cout << std::endl; 
+            std::string line = ss_line.str(); 
+            line.pop_back(); 
+            outfile << line << std::endl; 
         }
-
-        // Get the Betti numbers of the subcomplex 
-        Matrix<int, Dynamic, 1> betti = subcomplex.getZ2BettiNumbers();
-        std::cout << betti.transpose() << "\n--\n";  
     } 
 
     return 0;
