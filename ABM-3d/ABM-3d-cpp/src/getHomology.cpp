@@ -19,7 +19,15 @@
 using std::abs;
 using std::modf; 
 
-typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+
+enum class InputMode
+{
+    FILENAME_MODE,
+    DIRECTORY_MODE,
+    TIMEPOINT_MODE,
+    SIZE_MODE
+};
 
 int main(int argc, char** argv)
 {
@@ -27,7 +35,14 @@ int main(int argc, char** argv)
 
     // Parse input arguments
     std::vector<std::string> cells_filenames, complex_filenames;
-    bool dir_mode = (std::string(argv[1]) == "-d");
+
+    InputMode mode = InputMode::FILENAME_MODE;
+    if (std::string(argv[1]) == "-d")
+        mode = InputMode::DIRECTORY_MODE; 
+    else if (std::string(argv[1]) == "-t")
+        mode = InputMode::TIMEPOINT_MODE;
+    else if (std::string(argv[1]) == "-s")
+        mode = InputMode::SIZE_MODE;  
     int nframes = 20;  
     double tmin = 2.0; 
     double tmax = std::numeric_limits<double>::max(); 
@@ -35,7 +50,7 @@ int main(int argc, char** argv)
     bool verbose = false;
 
     // Get the homology generators for frames across a simulation  
-    if (dir_mode)
+    if (mode == InputMode::DIRECTORY_MODE)
     {
         if (argc > 4)   // Parse additional arguments 
         {
@@ -95,7 +110,73 @@ int main(int argc, char** argv)
             complex_filenames.push_back(complex_filename);  
         }
     }
-    else    // Or get the homology generators for a single simulation frame 
+    // Or get the homology generators for a single simulation frame that is
+    // closest to the given timepoint 
+    else if (mode == InputMode::TIMEPOINT_MODE)
+    {
+        if (argc > 5)   // Parse additional arguments
+        {
+            std::vector<std::string> args; 
+            for (int i = 5; i < argc; ++i)
+                args.push_back(argv[i]);
+
+            // --skip-min: Skip cycle minimization 
+            if (std::find(args.begin(), args.end(), "--skip-min") != args.end())
+                skip_minimize = true;
+
+            // --verbose: Verbosity 
+            if (std::find(args.begin(), args.end(), "--verbose") != args.end())
+                verbose = true;  
+        }
+
+        // Get the simulation frame closest to the given timepoint
+        std::string cells_dir = argv[2]; 
+        std::string complex_dir = argv[3];  
+        double t_query = std::stod(argv[4]);
+        std::string cells_filename = findFileNearestToTimepoint(cells_dir, t_query);
+        cells_filenames.push_back(cells_filename); 
+
+        // Construct the corresponding complex filename  
+        std::string basename = std::filesystem::path(cells_filename).stem(); 
+        std::stringstream ss; 
+        ss << basename << "_graph.txt"; 
+        std::string complex_filename = std::filesystem::path(complex_dir) / ss.str(); 
+        complex_filenames.push_back(complex_filename); 
+    }
+    // Or get the homology generators for a single simulation frame that is
+    // closest to the given population size 
+    else if (mode == InputMode::SIZE_MODE)
+    {
+        if (argc > 5)   // Parse additional arguments
+        {
+            std::vector<std::string> args; 
+            for (int i = 5; i < argc; ++i)
+                args.push_back(argv[i]);
+
+            // --skip-min: Skip cycle minimization 
+            if (std::find(args.begin(), args.end(), "--skip-min") != args.end())
+                skip_minimize = true;
+
+            // --verbose: Verbosity 
+            if (std::find(args.begin(), args.end(), "--verbose") != args.end())
+                verbose = true;  
+        }
+
+        // Get the simulation frame closest to the given timepoint
+        std::string cells_dir = argv[2]; 
+        std::string complex_dir = argv[3];  
+        int size = std::stoi(argv[4]);
+        std::string cells_filename = findFileNearestToSize(cells_dir, size);  
+        cells_filenames.push_back(cells_filename); 
+
+        // Construct the corresponding complex filename  
+        std::string basename = std::filesystem::path(cells_filename).stem(); 
+        std::stringstream ss; 
+        ss << basename << "_graph.txt"; 
+        std::string complex_filename = std::filesystem::path(complex_dir) / ss.str(); 
+        complex_filenames.push_back(complex_filename); 
+    }
+    else    // Or get the homology generators for the specified simulation frame 
     {
         if (argc > 3)   // Parse additional arguments
         {
