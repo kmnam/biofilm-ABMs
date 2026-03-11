@@ -3,8 +3,9 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/22/2025
+ *     3/9/2026
  */
+
 #ifndef FIELDS_OF_ARBITRARY_CHARACTERISTIC_HPP
 #define FIELDS_OF_ARBITRARY_CHARACTERISTIC_HPP
 
@@ -12,6 +13,7 @@
 #include <cmath>
 #include <Eigen/Dense>
 #include <boost/multiprecision/gmp.hpp>
+#include <CGAL/boost_mp_type.h>        // Includes explicit specialization of NumTraits<Rational>
 
 typedef boost::multiprecision::mpq_rational Rational; 
 
