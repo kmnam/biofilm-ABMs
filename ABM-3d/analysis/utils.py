@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/22/2025
+    3/11/2026
 """
 import os
 import glob
@@ -172,8 +172,9 @@ def write_cells(cells, path, fmt=None, params={}):
         for i in range(cells.shape[0]):
             line = '{:d}\t'.format(int(cells[i, _colidx_id]))         # Cell ID is an integer
             line += '\t'.join([fmt.format(cells[i, j]) for j in range(1, _colidx_group)])
-            line += '\t{:d}\t'.format(int(cells[i, _colidx_group]))   # Group is an integer
+            line += '\t{:d}'.format(int(cells[i, _colidx_group]))     # Group is an integer
             if cells.shape[1] > _ncols_required:
+                line += '\t'
                 line += '\t'.join([
                     fmt.format(cells[i, j]) for j in range(_colidx_group + 1, cells.shape[1])
                 ])
