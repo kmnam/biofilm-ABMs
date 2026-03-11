@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     7/21/2025
+ *     3/11/2026
  */
 
 #include <iostream>
@@ -81,7 +81,7 @@ int main(int argc, char** argv)
         }
         std::string cells_dir = argv[2]; 
         std::string complex_dir = argv[3];
-        cells_filenames = parseDir(cells_dir, nframes, tmin, tmax);
+        cells_filenames = parseDir(cells_dir, nframes, tmin, tmax).first;
         for (const std::string& filename : cells_filenames)
         {
             std::string basename = std::filesystem::path(filename).stem();  
