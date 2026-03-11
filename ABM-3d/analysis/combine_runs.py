@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    10/17/2025
+    3/11/2026
 """
 
 import sys
@@ -25,14 +25,16 @@ if __name__ == '__main__':
     if not os.path.isdir(os.path.join(indir, 'run1')):
         sys.exit()
 
-    # Copy over all files from the initial simulation into a new 'combined' 
-    # directory
+    # Make new 'combined' directory 
     try:
         os.mkdir(os.path.join(indir, 'combined'))
-        for filename in glob.glob(os.path.join(indir, '*.txt')):
-            shutil.copy(filename, os.path.join(indir, 'combined'))
     except FileExistsError:
         pass
+    
+    # Copy over all files from the initial simulation into a new 'combined' 
+    # directory
+    for filename in glob.glob(os.path.join(indir, '*.txt')):
+        shutil.copy(filename, os.path.join(indir, 'combined'))
 
     # For each subsequent run ...
     maxrun = None
