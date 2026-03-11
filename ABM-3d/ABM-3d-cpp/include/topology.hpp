@@ -2048,7 +2048,7 @@ class SimplicialComplex3D
          * that calculates the sentinel cycles associated with the minimum-
          * weight-path tree rooted at the given vertex. 
          *
-         * See Busaryev et al., SWAT LNCS (2010) and Dey et al., LNCS (2018) 
+         * See Busaryev et al., SWAT LNCS (2012) and Dey et al., LNCS (2018) 
          * for details.
          *
          * @param root Root vertex for the minimum-weight-path tree.
@@ -2181,7 +2181,7 @@ class SimplicialComplex3D
          * Calculate a minimal homology basis for the first homology group 
          * over Z/2Z coefficients, following the procedure outlined by 
          * Dey et al. SCG (2010), LNCS (2018), and using the edge annotation 
-         * procedure due to Busaryev et al. SWAT LNCS (2010).
+         * procedure due to Busaryev et al. SWAT LNCS (2012).
          *
          * @param verbose If true, print intermittent output to stdout. 
          */
