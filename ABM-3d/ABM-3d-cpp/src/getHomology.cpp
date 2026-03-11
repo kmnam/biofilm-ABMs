@@ -32,7 +32,9 @@ int main(int argc, char** argv)
     double tmin = 2.0; 
     double tmax = std::numeric_limits<double>::max(); 
     bool skip_minimize = false;
-    bool verbose = false; 
+    bool verbose = false;
+
+    // Get the homology generators for frames across a simulation  
     if (dir_mode)
     {
         if (argc > 4)   // Parse additional arguments 
@@ -79,9 +81,11 @@ int main(int argc, char** argv)
             if (std::find(args.begin(), args.end(), "--verbose") != args.end())
                 verbose = true;  
         }
+
+        // Gather the filenames in the given directories 
         std::string cells_dir = argv[2]; 
         std::string complex_dir = argv[3];
-        cells_filenames = parseDir(cells_dir, nframes, tmin, tmax);
+        cells_filenames = parseDir(cells_dir, nframes, tmin, tmax).first;
         for (const std::string& filename : cells_filenames)
         {
             std::string basename = std::filesystem::path(filename).stem();  
@@ -91,7 +95,7 @@ int main(int argc, char** argv)
             complex_filenames.push_back(complex_filename);  
         }
     }
-    else
+    else    // Or get the homology generators for a single simulation frame 
     {
         if (argc > 3)   // Parse additional arguments
         {
@@ -111,14 +115,15 @@ int main(int argc, char** argv)
         complex_filenames.push_back(argv[2]);
     } 
 
+    // Parse the cells and the simplicial complex at each frame ... 
     nframes = cells_filenames.size(); 
     for (int i = 0 ; i < nframes; ++i)
     {
         std::string cells_filename = cells_filenames[i]; 
         std::string complex_filename = complex_filenames[i];
         std::cout << "Parsing frame #" << i << ":\n"
-                  << "Frame filename: " << cells_filename << std::endl
-                  << "Complex filename: " << complex_filename << std::endl;
+                  << "- Frame filename: " << cells_filename << std::endl
+                  << "- Complex filename: " << complex_filename << std::endl;
 
         // Parse simulation frame and simplicial complex 
         auto result = readCells<double>(cells_filename); 
