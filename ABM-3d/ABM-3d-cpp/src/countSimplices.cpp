@@ -30,7 +30,6 @@ int main(int argc, char** argv)
     int nframes = 0;       // Impose no maximum number of frames by default
     double tmin = 2.0; 
     double tmax = std::numeric_limits<double>::max(); 
-    bool verbose = false;
 
     if (argc > 4)   // Parse additional arguments 
     {
@@ -67,10 +66,6 @@ int main(int argc, char** argv)
                 throw std::runtime_error("Invalid format for input option --tmax"); 
             tmax = std::stod(*next); 
         }
-
-        // --verbose: Verbosity 
-        if (std::find(args.begin(), args.end(), "--verbose") != args.end())
-            verbose = true;  
     }
 
     // Gather the filenames in the given directories 
@@ -122,7 +117,13 @@ int main(int argc, char** argv)
         // Get the number of simplices in the subcomplex
         n_simplices(i, 0) = subcomplex.getNumPoints();
         for (int j = 1; j < 4; ++j)
-            n_simplices(i, j) = subcomplex.getNumSimplices(j); 
+        {
+            try
+            {
+                n_simplices(i, j) = subcomplex.getNumSimplices(j);
+            }
+            catch (const std::runtime_error& e) { }   // Do nothing if there are no such simplices
+        }
     }
 
     // Write the numbers of simplices to file
