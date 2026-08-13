@@ -5,7 +5,7 @@ Authors:
     Kee-Myoung Nam
 
 Last updated:
-    4/10/2025
+    8/10/2026
 """
 
 import numpy as np
@@ -185,20 +185,53 @@ def violinplot_with_mean(dists, means, ax, violin_color, mean_color=None,
                          orient='v', zorder=0, plot_empirical_means=False,
                          empirical_mean_color=None, **kwargs):
     """
+    Plot the given distributions as violinplots, with the means marked as 
+    straight lines within each violin.
+
+    The function plots, by default, the means given in the input array;
+    if desired, the function also plots the empirical means of the given 
+    distributions.  
+
+    Parameters
+    ----------
+    dists : list of lists or `numpy.ndarray`
+        List of 1-D distributions to plot. 
+    means : list or `numpy.ndarray`
+        List of means.
+    ax : `matplotlib.pyplot.Axes`
+        Input axes.
+    violin_color : str or tuple 
+        Violin color.
+    mean_color : str or tuple 
+        Color for the lines indicating the means.
+    orient : str
+        Violinplot orientation. 
+    zorder : int
+        z-order for the violinplot. 
+    plot_empirical_means : bool
+        If True, plot a separate line for the empirical mean of each
+        distribution.
+    empirical_mean_color : str or tuple
+        Color for the lines indicating the empirical means. 
+
+    Returns
+    -------
+    Updated axes. 
     """
+    # Plot the violinplot 
     data = pd.DataFrame({i: dists[i] for i in range(len(dists))})
     ax = sns.violinplot(
         data=data, ax=ax, color=violin_color, orient=orient, inner=None,
         split=False, zorder=zorder, **kwargs
     )
     patches = ax.get_children()[:len(dists)]
-    print(patches)
-
+    
     if mean_color is None:
         mean_color = sns.color_palette()[1]
     if plot_empirical_means and empirical_mean_color is None:
         empirical_mean_color = sns.color_palette()[2]
 
+    # If the violinplot is vertical ... 
     if orient == 'v':
         # For each distribution ...
         for i in range(len(dists)):
@@ -217,7 +250,8 @@ def violinplot_with_mean(dists, means, ax, violin_color, mean_color=None,
                 xmin, xmax = i - np.abs(mean_vertex[0] - i), mean_vertex[0]
             ax.plot(
                 [i + 0.98 * (xmin - i), i + 0.98 * (xmax - i)],
-                [mean, mean], color=mean_color
+                [mean, mean],
+                color=mean_color
             )
 
             # Plot the same line for the empirical mean, if desired 
@@ -230,9 +264,10 @@ def violinplot_with_mean(dists, means, ax, violin_color, mean_color=None,
                     xmin, xmax = i - np.abs(mean_vertex[0] - i), mean_vertex[0]
                 ax.plot(
                     [i + 0.98 * (xmin - i), i + 0.98 * (xmax - i)],
-                    [mean, mean], color=empirical_mean_color
+                    [mean, mean],
+                    color=empirical_mean_color
                 )
-    else:   # orient == 'h'
+    else:   # If the violinplot is horizontal (orient == 'h') ... 
         # For each distribution ... 
         for i in range(len(dists)):
             # Locate the patch that was plotted for this distribution 
@@ -241,7 +276,6 @@ def violinplot_with_mean(dists, means, ax, violin_color, mean_color=None,
             # Identify the vertex in the patch that is closest to the mean 
             vertices = patch.get_paths()[0].vertices
             mean = means[i]
-            #mean = np.mean(dists[i])
             mean_vertex = vertices[np.argmin(np.abs(vertices[:, 0] - mean)), :]
 
             # Plot the vertical line
@@ -582,7 +616,11 @@ def get_mean_lifetimes_exp_vs_sim(data, model, tmin, tmax, nsim, rng,
         Random number generator.
     include_ends : bool
         If True, include the lifetimes of the starting and ending states
-        in the statistics. 
+        in the statistics.
+
+    Returns
+    -------
+    The empirical and simulated mean lifetimes. 
     """
     # Get state assignments for each trajectory
     assign, values = predict_from_hmm(data, model)
@@ -1138,8 +1176,12 @@ def find_switch_times(data, model, delta_backward, delta_forward, max_error_01=0
         Backward window half-length.
     delta_forward : int 
         Forward window half-length.
-    max_error : float
-        Maximum error between HMM state assignments and cdGreen2 trajectories.
+    max_error_01 : float
+        Maximum error between HMM state assignments and cdGreen2 trajectories
+        for switching events from 0 to 1.
+    max_error_10 : float
+        Maximum error between HMM state assignments and cdGreen2 trajectories 
+        for switching events from 1 to 0. 
 
     Returns 
     -------
@@ -1155,7 +1197,12 @@ def find_switch_times(data, model, delta_backward, delta_forward, max_error_01=0
     for i in range(nsample):
         # Start from the earliest timepoint at which the window is well-defined
         nframes = data[i].shape[0]
-        for t_curr in range(delta_backward, nframes - delta_forward - 1):
+
+        # Each time window is of the form [t - delta_backward, t + delta_forward]
+        #
+        # Therefore, possible values for the switching timepoint t range from
+        # delta_backward to nframes - delta_forward - 1
+        for t_curr in range(delta_backward, nframes - delta_forward):
             # Get the window at each timepoint (this window should have length
             # delta_backward + delta_forward + 1, including the current timepoint)
             window = range(t_curr - delta_backward, t_curr + delta_forward + 1)
@@ -1164,13 +1211,17 @@ def find_switch_times(data, model, delta_backward, delta_forward, max_error_01=0
             values_window = values[i][window]
             t0, t1 = delta_backward - 1, delta_backward
             
-            # Is there a switching event at the current timepoint? 
+            # Is there a switching event at the current timepoint?
+            #
+            # t0 = timepoint immediately before switching 
+            # t1 = timepoint immediately after switching 
             if assign_window[t0] != assign_window[t1]:
-                # If so, is that the only switching event within the window? 
-                if (np.all(assign_window[:t0] == assign_window[t0]) and
-                    np.all(assign_window[t1:] == assign_window[t1])):
-                    # If so, is the error between the trajectory and the 
-                    # state assignments within that window small enough? 
+                # If so, is that the only switching event within the window?
+                match_before_t0 = np.all(assign_window[:t0] == assign_window[t0])
+                match_after_t1 = np.all(assign_window[t1:] == assign_window[t1])
+                if match_before_t0 and match_after_t1:
+                    # If so, is the error between the cdGreen2 trajectory and
+                    # the state assignments within that window small enough?
                     error = np.abs(values_window - data_window).mean()
                     if ((assign_window[t0] == 0 and error < max_error_01) or
                         (assign_window[t0] == 1 and error < max_error_10)):
@@ -1184,9 +1235,12 @@ def find_switch_times(data, model, delta_backward, delta_forward, max_error_01=0
         
 ######################################################################
 def plot_aligned_trajectories(data, model, times, delta_backward, delta_forward,
-                              ax, alpha=1.0, truncate_at_further_switches=True):
+                              plot_window_backward, plot_window_forward, ax,
+                              colors=None, linewidths=None, alpha=1.0,
+                              truncate_at_further_switches=True):
     """
-    Plot the given trajectories, aligned at the given timepoints. 
+    Plot the given riboswitch RFI trajectories, aligned at the given
+    timepoints. 
 
     The input data array is assumed to have dimensions (ns, nt, 8), where:
     - ns is the number of samples, and
@@ -1209,135 +1263,93 @@ def plot_aligned_trajectories(data, model, times, delta_backward, delta_forward,
     model : `pomegranate.hmm.DenseHMM`
         Fitted HMM instance.
     delta_backward : int
-        Backward window half-length for plotting.
+        Backward window half-length over which the switching events were
+        identified. 
     delta_forward : int 
+        Forward window half-length over which the switching events were 
+        identified.
+    plot_window_backward : int
+        Backward window half-length for plotting.
+    plot_window_forward : int
         Forward window half-length for plotting.
     ax : `matplotlib.pyplot.Axes`
+        Input axes.
+    colors : list 
+        Color for each trajectory. 
+    linewidths : list
+        Linewidth for each trajectory.
+    alpha : float
+        Transparency. 
+    truncate_at_further_switches : bool
+        If True, truncate each trajectory at further switching events 
+        beyond the [delta_backward, delta_forward] window. 
 
     Returns 
     -------
-    Updated axes. 
+    Updated axes, along with the x- and y-values of each plotted trajectory
+    and the corresponding cdGreen2 and HMM state trajectories. 
     """
     nsample = len(data)
+    if colors is None:
+        colors = [sns.color_palette()[0] for _ in times]
+    if linewidths is None:
+        linewidths = [1.0 for _ in times]
 
     # Get state assignments for each trajectory
     assign, values = predict_from_hmm(data, model)
 
     # For each timepoint ...
+    x_plotted = []
+    data_plotted = []
+    assign_plotted = []
+    values_plotted = []
     for i, (idx, t_curr) in enumerate(times):
+        # There should be a switch at [t_curr - 1, t_curr]
+        assert assign[idx][t_curr - 1] != assign[idx][t_curr]
+
         # Get the window at each timepoint (this window should have length
         # 2 * delta + 1, including the current timepoint)
-        t0 = t_curr - delta_backward
-        t1 = t_curr + delta_forward + 1
+        t0 = t_curr - plot_window_backward
+        t1 = t_curr + plot_window_forward + 1
+
         if truncate_at_further_switches:
             # Assuming there is a switch at [t_curr - 1, t_curr], check if
-            # there are switches between t_curr and t_curr + delta_forward
+            # there are switches between t_curr and t_curr + plot_window_forward
             #
             # If there is a switch between t_curr + j and t_curr + j + 1, 
             # truncate the trajectory at t_curr + j
-            for j in range(delta_forward):
-                # If we have reached the end of the trajectory, break
-                if t_curr + j >= values[idx].shape[0] or t_curr + j + 1 >= values[idx].shape[0]:
-                    t1 = values[idx].shape[0]
-                    break
+            traj_length = values[idx].shape[0]
+            t_max = min([traj_length, t_curr + plot_window_forward])
+            for t in range(t_curr, t_max - 1):
                 # If we have reached a switching event, break 
-                if values[idx][t_curr + j] != values[idx][t_curr + j + 1]:
-                    t1 = t_curr + j
+                if values[idx][t] != values[idx][t + 1]:
+                    t1 = t + 1    # Stop the plotting at t
                     break
+
+        # Extract the subtrajectory to be plotted
         data_window = data[idx][t0:t1, 3]
-        assign_window = values[idx][t0:t1]
+        assign_window = assign[idx][t0:t1]
+        values_window = values[idx][t0:t1]
         window_length = data_window.shape[0]
+        x_plotted.append(np.arange(window_length) - plot_window_backward)
+        data_plotted.append(data_window)
+        assign_plotted.append(assign_window)
+        values_plotted.append(values_window)
 
         # Plot the riboswitch RFIs along the trajectory
         ax.plot(
             np.arange(window_length), data_window,
-            color=sns.color_palette()[0],
-            zorder=3,
-            alpha=alpha
+            color=colors[i], linewidth=linewidths[i], zorder=1, alpha=alpha
         )
 
     # Shade the time increment during which the switch occurs
     ymin, ymax = ax.get_ylim()
     rect = Rectangle(
-        (delta_backward - 1, ymin), 1, ymax - ymin,
+        (plot_window_backward - 1, ymin), 1, ymax - ymin,
         linewidth=0, facecolor=sns.color_palette('pastel')[7], zorder=0
     )
     ax.add_patch(rect)
     ax.set_ylim([ymin, ymax])
 
-    return ax
+    return ax, x_plotted, data_plotted, assign_plotted, values_plotted
 
-######################################################################
-def fit_to_ord2_ode(trajectories, ypinit, rng):
-    """
-    Fit the given trajectories to a second-order ODE of the form, 
-
-    a*y''(t) + b*y'(t) + c*y(t) = 0,
-
-    given estimates of their derivatives at t = 0. 
-    """
-    # Define an array of timepoints
-    #
-    # Note that each trajectory may have a different length due to truncation
-    t = [np.arange(len(trajectories[i])) for i in range(len(trajectories))]
-
-    def objective_composite_ord2(params):
-        """
-        Objective function to be minimized.
-
-        The solution should have the form c1*exp(r1*t) + c2*exp(r2*t), or,
-        if r1 == r2, c1*exp(r1*t) + c2*t*exp(r1*t).
-        """
-        r1, r2 = params
-        ypred = []
-        if r1 == r2:
-            for i in range(len(trajectories)):
-                yinit = trajectories[i][0]
-                c1 = yinit
-                c2 = ypinit[i] - r1 * yinit
-                ypred.append(c1 * np.exp(r1 * t[i]) + c2 * t[i] * np.exp(r1 * t[i]))
-        else:
-            for i in range(len(trajectories)):
-                yinit = trajectories[i][0]
-                c1 = (ypinit[i] - yinit * r2) / (r1 - r2)
-                c2 = yinit - c1
-                ypred.append(c1 * np.exp(r1 * t[i]) + c2 * np.exp(r2 * t[i]))
-
-        # Unravel the data/predictions so that the error can be passed as 
-        # a 1-D array 
-        dev = []
-        for i in range(len(trajectories)):
-            dev += [pred - traj for pred, traj in zip(ypred[i], trajectories[i])]
-        return np.array(dev)
-
-    # Perform least-squares minimization, changing the initial conditions
-    # as necessary 
-    fit = least_squares(
-        objective_composite_ord2, [-0.01, -0.01], bounds=[[-10, -10], [10, 10]],
-        verbose=1
-    )
-    while not fit.success or fit.status == 3:
-        fit = least_squares(
-            objective_composite_ord2, -1 + 2 * rng.random((2,)),
-            bounds=[[-10, -10], [10, 10]], verbose=1
-        )
-    r1, r2 = fit.x
-
-    # Evaluate the fitted function for each trajectory
-    #
-    # Again, note that each fit may have a different length 
-    fits = []
-    if r1 == r2:
-        for i in range(len(trajectories)):
-            yinit = trajectories[i][0]
-            c1 = yinit
-            c2 = ypinit[i] - r1 * yinit
-            fits.append(c1 * np.exp(r1 * t[i]) + c2 * t[i] * np.exp(r1 * t[i]))
-    else:
-        for i in range(len(trajectories)):
-            yinit = trajectories[i][0]
-            c1 = (ypinit[i] - yinit * r2) / (r1 - r2)
-            c2 = trajectories[i][0] - c1
-            fits.append(c1 * np.exp(r1 * t[i]) + c2 * np.exp(r2 * t[i]))
-
-    return fits
