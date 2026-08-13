@@ -8,7 +8,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     3/5/2025
+ *     6/15/2025
  */
 
 #ifndef BIOFILM_SIMULATIONS_2D_HPP
@@ -230,7 +230,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     // Prefactors for cell-cell interaction forces
     Array<T, 3, 1> cell_cell_prefactors; 
     cell_cell_prefactors << 2.5 * E0 * sqrt(R),
-                            2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 2.5),
+                            2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5),
                             2.5 * Ecell * sqrt(Rcell);
 
     // Surface contact area density
@@ -1011,7 +1011,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     // Prefactors for cell-cell interaction forces
     Array<T, 3, 1> cell_cell_prefactors; 
     cell_cell_prefactors << 2.5 * E0 * sqrt(R),
-                            2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 2.5),
+                            2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5),
                             2.5 * Ecell * sqrt(Rcell);
 
     // Surface contact area density
@@ -1723,7 +1723,7 @@ std::pair<Array<T, Dynamic, Dynamic>, std::vector<int> >
     // Prefactors for cell-cell interaction forces
     Array<T, 3, 1> cell_cell_prefactors; 
     cell_cell_prefactors << 2.5 * E0 * sqrt(R),
-                            2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 2.5),
+                            2.5 * E0 * sqrt(R) * pow(2 * (R - Rcell), 1.5),
                             2.5 * Ecell * sqrt(Rcell);
 
     // Surface contact area density
