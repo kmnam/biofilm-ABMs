@@ -349,16 +349,20 @@ if __name__ == '__main__':
     zero_w2_sim = np.mean(q_sim2 == 0)
     zero_w1 = density_Q_zero_weight(lambdaA, K, gamma0, sigma)
     zero_w2 = density_Q_zero_weight(lambdaB, K, gamma0, sigma)
-    print(zero_w1_sim, zero_w1)
-    print(zero_w2_sim, zero_w2)
+    print(
+        'Simulated vs. theoretical zero weights for A = high:',
+        zero_w1_sim, zero_w1
+    )
+    print(
+        'Simulated vs. theoretical zero weights for A = low:',
+        zero_w2_sim, zero_w2
+    )
 
     # Calculate the theoretical densities for nonzero q
     qmax = np.abs(np.log(alpha) - np.log(beta))
     q0 = np.linspace(-0.9999 * qmax, 0.9999 * qmax, 500)
     pQ_nz1 = density_Q_nonzero(q0, alpha, beta, lambdaA, lambdaB, K, gamma0, sigma)
     pQ_nz2 = density_Q_nonzero(q0, beta, alpha, lambdaB, lambdaA, K, gamma0, sigma)
-    print(pQ_nz1)
-    print(pQ_nz2)
 
     # Plot the histograms of nonzero q values 
     heights1, edges1 = np.histogram(q_sim1[nz_idx1], bins=25, density=True)
@@ -372,7 +376,9 @@ if __name__ == '__main__':
 
     # Plot the theoretical densities for positive q
     ax.plot(q0[q0 > 0], 2 * pQ_nz1[q0 > 0])
-    ax.plot(q0[q0 > 0], 2 * pQ_nz2[q0 > 0]) 
+    ax.plot(q0[q0 > 0], 2 * pQ_nz2[q0 > 0])
+    ax.set_xlabel(r'$Q^{\ast}$')
+    ax.set_ylabel('Density')
     plt.tight_layout()
     plt.savefig('asymmetry_simulations.pdf')
 
@@ -382,7 +388,7 @@ if __name__ == '__main__':
     signs = rng.choice([-1, 1], size=data_near_zero.shape, replace=True)
     data_near_zero *= signs
     _, eps = norm.fit(data_near_zero)
-    print(eps)
+    print('Fitted Gaussian kernel width:', eps)
     fig = plt.figure(figsize=(4, 3))
     ax = plt.gca()
     ax.hist(data, bins=25, density=True, color=sns.color_palette()[0], zorder=0)
