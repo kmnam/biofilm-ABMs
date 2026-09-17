@@ -78,7 +78,7 @@ int main(int argc, char** argv)
     const T n_tol = static_cast<T>(json_data["dormand_prince_n_tol"].as_double()); 
     const T min_stepsize = static_cast<T>(json_data["min_stepsize"].as_double()); 
     const T max_stepsize = static_cast<T>(json_data["max_stepsize"].as_double()); 
-    const int max_tries = static_cast<T>(json_data["dormand_prince_adapt_stepsize_max_tries"].as_double());
+    const int max_tries = json_data["dormand_prince_adapt_stepsize_max_tries"].as_int64();
 
     // Initialize the eight-neighbor configuration 
     Matrix<T, Dynamic, 6> coords_tilted = getEightNeighborConfiguration<T>(
