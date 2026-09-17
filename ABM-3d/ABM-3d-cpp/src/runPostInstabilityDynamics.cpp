@@ -170,6 +170,7 @@ int main(int argc, char** argv)
             t_next_write += t_write;  
         }
     }
+    outfile.close(); 
 
     return 0;
 }
