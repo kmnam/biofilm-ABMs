@@ -3,7 +3,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/17/2026
+ *     9/20/2026
  */
 
 #include <iostream>
@@ -11,16 +11,21 @@
 #include <iomanip>
 #include <Eigen/Dense>
 #include "../include/linearStability.hpp"
+#include "../include/distances.hpp"
 #include "../include/utils.hpp"
 
 using namespace Eigen;
 
 typedef double T;
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+typedef K::Segment_3 Segment_3;
 
 using std::fmod; 
 
 int main(int argc, char** argv)
 {
+    K kernel; 
+
     // Parse input json file 
     std::string json_filename = argv[1]; 
     boost::json::object json_data = parseConfigFile(json_filename).as_object(); 
@@ -108,11 +113,35 @@ int main(int argc, char** argv)
     Matrix<T, Dynamic, 3> r = coords_tilted(Eigen::all, Eigen::seqN(0, 3)); 
     Matrix<T, Dynamic, 3> n = coords_tilted(Eigen::all, Eigen::seqN(3, 3));
 
-    // Specify inward forces on the neighboring cells 
-    const T force_hertz = (4. / 3.) * E0 * sqrt(R / 2) * pow(overlap, 1.5); 
-    Matrix<T, Dynamic, 4> forces = getEightNeighborConfigurationInwardForces<T>(force_hertz);
-    Matrix<T, Dynamic, 3> forces_ext = forces(Eigen::all, Eigen::seqN(0, 3));
-    Matrix<T, Dynamic, 1> forces_s = (length / 2) * forces.col(3); 
+    // Initialize piston positions and orientations 
+    const int n_cells = r.rows();  
+    Matrix<T, Dynamic, 3> r_pistons(n_cells - 1, 3), n_pistons(n_cells - 1, 3);  
+    for (int i = 0; i < n_cells - 1; ++i)
+    {
+        Matrix<T, 3, 1> p = r.row(i + 1) - (length / 2) * n.row(i + 1); 
+        Matrix<T, 3, 1> q = r.row(i + 1) + (length / 2) * n.row(i + 1);
+        if (p.norm() > q.norm())    // Cell orientation vector points inward
+        { 
+            r_pistons.row(i) = p.transpose() - R * n.row(i + 1);
+            n_pistons.row(i) = n.row(i + 1); 
+        } 
+        else                        // Cell orientation vector points outward
+        { 
+            r_pistons.row(i) = q.transpose() + R * n.row(i + 1); 
+            n_pistons.row(i) = -n.row(i + 1);
+        } 
+    }
+    const T force_ext_prefactor = (4. / 3.) * E0 * sqrt(R);
+    T piston_travel_dist;
+    try
+    {
+        piston_travel_dist = json_data["piston_travel_dist"].as_int64(); 
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e)
+    {
+        piston_travel_dist = 0.5 * R;
+    } 
+    const T piston_velocity = piston_travel_dist / t_max;
 
     // Specify constraints 
     Matrix<T, Dynamic, Dynamic> constraints = getEightNeighborConfigurationConstraints<T>();
@@ -136,7 +165,8 @@ int main(int argc, char** argv)
             << "# brent_max_iter = " << brent_max_iter << std::endl
             << "# overlap_crit = " << overlap_crit << std::endl 
             << "# init_theta_deg = " << init_theta << std::endl
-            << "# inward_force_magnitude = " << force_hertz << std::endl 
+            << "# piston_travel_dist = " << piston_travel_dist << std::endl
+            << "# piston_velocity = " << piston_velocity << std::endl
             << "# t_max = " << t_max << std::endl
             << "# t_write = " << t_write << std::endl
             << "# dormand_prince_r_tol = " << r_tol << std::endl
@@ -157,8 +187,9 @@ int main(int argc, char** argv)
         // Take a Dormand-Prince step, update time, and update stepsize  
         auto result = getDormandPrinceUpdateWithAdaptedStepsize<T>(
             r, n, constraints, length, R, Rcell, E0, Ecell, sigma0, eta0, eta1,
-            gamma, forces_ext, forces_s, stepsize, r_tol, n_tol, min_stepsize,
-            max_stepsize, max_tries, mode, ignore_neighbor_interactions
+            gamma, r_pistons, n_pistons, force_ext_prefactor, piston_velocity,
+            stepsize, r_tol, n_tol, min_stepsize, max_stepsize, max_tries,
+            mode, ignore_neighbor_interactions
         );
         Matrix<T, Dynamic, 6> update = std::get<0>(result);
         T curr_stepsize = std::get<1>(result);
@@ -174,7 +205,12 @@ int main(int argc, char** argv)
         {
             T norm = n.row(k).norm(); 
             n.row(k) /= norm; 
-        } 
+        }
+
+        // Move the pistons inward
+        T dr_piston = piston_velocity * curr_stepsize;  
+        for (int i = 0; i < n_cells - 1; ++i)
+            r_pistons.row(i) += dr_piston * n_pistons.row(i);
 
         // Intermittently write cell coordinates to output file 
         if (t_prev < t_next_write && t_curr >= t_next_write)
@@ -200,7 +236,31 @@ int main(int argc, char** argv)
                       << n(0, 0) << ", " << n(0, 1) << ", " << n(0, 2) << "), "
                       << "minimum z-coordinate = " 
                       << (n(0, 2) > 0 ? r(0, 2) - (length / 2) * n(0, 2) : r(0, 2) + (length / 2) * n(0, 2))
-                      << std::endl;  
+                      << std::endl; 
+
+            // Look for any neighboring cells that have detached from the 
+            // central cell
+            int n_detached = 0;  
+            for (int i = 1; i < n_cells; ++i)
+            {
+                Segment_3 seg1 = generateSegment<T>(r.row(0), n.row(0), length / 2); 
+                Segment_3 seg2 = generateSegment<T>(r.row(i), n.row(i), length / 2);
+                auto result2 = distBetweenCells<T>(
+                    seg1, seg2, 0, r.row(0), n.row(0), length / 2,
+                    1, r.row(i), n.row(i), length / 2, kernel
+                );
+                T dist = std::get<0>(result2).norm(); 
+                if (dist > 2 * R)
+                {
+                    if (n_detached == 0)
+                        std::cout << "- Neighbors detached from central cell:\n";
+                    std::cout << "  - Cell " << i << ": (" << r(i, 0) << ", "
+                              << r(i, 1) << ", " << r(i, 2) << "; " 
+                              << n(i, 0) << ", " << n(i, 1) << ", "
+                              << n(i, 2) << "), dist = " << dist << std::endl;
+                    n_detached++; 
+                } 
+            }
         }
     }
     outfile.close(); 
