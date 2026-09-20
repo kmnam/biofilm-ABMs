@@ -79,6 +79,26 @@ int main(int argc, char** argv)
     const T min_stepsize = static_cast<T>(json_data["min_stepsize"].as_double()); 
     const T max_stepsize = static_cast<T>(json_data["max_stepsize"].as_double()); 
     const int max_tries = json_data["dormand_prince_adapt_stepsize_max_tries"].as_int64();
+    JKRCellBodyContactMode mode; 
+    try
+    {
+        mode = static_cast<JKRCellBodyContactMode>(
+            json_data["jkr_cell_body_contact_mode"].as_int64()
+        );
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e)
+    {
+        mode = JKRCellBodyContactMode::IgnoreCellBody; 
+    } 
+    bool ignore_neighbor_interactions;
+    try
+    {
+        ignore_neighbor_interactions = json_data["ignore_neighbor_interactions"].as_int64();
+    }
+    catch (boost::wrapexcept<boost::system::system_error>& e)
+    {
+        ignore_neighbor_interactions = true;
+    } 
 
     // Initialize the eight-neighbor configuration 
     Matrix<T, Dynamic, 6> coords_tilted = getEightNeighborConfiguration<T>(
@@ -123,7 +143,9 @@ int main(int argc, char** argv)
             << "# dormand_prince_n_tol = " << n_tol << std::endl
             << "# min_stepsize = " << min_stepsize << std::endl
             << "# max_stepsize = " << max_stepsize << std::endl
-            << "# dormand_prince_adapt_stepsize_max_tries = " << max_tries << std::endl; 
+            << "# dormand_prince_adapt_stepsize_max_tries = " << max_tries << std::endl
+            << "# jkr_cell_body_contact_mode = " << static_cast<int>(mode) << std::endl
+            << "# ignore_neighbor_interactions = " << ignore_neighbor_interactions << std::endl; 
 
     // Specify stepsize control parameters
     int iter = 0;
@@ -136,7 +158,7 @@ int main(int argc, char** argv)
         auto result = getDormandPrinceUpdateWithAdaptedStepsize<T>(
             r, n, constraints, length, R, Rcell, E0, Ecell, sigma0, eta0, eta1,
             gamma, forces_ext, forces_s, stepsize, r_tol, n_tol, min_stepsize,
-            max_stepsize, max_tries
+            max_stepsize, max_tries, mode, ignore_neighbor_interactions
         );
         Matrix<T, Dynamic, 6> update = std::get<0>(result);
         T curr_stepsize = std::get<1>(result);
@@ -167,7 +189,18 @@ int main(int argc, char** argv)
             }
             outfile.seekp(-1, std::ios_base::cur); 
             outfile << std::endl;
-            t_next_write += t_write;  
+            t_next_write += t_write;
+
+            // Also print a couple of lines to stdout 
+            std::cout << "Iteration " << iter << ", t = " << t_curr << ", "
+                      << "current stepsize = " << curr_stepsize << ", "
+                      << "next trial stepsize = " << stepsize << std::endl;
+            std::cout << "- Central cell coordinates = ("
+                      << r(0, 0) << ", " << r(0, 1) << ", " << r(0, 2) << "; "
+                      << n(0, 0) << ", " << n(0, 1) << ", " << n(0, 2) << "), "
+                      << "minimum z-coordinate = " 
+                      << (n(0, 2) > 0 ? r(0, 2) - (length / 2) * n(0, 2) : r(0, 2) + (length / 2) * n(0, 2))
+                      << std::endl;  
         }
     }
     outfile.close(); 
