@@ -39,7 +39,14 @@ typedef K::Segment_3 Segment_3;
 
 using Dual::DualNumber; 
 using Dual::DualVector; 
-using Dual::DualMatrix; 
+using Dual::DualMatrix;
+
+enum class JKRCellBodyContactMode
+{
+    DisallowContacts, 
+    IgnoreCellBody,
+    AllowRepulsiveContacts
+};
 
 /**
  * Calculate the 6x6 dissipation matrix specifying the viscosity forces
@@ -407,7 +414,8 @@ std::pair<T, Matrix<T, 4, 3> > getHertzianCellCellEnergyGradient(const Ref<const
  * @param distances Array of cell-cell distance vectors, specified in duals. 
  *                  Each row specifies the two centerline coordinates and the
  *                  distance vector coordinates. 
- * @param R Cell radius (including the EPS).  
+ * @param R Cell radius (including the EPS). 
+ * @param Rcell Cell radius (excluding the EPS).  
  * @param E0 Elastic modulus of the EPS.
  * @param gamma Cell-cell adhesion energy density.  
  * @returns Dual vector specifying the generalized translational and orientational
@@ -415,7 +423,8 @@ std::pair<T, Matrix<T, 4, 3> > getHertzianCellCellEnergyGradient(const Ref<const
  */
 template <typename T>
 DualVector<T> getJKRCellCellForce(const Ref<const Matrix<DualNumber<T>, Dynamic, 5> >& distances, 
-                                  const T R, const T E0, const T gamma)
+                                  const T R, const T Rcell, const T E0,
+                                  const T gamma)
 {
     DualVector<T> b = DualVector<T>::Zero(6);
     const T Req = R / 2;  
@@ -427,9 +436,15 @@ DualVector<T> getJKRCellCellForce(const Ref<const Matrix<DualNumber<T>, Dynamic,
         DualVector<T> dvec = distances(i, Eigen::seqN(2, 3)); 
         DualNumber<T> dist = dvec.norm();
 
-        // If the overlap is nonzero ... 
+        // If the overlap is nonzero ...
         if (dist.getValue() < 2 * R)
         {
+            // Raise an exception if the cells are within 2 * Rcell apart 
+            if (dist.getValue() < 2 * Rcell)
+                throw std::runtime_error(
+                    "Encountered disallowed JKR cell body contact"
+                );
+
             // Calculate the contact radius
             //
             // Here, we use the analytical formula derived by Parteli et al.
@@ -470,17 +485,23 @@ DualVector<T> getJKRCellCellForce(const Ref<const Matrix<DualNumber<T>, Dynamic,
  * Calculate the JKR cell-cell contact energy due to a contact between one
  * neighboring pair of cells.
  *
- * This calculation assumes that the cells are further than 2 * Rcell apart.  
+ * If the cells are less than 2 * Rcell apart, then this function can either
+ * throw an exception or assume a repulsive contact (the adhesion is turned off). 
  *
  * @param dist Centerline distance from cell 1 to cell 2. 
  * @param R Cell radius (including the EPS).  
- * @param E0 Elastic modulus of the EPS. 
- * @param gamma Cell-cell adhesion energy density.  
+ * @param Rcell Cell radius (excluding the EPS). 
+ * @param E0 Elastic modulus of the EPS.
+ * @param Ecell Elastic modulus of the cell body.  
+ * @param gamma Cell-cell adhesion energy density. 
+ * @param mode JKR cell body contact mode.  
  * @returns Dual number specifying the cell-cell contact energy. 
  */
 template <typename T>
 DualNumber<T> getJKRCellCellEnergy(const DualNumber<T> dist, const T R,
-                                   const T E0, const T gamma)
+                                   const T Rcell, const T E0, const T Ecell, 
+                                   const T gamma, 
+                                   const JKRCellBodyContactMode mode = JKRCellBodyContactMode::DisallowContacts)
 {
     const T Req = R / 2;
     DualNumber<T> energy(0.0, 0.0);  
@@ -488,11 +509,38 @@ DualNumber<T> getJKRCellCellEnergy(const DualNumber<T> dist, const T R,
     // If the overlap is nonzero ... 
     if (dist < 2 * R)
     {
+        // If the two cell bodies are contacting and such contacts are disallowed,
+        // then raise an exception 
+        if (mode == JKRCellBodyContactMode::DisallowContacts && dist < 2 * Rcell)
+            throw std::runtime_error("Encountered disallowed JKR cell body contact");
+
+        // Otherwise, calculate the JKR energy
+        //
+        // If the cell bodies are to be ignored completely, calculate the 
+        // JKR energy corresponding to the full overlap  
+        //
+        // Otherwise, if the two cell bodies are contacting, calculate the
+        // JKR energy corresponding to an overlap of 2 * R - 2 * Rcell
+        DualNumber<T> dist_; 
+        if (mode == JKRCellBodyContactMode::IgnoreCellBody)
+        {
+            dist_ = dist;
+        } 
+        else if (dist.getValue() < 2 * Rcell)
+        {
+            dist_.setValue(2 * Rcell); 
+            dist_.setDerivative(0); 
+        }
+        else 
+        { 
+            dist_ = dist;
+        }
+
         // Calculate the contact radius
         //
         // Here, we use the analytical formula derived by Parteli et al.
         // based on the quartic formula
-        DualNumber<T> overlap = 2 * R - dist;
+        DualNumber<T> overlap = 2 * R - dist_;
         DualNumber<T> c2 = -2 * Req * overlap;
         DualNumber<T> c1 = -4 * boost::math::constants::pi<T>() * gamma * Req * Req / E0;
         DualNumber<T> c0 = Req * Req * overlap * overlap; 
@@ -517,7 +565,15 @@ DualNumber<T> getJKRCellCellEnergy(const DualNumber<T> dist, const T R,
         energy = (8. / 15.) * E0 * pow(radius, 5) / (Req * Req);
         energy -= (8. / 3.) * sqrt(boost::math::constants::pi<T>() * gamma * E0) * pow(radius, 3.5) / Req;
         energy += boost::math::constants::two_pi<T>() * pow(radius, 2) * gamma;
-        energy += boost::math::constants::two_pi<T>() * gamma * a0 * a0 / 5; 
+        energy += boost::math::constants::two_pi<T>() * gamma * a0 * a0 / 5;
+
+        // If the two cell bodies are contacting and this contact should be 
+        // counted as repulsive, add an extra Hertzian term 
+        if (mode == JKRCellBodyContactMode::AllowRepulsiveContacts && dist < 2 * Rcell)
+        {
+            DualNumber<T> overlap_body = 2 * Rcell - dist; 
+            energy += (8. / 15.) * Ecell * sqrt(Rcell / 2) * pow(overlap_body, 2.5);
+        }
     }
     
     return energy;  
@@ -533,9 +589,12 @@ DualNumber<T> getJKRCellCellEnergy(const DualNumber<T> dist, const T R,
  * @param r2 Cell 2 center. 
  * @param n2 Cell 2 orientation.  
  * @param s Pair of centerline coordinates specifying the contact point.  
- * @param R Cell radius (including the EPS).  
+ * @param R Cell radius (including the EPS). 
+ * @param Rcell Cell radius (excluding the EPS).  
  * @param E0 Elastic modulus of the EPS.
- * @param gamma Cell-cell adhesion energy density.  
+ * @param Ecell Elastic modulus of the cell body. 
+ * @param gamma Cell-cell adhesion energy density. 
+ * @param mode JKR cell body contact mode.  
  * @returns The cell-cell contact energy, together with a matrix specifying 
  *          the gradient. 
  */
@@ -546,8 +605,11 @@ std::pair<T, Matrix<T, 4, 3> > getJKRCellCellEnergyGradient(const Ref<const Matr
                                                             const Ref<const Matrix<T, 3, 1> >& n2, 
                                                             const Ref<const Matrix<T, 2, 1> >& s, 
                                                             const T R,
+                                                            const T Rcell,
                                                             const T E0, 
-                                                            const T gamma)
+                                                            const T Ecell, 
+                                                            const T gamma,
+                                                            const JKRCellBodyContactMode mode = JKRCellBodyContactMode::DisallowContacts)
 {
     // Set up the gradient matrix
     T energy = 0;   
@@ -581,7 +643,9 @@ std::pair<T, Matrix<T, 4, 3> > getJKRCellCellEnergyGradient(const Ref<const Matr
 
         // Calculate the JKR contact energy and extract the partial
         // derivative  
-        DualNumber<T> energy_ = getJKRCellCellEnergy<T>(dvec.norm(), R, E0, gamma);
+        DualNumber<T> energy_ = getJKRCellCellEnergy<T>(
+            dvec.norm(), R, Rcell, E0, Ecell, gamma, mode
+        );
         if (i == 0)
             energy = energy_.getValue();  
         grad(0, i) = energy_.getDerivative();
@@ -609,7 +673,9 @@ std::pair<T, Matrix<T, 4, 3> > getJKRCellCellEnergyGradient(const Ref<const Matr
 
         // Calculate the JKR contact energy and extract the partial
         // derivative  
-        energy_ = getJKRCellCellEnergy<T>(dvec.norm(), R, E0, gamma); 
+        energy_ = getJKRCellCellEnergy<T>(
+            dvec.norm(), R, Rcell, E0, Ecell, gamma, mode
+        ); 
         grad(1, i) = energy_.getDerivative();
     }
 
@@ -641,7 +707,9 @@ std::pair<T, Matrix<T, 4, 3> > getJKRCellCellEnergyGradient(const Ref<const Matr
 
         // Calculate the JKR contact energy and extract the partial
         // derivative  
-        DualNumber<T> energy_ = getJKRCellCellEnergy<T>(dvec.norm(), R, E0, gamma);
+        DualNumber<T> energy_ = getJKRCellCellEnergy<T>(
+            dvec.norm(), R, Rcell, E0, Ecell, gamma, mode
+        );
         grad(2, i) = energy_.getDerivative();
 
         // Get the gradient w.r.t the position of cell 2 ... 
@@ -667,7 +735,9 @@ std::pair<T, Matrix<T, 4, 3> > getJKRCellCellEnergyGradient(const Ref<const Matr
 
         // Calculate the JKR contact energy and extract the partial
         // derivative  
-        energy_ = getJKRCellCellEnergy<T>(dvec.norm(), R, E0, gamma); 
+        energy_ = getJKRCellCellEnergy<T>(
+            dvec.norm(), R, Rcell, E0, Ecell, gamma, mode
+        ); 
         grad(3, i) = energy_.getDerivative();
     }
 
@@ -1086,6 +1156,7 @@ std::pair<T, Matrix<T, Dynamic, 6> > getConfigurationalEnergy(const Ref<const Ma
                                                               const T eta0,
                                                               const T eta1,
                                                               const T gamma,
+                                                              const JKRCellBodyContactMode mode = JKRCellBodyContactMode::AllowRepulsiveContacts, 
                                                               const bool ignore_neighbor_interactions = true)
 {
     // Calculate the configurational energy and its gradient w.r.t all
@@ -1151,8 +1222,8 @@ std::pair<T, Matrix<T, Dynamic, 6> > getConfigurationalEnergy(const Ref<const Ma
                 else 
                 {
                     auto result2 = getJKRCellCellEnergyGradient<T>(
-                        r.row(i), n.row(i), r.row(j), n.row(j), s, R, E0, 
-                        gamma
+                        r.row(i), n.row(i), r.row(j), n.row(j), s, R, Rcell, 
+                        E0, Ecell, gamma, mode
                     );
                     energy_ij = result2.first; 
                     grad_ij = result2.second;
@@ -1385,7 +1456,10 @@ Matrix<T, Dynamic, 6> getEnergyGradientDescentDirection(const Ref<const Matrix<T
  * @param force_ext External forces on the neighboring cells. 
  * @param force_ext_s Centerline coordinates on which the external forces are
  *                    applied on the neighboring cells.  
- * @param stepsize Trial stepsize.  
+ * @param stepsize Trial stepsize. 
+ * @param ignore_neighbor_interactions If true, ignore interactions between
+ *                                     neighboring cells in the energy 
+ *                                     calculation.  
  * @returns The Dormand-Prince update and the associated fifth-order error. 
  */
 template <typename T>
@@ -1403,7 +1477,9 @@ std::pair<Matrix<T, Dynamic, 6>, Matrix<T, Dynamic, 6> > getDormandPrinceUpdate(
                                                                                 const T gamma,
                                                                                 const Ref<const Matrix<T, Dynamic, 3> >& force_ext,
                                                                                 const Ref<const Matrix<T, Dynamic, 1> >& force_ext_s,  
-                                                                                const T stepsize)
+                                                                                const T stepsize,
+                                                                                const JKRCellBodyContactMode mode = JKRCellBodyContactMode::AllowRepulsiveContacts, 
+                                                                                const bool ignore_neighbor_interactions = true)
 {
     // Define the Dormand-Prince tableau
     Matrix<T, Dynamic, Dynamic> A(7, 7);  
@@ -1438,7 +1514,8 @@ std::pair<Matrix<T, Dynamic, 6>, Matrix<T, Dynamic, 6> > getDormandPrinceUpdate(
             n_.row(j) *= -1; 
     }
     auto result = getConfigurationalEnergy<T>(
-        r, n_, length, R, Rcell, E0, Ecell, sigma0, eta0, eta1, gamma
+        r, n_, length, R, Rcell, E0, Ecell, sigma0, eta0, eta1, gamma, mode,
+        ignore_neighbor_interactions
     );
 
     // Get the energy gradient and transform back the z-orientations so that
@@ -1486,7 +1563,8 @@ std::pair<Matrix<T, Dynamic, 6>, Matrix<T, Dynamic, 6> > getDormandPrinceUpdate(
                 ni_.row(j) *= -1; 
         }  
         result = getConfigurationalEnergy<T>(
-            ri, ni_, length, R, Rcell, E0, Ecell, sigma0, eta0, eta1, gamma
+            ri, ni_, length, R, Rcell, E0, Ecell, sigma0, eta0, eta1, gamma,
+            mode, ignore_neighbor_interactions
         ); 
         Matrix<T, Dynamic, 6> grad_i = result.second;
         for (int j = 0; j < n_cells; ++j)    // Switch z-orientations back to original signs 
@@ -1558,7 +1636,10 @@ std::pair<Matrix<T, Dynamic, 6>, Matrix<T, Dynamic, 6> > getDormandPrinceUpdate(
  * @param n_tol Absolute tolerance for orientation coordinates. 
  * @param min_stepsize Minimum Dormand-Prince stepsize. 
  * @param max_stepsize Maximum Dormand-Prince stepsize. 
- * @param max_tries Maximum number of stepsize control iterations. 
+ * @param max_tries Maximum number of stepsize control iterations.
+ * @param ignore_neighbor_interactions If true, ignore interactions between
+ *                                     neighboring cells in the energy 
+ *                                     calculation.  
  * @returns The Dormand-Prince update, the stepsize corresponding to the update,
  *          and the initial trial stepsize to try for the next iteration. 
  */
@@ -1582,12 +1663,15 @@ std::tuple<Matrix<T, Dynamic, 6>, T, T> getDormandPrinceUpdateWithAdaptedStepsiz
                                                                                   const T n_tol,
                                                                                   const T min_stepsize, 
                                                                                   const T max_stepsize, 
-                                                                                  const int max_tries)
+                                                                                  const int max_tries,
+                                                                                  const JKRCellBodyContactMode mode = JKRCellBodyContactMode::AllowRepulsiveContacts, 
+                                                                                  const bool ignore_neighbor_interactions = true)
 {
     // Generate an initial Dormand-Prince update 
     auto result = getDormandPrinceUpdate<T>(
         r, n, constraints, length, R, Rcell, E0, Ecell, sigma0, eta0, eta1, 
-        gamma, force_ext, force_ext_s, curr_stepsize
+        gamma, force_ext, force_ext_s, curr_stepsize, mode,
+        ignore_neighbor_interactions
     );
     Matrix<T, Dynamic, 6> update_final = result.first; 
     Matrix<T, Dynamic, 6> update_error = result.second;
@@ -1658,7 +1742,8 @@ std::tuple<Matrix<T, Dynamic, 6>, T, T> getDormandPrinceUpdateWithAdaptedStepsiz
         // Re-try the Dormand-Prince step
         result = getDormandPrinceUpdate<T>(
             r, n, constraints, length, R, Rcell, E0, Ecell, sigma0, eta0, eta1, 
-            gamma, force_ext, force_ext_s, next_stepsize
+            gamma, force_ext, force_ext_s, next_stepsize, mode,
+            ignore_neighbor_interactions
         );
         update_final = result.first; 
         update_error = result.second;
@@ -1831,7 +1916,7 @@ T getOrientationalStability(const Ref<const Matrix<T, Dynamic, 2> >& neighbors_r
     else 
     {
         cell_cell_forces = getJKRCellCellForce<T>(
-            distances, R, E0, gamma
+            distances, R, Rcell, E0, gamma
         ); 
     }
     DualVector<T> forces = cell_cell_forces(Eigen::seqN(3, 3)); 
@@ -1983,8 +2068,8 @@ Matrix<T, 2, 1> get2DStability(const Ref<const Matrix<T, Dynamic, 2> >& neighbor
     }
     else 
     {
-        forces_dw = getJKRCellCellForce<T>(distances_dw, R, E0, gamma);
-        forces_du = getJKRCellCellForce<T>(distances_du, R, E0, gamma);
+        forces_dw = getJKRCellCellForce<T>(distances_dw, R, Rcell, E0, gamma);
+        forces_du = getJKRCellCellForce<T>(distances_du, R, Rcell, E0, gamma);
     } 
 
     // Calculate the cell-surface repulsion force on the central cell
