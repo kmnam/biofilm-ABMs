@@ -6,7 +6,7 @@
  *     Kee-Myoung Nam
  *
  * Last updated:
- *     9/17/2026
+ *     9/20/2026
  */
 
 #ifndef LINEAR_STABILITY_ANALYSIS_HPP
@@ -1453,9 +1453,10 @@ Matrix<T, Dynamic, 6> getEnergyGradientDescentDirection(const Ref<const Matrix<T
  * @param eta0 Ambient viscosity. 
  * @param eta1 Cell-surface friction coefficient.
  * @param gamma Cell-cell adhesion energy density.
- * @param force_ext External forces on the neighboring cells. 
- * @param force_ext_s Centerline coordinates on which the external forces are
- *                    applied on the neighboring cells.  
+ * @param r_pistons Piston coordinates.
+ * @param n_pistons Piston orientations. 
+ * @param force_ext_prefactor Prefactor for calculating the external forces. 
+ * @param piston_velocity Piston velocity.  
  * @param stepsize Trial stepsize. 
  * @param ignore_neighbor_interactions If true, ignore interactions between
  *                                     neighboring cells in the energy 
@@ -1475,8 +1476,10 @@ std::pair<Matrix<T, Dynamic, 6>, Matrix<T, Dynamic, 6> > getDormandPrinceUpdate(
                                                                                 const T eta0,
                                                                                 const T eta1,
                                                                                 const T gamma,
-                                                                                const Ref<const Matrix<T, Dynamic, 3> >& force_ext,
-                                                                                const Ref<const Matrix<T, Dynamic, 1> >& force_ext_s,  
+                                                                                const Ref<const Matrix<T, Dynamic, 3> >& r_pistons,
+                                                                                const Ref<const Matrix<T, Dynamic, 3> >& n_pistons, 
+                                                                                const T force_ext_prefactor,
+                                                                                const T piston_velocity, 
                                                                                 const T stepsize,
                                                                                 const JKRCellBodyContactMode mode = JKRCellBodyContactMode::AllowRepulsiveContacts, 
                                                                                 const bool ignore_neighbor_interactions = true)
@@ -1527,6 +1530,29 @@ std::pair<Matrix<T, Dynamic, 6>, Matrix<T, Dynamic, 6> > getDormandPrinceUpdate(
             grad(j, Eigen::seqN(3, 3)) *= -1; 
     }
 
+    // Calculate the external forces on the neighboring cells 
+    Matrix<T, Dynamic, 3> force_ext = Matrix<T, Dynamic, 3>::Zero(n_cells, 3); 
+    Matrix<T, Dynamic, 1> force_ext_s = Matrix<T, Dynamic, 1>::Zero(n_cells); 
+    for (int i = 1; i < n_cells; ++i)
+    {
+        // Get the piston-cell distance vector and overlap
+        //
+        // For each endpoint, calculate the distance to the plane containing
+        // the piston coordinate and perpendicular to the piston orientation
+        Matrix<T, 3, 1> pi = r.row(i) - (length / 2) * n.row(i); 
+        Matrix<T, 3, 1> qi = r.row(i) + (length / 2) * n.row(i);
+        Matrix<T, 3, 1> r_piston = r_pistons.row(i - 1); 
+        Matrix<T, 3, 1> n_piston = n_pistons.row(i - 1);  
+        T pi_dist = n_piston.dot(pi - r_piston);
+        T qi_dist = n_piston.dot(qi - r_piston);
+        T dist = (pi_dist < qi_dist ? pi_dist : qi_dist);  
+        T overlap = (R - dist > 0 ? R - dist : 0.0);
+
+        // Determine the corresponding external force
+        force_ext.row(i) = force_ext_prefactor * pow(overlap, 1.5) * n_piston.transpose(); 
+        force_ext_s(i) = (pi_dist < qi_dist ? -length / 2 : length / 2); 
+    } 
+
     // Get the velocities
     Matrix<T, Dynamic, 6> v = getEnergyGradientDescentDirection<T>(
         r, n, constraints, length, grad, R, Rcell, E0, Ecell, sigma0, eta0,
@@ -1547,6 +1573,9 @@ std::pair<Matrix<T, Dynamic, 6>, Matrix<T, Dynamic, 6> > getDormandPrinceUpdate(
         }
         Matrix<T, Dynamic, 3> ri = r + stepsize * r_delta;
         Matrix<T, Dynamic, 3> ni = n + stepsize * n_delta;
+
+        // Calculate the intermediate piston coordinates 
+        Matrix<T, Dynamic, 3> r_pistons_i = r_pistons + c(i) * stepsize * piston_velocity * n_pistons;
 
         // Re-normalize the cell orientations 
         for (int j = 0; j < n_cells; ++j)
@@ -1572,6 +1601,29 @@ std::pair<Matrix<T, Dynamic, 6>, Matrix<T, Dynamic, 6> > getDormandPrinceUpdate(
             if (ni(j, 2) < 0)
                 grad_i(j, Eigen::seqN(3, 3)) *= -1; 
         }
+
+        // Re-calculate the external forces on the neighboring cells 
+        force_ext = Matrix<T, Dynamic, 3>::Zero(n_cells, 3); 
+        force_ext_s = Matrix<T, Dynamic, 1>::Zero(n_cells); 
+        for (int j = 1; j < n_cells; ++j)
+        {
+            // Get the piston-cell distance vector and overlap
+            //
+            // For each endpoint, calculate the distance to the plane containing
+            // the piston coordinate and perpendicular to the piston orientation
+            Matrix<T, 3, 1> pij = ri.row(j) - (length / 2) * ni.row(j); 
+            Matrix<T, 3, 1> qij = ri.row(j) + (length / 2) * ni.row(j);
+            Matrix<T, 3, 1> r_piston = r_pistons_i.row(j - 1); 
+            Matrix<T, 3, 1> n_piston = n_pistons.row(j - 1);  
+            T pij_dist = n_piston.dot(pij - r_piston);
+            T qij_dist = n_piston.dot(qij - r_piston);
+            T dist = (pij_dist < qij_dist ? pij_dist : qij_dist);  
+            T overlap = (R - dist > 0 ? R - dist : 0.0);
+
+            // Determine the corresponding external force
+            force_ext.row(j) = force_ext_prefactor * pow(overlap, 1.5) * n_piston.transpose(); 
+            force_ext_s(j) = (pij_dist < qij_dist ? -length / 2 : length / 2);  
+        } 
 
         // Calculate the corresponding velocity vector 
         Matrix<T, Dynamic, 6> vi = getEnergyGradientDescentDirection<T>(
@@ -1628,9 +1680,10 @@ std::pair<Matrix<T, Dynamic, 6>, Matrix<T, Dynamic, 6> > getDormandPrinceUpdate(
  * @param eta0 Ambient viscosity. 
  * @param eta1 Cell-surface friction coefficient.
  * @param gamma Cell-cell adhesion energy density.
- * @param force_ext External forces on the neighboring cells. 
- * @param force_ext_s Centerline coordinates on which the external forces are
- *                    applied on the neighboring cells.  
+ * @param r_pistons Piston coordinates.
+ * @param n_pistons Piston orientations. 
+ * @param force_ext_prefactor Prefactor for calculating the external forces. 
+ * @param piston_velocity Piston velocity.  
  * @param curr_stepsize Initial trial stepsize. 
  * @param r_tol Absolute tolerance for position coordinates. 
  * @param n_tol Absolute tolerance for orientation coordinates. 
@@ -1656,8 +1709,10 @@ std::tuple<Matrix<T, Dynamic, 6>, T, T> getDormandPrinceUpdateWithAdaptedStepsiz
                                                                                   const T eta0,
                                                                                   const T eta1,
                                                                                   const T gamma,
-                                                                                  const Ref<const Matrix<T, Dynamic, 3> >& force_ext,
-                                                                                  const Ref<const Matrix<T, Dynamic, 1> >& force_ext_s,  
+                                                                                  const Ref<const Matrix<T, Dynamic, 3> >& r_pistons,
+                                                                                  const Ref<const Matrix<T, Dynamic, 3> >& n_pistons, 
+                                                                                  const T force_ext_prefactor,
+                                                                                  const T piston_velocity, 
                                                                                   const T curr_stepsize,
                                                                                   const T r_tol, 
                                                                                   const T n_tol,
@@ -1670,8 +1725,8 @@ std::tuple<Matrix<T, Dynamic, 6>, T, T> getDormandPrinceUpdateWithAdaptedStepsiz
     // Generate an initial Dormand-Prince update 
     auto result = getDormandPrinceUpdate<T>(
         r, n, constraints, length, R, Rcell, E0, Ecell, sigma0, eta0, eta1, 
-        gamma, force_ext, force_ext_s, curr_stepsize, mode,
-        ignore_neighbor_interactions
+        gamma, r_pistons, n_pistons, force_ext_prefactor, piston_velocity, 
+        curr_stepsize, mode, ignore_neighbor_interactions
     );
     Matrix<T, Dynamic, 6> update_final = result.first; 
     Matrix<T, Dynamic, 6> update_error = result.second;
@@ -1742,8 +1797,8 @@ std::tuple<Matrix<T, Dynamic, 6>, T, T> getDormandPrinceUpdateWithAdaptedStepsiz
         // Re-try the Dormand-Prince step
         result = getDormandPrinceUpdate<T>(
             r, n, constraints, length, R, Rcell, E0, Ecell, sigma0, eta0, eta1, 
-            gamma, force_ext, force_ext_s, next_stepsize, mode,
-            ignore_neighbor_interactions
+            gamma, r_pistons, n_pistons, force_ext_prefactor, piston_velocity,
+            next_stepsize, mode, ignore_neighbor_interactions
         );
         update_final = result.first; 
         update_error = result.second;
@@ -2248,25 +2303,6 @@ Matrix<T, Dynamic, Dynamic> getTwoNeighborConfigurationConstraints()
 }
 
 /**
- * Generate external inward forces of the given magnitude on the 3-cell
- * configuration.
- *
- * @param magnitude Force magnitude. 
- * @returns Array of force vectors and normalized centerline coordinates at 
- *          which the forces are applied. 
- */
-template <typename T>
-Matrix<T, Dynamic, 4> getTwoNeighborConfigurationInwardForces(const T magnitude)
-{
-    Matrix<T, Dynamic, 4> forces(3, 4);
-    forces <<          0, 0, 0,  0,
-               magnitude, 0, 0, -1,
-              -magnitude, 0, 0,  1;  
-
-    return forces; 
-}
-
-/**
  * Generate the 9-cell configuration with the given overlap and given angle 
  * between the central cell and the surface. 
  *
@@ -2468,32 +2504,6 @@ Matrix<T, Dynamic, Dynamic> getEightNeighborConfigurationConstraints()
     constraints(idx, 6 * idx_northwest + 5) = 1; 
 
     return constraints; 
-}
-
-/**
- * Generate external inward forces of the given magnitude on the 9-cell
- * configuration.
- *
- * @param magnitude Force magnitude. 
- * @returns Array of force vectors and normalized centerline coordinates at 
- *          which the forces are applied. 
- */
-template <typename T>
-Matrix<T, Dynamic, 4> getEightNeighborConfigurationInwardForces(const T magnitude)
-{
-    const T phi = boost::math::constants::quarter_pi<T>(); 
-    Matrix<T, Dynamic, 4> forces(9, 4);
-    forces <<                     0,                     0, 0,  0,
-                          magnitude,                     0, 0, -1,      // West
-               magnitude * cos(phi), -magnitude * sin(phi), 0,  1,      // Northwest 
-                                  0,            -magnitude, 0,  1,      // North
-              -magnitude * cos(phi), -magnitude * sin(phi), 0,  1,      // Northeast
-                         -magnitude,                     0, 0,  1,      // East 
-              -magnitude * cos(phi),  magnitude * sin(phi), 0,  1,      // Southeast
-                                  0,             magnitude, 0,  1,      // South
-               magnitude * cos(phi),  magnitude * sin(phi), 0,  1;      // Southwest
-
-    return forces; 
 }
 
 /**
